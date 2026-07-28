@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     region: singapore          # closest to India
-    buildCommand: npm install && npm run dev:frontend 
+    buildCommand: npm start && npm run dev:frontend 
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
