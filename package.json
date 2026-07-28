@@ -5,8 +5,8 @@
   "main": "backend/index.js",
   "scripts": {
     "dev:backend":  "node backend/index.js",
-    "dev:frontend": "node node_modules/vite/bin/vite.js --config frontend/vite.config.js",
-    "build":        "node node_modules/vite/bin/vite.js build --config frontend/vite.config.js",
+    "dev:frontend": "vite --config frontend/vite.config.js",
+    "build":        "vite build --config frontend/vite.config.js",
     "start":        "node backend/index.js"
   },
   "dependencies": {
@@ -17,9 +17,7 @@
     "yaml": "^2.3.1",
     "multer": "^1.4.5-lts.1",
     "uuid": "^9.0.0",
-    "adm-zip": "^0.5.10"
-  },
-  "devDependencies": {
+    "adm-zip": "^0.5.10",
     "vite": "5.4.19",
     "@vitejs/plugin-react": "4.3.4",
     "react": "^18.2.0",
