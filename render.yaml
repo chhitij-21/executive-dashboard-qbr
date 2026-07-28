@@ -11,7 +11,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: 3000
       - key: ADMIN_PASSWORD
         value: admin123
       - key: ALLOWED_ORIGINS
