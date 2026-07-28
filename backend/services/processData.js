@@ -13,7 +13,7 @@ const { generatePPT } = require('./pptGenerator');
 
 const CUSTOMER_NAME    = 'Jubilant Foodworks Ltd (JFL)';
 const REPORTING_PERIOD = 'Q1 FY2026 (7 Apr – 6 Jul 2026)';
-// SLA target is always read from ruleEngine (rules.yaml) — no local constant to avoid dual source-of-truth
+const SLA_TARGET       = ruleEngine.getSLATarget() || 99.3;
 
 function normalizeSiteName(site) {
   if (!site) return 'Unknown';

@@ -4,13 +4,8 @@ services:
     env: node
     plan: free
     region: singapore          # closest to India
-<<<<<<< HEAD
     buildCommand: npm install && cd frontend && npm install && npm run build && cd ..
-    startCommand: npm start 
-=======
-    buildCommand: npm start && npm run dev:frontend 
     startCommand: npm start
->>>>>>> f9463cfa02ab2de7fb8fe98bf9598238554c611f
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
