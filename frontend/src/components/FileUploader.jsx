@@ -1,14 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/api';
 
 export default function FileUploader({ onJobStarted, onJobCompleted }) {
-  const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin, isBackendOffline } = useAuth();
+  const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin } = useAuth();
   const [incidentFile, setIncidentFile] = useState(null);
   const [inventoryFile, setInventoryFile] = useState(null);
   const [reportPeriod, setReportPeriod] = useState('Q1 FY2026 (7 Apr – 6 Jul 2026)');
 
-  const [status, setStatus] = useState('idle'); // idle, validating, processing, failed, completed
+  const [status, setStatus] = useState('idle'); // idle, processing, failed, completed
+  const [stageText, setStageText] = useState('Uploading Excel Files...');
   const [validationErrors, setValidationErrors] = useState([]);
   const [validationWarnings, setValidationWarnings] = useState([]);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -21,6 +22,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     if (e.target.files && e.target.files[0]) {
       setIncidentFile(e.target.files[0]);
       setValidationErrors([]);
+      setErrorMsg(null);
     }
   };
 
@@ -41,6 +43,12 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     setValidationWarnings([]);
     setErrorMsg(null);
     setStatus('processing');
+    setStageText('Uploading files to backend...');
+
+    // Cold-start warning timer if server takes longer than 3 seconds to respond
+    const wakeTimer = setTimeout(() => {
+      setStageText('⚡ Server is waking up (Render Free Tier cold start takes ~30-45s)... Please wait.');
+    }, 3500);
 
     const form = new FormData();
     form.append('incidents', incidentFile);
@@ -52,6 +60,8 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
+      clearTimeout(wakeTimer);
+
       const json = await res.json();
 
       if (!res.ok) {
@@ -60,38 +70,20 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           setValidationErrors(json.validationErrors);
           setValidationWarnings(json.validationWarnings || []);
         } else {
-          setErrorMsg(json.error || 'Upload failed');
+          setErrorMsg(json.error || 'Upload failed. Please verify your Excel format.');
         }
         return;
       }
 
+      setStageText('Files uploaded! Running Rule Engine & Generating QBR PowerPoint...');
       setCurrentJobId(json.jobId);
       if (onJobStarted) onJobStarted(json.jobId);
     } catch (err) {
+      clearTimeout(wakeTimer);
       setStatus('failed');
-      setErrorMsg('Backend Offline');
+      setErrorMsg('Unable to connect to backend server. Please refresh or try again in a few seconds.');
     }
   };
-
-  const STAGES = [
-    'Uploading...',
-    'Validating Files...',
-    'Running Rule Engine...',
-    'Calculating KPIs...',
-    'Generating Dashboard...',
-    'Generating PowerPoint...',
-    'Completed'
-  ];
-  const [stageIndex, setStageIndex] = useState(0);
-
-  React.useEffect(() => {
-    if (status !== 'processing') return;
-    setStageIndex(0);
-    const interval = setInterval(() => {
-      setStageIndex((prev) => (prev < STAGES.length - 2 ? prev + 1 : prev));
-    }, 750);
-    return () => clearInterval(interval);
-  }, [status]);
 
   return (
     <div className="upload-container">
@@ -100,11 +92,11 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           <div>
             <h2 className="card-title">🚀 QBR Report Generation Workflow</h2>
             <p className="card-subtitle">
-              Upload client incidents and inventory workbooks. The non-interfering processing engine will generate executive KPIs and PowerPoint reports without altering raw data.
+              Upload client incidents and inventory workbooks. The processing engine will generate executive KPIs and PowerPoint reports without altering raw data.
             </p>
           </div>
           <div className="privacy-badge">
-            🔒 <strong>Zero Storage Policy:</strong> Raw Excel data is deleted immediately post-processing.
+            🔒 <strong>Zero Storage Policy:</strong> Raw Excel data is deleted post-processing.
           </div>
         </div>
 
@@ -135,14 +127,14 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               <label>CLIENT TARGET</label>
               {isAdmin ? (
                 <select
-                  value={activeClient?.id || ''}
+                  value={activeClient?.id || 'client-jfl'}
                   onChange={(e) => {
                     const c = clients.find((item) => item.id === e.target.value);
                     if (c) setActiveClient(c);
                   }}
                   className="select-field"
                 >
-                  {clients.map((c) => (
+                  {(clients.length > 0 ? clients : [{ id: 'client-jfl', name: 'Jubilant Foodworks Ltd (JFL)', logo: '🍔' }]).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.logo} {c.name}
                     </option>
@@ -150,7 +142,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
                 </select>
               ) : (
                 <div className="context-value">
-                  {activeClient?.logo} {activeClient?.name}
+                  {activeClient?.logo || '🍔'} {activeClient?.name || 'Jubilant Foodworks Ltd (JFL)'}
                 </div>
               )}
             </div>
@@ -162,7 +154,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
                 onChange={(e) => setActiveLocation(e.target.value)}
                 className="select-field"
               >
-                {(activeClient?.locations || ['All Locations']).map((loc) => (
+                {(activeClient?.locations || ['All Locations', 'Noida', 'Delhi', 'Bangalore', 'Mumbai', 'Gurgaon', 'Hyderabad', 'Pune', 'Kolkata']).map((loc) => (
                   <option key={loc} value={loc}>
                     📍 {loc}
                   </option>
@@ -184,19 +176,19 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
           {/* Validation Errors Alert Box */}
           {validationErrors.length > 0 && (
-            <div className="alert-box alert-error">
-              <h4>❌ Pre-Upload Validation Errors</h4>
-              <ul>
+            <div className="alert-box alert-error" style={{ marginBottom: '1rem', padding: '1rem', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#991b1b' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold' }}>❌ Pre-Upload Validation Errors</h4>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
                 {validationErrors.map((err, idx) => (
                   <li key={idx}>{err}</li>
                 ))}
               </ul>
-              <p className="alert-hint">Processing stopped. Please correct the Excel file before retrying.</p>
+              <p style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>Processing stopped. Please check your Excel files.</p>
             </div>
           )}
 
           {errorMsg && (
-            <div className="alert-box alert-error">
+            <div className="alert-box alert-error" style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#991b1b' }}>
               ⚠️ {errorMsg}
             </div>
           )}
@@ -219,9 +211,11 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               <div className="dropzone-title">Incident Excel File (Mandatory)</div>
               <div className="dropzone-desc">
                 {incidentFile ? (
-                  <span className="file-name">✅ {incidentFile.name} ({(incidentFile.size / 1024).toFixed(1)} KB)</span>
+                  <span className="file-name" style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                    ✅ {incidentFile.name} ({(incidentFile.size / 1024).toFixed(1)} KB)
+                  </span>
                 ) : (
-                  <span>Click to select or drop <code>jfl incidents.xlsx</code></span>
+                  <span>Click to select <code>jfl incidents.xlsx</code></span>
                 )}
               </div>
               <span className="badge-required">REQUIRED</span>
@@ -243,9 +237,11 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               <div className="dropzone-title">Device Inventory File (Optional)</div>
               <div className="dropzone-desc">
                 {inventoryFile ? (
-                  <span className="file-name">✅ {inventoryFile.name} ({(inventoryFile.size / 1024).toFixed(1)} KB)</span>
+                  <span className="file-name" style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                    ✅ {inventoryFile.name} ({(inventoryFile.size / 1024).toFixed(1)} KB)
+                  </span>
                 ) : (
-                  <span>Click to select or drop <code>JFL Updated Inventory.xlsx</code></span>
+                  <span>Click to select <code>JFL Updated Inventory.xlsx</code></span>
                 )}
               </div>
               <span className="badge-optional">OPTIONAL</span>
@@ -253,14 +249,15 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           </div>
 
           {/* Submit Action Bar */}
-          <div className="action-bar">
+          <div className="action-bar" style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
             <button
               type="submit"
               className="btn-primary btn-hero"
               disabled={status === 'processing' || !incidentFile}
+              style={{ padding: '0.8rem 2rem', fontSize: '1rem', fontWeight: 'bold', cursor: incidentFile ? 'pointer' : 'not-allowed' }}
             >
               {status === 'processing' ? (
-                <>⏳ {STAGES[stageIndex]}</>
+                <>⏳ Processing... Please wait</>
               ) : (
                 <>⚡ Validate & Generate QBR Reports</>
               )}
@@ -268,13 +265,15 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           </div>
         </form>
 
-        {/* Processing Spinner / Progress Bar */}
+        {/* Processing Spinner / Progress Indicator */}
         {status === 'processing' && (
-          <div className="processing-indicator">
+          <div className="processing-indicator" style={{ marginTop: '1.5rem', padding: '1rem', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div className="spinner"></div>
             <div className="processing-text">
-              <h4>⏳ {STAGES[stageIndex]}</h4>
-              <p>Processing Report for {activeClient?.name} ({activeLocation}) • Parsing Excel data • Applying rule engine • Calculating KPIs • Building PowerPoint slides</p>
+              <h4 style={{ margin: 0, color: '#1d4ed8' }}>{stageText}</h4>
+              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#3b82f6' }}>
+                Parsing workbooks • Applying rules • Calculating uptime & SLA metrics • Building PowerPoint presentation
+              </p>
             </div>
           </div>
         )}
