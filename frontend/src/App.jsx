@@ -12,6 +12,7 @@ import Chart from './components/Chart';
 import DataTable from './components/DataTable';
 import SiteSummaryTable from './components/SiteSummaryTable';
 import TrendChart from './components/TrendChart';
+import API_BASE from './config/api';
 import './styles/index.css';
 
 function MainPortal() {
@@ -30,7 +31,7 @@ function MainPortal() {
     if (!jobId || status === 'completed' || status === 'failed') return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/dashboard/${jobId}`);
+        const res = await fetch(`${API_BASE}/api/dashboard/${jobId}`);
         if (res.status === 202) return;
         const json = await res.json();
         if (json.status && json.status !== 'completed') {
@@ -150,7 +151,7 @@ function MainPortal() {
           <div className="download-header-actions">
             <div className="status-badge completed">✓ Validated Engine</div>
             {jobId && (
-              <a href={`/api/ppt/${jobId}`} className="btn-primary" download>
+              <a href={`${API_BASE}/api/ppt/${jobId}`} className="btn-primary" download>
                 📊 Download PPT QBR Report
               </a>
             )}

@@ -1,6 +1,7 @@
 // frontend/src/components/ClientManager.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import API_BASE from '../config/api';
 
 export default function ClientManager() {
   const { clients, activeClient, activeLocation, setActiveClient, setActiveLocation, refreshClients, isAdmin } = useAuth();
@@ -26,7 +27,7 @@ export default function ClientManager() {
       .filter(Boolean);
 
     try {
-      const res = await fetch('/api/clients', {
+      const res = await fetch(`${API_BASE}/api/clients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -59,7 +60,7 @@ export default function ClientManager() {
     if (!isAdmin) return;
     const nextStatus = client.status === 'active' ? 'inactive' : 'active';
     try {
-      await fetch(`/api/clients/${client.id}`, {
+      await fetch(`${API_BASE}/api/clients/${client.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),
@@ -75,7 +76,7 @@ export default function ClientManager() {
     if (!locName || !locName.trim()) return;
 
     try {
-      await fetch(`/api/clients/${clientId}/locations`, {
+      await fetch(`${API_BASE}/api/clients/${clientId}/locations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ location: locName.trim() }),

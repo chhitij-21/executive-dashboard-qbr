@@ -1,6 +1,7 @@
 // frontend/src/components/LoginModal.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import API_BASE from '../config/api';
 
 export default function LoginModal({ isOpen, onClose }) {
   const { login } = useAuth();
@@ -10,7 +11,7 @@ export default function LoginModal({ isOpen, onClose }) {
   const [demoAccounts, setDemoAccounts] = useState([]);
 
   useEffect(() => {
-    fetch('/api/auth/demo-accounts')
+    fetch(`${API_BASE}/api/auth/demo-accounts`)
       .then((res) => res.json())
       .then((data) => setDemoAccounts(data.users || []))
       .catch(() => {});

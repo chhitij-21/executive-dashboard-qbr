@@ -1,6 +1,7 @@
 // frontend/src/components/ReportHistory.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import API_BASE from '../config/api';
 
 export default function ReportHistory({ onViewDashboard }) {
   const { user, clients, activeClient, activeLocation, isAdmin } = useAuth();
@@ -19,7 +20,7 @@ export default function ReportHistory({ onViewDashboard }) {
         queryParams.append('location', locationFilter);
       }
 
-      const res = await fetch(`/api/history?${queryParams.toString()}`);
+      const res = await fetch(`${API_BASE}/api/history?${queryParams.toString()}`);
       if (res.ok) {
         const json = await res.json();
         setHistory(json.history || []);
@@ -157,7 +158,7 @@ export default function ReportHistory({ onViewDashboard }) {
                               📈 Dashboard
                             </button>
                             <a
-                              href={`/api/ppt/${item.jobId}`}
+                              href={`${API_BASE}/api/ppt/${item.jobId}`}
                               className="btn-action btn-ppt"
                               download
                               title="Download PowerPoint Presentation"
@@ -165,7 +166,7 @@ export default function ReportHistory({ onViewDashboard }) {
                               📊 PPT
                             </a>
                             <a
-                              href={`/api/report/${item.jobId}`}
+                              href={`${API_BASE}/api/report/${item.jobId}`}
                               className="btn-action btn-log"
                               download
                               title="Download Validation Report"

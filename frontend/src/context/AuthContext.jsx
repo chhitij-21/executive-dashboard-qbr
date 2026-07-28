@@ -1,5 +1,6 @@
 // frontend/src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import API_BASE from '../config/api';
 
 const AuthContext = createContext(null);
 
@@ -25,7 +26,7 @@ export function AuthProvider({ children }) {
   const refreshClients = async () => {
     try {
       setLoadingClients(true);
-      const res = await fetch('/api/clients');
+      const res = await fetch(`${API_BASE}/api/clients`);
       if (res.ok) {
         const json = await res.json();
         setClients(json.clients || []);
@@ -57,7 +58,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })

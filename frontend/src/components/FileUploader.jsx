@@ -1,6 +1,7 @@
 // frontend/src/components/FileUploader.jsx
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import API_BASE from '../config/api';
 
 export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin } = useAuth();
@@ -52,7 +53,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     form.append('uploadedBy', user?.name || 'System User');
 
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: form });
       const json = await res.json();
 
       if (!res.ok) {
