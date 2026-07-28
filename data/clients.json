@@ -25,7 +25,7 @@
     "name": "Client A (Retail Chain)",
     "code": "CLT-A",
     "logo": "🛍️",
-    "status": "active",
+    "status": "inactive",
     "ruleConfigFile": "rules.yaml",
     "locations": [
       "All Locations",
@@ -41,7 +41,7 @@
     "name": "Client B (Tech Corp)",
     "code": "CLT-B",
     "logo": "🏢",
-    "status": "active",
+    "status": "inactive",
     "ruleConfigFile": "rules.yaml",
     "locations": [
       "All Locations",

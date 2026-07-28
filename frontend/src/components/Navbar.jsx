@@ -2,8 +2,14 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export default function Navbar({ activeTab, setActiveTab, onOpenLogin }) {
+export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSites = [] }) {
   const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin, logout } = useAuth();
+
+  const locationsList = React.useMemo(() => {
+    const defaultLocs = activeClient?.locations || ['All Locations'];
+    const merged = Array.from(new Set(['All Locations', ...reportSites, ...defaultLocs]));
+    return merged;
+  }, [activeClient, reportSites]);
 
   return (
     <header className="nav-bar">
@@ -50,7 +56,7 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin }) {
             value={activeLocation}
             onChange={(e) => setActiveLocation(e.target.value)}
           >
-            {(activeClient?.locations || ['All Locations']).map((loc) => (
+            {locationsList.map((loc) => (
               <option key={loc} value={loc}>
                 📍 {loc}
               </option>

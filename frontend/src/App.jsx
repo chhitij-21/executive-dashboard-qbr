@@ -17,44 +17,150 @@ import './styles/index.css';
 
 function MainPortal() {
   const { user, activeClient, activeLocation } = useAuth();
-  const [tab, setTab] = useState('upload'); // upload, dashboard, history, clients
+  const [tab, setTab] = useState('dashboard'); // default to executive dashboard view
   const [dashTab, setDashTab] = useState('executive');
   const [selectedSite, setSelectedSite] = useState('ALL');
 
-  const [jobId, setJobId] = useState(null);
+  const [jobId, setJobId] = useState('latest'); // Auto-load latest/master report by default
   const [status, setStatus] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Poll for job completion when jobId is set
+  // Fetch & poll for dashboard data whenever jobId changes or data is not loaded
   useEffect(() => {
-    if (!jobId || status === 'completed' || status === 'failed') return;
-    const interval = setInterval(async () => {
+    if (!jobId) return;
+    let isSubscribed = true;
+
+    const fetchDashboard = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/api/dashboard/${jobId}`);
-        if (res.status === 202) return;
+        if (res.status === 202) return false;
+        if (!res.ok) return false;
         const json = await res.json();
         if (json.status && json.status !== 'completed') {
           if (json.status === 'failed' || json.status === 'error') {
-            setStatus('failed');
-            clearInterval(interval);
+            if (isSubscribed) setStatus('failed');
           }
-          return;
+          return false;
         }
-        setDashboardData(json);
-        setStatus('completed');
-        setTab('dashboard'); // Auto-switch to dashboard view upon completion
-        clearInterval(interval);
+        if (isSubscribed) {
+          setDashboardData(json);
+          setStatus('completed');
+        }
+        return true;
       } catch (e) {
-        console.error('Poll error', e);
+        console.error('Fetch dashboard error:', e);
+        return false;
       }
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [jobId, status]);
+    };
+
+    fetchDashboard().then((loaded) => {
+      if (loaded || !isSubscribed) return;
+      const interval = setInterval(async () => {
+        const done = await fetchDashboard();
+        if (done) clearInterval(interval);
+      }, 1500);
+      return () => clearInterval(interval);
+    });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [jobId]);
+
+  // Filter dashboard data reactively based on activeLocation / selectedSite filter
+  const activeDashboardData = useMemo(() => {
+    if (!dashboardData) return null;
+
+    const locFilter = activeLocation && activeLocation !== 'All Locations' && activeLocation !== 'ALL'
+      ? activeLocation
+      : (selectedSite && selectedSite !== 'ALL' ? selectedSite : null);
+
+    if (!locFilter) return dashboardData;
+
+    const locKey = locFilter.trim().toLowerCase().split(' ')[0];
+
+    const devices = (dashboardData.devices || []).filter((d) => {
+      const site = String(d.SiteID || d.Location || '').trim().toLowerCase();
+      return site.includes(locKey);
+    });
+
+    const incidents = (dashboardData.incidents || []).filter((i) => {
+      const site = String(i.SiteID || i.Location || '').trim().toLowerCase();
+      return site.includes(locKey);
+    });
+
+    const activeDevices = devices.filter((d) => !d.__isStock);
+    const stockDevices  = devices.filter((d) => d.__isStock);
+
+    const switches = activeDevices.filter((d) => {
+      const type = String(d.DeviceType || '').toLowerCase();
+      const core = String(d.CoreNonCore || '').toLowerCase();
+      return type.includes('sw') || type.includes('switch') || core.includes('core') || core.includes('non');
+    });
+
+    const aps = activeDevices.filter((d) => {
+      const type = String(d.DeviceType || '').toLowerCase();
+      return type.includes('ap') || type.includes('access');
+    });
+
+    const switchUptimes = switches.map((d) => d.__effectiveUptime ?? 100);
+    const apUptimes     = aps.map((d) => d.__effectiveUptime ?? 100);
+    const allUptimes    = activeDevices.map((d) => d.__effectiveUptime ?? 100);
+
+    const overallUptime = allUptimes.length > 0 ? (allUptimes.reduce((a,b)=>a+b,0)/allUptimes.length).toFixed(2) : '100.00';
+    const switchUptime  = switchUptimes.length > 0 ? (switchUptimes.reduce((a,b)=>a+b,0)/switchUptimes.length).toFixed(2) : '100.00';
+    const apAvgUptime   = apUptimes.length > 0 ? (apUptimes.reduce((a,b)=>a+b,0)/apUptimes.length).toFixed(2) : '100.00';
+
+    const incFreeCount  = activeDevices.filter((d) => !incidents.some((i) => i.DeviceID === d.DeviceID)).length;
+    const incFreePct    = activeDevices.length > 0 ? ((incFreeCount / activeDevices.length) * 100).toFixed(2) : '100.00';
+
+    const breaches = activeDevices.filter((d) => d.__slaBreach).length;
+    const slaPct   = activeDevices.length > 0 ? (((activeDevices.length - breaches) / activeDevices.length) * 100).toFixed(2) : '100.00';
+
+    const siteSummary = (dashboardData.siteSummary || []).filter((s) => {
+      return s.siteId.toLowerCase().includes(locKey);
+    });
+
+    return {
+      ...dashboardData,
+      executiveSummary: {
+        ...dashboardData.executiveSummary,
+        totalSites: siteSummary.length || 1,
+        totalDevices: activeDevices.length,
+        totalStockDevices: stockDevices.length,
+        totalSwitches: switches.length,
+        totalAPs: aps.length,
+        overallUptime,
+        incidentFreePercent: incFreePct,
+        slaCompliance: slaPct,
+        totalIncidents: incidents.length,
+      },
+      siteSummary,
+      switchAnalytics: {
+        ...dashboardData.switchAnalytics,
+        totalSwitches: switches.length,
+        coreUptime: switchUptime,
+        nonCoreUptime: switchUptime,
+        overallUptime: switchUptime,
+        switchIncidents: incidents.filter(i => switches.some(s => s.DeviceID === i.DeviceID)).length,
+        top10SwitchOutages: (dashboardData.switchAnalytics?.top10SwitchOutages || []).filter(s => String(s.Location).toLowerCase().includes(locKey)),
+      },
+      apAnalytics: {
+        ...dashboardData.apAnalytics,
+        totalAPs: aps.length,
+        apAverageUptime: apAvgUptime,
+        apIncidents: incidents.filter(i => aps.some(a => a.DeviceID === i.DeviceID)).length,
+        top10APOutages: (dashboardData.apAnalytics?.top10APOutages || []).filter(a => String(a.Location).toLowerCase().includes(locKey)),
+      },
+      devices,
+      incidents,
+    };
+  }, [dashboardData, activeLocation, selectedSite]);
 
   // Requirement 1: Device Uptime Distribution for ALL Switches (Core and Non-Core)
   const switchUptimeChartData = useMemo(() => {
-    const allSwitches = (dashboardData?.devices || []).filter((d) => {
+    const allSwitches = (activeDashboardData?.devices || []).filter((d) => {
       if (d.__isStock) return false;
       const type = String(d.DeviceType || '').toLowerCase();
       const core = String(d.CoreNonCore || '').toLowerCase();
@@ -72,19 +178,19 @@ function MainPortal() {
           backgroundColor: allSwitches.map((d) => {
             const isCore = String(d.CoreNonCore || '').toLowerCase().includes('core') && !String(d.CoreNonCore || '').toLowerCase().includes('non');
             const uptime = d.__effectiveUptime ?? 100;
-            if (uptime < 99.9) return 'hsla(0,73%,58%,0.85)'; // Red for SLA breach
-            return isCore ? 'hsla(262,52%,62%,0.85)' : 'hsla(212,92%,52%,0.85)'; // Purple for Core, Blue for Non-Core
+            if (uptime < 99.9) return 'hsla(0,73%,58%,0.85)';
+            return isCore ? 'hsla(262,52%,62%,0.85)' : 'hsla(212,92%,52%,0.85)';
           }),
           borderRadius: 3,
         },
       ],
     };
-  }, [dashboardData]);
+  }, [activeDashboardData]);
 
-  // Requirement 5: Formatted RCA Category Distribution Doughnut chart
+  // Formatted RCA Category Distribution chart
   const rcaChartData = useMemo(() => {
-    const items = dashboardData?.rcaAnalytics?.standardBreakdown?.filter((r) => r.count > 0) ||
-      dashboardData?.rcaAnalytics?.rawBreakdown?.filter((r) => r.count > 0) || [];
+    const items = activeDashboardData?.rcaAnalytics?.standardBreakdown?.filter((r) => r.count > 0) ||
+      activeDashboardData?.rcaAnalytics?.rawBreakdown?.filter((r) => r.count > 0) || [];
     if (!items.length) return null;
     return {
       labels: items.map((r) => r.category || r.rca),
@@ -103,21 +209,21 @@ function MainPortal() {
         },
       ],
     };
-  }, [dashboardData]);
+  }, [activeDashboardData]);
 
   const slaMonthlyData = useMemo(() => {
-    const trend = dashboardData?.slaAnalytics?.monthlySLATrend || [];
+    const trend = activeDashboardData?.slaAnalytics?.monthlySLATrend || [];
     return trend.map((t) => ({ label: t.month, value: parseFloat(t.slaPercent) }));
-  }, [dashboardData]);
+  }, [activeDashboardData]);
 
   const incidentTrendData = useMemo(() => {
-    const trend = dashboardData?.incidentAnalytics?.monthlyTrend || [];
+    const trend = activeDashboardData?.incidentAnalytics?.monthlyTrend || [];
     return trend.map((t) => ({ label: t.month, value: t.count }));
-  }, [dashboardData]);
+  }, [activeDashboardData]);
 
   // Render full 7-section Executive Dashboard
   const renderDashboard = () => {
-    if (!dashboardData) {
+    if (!activeDashboardData) {
       return (
         <div className="empty-state card pad-lg">
           <span className="empty-state-icon">📊</span>
@@ -128,13 +234,13 @@ function MainPortal() {
       );
     }
 
-    const exec = dashboardData.executiveSummary || {};
-    const siteSummary = dashboardData.siteSummary || [];
-    const switchAn = dashboardData.switchAnalytics || {};
-    const apAn = dashboardData.apAnalytics || {};
-    const incAn = dashboardData.incidentAnalytics || {};
-    const rcaAn = dashboardData.rcaAnalytics || {};
-    const slaAn = dashboardData.slaAnalytics || {};
+    const exec = activeDashboardData.executiveSummary || {};
+    const siteSummary = activeDashboardData.siteSummary || [];
+    const switchAn = activeDashboardData.switchAnalytics || {};
+    const apAn = activeDashboardData.apAnalytics || {};
+    const incAn = activeDashboardData.incidentAnalytics || {};
+    const rcaAn = activeDashboardData.rcaAnalytics || {};
+    const slaAn = activeDashboardData.slaAnalytics || {};
 
     return (
       <div className="dashboard-section">
@@ -248,7 +354,7 @@ function MainPortal() {
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', margin: '1rem 0' }}>
               <button
                 className={`dash-tab ${selectedSite === 'ALL' ? 'active' : ''}`}
-                onClick={() => setSelectedSite('ALL')}
+                onClick={() => { setSelectedSite('ALL'); setActiveLocation('All Locations'); }}
               >
                 🌐 All Sites Overview
               </button>
@@ -256,7 +362,7 @@ function MainPortal() {
                 <button
                   key={s.siteId}
                   className={`dash-tab ${selectedSite === s.siteId ? 'active' : ''}`}
-                  onClick={() => setSelectedSite(s.siteId)}
+                  onClick={() => { setSelectedSite(s.siteId); setActiveLocation(s.siteId); }}
                 >
                   🏢 {s.siteId}
                 </button>
@@ -519,9 +625,11 @@ function MainPortal() {
     );
   };
 
+  const reportSites = useMemo(() => (dashboardData?.siteSummary || []).map((s) => s.siteId), [dashboardData]);
+
   return (
     <div className="app-container">
-      <Navbar activeTab={tab} setActiveTab={setTab} onOpenLogin={() => setIsLoginOpen(true)} />
+      <Navbar activeTab={tab} setActiveTab={setTab} onOpenLogin={() => setIsLoginOpen(true)} reportSites={reportSites} />
 
       <main className="main-content">
         {tab === 'upload' && (

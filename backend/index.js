@@ -38,7 +38,14 @@ const REPORTS_DIR = process.env.VERCEL
 
 // Temp file uploader with os.tmpdir fallback for Vercel serverless
 const tempUploadDir = process.env.VERCEL ? os.tmpdir() : INCOMING_DIR;
-const upload = multer({ dest: tempUploadDir });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, tempUploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.xlsx';
+    cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+  }
+});
+const upload = multer({ storage });
 
 // In-memory active job cache
 const jobs = {};
@@ -224,18 +231,66 @@ app.post('/api/upload', upload.fields([
 });
 
 // ── Dashboard JSON Endpoint ────────────────────────────────────────────────
-app.get('/api/dashboard/:jobId', (req, res) => {
-  const jobId = req.params.jobId;
-  const job = jobs[jobId] || historyService.getReportByJobId(jobId);
+app.get('/api/dashboard/:jobId', async (req, res) => {
+  const reqJobId = req.params.jobId;
+  let job = null;
+
+  if (reqJobId === 'latest' || reqJobId === 'default') {
+    const history = historyService.getHistory();
+    job = history.find((h) => h.status === 'completed') || Object.values(jobs).find((j) => j.status === 'completed');
+
+    if (!job) {
+      // Auto-process default master dataset if present in workspace root
+      const incPath = path.resolve('jfl incidents.xlsx');
+      const invPath = path.resolve('JFL Updated Inventory.xlsx');
+
+      if (fs.existsSync(incPath)) {
+        try {
+          console.log('[server] Auto-processing default master dataset for initial load...');
+          const autoJobId = 'master-jfl-q1-fy2026';
+          const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
+
+          const result = await processJFLWorkbooks(
+            incPath,
+            fs.existsSync(invPath) ? invPath : null,
+            outputDir
+          );
+
+          if (result && result.success) {
+            job = historyService.recordReport({
+              jobId: autoJobId,
+              clientId: 'client-jfl',
+              clientName: 'Jubilant Foodworks Ltd (JFL)',
+              location: 'All Locations',
+              reportPeriod: 'Q1 FY2026',
+              uploadedBy: 'System Auto-Engine',
+              status: 'completed',
+              dashboardPath: result.dashboardPath,
+              pptPath: result.pptPath,
+              reportPath: result.reportPath,
+              dataQualityPath: result.dataQualityPath,
+              processingLogPath: result.processingLogPath,
+            });
+            jobs[autoJobId] = { status: 'completed', ...result, ...job };
+          }
+        } catch (err) {
+          console.error('[server] Error auto-processing default dataset:', err.message);
+        }
+      }
+    }
+  } else {
+    job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+  }
+
   if (!job) return res.status(404).json({ error: 'Job not found' });
   if (job.status !== 'completed') return res.status(202).json({ status: job.status, error: job.error });
 
   let dPath = job.dashboardPath;
   if (!dPath || !fs.existsSync(dPath)) {
-    dPath = path.join(REPORTS_DIR, `job_${jobId}`, 'dashboard_data.json');
+    dPath = path.join(REPORTS_DIR, `job_${job.jobId || reqJobId}`, 'dashboard_data.json');
   }
   if (!fs.existsSync(dPath)) {
-    dPath = path.join(REPORTS_DIR, `job_${jobId}`, 'dashboard.json');
+    dPath = path.join(REPORTS_DIR, `job_${job.jobId || reqJobId}`, 'dashboard.json');
   }
 
   try {
@@ -284,11 +339,25 @@ app.get('*', (req, res) => {
 });
 
 if (require.main === module || !process.env.VERCEL) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[server] Multi-Client Web Portal running at http://localhost:${PORT}`);
-    console.log(`[server] Reports directory: ${REPORTS_DIR}`);
-  });
+  const DEFAULT_PORT = process.env.PORT || 3000;
+
+  const startServer = (port) => {
+    const server = app.listen(port, '0.0.0.0', () => {
+      console.log(`[server] Multi-Client Web Portal running at http://localhost:${port}`);
+      console.log(`[server] Reports directory: ${REPORTS_DIR}`);
+    });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.warn(`[server] Port ${port} occupied. Trying port ${port + 1}...`);
+        startServer(port + 1);
+      } else {
+        console.error('[server] Startup error:', err.message);
+      }
+    });
+  };
+
+  startServer(Number(DEFAULT_PORT));
 }
 
 module.exports = app;

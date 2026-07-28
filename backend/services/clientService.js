@@ -21,7 +21,7 @@ const DEFAULT_CLIENTS = [
     logo: '🍔',
     status: 'active',
     ruleConfigFile: 'rules.yaml',
-    locations: ['All Locations', 'Noida', 'Delhi', 'Bangalore', 'Mumbai', 'Gurgaon', 'Hyderabad', 'Pune', 'Kolkata'],
+    locations: ['All Locations', 'Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Nagpur', 'Noida'],
     createdAt: '2026-01-01T00:00:00.000Z',
     description: 'Master QBR client for Jubilant Foodworks Ltd ecosystem.'
   },

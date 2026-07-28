@@ -15,18 +15,37 @@ const CUSTOMER_NAME    = 'Jubilant Foodworks Ltd (JFL)';
 const REPORTING_PERIOD = 'Q1 FY2026 (7 Apr – 6 Jul 2026)';
 const SLA_TARGET       = 99.9;
 
+function normalizeSiteName(site) {
+  if (!site) return 'Unknown';
+  const str = String(site).trim();
+  const lower = str.toLowerCase();
+
+  if (/blr|bangalore/i.test(lower)) return 'Bangalore';
+  if (/g.*noida|gr.*noida|greater.*noida|grater.*noida/i.test(lower)) return 'Greater Noida';
+  if (/guwahati/i.test(lower)) return 'Guwahati';
+  if (/hyd|hyderabad/i.test(lower)) return 'Hyderabad';
+  if (/mohali/i.test(lower)) return 'Mohali';
+  if (/mumbai/i.test(lower)) return 'Mumbai';
+  if (/nagpur/i.test(lower)) return 'Nagpur';
+  if (/^noida$/i.test(lower)) return 'Noida';
+
+  return str;
+}
+
 function isStockDevice(d) {
   if (!d) return false;
   const loc = String(d.SiteID || d.Location || '').trim().toLowerCase();
   const devId = String(d.DeviceID || '').trim().toLowerCase();
   const rack = String(d.Rack || '').trim().toLowerCase();
   const hostname = String(d.Hostname || '').trim().toLowerCase();
+  const devType = String(d.DeviceType || '').trim().toLowerCase();
 
   return (
     /stock|inventory|spare|warehouse|unassigned/i.test(loc) ||
     /stock|spare/i.test(devId) ||
     /stock|spare/i.test(rack) ||
-    /stock|spare/i.test(hostname)
+    /stock|spare/i.test(hostname) ||
+    /stock|spare/i.test(devType)
   );
 }
 
@@ -538,8 +557,12 @@ function calculateMTTRHours(incidents) {
   let count = 0;
   incidents.forEach(inc => {
     const dur = parseFloat(inc.DowntimeHours || inc.OutageHours || inc.ResolutionTimeHours || inc['Resolution Time (Hrs)']);
+    const min = parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)'] || inc['Total Resolution Time']);
     if (!isNaN(dur) && dur > 0) {
       totalHours += dur;
+      count++;
+    } else if (!isNaN(min) && min > 0) {
+      totalHours += (min / 60);
       count++;
     } else if (inc.OpenTime && inc.ResolvedTime) {
       const open = typeof inc.OpenTime === 'number' ? excelDateToJS(inc.OpenTime) : new Date(inc.OpenTime);

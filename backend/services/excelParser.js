@@ -33,15 +33,20 @@ function detectSheets(workbookData) {
   const incidentSheet = sheets.find((s) => s.trim() === 'Raw')
     || sheets.find((s) => s.trim() === 'JFL')
     || sheets.find((s) => s.trim().toLowerCase() === 'raw')
+    || sheets.find((s) => s.trim().toLowerCase().includes('incident'))
+    || sheets.find((s) => s.trim().toLowerCase().includes('jfl'))
     || (sheets.length > 0 ? sheets[0] : null);
 
-  const uptimeSheet = sheets.find((s) => s.trim().toLowerCase().startsWith('all location')) || null;
+  const uptimeSheet = sheets.find((s) => s.trim().toLowerCase().startsWith('all location'))
+    || sheets.find((s) => s.trim().toLowerCase().includes('uptime'))
+    || null;
 
   const locationSheets = sheets.filter((s) => {
     const lower = s.trim().toLowerCase();
     return (
       s !== incidentSheet &&
       !lower.startsWith('all location') &&
+      !lower.includes('uptime') &&
       !lower.startsWith('rca') &&
       !lower.startsWith('device wise')
     );
@@ -55,6 +60,23 @@ function detectSheets(workbookData) {
   };
 }
 
+function normalizeSiteName(site) {
+  if (!site) return 'Unknown';
+  const str = String(site).trim();
+  const lower = str.toLowerCase();
+
+  if (/blr|bangalore/i.test(lower)) return 'Bangalore';
+  if (/g.*noida|gr.*noida|greater.*noida|grater.*noida/i.test(lower)) return 'Greater Noida';
+  if (/guwahati/i.test(lower)) return 'Guwahati';
+  if (/hyd|hyderabad/i.test(lower)) return 'Hyderabad';
+  if (/mohali/i.test(lower)) return 'Mohali';
+  if (/mumbai/i.test(lower)) return 'Mumbai';
+  if (/nagpur/i.test(lower)) return 'Nagpur';
+  if (/^noida$/i.test(lower)) return 'Noida';
+
+  return str;
+}
+
 /**
  * Merge all location sheets from the inventory file into one flat device array.
  */
@@ -66,11 +88,14 @@ function mergeInventorySheets(workbookData, locationSheets) {
       const serial = row['Serial No.'] || row['Serial No'] || row['SerialNo'] || row['Device Serial'] || row['DeviceID'] || '';
       if (!serial) return;
 
+      const rawLoc = row['Location'] || sheet;
+      const normLoc = normalizeSiteName(rawLoc);
+
       devices.push({
         DeviceID:   String(serial).trim(),
         Hostname:   row['Hostname'] || row['Host Name'] || '',
-        Location:   row['Location'] || sheet,
-        SiteID:     row['Location'] || sheet,
+        Location:   normLoc,
+        SiteID:     normLoc,
         DeviceType: row['Device Type'] || row['DeviceType'] || '',
         Rack:       row['Rack no.'] || row['Rack'] || row['Rack Number'] || '',
         CoreNonCore:row['Core/Non Core'] || row['Core Non Core'] || '',
@@ -118,12 +143,15 @@ function parseIncidentSheet(rows) {
       ''
     ).trim();
 
+    const rawLoc = row['Device Name'] || row['Location'] || row['Site'] || row['SiteID'] || row.__source?.sheet || '';
+    const normLoc = normalizeSiteName(rawLoc);
+
     return {
       IncidentNumber: ticketNo,
       TicketNumber:   ticketNo,
       DeviceID:       devId,
-      Location:       row['Device Name'] || row['Location'] || row['Site'] || row['SiteID'] || '',
-      SiteID:         row['Device Name'] || row['Location'] || row['Site'] || row['SiteID'] || '',
+      Location:       normLoc,
+      SiteID:         normLoc,
       DeviceType:     row['Device Type'] || row['DeviceType'] || '',
       Rack:           row['Rack Number'] || row['Rack'] || '',
       Priority:       row['Priority'] || row['Severity'] || '',
