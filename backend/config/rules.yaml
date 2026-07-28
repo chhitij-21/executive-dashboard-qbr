@@ -1,0 +1,79 @@
+# Global business rules configuration
+# All values are configurable — no hardcoding in application code.
+
+# ── SLA ──────────────────────────────────────────────────────────────────────
+sla:
+  resolution_threshold_days: 2
+  uptime_target_percent: 99.9       # Confirmed by user
+
+# ── Health Score ─────────────────────────────────────────────────────────────
+health_score:
+  # Formula: (uptime% × uptime_weight) + (incident_free% × incident_free_weight)
+  weights:
+    uptime: 0.6
+    incident_free: 0.4
+  thresholds:
+    excellent: 95
+    good: 85
+    fair: 70
+    poor: 0
+
+# ── Severity Mapping ──────────────────────────────────────────────────────────
+# core devices (listed as core in Excel) → High
+# non-core APs → Low; other non-core → Medium
+severity_device_mapping:
+  core: "High"
+  non_core: "Medium"
+  ap: "Low"
+  access_point: "Low"
+
+# Maps raw severity text from incidents sheet to standard labels
+incident_severity_values:
+  critical: ["P1", "Critical", "CRITICAL", "High", "HIGH", "1"]
+  major:    ["P2", "Major", "MAJOR", "Medium", "MEDIUM", "2"]
+  minor:    ["P3", "Minor", "MINOR", "Low", "LOW", "3"]
+
+# ── RCA Category Mapping ──────────────────────────────────────────────────────
+# Maps raw Excel RCA text → one of 6 standard categories
+# Add more mappings as needed without code changes.
+rca_category_mapping:
+  "Third Party Device issue":       "ISP Issues"
+  "Third Party Device Issue":       "ISP Issues"
+  "ISP issue":                      "ISP Issues"
+  "ISP Issue":                      "ISP Issues"
+  "ISP":                            "ISP Issues"
+  "Client Side Activity":           "Client Side Issues"
+  "Client side activity":           "Client Side Issues"
+  "Client Side issue":              "Client Side Issues"
+  "Client Issue":                   "Client Side Issues"
+  "Power Failure":                  "Device Power Issues"
+  "power failure":                  "Device Power Issues"
+  "Power Issue":                    "Device Power Issues"
+  "Power Cut":                      "Device Power Issues"
+  "Hardware Failure":               "Hardware Failure"
+  "hardware failure":               "Hardware Failure"
+  "Hardware Issue":                 "Hardware Failure"
+  "Device Failure":                 "Hardware Failure"
+  "Configuration Error":            "Configuration Issues"
+  "Configuration Issue":            "Configuration Issues"
+  "config error":                   "Configuration Issues"
+  "Misconfiguration":               "Configuration Issues"
+  "Unknown":                        "Unknown"
+  "Others":                         "Unknown"
+  "Other":                          "Unknown"
+
+# ── Standard RCA Categories (display order) ───────────────────────────────────
+rca_standard_categories:
+  - "Device Power Issues"
+  - "ISP Issues"
+  - "Client Side Issues"
+  - "Hardware Failure"
+  - "Configuration Issues"
+  - "Unknown"
+
+# ── Device Type Detection ─────────────────────────────────────────────────────
+device_type_patterns:
+  switch: ["switch", "sw"]
+  ap: ["ap", "access point", "accesspoint", "wireless"]
+  router: ["router", "rtr"]
+  firewall: ["firewall", "fw", "asa"]

@@ -1,0 +1,25 @@
+# Processing Log
+
+- `2026-07-28T03:39:52.929Z` JFL pipeline started
+- `2026-07-28T03:39:53.002Z` Incident file parsed — sheets: Updated inventory, Gr._Noida, Noida, Nagpur, Mumbai_DC, Mohali, Hyderabad, Guwahati, Bangalore
+- `2026-07-28T03:39:53.140Z` Inventory file parsed — sheets: Raw, RCA, Device Wise Uptime , All Location , BLR, Grater Noida , Guwahati, Hyd, mohali, Mumbai, Nagpur, Noida
+- `2026-07-28T03:39:53.141Z` Incident sheets detected: incidentSheet=Updated inventory, uptimeSheet=null
+- `2026-07-28T03:39:53.142Z` Raw incident rows: 441
+- `2026-07-28T03:39:53.142Z` Uptime summary devices: 0
+- `2026-07-28T03:39:53.143Z` All Location sheet rows: 0
+- `2026-07-28T03:39:53.144Z` Inventory devices merged: 450 from 8 sheets
+- `2026-07-28T03:39:53.144Z` Parsed incidents: 441
+- `2026-07-28T03:39:53.145Z` Devices enriched with uptime. Breaching SLA: 0
+- `2026-07-28T03:39:53.145Z` Site "BLR" has zero incidents — treated as 100% uptime per spec.
+- `2026-07-28T03:39:53.146Z` Site "Grater Noida " has zero incidents — treated as 100% uptime per spec.
+- `2026-07-28T03:39:53.146Z` Site "Hyd" has zero incidents — treated as 100% uptime per spec.
+- `2026-07-28T03:39:53.147Z` Site "mohali" has zero incidents — treated as 100% uptime per spec.
+- `2026-07-28T03:39:53.147Z` Site "Mumbai" has zero incidents — treated as 100% uptime per spec.
+- `2026-07-28T03:39:53.148Z` Building analytics sections...
+- `2026-07-28T03:39:53.149Z` Devices — Switches: 0, APs: 0, Core: 0, Non-Core: 0
+- `2026-07-28T03:39:53.151Z` Analytics complete
+- `2026-07-28T03:39:53.153Z` Data quality report written
+- `2026-07-28T03:39:53.153Z` Generating PPT...
+- `2026-07-28T03:39:53.233Z` PPT generated: C:\Users\Chhitij\Desktop\New folder\Executive Dashboard & Automated QBR Generator\reports\job_7a35673f-3ca5-45ba-b4aa-747d542efe23\JFL_QBR_1785209993153.pptx
+- `2026-07-28T03:39:53.240Z` Dashboard JSON saved
+- `2026-07-28T03:39:53.246Z` Pipeline complete ✓
