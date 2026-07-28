@@ -4,6 +4,7 @@
 
 const authService = require('../services/authService');
 
+const SERVICE_USER = process.env.SERVICE_USER || 'svc_dashboard';
 const SERVICE_PASS = process.env.SERVICE_PASS || 'svc_pass_default';
 
 /**
