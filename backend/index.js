@@ -59,8 +59,8 @@ if (process.env.VERCEL) {
   });
 }
 
-app.use(express.static(path.join(__dirname, '..', 'dist')));
 app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
+app.use(express.static(path.join(__dirname, '..', 'dist')));
 
 // Directories (os.tmpdir fallback for Vercel serverless environment)
 const INCOMING_DIR = process.env.VERCEL
@@ -453,10 +453,10 @@ app.get(['/api/status/:jobId', '/status/:jobId'], (req, res) => {
 
 // ── SPA Fallback ─────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
-  const idxRoot = path.join(__dirname, '..', 'dist', 'index.html');
   const idxFrontend = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
-  if (fs.existsSync(idxRoot)) return res.sendFile(idxRoot);
+  const idxRoot = path.join(__dirname, '..', 'dist', 'index.html');
   if (fs.existsSync(idxFrontend)) return res.sendFile(idxFrontend);
+  if (fs.existsSync(idxRoot)) return res.sendFile(idxRoot);
   res.json({ message: 'Executive Dashboard & Multi-Client QBR Portal API running.' });
 });
 
