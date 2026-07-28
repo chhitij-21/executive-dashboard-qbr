@@ -14,13 +14,23 @@ const { validateUpload } = require('./services/uploadValidationService');
 const authService = require('./services/authService');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+app.options('*', cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
 
-// Directories
-const INCOMING_DIR = path.resolve('data', 'incoming');
-const REPORTS_DIR = path.resolve('reports');
+// Directories (os.tmpdir fallback for Vercel serverless environment)
+const INCOMING_DIR = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'incoming')
+  : path.resolve('data', 'incoming');
+const REPORTS_DIR = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'reports')
+  : path.resolve('reports');
+
 [INCOMING_DIR, REPORTS_DIR].forEach((d) => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 });
@@ -270,8 +280,12 @@ app.get('*', (req, res) => {
   else res.json({ message: 'Executive Dashboard & Multi-Client QBR Portal API running.' });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[server] Multi-Client Web Portal running at http://localhost:${PORT}`);
-  console.log(`[server] Reports directory: ${REPORTS_DIR}`);
-});
+if (require.main === module || !process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[server] Multi-Client Web Portal running at http://localhost:${PORT}`);
+    console.log(`[server] Reports directory: ${REPORTS_DIR}`);
+  });
+}
+
+module.exports = app;

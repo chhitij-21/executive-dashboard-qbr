@@ -1,20 +1,25 @@
 // frontend/src/components/LoginModal.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import API_BASE from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 export default function LoginModal({ isOpen, onClose }) {
-  const { login } = useAuth();
+  const { login, isBackendOffline } = useAuth();
   const [email, setEmail] = useState('admin@portal.com');
   const [password, setPassword] = useState('admin123');
   const [error, setError] = useState(null);
   const [demoAccounts, setDemoAccounts] = useState([]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/auth/demo-accounts`)
-      .then((res) => res.json())
+    fetch(`${API_BASE_URL}/api/auth/demo-accounts`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Backend Offline');
+        return res.json();
+      })
       .then((data) => setDemoAccounts(data.users || []))
-      .catch(() => {});
+      .catch(() => {
+        setError('Backend Offline');
+      });
   }, []);
 
   if (!isOpen) return null;
@@ -26,7 +31,7 @@ export default function LoginModal({ isOpen, onClose }) {
     if (res.success) {
       onClose();
     } else {
-      setError(res.error);
+      setError(res.error || 'Backend Offline');
     }
   };
 
@@ -38,7 +43,7 @@ export default function LoginModal({ isOpen, onClose }) {
     if (res.success) {
       onClose();
     } else {
-      setError(res.error);
+      setError(res.error || 'Backend Offline');
     }
   };
 
@@ -50,15 +55,18 @@ export default function LoginModal({ isOpen, onClose }) {
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        {error && <div className="alert-error">⚠️ {error}</div>}
+        {(error || isBackendOffline) && (
+          <div className="alert-error">⚠️ {error || 'Backend Offline'}</div>
+        )}
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label>Email Address</label>
+            <label>Username / Email</label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="Username or Email"
               required
             />
           </div>

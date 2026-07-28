@@ -4,9 +4,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
-const DATA_DIR = path.resolve(__dirname, '..', '..', 'data');
+const DATA_DIR = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'data')
+  : path.resolve(__dirname, '..', '..', 'data');
 const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
 
 // Pre-seeded clients

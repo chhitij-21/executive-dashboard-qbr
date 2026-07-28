@@ -12,11 +12,11 @@ import Chart from './components/Chart';
 import DataTable from './components/DataTable';
 import SiteSummaryTable from './components/SiteSummaryTable';
 import TrendChart from './components/TrendChart';
-import API_BASE from './config/api';
+import { API_BASE_URL } from './config/api';
 import './styles/index.css';
 
 function MainPortal() {
-  const { activeClient, activeLocation } = useAuth();
+  const { user, activeClient, activeLocation } = useAuth();
   const [tab, setTab] = useState('upload'); // upload, dashboard, history, clients
   const [dashTab, setDashTab] = useState('executive');
   const [selectedSite, setSelectedSite] = useState('ALL');
@@ -31,7 +31,7 @@ function MainPortal() {
     if (!jobId || status === 'completed' || status === 'failed') return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/dashboard/${jobId}`);
+        const res = await fetch(`${API_BASE_URL}/api/dashboard/${jobId}`);
         if (res.status === 202) return;
         const json = await res.json();
         if (json.status && json.status !== 'completed') {
@@ -138,6 +138,11 @@ function MainPortal() {
 
     return (
       <div className="dashboard-section">
+        {/* Success Notifications Banner */}
+        <div className="alert-box alert-success" style={{ marginBottom: '1rem', background: '#d4edda', color: '#155724', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #c3e6cb', fontWeight: 500 }}>
+          ✨ <strong>Dashboard Generated Successfully</strong> • 📊 <strong>PowerPoint Generated Successfully</strong> • ✅ <strong>Validation Completed</strong> — <strong>Ready for Download</strong>
+        </div>
+
         {/* Customer header */}
         <div className="section-header card pad-md">
           <div>
@@ -151,7 +156,7 @@ function MainPortal() {
           <div className="download-header-actions">
             <div className="status-badge completed">✓ Validated Engine</div>
             {jobId && (
-              <a href={`${API_BASE}/api/ppt/${jobId}`} className="btn-primary" download>
+              <a href={`${API_BASE_URL}/api/ppt/${jobId}`} className="btn-primary" download>
                 📊 Download PPT QBR Report
               </a>
             )}
@@ -547,7 +552,7 @@ function MainPortal() {
         {tab === 'clients' && <ClientManager />}
       </main>
 
-      <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+      <LoginModal isOpen={!user || isLoginOpen} onClose={() => setIsLoginOpen(false)} />
     </div>
   );
 }

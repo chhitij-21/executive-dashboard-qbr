@@ -1,10 +1,10 @@
 // frontend/src/components/ClientManager.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import API_BASE from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 export default function ClientManager() {
-  const { clients, activeClient, activeLocation, setActiveClient, setActiveLocation, refreshClients, isAdmin } = useAuth();
+  const { clients, activeClient, activeLocation, setActiveClient, setActiveLocation, refreshClients, isAdmin, isBackendOffline } = useAuth();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newClient, setNewClient] = useState({
     name: '',
@@ -27,7 +27,7 @@ export default function ClientManager() {
       .filter(Boolean);
 
     try {
-      const res = await fetch(`${API_BASE}/api/clients`, {
+      const res = await fetch(`${API_BASE_URL}/api/clients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -52,7 +52,7 @@ export default function ClientManager() {
       });
       refreshClients();
     } catch (err) {
-      setErrorMsg(err.message);
+      setErrorMsg(err.message.includes('fetch') ? 'Backend Offline' : err.message);
     }
   };
 
@@ -60,7 +60,7 @@ export default function ClientManager() {
     if (!isAdmin) return;
     const nextStatus = client.status === 'active' ? 'inactive' : 'active';
     try {
-      await fetch(`${API_BASE}/api/clients/${client.id}`, {
+      await fetch(`${API_BASE_URL}/api/clients/${client.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),
@@ -76,7 +76,7 @@ export default function ClientManager() {
     if (!locName || !locName.trim()) return;
 
     try {
-      await fetch(`${API_BASE}/api/clients/${clientId}/locations`, {
+      await fetch(`${API_BASE_URL}/api/clients/${clientId}/locations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ location: locName.trim() }),

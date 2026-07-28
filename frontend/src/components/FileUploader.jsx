@@ -1,11 +1,9 @@
-// frontend/src/components/FileUploader.jsx
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import API_BASE from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 export default function FileUploader({ onJobStarted, onJobCompleted }) {
-  const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin } = useAuth();
-
+  const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin, isBackendOffline } = useAuth();
   const [incidentFile, setIncidentFile] = useState(null);
   const [inventoryFile, setInventoryFile] = useState(null);
   const [reportPeriod, setReportPeriod] = useState('Q1 FY2026 (7 Apr – 6 Jul 2026)');
@@ -53,7 +51,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     form.append('uploadedBy', user?.name || 'System User');
 
     try {
-      const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: form });
+      const res = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
       const json = await res.json();
 
       if (!res.ok) {
@@ -71,9 +69,29 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       if (onJobStarted) onJobStarted(json.jobId);
     } catch (err) {
       setStatus('failed');
-      setErrorMsg(err.message);
+      setErrorMsg('Backend Offline');
     }
   };
+
+  const STAGES = [
+    'Uploading...',
+    'Validating Files...',
+    'Running Rule Engine...',
+    'Calculating KPIs...',
+    'Generating Dashboard...',
+    'Generating PowerPoint...',
+    'Completed'
+  ];
+  const [stageIndex, setStageIndex] = useState(0);
+
+  React.useEffect(() => {
+    if (status !== 'processing') return;
+    setStageIndex(0);
+    const interval = setInterval(() => {
+      setStageIndex((prev) => (prev < STAGES.length - 2 ? prev + 1 : prev));
+    }, 750);
+    return () => clearInterval(interval);
+  }, [status]);
 
   return (
     <div className="upload-container">
@@ -242,7 +260,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               disabled={status === 'processing' || !incidentFile}
             >
               {status === 'processing' ? (
-                <>⏳ Running Processing Engine...</>
+                <>⏳ {STAGES[stageIndex]}</>
               ) : (
                 <>⚡ Validate & Generate QBR Reports</>
               )}
@@ -255,8 +273,8 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           <div className="processing-indicator">
             <div className="spinner"></div>
             <div className="processing-text">
-              <h4>Processing Report for {activeClient?.name} ({activeLocation})</h4>
-              <p>Parsing Excel data • Applying rule engine • Calculating KPIs • Building PowerPoint slides</p>
+              <h4>⏳ {STAGES[stageIndex]}</h4>
+              <p>Processing Report for {activeClient?.name} ({activeLocation}) • Parsing Excel data • Applying rule engine • Calculating KPIs • Building PowerPoint slides</p>
             </div>
           </div>
         )}

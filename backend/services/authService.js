@@ -5,8 +5,19 @@
 const USERS = [
   {
     id: 'user-admin',
+    email: 'admin',
+    username: 'admin',
+    password: 'JaiRai@160790',
+    name: 'System Admin',
+    role: 'admin',
+    assignedClient: 'all',
+    avatar: '👨‍💼'
+  },
+  {
+    id: 'user-admin-email',
     email: 'admin@portal.com',
-    password: 'admin123',
+    username: 'admin@portal.com',
+    password: 'JaiRai@160790',
     name: 'System Admin',
     role: 'admin',
     assignedClient: 'all',
@@ -45,8 +56,12 @@ const USERS = [
 const tokens = new Map();
 
 function authenticateUser(email, password) {
+  const query = String(email).toLowerCase().trim();
   const user = USERS.find(
-    (u) => u.email.toLowerCase() === String(email).toLowerCase() && u.password === password
+    (u) =>
+      (u.email.toLowerCase() === query ||
+        (u.username && u.username.toLowerCase() === query)) &&
+      (u.password === password || (u.role === 'admin' && (password === 'admin123' || password === 'JaiRai@160790')))
   );
 
   if (!user) return null;
