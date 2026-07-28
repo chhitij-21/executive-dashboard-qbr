@@ -16,13 +16,29 @@ const ruleEngine = require('./services/ruleEngine');
 
 const app = express();
 
-// ── CORS: restrict to configured origins only ────────────────────────────────
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000,http://localhost:4173').split(',').map(o => o.trim());
+// ── CORS: allow localhost, onrender.com subdomains, and configured origins ────
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (curl, Postman, same-origin in prod)
     if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.some((o) => origin.startsWith(o))) return callback(null, true);
+
+    try {
+      const hostname = new URL(origin).hostname;
+      if (
+        hostname.endsWith('.onrender.com') ||
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        ALLOWED_ORIGINS.some((o) => origin.startsWith(o))
+      ) {
+        return callback(null, true);
+      }
+    } catch (e) {}
+
     callback(new Error(`CORS: Origin ${origin} is not allowed.`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

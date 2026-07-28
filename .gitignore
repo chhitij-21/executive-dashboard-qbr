@@ -1,22 +1,25 @@
-# Dependencies
+# Dependencies — never commit
 node_modules/
+frontend/node_modules/
 
-# Build Output
+# Build Output — Render builds this fresh on every deploy
 frontend/dist/
 dist/
 build/
 
-# Generated Reports (runtime output — never commit)
+# Generated Reports (runtime output)
 reports/
 
-# Runtime Uploads (ephemeral — never commit)
+# Runtime Uploads (ephemeral)
 data/incoming/
 
-# Keep seed data files (clients.json needed on first boot)
-# data/clients.json is committed so Render has initial client config
+# Runtime history (regenerated at runtime)
+data/reports_metadata.json
+
+# Keep seed data — clients.json needed on first boot
 !data/clients.json
 
-# Customer Files (never commit)
+# Customer Files — never commit
 *.xlsx
 *.xls
 *.csv
@@ -37,11 +40,11 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Vercel
+# Vercel (not needed for Render)
 .vercel
 vercel.json
 api/
 
-# Python Cache
+# Python
 __pycache__/
 *.py[cod]

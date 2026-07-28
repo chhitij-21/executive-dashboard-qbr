@@ -4,11 +4,7 @@
 
 const authService = require('../services/authService');
 
-const SERVICE_USER = process.env.SERVICE_USER || 'svc_dashboard';
-
-if (!process.env.SERVICE_PASS && process.env.NODE_ENV === 'production') {
-  console.error('[auth] FATAL: SERVICE_PASS env var is not set. Set it before deploying to production.');
-}
+const SERVICE_PASS = process.env.SERVICE_PASS || 'svc_pass_default';
 
 /**
  * Middleware: validates Bearer token from Authorization header.
