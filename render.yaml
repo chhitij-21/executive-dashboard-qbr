@@ -1,10 +1,18 @@
 services:
   - type: web
-    name: qbr-dashboard-backend
+    name: qbr-dashboard
     env: node
     plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    region: singapore          # closest to India
+    buildCommand: npm install && cd frontend && npm install && npm run build && cd ..
+    startCommand: node backend/index.js
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
+      - key: ADMIN_PASSWORD
+        generateValue: true        # Render auto-generates a secure random value
+      - key: ALLOWED_ORIGINS
+        value: https://qbr-dashboard.onrender.com

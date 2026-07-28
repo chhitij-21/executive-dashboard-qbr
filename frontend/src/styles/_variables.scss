@@ -1,0 +1,16 @@
+// frontend/src/styles/_variables.scss
+$font-family: "Inter", system-ui, -apple-system, sans-serif;
+$font-size-base: 0.875rem;   // 14px
+$font-weight-regular: 400;
+$font-weight-bold: 600;
+$text-color-primary: #1F2937;   // gray-900
+$text-color-muted:   #6B7280;   // gray-500
+
+:root {
+  --font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --font-size-base: 0.875rem;
+  --font-weight-regular: 400;
+  --font-weight-bold: 600;
+  --text-color-primary: #1F2937;
+  --text-color-muted: #6B7280;
+}

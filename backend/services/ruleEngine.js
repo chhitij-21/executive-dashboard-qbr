@@ -23,6 +23,35 @@ function loadRules() {
   }
 }
 
+function getRulesYaml() {
+  try {
+    if (fs.existsSync(RULES_PATH)) {
+      return fs.readFileSync(RULES_PATH, 'utf8');
+    }
+  } catch (err) {
+    console.error('[ruleEngine] Error reading rules.yaml:', err.message);
+  }
+  return '';
+}
+
+function saveRulesYaml(rawYaml) {
+  try {
+    const parsed = yaml.parse(rawYaml);
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Invalid YAML format: Root content must be an object.');
+    }
+    const dir = path.dirname(RULES_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(RULES_PATH, rawYaml, 'utf8');
+    rules = parsed;
+    console.log('[ruleEngine] Business rules updated and reloaded in memory successfully.');
+    return { success: true, rules: parsed };
+  } catch (err) {
+    console.error('[ruleEngine] Error saving rules.yaml:', err.message);
+    throw err;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Health Score
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,7 +87,7 @@ function getHealthLabel(score) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getSLATarget() {
-  return rules.sla?.uptime_target_percent ?? 99.9;
+  return rules.sla?.uptime_target_percent ?? 99.3;
 }
 
 /**
@@ -283,6 +312,8 @@ function detectColumnFromRows(rows, candidates) {
 module.exports = {
   loadRules,
   getRules: () => rules,
+  getRulesYaml,
+  saveRulesYaml,
   // Health
   calculateHealthScore,
   getHealthLabel,

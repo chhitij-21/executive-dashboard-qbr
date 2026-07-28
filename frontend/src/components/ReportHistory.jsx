@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, apiFetch } from '../config/api';
 
-export default function ReportHistory({ onViewDashboard }) {
+export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
   const { user, clients, activeClient, activeLocation, isAdmin } = useAuth();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingJobId, setDeletingJobId] = useState(null);
   const [clientFilter, setClientFilter] = useState(activeClient?.id || 'all');
   const [locationFilter, setLocationFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,7 +20,7 @@ export default function ReportHistory({ onViewDashboard }) {
         queryParams.append('location', locationFilter);
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/history?${queryParams.toString()}`);
+      const res = await apiFetch(`${API_BASE_URL}/api/history?${queryParams.toString()}`);
       if (res.ok) {
         const json = await res.json();
         setHistory(json.history || []);
@@ -34,6 +35,66 @@ export default function ReportHistory({ onViewDashboard }) {
   useEffect(() => {
     fetchHistory();
   }, [clientFilter, locationFilter]);
+
+  const handleDeleteReport = async (e, jobId) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!window.confirm('Are you sure you want to delete this report from history?')) {
+      return;
+    }
+    try {
+      setDeletingJobId(jobId);
+      const encodedId = encodeURIComponent(jobId);
+      const res = await apiFetch(`${API_BASE_URL}/api/history/${encodedId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      let json = {};
+      try {
+        json = await res.json();
+      } catch (pErr) {
+        console.warn('Response was not JSON:', pErr);
+      }
+
+      if (res.ok || res.status === 404) {
+        setHistory((prev) => prev.filter((item) => String(item.jobId).trim().toLowerCase() !== String(jobId).trim().toLowerCase()));
+        if (onReportDeleted) onReportDeleted(jobId);
+      } else {
+        alert(`Failed to delete report: ${json.error || `Server responded with status ${res.status}`}`);
+      }
+    } catch (err) {
+      console.error('Error deleting report:', err);
+      // Remove from UI state as fallback if server operation completed
+      setHistory((prev) => prev.filter((item) => String(item.jobId).trim().toLowerCase() !== String(jobId).trim().toLowerCase()));
+      if (onReportDeleted) onReportDeleted(jobId);
+    } finally {
+      setDeletingJobId(null);
+    }
+  };
+
+  const handleClearAllHistory = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete ALL report history entries? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await apiFetch(`${API_BASE_URL}/api/history`, { method: 'DELETE' });
+      if (res.ok) {
+        setHistory([]);
+        if (onReportDeleted) onReportDeleted('all');
+      } else {
+        alert('Failed to clear history. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error clearing history:', err);
+      setHistory([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredHistory = history.filter((item) => {
     if (!searchQuery) return true;
@@ -56,9 +117,20 @@ export default function ReportHistory({ onViewDashboard }) {
               Audit log of executive report generation metadata. No raw ticket or inventory data is retained per strict data policy.
             </p>
           </div>
-          <button className="btn-secondary" onClick={fetchHistory}>
-            🔄 Refresh Log
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="btn-secondary" onClick={fetchHistory}>
+              🔄 Refresh Log
+            </button>
+            {history.length > 0 && (
+              <button
+                className="btn-secondary"
+                onClick={handleClearAllHistory}
+                style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', fontWeight: 600 }}
+              >
+                🧹 Clear All History
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filters Bar */}
@@ -146,7 +218,7 @@ export default function ReportHistory({ onViewDashboard }) {
                       </span>
                     </td>
                     <td>
-                      <div className="action-buttons">
+                      <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         {item.status === 'completed' && (
                           <>
                             <button
@@ -190,6 +262,29 @@ export default function ReportHistory({ onViewDashboard }) {
                             </a>
                           </>
                         )}
+                        <button
+                          type="button"
+                          className="btn-action btn-delete"
+                          disabled={deletingJobId === item.jobId}
+                          onClick={(e) => handleDeleteReport(e, item.jobId)}
+                          title="Delete Report"
+                          style={{
+                            background: deletingJobId === item.jobId ? '#e5e7eb' : '#fee2e2',
+                            color: deletingJobId === item.jobId ? '#9ca3af' : '#dc2626',
+                            border: '1px solid #fca5a5',
+                            borderRadius: '6px',
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            cursor: deletingJobId === item.jobId ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          {deletingJobId === item.jobId ? '⏳ Deleting...' : '🗑️ Delete'}
+                        </button>
                         {item.error && (
                           <span className="error-tooltip" title={item.error}>
                             ⚠️ Error details

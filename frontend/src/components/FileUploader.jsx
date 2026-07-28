@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, apiFetch } from '../config/api';
 
 export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin } = useAuth();
@@ -32,6 +32,18 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     }
   };
 
+  const handleRemoveIncident = (e) => {
+    e.stopPropagation();
+    setIncidentFile(null);
+    if (incidentRef.current) incidentRef.current.value = '';
+  };
+
+  const handleRemoveInventory = (e) => {
+    e.stopPropagation();
+    setInventoryFile(null);
+    if (inventoryRef.current) inventoryRef.current.value = '';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!incidentFile) {
@@ -59,7 +71,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     form.append('uploadedBy', user?.name || 'System User');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
+      const res = await apiFetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
       clearTimeout(wakeTimer);
 
       const json = await res.json();
@@ -154,7 +166,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
                 onChange={(e) => setActiveLocation(e.target.value)}
                 className="select-field"
               >
-                {(activeClient?.locations || ['All Locations', 'Noida', 'Delhi', 'Bangalore', 'Mumbai', 'Gurgaon', 'Hyderabad', 'Pune', 'Kolkata']).map((loc) => (
+                {(activeClient?.locations || ['All Locations', 'Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Nagpur', 'Noida']).map((loc) => (
                   <option key={loc} value={loc}>
                     📍 {loc}
                   </option>
@@ -211,11 +223,34 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               <div className="dropzone-title">Incident Excel File (Mandatory)</div>
               <div className="dropzone-desc">
                 {incidentFile ? (
-                  <span className="file-name" style={{ color: '#16a34a', fontWeight: 'bold' }}>
-                    ✅ {incidentFile.name} ({(incidentFile.size / 1024).toFixed(1)} KB)
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center', marginTop: '0.25rem' }}>
+                    <span className="file-name" style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                      ✅ {incidentFile.name} ({(incidentFile.size / 1024).toFixed(1)} KB)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRemoveIncident}
+                      title="Delete / Remove selected file"
+                      style={{
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        border: '1px solid #fca5a5',
+                        borderRadius: '6px',
+                        padding: '0.25rem 0.6rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
                 ) : (
-                  <span>Click to select <code>jfl incidents.xlsx</code></span>
+                  <span>Click to add file</span>
                 )}
               </div>
               <span className="badge-required">REQUIRED</span>
@@ -237,11 +272,34 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               <div className="dropzone-title">Device Inventory File (Optional)</div>
               <div className="dropzone-desc">
                 {inventoryFile ? (
-                  <span className="file-name" style={{ color: '#16a34a', fontWeight: 'bold' }}>
-                    ✅ {inventoryFile.name} ({(inventoryFile.size / 1024).toFixed(1)} KB)
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center', marginTop: '0.25rem' }}>
+                    <span className="file-name" style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                      ✅ {inventoryFile.name} ({(inventoryFile.size / 1024).toFixed(1)} KB)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRemoveInventory}
+                      title="Delete / Remove selected file"
+                      style={{
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        border: '1px solid #fca5a5',
+                        borderRadius: '6px',
+                        padding: '0.25rem 0.6rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
                 ) : (
-                  <span>Click to select <code>JFL Updated Inventory.xlsx</code></span>
+                  <span>Click to add file</span>
                 )}
               </div>
               <span className="badge-optional">OPTIONAL</span>

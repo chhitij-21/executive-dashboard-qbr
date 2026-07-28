@@ -3,8 +3,8 @@
 
 # ── SLA ──────────────────────────────────────────────────────────────────────
 sla:
-  resolution_threshold_days: 2
-  uptime_target_percent: 99.9       # Confirmed by user
+  resolution_threshold_hours: 2     # TAT target across all devices
+  uptime_target_percent: 99.3       # Quarterly uptime target confirmed by user
 
 # ── Health Score ─────────────────────────────────────────────────────────────
 health_score:

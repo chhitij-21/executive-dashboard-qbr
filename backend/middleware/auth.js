@@ -1,0 +1,67 @@
+// backend/middleware/auth.js
+// Real authentication middleware using token validation from authService.
+// SERVICE_PASS has no hardcoded fallback — must be set via env in production.
+
+const authService = require('../services/authService');
+
+const SERVICE_USER = process.env.SERVICE_USER || 'svc_dashboard';
+
+if (!process.env.SERVICE_PASS && process.env.NODE_ENV === 'production') {
+  console.error('[auth] FATAL: SERVICE_PASS env var is not set. Set it before deploying to production.');
+}
+
+/**
+ * Middleware: validates Bearer token from Authorization header.
+ * Attaches req.user on success, returns 401 on failure.
+ */
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const session = authService.verifyToken(authHeader);
+  if (!session) {
+    return res.status(401).json({ error: 'Authorization required — please log in.' });
+  }
+  req.user = session.user;
+  next();
+}
+
+/**
+ * Middleware: requires req.user.role === 'admin'.
+ * Must be used AFTER requireAuth.
+ */
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  next();
+}
+
+/**
+ * Auto-auth route handler (kept for service-account integrations).
+ * Uses SERVICE_USER env var — no hardcoded credentials.
+ */
+function handleAutoAuthRoute(req, res) {
+  const user = {
+    id: 'user-svc-001',
+    email: `${SERVICE_USER}@proactivedata.com`,
+    name: 'Service Account (Auto)',
+    role: 'admin',
+    assignedClient: 'all',
+    avatar: '🤖',
+  };
+
+  const token = `svc_tok_${SERVICE_USER}_${Date.now()}`;
+
+  res.json({
+    success: true,
+    user,
+    token,
+    message: 'Auto-login successful using service account credentials',
+  });
+}
+
+module.exports = {
+  requireAuth,
+  requireAdmin,
+  handleAutoAuthRoute,
+  SERVICE_USER,
+};

@@ -6,20 +6,25 @@ frontend/dist/
 dist/
 build/
 
-# Generated Reports
+# Generated Reports (runtime output — never commit)
 reports/
 
-# Runtime Data
-data/
+# Runtime Uploads (ephemeral — never commit)
+data/incoming/
 
-# Customer Files
+# Keep seed data files (clients.json needed on first boot)
+# data/clients.json is committed so Render has initial client config
+!data/clients.json
+
+# Customer Files (never commit)
 *.xlsx
 *.xls
 *.csv
 
 # Environment Variables
 .env
-.env.*
+.env.local
+.env.*.local
 
 # Logs
 *.log
@@ -31,6 +36,11 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Vercel
+.vercel
+vercel.json
+api/
 
 # Python Cache
 __pycache__/

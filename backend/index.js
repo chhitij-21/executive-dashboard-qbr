@@ -12,15 +12,37 @@ const clientService = require('./services/clientService');
 const historyService = require('./services/historyService');
 const { validateUpload } = require('./services/uploadValidationService');
 const authService = require('./services/authService');
+const ruleEngine = require('./services/ruleEngine');
 
 const app = express();
+
+// ── CORS: restrict to configured origins only ────────────────────────────────
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000,http://localhost:4173').split(',').map(o => o.trim());
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, Postman, same-origin in prod)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.some((o) => origin.startsWith(o))) return callback(null, true);
+    callback(new Error(`CORS: Origin ${origin} is not allowed.`));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
 }));
 app.options('*', cors());
 app.use(express.json());
+
+// Vercel Serverless Path Normalizer: ONLY active on Vercel deployments.
+// Ensures /api prefix is preserved when Vercel strips it in function rewrites.
+if (process.env.VERCEL) {
+  app.use((req, res, next) => {
+    if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/assets') && !req.url.includes('.')) {
+      req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+    }
+    next();
+  });
+}
+
 app.use(express.static(path.join(__dirname, '..', 'dist')));
 app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
 
@@ -45,24 +67,54 @@ const storage = multer.diskStorage({
     cb(null, `${uuidv4()}_${Date.now()}${ext}`);
   }
 });
-const upload = multer({ storage });
+
+// ── MIME-type allowlist + 50 MB file size cap ─────────────────────────────
+const ALLOWED_MIMES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel',                                           // .xls
+  'text/csv',                                                           // .csv
+  'application/octet-stream',                                           // generic binary (some OS use this)
+];
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.xlsx', '.xls', '.csv'].includes(ext) || ALLOWED_MIMES.includes(file.mimetype)) {
+      return cb(null, true);
+    }
+    cb(new Error(`File type not allowed: ${file.originalname}. Only .xlsx, .xls, .csv are accepted.`));
+  },
+});
 
 // In-memory active job cache
 const jobs = {};
 
+const { handleAutoAuthRoute, requireAuth, requireAdmin } = require('./middleware/auth');
+
+// ── Cache-Control: no-store on all /api responses ─────────────────────────
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  next();
+});
+
 // ── Auth Routes ─────────────────────────────────────────────────────────────
-app.post('/api/auth/login', (req, res) => {
+app.get(['/api/auth/auto', '/auth/auto'], handleAutoAuthRoute);
+
+app.post(['/api/auth/login', '/auth/login'], (req, res) => {
   const { email, password } = req.body;
   const session = authService.authenticateUser(email, password);
   if (!session) return res.status(401).json({ error: 'Invalid email or password' });
   res.json(session);
 });
 
-app.get('/api/auth/me', (req, res) => {
-  const authHeader = req.headers.authorization;
-  const session = authService.verifyToken(authHeader);
-  if (!session) return res.status(401).json({ error: 'Unauthorized session' });
-  res.json(session);
+app.get(['/api/auth/me', '/auth/me'], requireAuth, (req, res) => {
+  res.json({ user: req.user });
+});
+
+app.post(['/api/auth/logout', '/auth/logout'], (req, res) => {
+  authService.invalidateToken(req.headers.authorization);
+  res.json({ success: true, message: 'Logged out successfully.' });
 });
 
 app.get('/api/auth/demo-accounts', (req, res) => {
@@ -70,7 +122,7 @@ app.get('/api/auth/demo-accounts', (req, res) => {
 });
 
 // ── Client & Location Management Routes ─────────────────────────────────────
-app.get('/api/clients', (req, res) => {
+app.get(['/api/clients', '/clients'], (req, res) => {
   res.json({ clients: clientService.getAllClients() });
 });
 
@@ -80,7 +132,7 @@ app.get('/api/clients/:id', (req, res) => {
   res.json({ client });
 });
 
-app.post('/api/clients', (req, res) => {
+app.post(['/api/clients', '/clients'], requireAuth, requireAdmin, (req, res) => {
   try {
     const newClient = clientService.createClient(req.body);
     res.status(201).json({ client: newClient });
@@ -89,13 +141,13 @@ app.post('/api/clients', (req, res) => {
   }
 });
 
-app.put('/api/clients/:id', (req, res) => {
+app.put(['/api/clients/:id', '/clients/:id'], requireAuth, requireAdmin, (req, res) => {
   const updated = clientService.updateClient(req.params.id, req.body);
   if (!updated) return res.status(404).json({ error: 'Client not found' });
   res.json({ client: updated });
 });
 
-app.post('/api/clients/:id/locations', (req, res) => {
+app.post(['/api/clients/:id/locations', '/clients/:id/locations'], requireAuth, requireAdmin, (req, res) => {
   const { location } = req.body;
   if (!location) return res.status(400).json({ error: 'Location name is required' });
   const updated = clientService.addLocation(req.params.id, location);
@@ -103,18 +155,68 @@ app.post('/api/clients/:id/locations', (req, res) => {
   res.json({ client: updated });
 });
 
+// ── Rules Configuration Endpoints ───────────────────────────────────────────
+app.get(['/api/rules', '/rules'], (req, res) => {
+  try {
+    const rawYaml = ruleEngine.getRulesYaml();
+    const parsed = ruleEngine.getRules();
+    res.json({ yaml: rawYaml, rules: parsed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(['/api/rules', '/rules'], requireAuth, requireAdmin, (req, res) => {
+  try {
+    const { yaml: rawYaml } = req.body;
+    if (!rawYaml || typeof rawYaml !== 'string') {
+      return res.status(400).json({ error: 'YAML content is required.' });
+    }
+    const result = ruleEngine.saveRulesYaml(rawYaml);
+    res.json({ success: true, message: 'rules.yaml updated successfully', ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Invalid YAML format' });
+  }
+});
+
 // ── Report History Route ────────────────────────────────────────────────────
-app.get('/api/history', (req, res) => {
+app.get(['/api/history', '/history'], (req, res) => {
   const { clientId, location, status } = req.query;
   const history = historyService.getHistory({ clientId, location, status });
   res.json({ history });
 });
 
+app.delete(['/api/history', '/history'], requireAuth, requireAdmin, (req, res) => {
+  try {
+    console.log('[server] DELETE request received to clear ALL report history.');
+    historyService.clearAllHistory();
+    Object.keys(jobs).forEach((k) => delete jobs[k]);
+    res.json({ success: true, message: 'All report history cleared successfully' });
+  } catch (err) {
+    console.error('[server] Error in DELETE /api/history:', err.message);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+app.delete(['/api/history/:jobId', '/history/:jobId'], requireAuth, (req, res) => {
+  try {
+    const { jobId } = req.params;
+    console.log(`[server] DELETE request received for report jobId: ${jobId}`);
+    const deleted = historyService.deleteReport(jobId);
+    if (jobs[jobId]) delete jobs[jobId];
+    if (!deleted) return res.status(404).json({ error: 'Report not found or already deleted' });
+    res.json({ success: true, message: 'Report deleted successfully', jobId });
+  } catch (err) {
+    console.error('[server] Error in DELETE /api/history/:jobId:', err.message);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
 // ── Health Route ─────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+app.get(['/api/health', '/health'], (req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 
 // ── Upload & Report Generation Workflow Endpoint ────────────────────────────
-app.post('/api/upload', upload.fields([
+app.post(['/api/upload', '/upload'], requireAuth, upload.fields([
   { name: 'incidents', maxCount: 1 },
   { name: 'inventory', maxCount: 1 },
   { name: 'excel', maxCount: 1 }, // legacy fallback
@@ -231,7 +333,7 @@ app.post('/api/upload', upload.fields([
 });
 
 // ── Dashboard JSON Endpoint ────────────────────────────────────────────────
-app.get('/api/dashboard/:jobId', async (req, res) => {
+app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
   const reqJobId = req.params.jobId;
   let job = null;
 
@@ -239,14 +341,18 @@ app.get('/api/dashboard/:jobId', async (req, res) => {
     const history = historyService.getHistory();
     job = history.find((h) => h.status === 'completed') || Object.values(jobs).find((j) => j.status === 'completed');
 
-    if (!job) {
-      // Auto-process default master dataset if present in workspace root
-      const incPath = path.resolve('jfl incidents.xlsx');
-      const invPath = path.resolve('JFL Updated Inventory.xlsx');
+    if (!job && reqJobId === 'default') {
+      // Process default master dataset only when explicitly requested via 'default' route
+      const incPath = fs.existsSync(path.resolve('jfl incidents.xlsx'))
+        ? path.resolve('jfl incidents.xlsx')
+        : path.join(__dirname, '..', 'jfl incidents.xlsx');
+      const invPath = fs.existsSync(path.resolve('JFL Updated Inventory.xlsx'))
+        ? path.resolve('JFL Updated Inventory.xlsx')
+        : path.join(__dirname, '..', 'JFL Updated Inventory.xlsx');
 
       if (fs.existsSync(incPath)) {
         try {
-          console.log('[server] Auto-processing default master dataset for initial load...');
+          console.log('[server] Processing default sample dataset upon manual user request...');
           const autoJobId = 'master-jfl-q1-fy2026';
           const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
 
@@ -274,7 +380,7 @@ app.get('/api/dashboard/:jobId', async (req, res) => {
             jobs[autoJobId] = { status: 'completed', ...result, ...job };
           }
         } catch (err) {
-          console.error('[server] Error auto-processing default dataset:', err.message);
+          console.error('[server] Error processing default dataset:', err.message);
         }
       }
     }
@@ -315,14 +421,14 @@ const sendFileHelper = (pathKey, defaultFilename) => (req, res) => {
   res.download(targetPath);
 };
 
-app.get('/api/ppt/:jobId', sendFileHelper('pptPath', 'QBR_Presentation.pptx'));
-app.get('/api/report/:jobId', sendFileHelper('reportPath', 'validation_report.md'));
-app.get('/api/error-report/:jobId', sendFileHelper('errorReportPath', 'error_report.json'));
-app.get('/api/data-quality/:jobId', sendFileHelper('dataQualityPath', 'data_quality_report.md'));
-app.get('/api/processing-log/:jobId', sendFileHelper('processingLogPath', 'processing_log.md'));
+app.get(['/api/ppt/:jobId', '/ppt/:jobId'], sendFileHelper('pptPath', 'QBR_Presentation.pptx'));
+app.get(['/api/report/:jobId', '/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
+app.get(['/api/error-report/:jobId', '/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
+app.get(['/api/data-quality/:jobId', '/data-quality/:jobId'], sendFileHelper('dataQualityPath', 'data_quality_report.md'));
+app.get(['/api/processing-log/:jobId', '/processing-log/:jobId'], sendFileHelper('processingLogPath', 'processing_log.md'));
 
 // ── Job Status Route ────────────────────────────────────────────────────────
-app.get('/api/status/:jobId', (req, res) => {
+app.get(['/api/status/:jobId', '/status/:jobId'], (req, res) => {
   const jobId = req.params.jobId;
   const job = jobs[jobId] || historyService.getReportByJobId(jobId);
   if (!job) return res.status(404).json({ error: 'Job not found' });

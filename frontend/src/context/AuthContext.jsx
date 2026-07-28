@@ -1,6 +1,6 @@
 // frontend/src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, apiFetch } from '../config/api';
 
 const AuthContext = createContext(null);
 
@@ -15,41 +15,35 @@ export function AuthProvider({ children }) {
   const [authenticating, setAuthenticating] = useState(true);
   const [isBackendOffline, setIsBackendOffline] = useState(false);
 
-  // Requirement 4: On load, automatically call GET /api/auth/me if token exists
+  // On load: validate stored token against the backend
   useEffect(() => {
     const checkSession = async () => {
-      const savedToken = localStorage.getItem('portal_token');
-      if (!savedToken) {
-        setUser(null);
-        setSession(null);
+      const storedToken = localStorage.getItem('portal_token');
+      if (!storedToken) {
         setAuthenticating(false);
         return;
       }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${savedToken}` },
+          headers: { Authorization: `Bearer ${storedToken}` },
         });
 
         if (res.ok) {
-          const data = await res.json();
-          const sessionUser = data.user || data;
-          setUser(sessionUser);
-          setSession(data);
-          setToken(savedToken);
+          const json = await res.json();
+          const userObj = json.user || json;
+          setUser(userObj);
+          setSession({ user: userObj, token: storedToken });
+          setToken(storedToken);
           setIsBackendOffline(false);
         } else {
-          // Token expired or invalid session
-          logout();
+          // Token invalid or expired — clear local session
+          localStorage.removeItem('portal_user');
+          localStorage.removeItem('portal_token');
         }
       } catch (err) {
-        console.error('Error verifying session:', err);
-        const savedUser = localStorage.getItem('portal_user');
-        if (savedUser) {
-          setUser(JSON.parse(savedUser));
-        } else {
-          logout();
-        }
+        console.warn('Backend offline during session check:', err.message);
+        setIsBackendOffline(true);
       } finally {
         setAuthenticating(false);
       }
@@ -62,7 +56,7 @@ export function AuthProvider({ children }) {
   const refreshClients = async () => {
     try {
       setLoadingClients(true);
-      const res = await fetch(`${API_BASE_URL}/api/clients`);
+      const res = await apiFetch(`${API_BASE_URL}/api/clients`);
       if (res.ok) {
         const json = await res.json();
         setClients(json.clients || []);
@@ -89,6 +83,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     refreshClients();
   }, [user]);
+
+  useEffect(() => {
+    if (!activeClient && clients && clients.length > 0) {
+      setActiveClientState(clients[0]);
+    }
+  }, [clients, activeClient]);
 
   const setActiveClient = (client) => {
     setActiveClientState(client);
@@ -138,7 +138,12 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Invalidate token on the server
+    try {
+      await apiFetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST' });
+    } catch (_) { /* ignore network errors on logout */ }
+
     setUser(null);
     setSession(null);
     setToken(null);

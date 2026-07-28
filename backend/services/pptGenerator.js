@@ -4,7 +4,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const PptxGenJS = require('pptxgenjs');
+const { captureDashboard } = require('../utils/screenshot');
 let AdmZip;
 try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
 
@@ -373,33 +375,130 @@ async function generateProgrammatic(data, outputPath) {
     });
   }
 
+  // Executive Summary Dashboard View Screenshot Slide
+  try {
+    const screenshotPath = path.join(process.env.VERCEL ? os.tmpdir() : 'tmp', 'summary.png');
+    await captureDashboard('http://localhost:3000', screenshotPath);
+    if (fs.existsSync(screenshotPath)) {
+      const sScreen = pres.addSlide();
+      sScreen.background = { color: BG };
+      sScreen.addText('Executive Summary Dashboard View {{EXEC_SUMMARY_SCREENSHOT}}', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
+      sScreen.addImage({ path: screenshotPath, x: 0.5, y: 1.0, w: 12.3, h: 5.8 });
+    }
+  } catch (err) {
+    console.warn('[pptGenerator] Screenshot step note:', err.message);
+  }
+
   // Per-Site Analytics Slides (Bangalore, Greater Noida, etc.)
   siteSummary.forEach((site, idx) => {
-    const s = pres.addSlide();
-    s.background = { color: BG };
-    s.addText(`Site Review (${idx + 1}/${siteSummary.length}): ${fmt(site.siteId)}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-    s.addText(`AP & Switch Analytics Overview`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
+    const siteKey = fmt(site.siteId).toUpperCase();
 
-    const siteKpis = [
-      { l: 'Total Devices',     v: fmt(site.deviceCount) },
-      { l: 'Total Switches',    v: fmt(site.switchCount) },
-      { l: 'Total APs',         v: fmt(site.apCount) },
-      { l: 'Switch Uptime',     v: pct(site.switchUptime) },
-      { l: 'Overall Uptime',    v: pct(site.overallUptime) },
-      { l: 'Incident-Free %',   v: pct(site.incidentFreePercent) },
-      { l: 'Primary RCA (All)', v: fmt(site.primaryRca) },
-      { l: 'Primary RCA (APs)', v: fmt(site.primaryRcaForAPs) },
-    ];
+    // 1. Site Overview Slide
+    {
+      const s = pres.addSlide();
+      s.background = { color: BG };
+      s.addText(`Site Review (${idx + 1}/${siteSummary.length}): ${fmt(site.siteId)}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
+      s.addText(`Site Infrastructure & Performance Summary`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
 
-    siteKpis.forEach((kpi, i) => {
-      const col = i % 4;
-      const row = Math.floor(i / 4);
-      const x = 0.3 + col * 3.3;
-      const y = 1.4 + row * 2.0;
-      s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.0, h: 1.7, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-      s.addText(kpi.v, { x, y: y + 0.3, w: 3.0, h: 0.7, fontSize: 16, bold: true, color: ACCENT, align: 'center' });
-      s.addText(kpi.l, { x, y: y + 1.1, w: 3.0, h: 0.45, fontSize: 11, color: MUTED, align: 'center' });
-    });
+      const siteKpis = [
+        { l: 'Total Devices',     v: fmt(site.deviceCount) },
+        { l: 'Total Switches',    v: fmt(site.switchCount) },
+        { l: 'Total APs',         v: fmt(site.apCount) },
+        { l: 'Switch Uptime',     v: pct(site.switchUptime) },
+        { l: 'Overall Uptime',    v: pct(site.overallUptime) },
+        { l: 'Incident-Free %',   v: pct(site.incidentFreePercent) },
+        { l: 'Primary RCA (All)', v: fmt(site.primaryRca) },
+        { l: 'Primary RCA (APs)', v: fmt(site.primaryRcaForAPs) },
+      ];
+
+      siteKpis.forEach((kpi, i) => {
+        const col = i % 4;
+        const row = Math.floor(i / 4);
+        const x = 0.3 + col * 3.3;
+        const y = 1.4 + row * 2.0;
+        s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.0, h: 1.7, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
+        s.addText(kpi.v, { x, y: y + 0.3, w: 3.0, h: 0.7, fontSize: 16, bold: true, color: ACCENT, align: 'center' });
+        s.addText(kpi.l, { x, y: y + 1.1, w: 3.0, h: 0.45, fontSize: 11, color: MUTED, align: 'center' });
+      });
+    }
+
+    // 2. AP Analytics Slide ({{SITE_BANGALORE_AP_ANALYTICS}})
+    {
+      const s = pres.addSlide();
+      s.background = { color: BG };
+      s.addText(`${fmt(site.siteId)} — AP Analytics {{SITE_${siteKey}_AP_ANALYTICS}}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
+      s.addText(`Access Point Count: ${fmt(site.apCount)} · AP Incidents: ${fmt(site.uniqueAPsWithIncidents)} · Primary RCA: ${fmt(site.primaryRcaForAPs)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
+
+      const apKpis = [
+        { l: 'Monitored APs', v: fmt(site.apCount) },
+        { l: 'APs with Incidents', v: fmt(site.uniqueAPsWithIncidents) },
+        { l: 'Primary AP RCA', v: fmt(site.primaryRcaForAPs) },
+      ];
+
+      apKpis.forEach((kpi, i) => {
+        const x = 0.5 + i * 4.2;
+        const y = 1.5;
+        s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.8, h: 1.8, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
+        s.addText(kpi.v, { x, y: y + 0.4, w: 3.8, h: 0.7, fontSize: 20, bold: true, color: ACCENT, align: 'center' });
+        s.addText(kpi.l, { x, y: y + 1.1, w: 3.8, h: 0.45, fontSize: 12, color: MUTED, align: 'center' });
+      });
+    }
+
+    // 3. Switch Analytics Slide ({{SITE_BANGALORE_SWITCH_ANALYTICS}})
+    {
+      const s = pres.addSlide();
+      s.background = { color: BG };
+      s.addText(`${fmt(site.siteId)} — Switch Analytics {{SITE_${siteKey}_SWITCH_ANALYTICS}}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
+      s.addText(`Total Switches: ${fmt(site.switchCount)} · Switch Uptime: ${pct(site.switchUptime)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
+
+      const swKpis = [
+        { l: 'Total Switches', v: fmt(site.switchCount) },
+        { l: 'Switch Uptime %', v: pct(site.switchUptime) },
+        { l: 'Primary Switch RCA', v: fmt(site.primaryRca) },
+      ];
+
+      swKpis.forEach((kpi, i) => {
+        const x = 0.5 + i * 4.2;
+        const y = 1.5;
+        s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.8, h: 1.8, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
+        s.addText(kpi.v, { x, y: y + 0.4, w: 3.8, h: 0.7, fontSize: 20, bold: true, color: ACCENT, align: 'center' });
+        s.addText(kpi.l, { x, y: y + 1.1, w: 3.8, h: 0.45, fontSize: 12, color: MUTED, align: 'center' });
+      });
+    }
+
+    // 4. RCA Analytics Slide ({{SITE_BANGALORE_RCA_ANALYTICS}})
+    {
+      const s = pres.addSlide();
+      s.background = { color: BG };
+      s.addText(`${fmt(site.siteId)} — RCA Analytics {{SITE_${siteKey}_RCA_ANALYTICS}}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
+      s.addText(`Root Cause Analysis Breakdown for ${fmt(site.siteId)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
+
+      s.addShape(pres.ShapeType.roundRect, { x: 0.5, y: 1.5, w: 12.0, h: 2.2, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
+      s.addText(`Primary RCA Driver (All Devices): ${fmt(site.primaryRca)}\nPrimary RCA Driver (APs): ${fmt(site.primaryRcaForAPs)}`, { x: 0.8, y: 2.0, w: 11.4, h: 1.2, fontSize: 16, color: TEXT });
+    }
+
+    // 5. SLA Analytics Slide ({{SITE_BANGALORE_SLA_ANALYTICS}})
+    {
+      const s = pres.addSlide();
+      s.background = { color: BG };
+      s.addText(`${fmt(site.siteId)} — SLA Analytics {{SITE_${siteKey}_SLA_ANALYTICS}}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
+      s.addText(`SLA Status: ${fmt(site.slaStatus)} · Overall Uptime: ${pct(site.overallUptime)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
+
+      const slaKpis = [
+        { l: 'Overall Uptime', v: pct(site.overallUptime) },
+        { l: 'SLA Status', v: fmt(site.slaStatus) },
+        { l: 'Incident-Free %', v: pct(site.incidentFreePercent) },
+      ];
+
+      slaKpis.forEach((kpi, i) => {
+        const x = 0.5 + i * 4.2;
+        const y = 1.5;
+        const valColor = kpi.v === 'Compliant' ? GREEN : ACCENT;
+        s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.8, h: 1.8, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
+        s.addText(kpi.v, { x, y: y + 0.4, w: 3.8, h: 0.7, fontSize: 20, bold: true, color: valColor, align: 'center' });
+        s.addText(kpi.l, { x, y: y + 1.1, w: 3.8, h: 0.45, fontSize: 12, color: MUTED, align: 'center' });
+      });
+    }
   });
 
   // Switch Analytics Slide

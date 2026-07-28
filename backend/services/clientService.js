@@ -24,28 +24,6 @@ const DEFAULT_CLIENTS = [
     locations: ['All Locations', 'Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Nagpur', 'Noida'],
     createdAt: '2026-01-01T00:00:00.000Z',
     description: 'Master QBR client for Jubilant Foodworks Ltd ecosystem.'
-  },
-  {
-    id: 'client-a',
-    name: 'Client A (Retail Chain)',
-    code: 'CLT-A',
-    logo: '🛍️',
-    status: 'active',
-    ruleConfigFile: 'rules.yaml',
-    locations: ['All Locations', 'Bangalore', 'Delhi', 'Mumbai'],
-    createdAt: '2026-02-15T00:00:00.000Z',
-    description: 'National retail chain with multi-location network requirements.'
-  },
-  {
-    id: 'client-b',
-    name: 'Client B (Tech Corp)',
-    code: 'CLT-B',
-    logo: '🏢',
-    status: 'active',
-    ruleConfigFile: 'rules.yaml',
-    locations: ['All Locations', 'Pune', 'Hyderabad'],
-    createdAt: '2026-03-20T00:00:00.000Z',
-    description: 'Enterprise IT technology center.'
   }
 ];
 
@@ -87,16 +65,29 @@ function getClientById(id) {
 
 function createClient(clientData) {
   const clients = loadClients();
+
+  // Allowlist: only accept known, safe fields
+  const name = String(clientData.name || '').trim().slice(0, 120);
+  const code = String(clientData.code || '').trim().replace(/[^A-Z0-9_-]/gi, '').slice(0, 10).toUpperCase() || 'CLT';
+  const logo = String(clientData.logo || '🏢').trim().slice(0, 10);
+  const status = ['active', 'inactive'].includes(clientData.status) ? clientData.status : 'active';
+  const description = String(clientData.description || '').trim().slice(0, 500);
+  const locations = Array.isArray(clientData.locations)
+    ? clientData.locations.map((l) => String(l).trim().slice(0, 80)).filter(Boolean)
+    : ['All Locations'];
+
+  if (!name) throw new Error('Client name is required.');
+
   const newClient = {
     id: `client-${uuidv4().substring(0, 8)}`,
-    name: clientData.name || 'New Client',
-    code: clientData.code || 'CLT',
-    logo: clientData.logo || '🏢',
-    status: clientData.status || 'active',
-    ruleConfigFile: clientData.ruleConfigFile || 'rules.yaml',
-    locations: clientData.locations && clientData.locations.length ? clientData.locations : ['All Locations'],
+    name,
+    code,
+    logo,
+    status,
+    ruleConfigFile: 'rules.yaml',
+    locations,
     createdAt: new Date().toISOString(),
-    description: clientData.description || 'Custom multi-location client.'
+    description,
   };
 
   if (!newClient.locations.includes('All Locations')) {
@@ -114,11 +105,21 @@ function updateClient(id, updateData) {
   if (idx === -1) return null;
 
   const existing = clients[idx];
-  const updated = {
-    ...existing,
-    ...updateData,
-    id: existing.id // preserve ID
-  };
+
+  // Allowlist: only permit safe, known fields to be updated
+  const patch = {};
+  if (updateData.name !== undefined)   patch.name        = String(updateData.name).trim().slice(0, 120);
+  if (updateData.code !== undefined)   patch.code        = String(updateData.code).replace(/[^A-Z0-9_-]/gi, '').slice(0, 10).toUpperCase();
+  if (updateData.logo !== undefined)   patch.logo        = String(updateData.logo).trim().slice(0, 10);
+  if (updateData.status !== undefined && ['active', 'inactive'].includes(updateData.status)) {
+    patch.status = updateData.status;
+  }
+  if (updateData.description !== undefined) patch.description = String(updateData.description).trim().slice(0, 500);
+  if (Array.isArray(updateData.locations)) {
+    patch.locations = updateData.locations.map((l) => String(l).trim().slice(0, 80)).filter(Boolean);
+  }
+
+  const updated = { ...existing, ...patch, id: existing.id }; // preserve original ID
 
   if (updated.locations && !updated.locations.includes('All Locations')) {
     updated.locations.unshift('All Locations');

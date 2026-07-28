@@ -35,7 +35,7 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
                 if (found) setActiveClient(found);
               }}
             >
-              {clients.map((c) => (
+              {clients && clients.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.logo} {c.name}
                 </option>

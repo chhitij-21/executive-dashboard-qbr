@@ -12,28 +12,28 @@ import Chart from './components/Chart';
 import DataTable from './components/DataTable';
 import SiteSummaryTable from './components/SiteSummaryTable';
 import TrendChart from './components/TrendChart';
-import { API_BASE_URL } from './config/api';
-import './styles/index.css';
+import { API_BASE_URL, apiFetch } from './config/api';
+import defaultDashboardData from './data/defaultDashboardData.json';
 
 function MainPortal() {
-  const { user, activeClient, activeLocation } = useAuth();
+  const { user, activeClient, activeLocation, setActiveLocation } = useAuth();
   const [tab, setTab] = useState('dashboard'); // default to executive dashboard view
   const [dashTab, setDashTab] = useState('executive');
   const [selectedSite, setSelectedSite] = useState('ALL');
-
-  const [jobId, setJobId] = useState('latest'); // Auto-load latest/master report by default
-  const [status, setStatus] = useState(null);
-  const [dashboardData, setDashboardData] = useState(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Fetch & poll for dashboard data whenever jobId changes or data is not loaded
+  const [jobId, setJobId] = useState(null);
+  const [status, setStatus] = useState('idle');
+  const [dashboardData, setDashboardData] = useState(null);
+
+  // Fetch & poll for dashboard data with exponential backoff (1.5s → 3 → 6 → 12 → max 20s)
   useEffect(() => {
     if (!jobId) return;
     let isSubscribed = true;
 
     const fetchDashboard = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/dashboard/${jobId}`);
+        const res = await apiFetch(`${API_BASE_URL}/api/dashboard/${jobId}`);
         if (res.status === 202) return false;
         if (!res.ok) return false;
         const json = await res.json();
@@ -56,16 +56,26 @@ function MainPortal() {
 
     fetchDashboard().then((loaded) => {
       if (loaded || !isSubscribed) return;
-      const interval = setInterval(async () => {
+
+      // Exponential backoff: 1.5s → 3s → 6s → 12s, capped at 20s
+      let delay = 1500;
+      const MAX_DELAY = 20000;
+      let timeoutId;
+
+      const poll = async () => {
+        if (!isSubscribed) return;
         const done = await fetchDashboard();
-        if (done) clearInterval(interval);
-      }, 1500);
-      return () => clearInterval(interval);
+        if (!done && isSubscribed) {
+          delay = Math.min(delay * 2, MAX_DELAY);
+          timeoutId = setTimeout(poll, delay);
+        }
+      };
+
+      timeoutId = setTimeout(poll, delay);
+      return () => clearTimeout(timeoutId);
     });
 
-    return () => {
-      isSubscribed = false;
-    };
+    return () => { isSubscribed = false; };
   }, [jobId]);
 
   // Filter dashboard data reactively based on activeLocation / selectedSite filter
@@ -78,16 +88,28 @@ function MainPortal() {
 
     if (!locFilter) return dashboardData;
 
-    const locKey = locFilter.trim().toLowerCase().split(' ')[0];
+    // Normalize a site name for comparison (mirrors normalizeSiteName in processData.js)
+    const normalizeLoc = (str) => {
+      const s = String(str || '').trim().toLowerCase();
+      if (/blr|bangalore/i.test(s)) return 'bangalore';
+      if (/g.*noida|gr.*noida|greater.*noida/i.test(s)) return 'greater noida';
+      if (/guwahati/i.test(s)) return 'guwahati';
+      if (/hyd|hyderabad/i.test(s)) return 'hyderabad';
+      if (/mohali/i.test(s)) return 'mohali';
+      if (/mumbai/i.test(s)) return 'mumbai';
+      if (/nagpur/i.test(s)) return 'nagpur';
+      if (/^noida$/i.test(s)) return 'noida';
+      return s;
+    };
+
+    const normalizedFilter = normalizeLoc(locFilter);
 
     const devices = (dashboardData.devices || []).filter((d) => {
-      const site = String(d.SiteID || d.Location || '').trim().toLowerCase();
-      return site.includes(locKey);
+      return normalizeLoc(d.SiteID || d.Location || '') === normalizedFilter;
     });
 
     const incidents = (dashboardData.incidents || []).filter((i) => {
-      const site = String(i.SiteID || i.Location || '').trim().toLowerCase();
-      return site.includes(locKey);
+      return normalizeLoc(i.SiteID || i.Location || '') === normalizedFilter;
     });
 
     const activeDevices = devices.filter((d) => !d.__isStock);
@@ -178,7 +200,7 @@ function MainPortal() {
           backgroundColor: allSwitches.map((d) => {
             const isCore = String(d.CoreNonCore || '').toLowerCase().includes('core') && !String(d.CoreNonCore || '').toLowerCase().includes('non');
             const uptime = d.__effectiveUptime ?? 100;
-            if (uptime < 99.9) return 'hsla(0,73%,58%,0.85)';
+            if (uptime < 99.3) return 'hsla(0,73%,58%,0.85)';
             return isCore ? 'hsla(262,52%,62%,0.85)' : 'hsla(212,92%,52%,0.85)';
           }),
           borderRadius: 3,
@@ -225,11 +247,31 @@ function MainPortal() {
   const renderDashboard = () => {
     if (!activeDashboardData) {
       return (
-        <div className="empty-state card pad-lg">
-          <span className="empty-state-icon">📊</span>
-          <h3>No Dashboard Data Loaded</h3>
-          <p>{status === 'processing' ? 'Processing report for client...' : 'Upload Excel files in "Upload & Generate" tab or select a report from "Report History".'}</p>
-          {status === 'processing' && <div className="spinner" style={{ width: 28, height: 28, margin: '1rem auto' }} />}
+        <div className="empty-state card pad-lg" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
+          <span className="empty-state-icon" style={{ fontSize: '3rem', display: 'block', marginBottom: '1rem' }}>📊</span>
+          <h3 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+            No Dashboard Data Loaded
+          </h3>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto 1.5rem' }}>
+            {status === 'processing'
+              ? 'Processing report files for client... Please wait.'
+              : 'Please upload raw Excel workbooks or select a previous report from history to view executive dashboard analytics.'}
+          </p>
+          {status === 'processing' ? (
+            <div className="spinner" style={{ width: 32, height: 32, margin: '1rem auto' }} />
+          ) : (
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" onClick={() => setTab('upload')}>
+                📁 Upload & Generate Report
+              </button>
+              <button className="btn btn-secondary" onClick={() => setTab('history')}>
+                📜 Select from History
+              </button>
+              <button className="btn btn-outline" style={{ border: '1px solid #ccc', background: 'transparent' }} onClick={() => setJobId('default')}>
+                ⚡ Load Sample Demo Data
+              </button>
+            </div>
+          )}
         </div>
       );
     }
@@ -327,7 +369,7 @@ function MainPortal() {
             {switchUptimeChartData && (
               <div className="chart-panel" style={{ marginTop: '1.5rem' }}>
                 <h3 className="chart-panel-title">
-                  Device Uptime Distribution — All Switches (Core &amp; Non-Core) — Purple = Core, Blue = Non-Core, Red = below SLA 99.9%
+                  Device Uptime Distribution — All Switches (Core &amp; Non-Core) — Purple = Core, Blue = Non-Core, Red = below SLA 99.3%
                 </h3>
                 <Chart
                   type="bar"
@@ -597,7 +639,7 @@ function MainPortal() {
                 value={slaAn.overallSLAPercent ?? '100.00'}
                 unit="%"
               />
-              <KpiCard title="SLA Target" value={slaAn.slaTarget ?? 99.9} unit="%" />
+              <KpiCard title="SLA Target" value={slaAn.slaTarget ?? 99.3} unit="%" />
               <KpiCard title="Compliant Active Devices" value={slaAn.compliantDevices ?? 0} />
               <KpiCard title="Breaching Active Devices" value={slaAn.breachingDevices ?? 0} />
             </div>
@@ -614,7 +656,7 @@ function MainPortal() {
             {slaAn.deviceSLA?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
-                  Active Operational Devices Below SLA Target (99.9%)
+                  Active Operational Devices Below SLA Target (99.3%)
                 </h4>
                 <DataTable columns={['DeviceID', 'Location', 'uptime', 'slaTarget', 'gap']} rows={slaAn.deviceSLA} />
               </div>
@@ -653,6 +695,12 @@ function MainPortal() {
               setJobId(jid);
               setStatus('completed');
               setTab('dashboard');
+            }}
+            onReportDeleted={(jid) => {
+              if (jobId === jid) {
+                setJobId(null);
+                setDashboardData(null);
+              }
             }}
           />
         )}

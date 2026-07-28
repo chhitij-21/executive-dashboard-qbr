@@ -128,9 +128,76 @@ function cleanupTempFiles(filePaths = []) {
   }
 }
 
+/**
+ * Delete a report metadata entry and cleanup associated generated files.
+ */
+function deleteReport(jobId) {
+  try {
+    const list = loadHistory();
+    const targetId = String(jobId || '').trim().toLowerCase();
+    const index = list.findIndex((item) => String(item.jobId || '').trim().toLowerCase() === targetId);
+
+    if (index === -1) {
+      console.log(`[historyService] deleteReport: jobId "${jobId}" not found in metadata (treated as already deleted).`);
+      return true;
+    }
+
+    const targetReport = list[index];
+    list.splice(index, 1);
+    saveHistory(list);
+
+    // Attempt to delete output report folder
+    try {
+      const REPORTS_DIR = process.env.VERCEL
+        ? path.join(os.tmpdir(), 'reports')
+        : path.resolve(__dirname, '..', '..', 'reports');
+      const jobDir = path.join(REPORTS_DIR, `job_${targetReport.jobId}`);
+      if (fs.existsSync(jobDir)) {
+        fs.rmSync(jobDir, { recursive: true, force: true });
+        console.log(`[historyService] Deleted report output directory for job ${targetReport.jobId}`);
+      }
+    } catch (err) {
+      console.warn(`[historyService] Warning removing report directory for job ${targetReport.jobId}:`, err.message);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('[historyService] Error in deleteReport:', err.message);
+    return false;
+  }
+} // ← end of deleteReport
+
+/**
+ * Delete ALL report history metadata and purge generated output report files.
+ */
+function clearAllHistory() {
+  try {
+    saveHistory([]);
+    const REPORTS_DIR = process.env.VERCEL
+      ? path.join(os.tmpdir(), 'reports')
+      : path.resolve(__dirname, '..', '..', 'reports');
+    if (fs.existsSync(REPORTS_DIR)) {
+      const entries = fs.readdirSync(REPORTS_DIR);
+      entries.forEach((e) => {
+        const full = path.join(REPORTS_DIR, e);
+        try {
+          fs.rmSync(full, { recursive: true, force: true });
+        } catch (err) {}
+      });
+    }
+    console.log('[historyService] Purged all report history and output files.');
+    return true;
+  } catch (err) {
+    console.error('[historyService] Error clearing all history:', err.message);
+    return false;
+  }
+}
+
 module.exports = {
   getHistory,
   getReportByJobId,
   recordReport,
   cleanupTempFiles,
+  deleteReport,
+  clearAllHistory,
 };

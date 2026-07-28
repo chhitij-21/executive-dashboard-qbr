@@ -8,47 +8,16 @@
     "ruleConfigFile": "rules.yaml",
     "locations": [
       "All Locations",
-      "Noida",
-      "Delhi",
       "Bangalore",
-      "Mumbai",
-      "Gurgaon",
+      "Greater Noida",
+      "Guwahati",
       "Hyderabad",
-      "Pune",
-      "Kolkata"
+      "Mohali",
+      "Mumbai",
+      "Nagpur",
+      "Noida"
     ],
     "createdAt": "2026-01-01T00:00:00.000Z",
     "description": "Master QBR client for Jubilant Foodworks Ltd ecosystem."
-  },
-  {
-    "id": "client-a",
-    "name": "Client A (Retail Chain)",
-    "code": "CLT-A",
-    "logo": "🛍️",
-    "status": "inactive",
-    "ruleConfigFile": "rules.yaml",
-    "locations": [
-      "All Locations",
-      "Bangalore",
-      "Delhi",
-      "Mumbai"
-    ],
-    "createdAt": "2026-02-15T00:00:00.000Z",
-    "description": "National retail chain with multi-location network requirements."
-  },
-  {
-    "id": "client-b",
-    "name": "Client B (Tech Corp)",
-    "code": "CLT-B",
-    "logo": "🏢",
-    "status": "inactive",
-    "ruleConfigFile": "rules.yaml",
-    "locations": [
-      "All Locations",
-      "Pune",
-      "Hyderabad"
-    ],
-    "createdAt": "2026-03-20T00:00:00.000Z",
-    "description": "Enterprise IT technology center."
   }
 ]
