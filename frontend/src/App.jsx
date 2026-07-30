@@ -31,16 +31,16 @@ const normalizeLoc = (str) => {
 
 function MainPortal() {
   const { user, activeClient, activeLocation, setActiveLocation } = useAuth();
-  const [tab, setTab] = useState('upload'); // Default to Upload view until files are uploaded
+  const [tab, setTab] = useState('dashboard'); // Default to executive dashboard view
   const [dashTab, setDashTab] = useState('executive');
   const [selectedSite, setSelectedSite] = useState('ALL');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState('idle');
-  const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardData, setDashboardData] = useState(defaultDashboardData);
 
-  // On initial mount, check if a previous report exists in history
+  // On initial mount, fetch the latest completed report from backend if available
   useEffect(() => {
     let isSubscribed = true;
     const fetchInitialData = async () => {
@@ -50,12 +50,11 @@ function MainPortal() {
           const json = await res.json();
           if (json && !json.error && isSubscribed) {
             setDashboardData(json);
-            setTab('dashboard');
             if (json.metadata?.jobId) setJobId(json.metadata.jobId);
           }
         }
       } catch (err) {
-        console.warn('Initial dashboard fetch check:', err);
+        console.warn('Initial dashboard fetch fallback to default dataset:', err);
       }
     };
 
