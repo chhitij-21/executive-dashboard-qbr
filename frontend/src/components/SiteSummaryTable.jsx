@@ -3,7 +3,7 @@ import React from 'react';
 /**
  * SiteSummaryTable — per-site breakdown table with health badges and primary RCA for APs.
  */
-export default function SiteSummaryTable({ sites }) {
+export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) {
   const filteredSites = (sites || []).filter(site => {
     const name = String(site.siteId || '').toLowerCase().trim();
     return !['sla_compliance_report', 'sla compliance report', 'raw', 'sheet1', 'jfl', 'unknown'].includes(name) &&
@@ -33,7 +33,6 @@ export default function SiteSummaryTable({ sites }) {
               <th>Switch Uptime</th>
               <th>Total Incidents</th>
               <th>AP Incidents (Unique APs)</th>
-              <th>Overall Uptime</th>
               <th>Incident-Free %</th>
               <th>Health Score</th>
               <th>Primary RCA (All)</th>
@@ -42,6 +41,7 @@ export default function SiteSummaryTable({ sites }) {
           </thead>
           <tbody>
             {filteredSites.map((site, i) => {
+              const isSelected = selectedSite === site.siteId;
               const healthNum = parseFloat(site.healthScore);
               const healthColor =
                 isNaN(healthNum) ? '' :
@@ -50,8 +50,17 @@ export default function SiteSummaryTable({ sites }) {
                 healthNum >= 70 ? 'health-fair' : 'health-poor';
 
               return (
-                <tr key={i}>
-                  <td><strong>{site.siteId}</strong></td>
+                <tr
+                  key={i}
+                  onClick={() => onSelectSite && onSelectSite(site.siteId)}
+                  style={{
+                    background: isSelected ? 'rgba(59, 130, 246, 0.15)' : undefined,
+                    cursor: onSelectSite ? 'pointer' : 'default',
+                    transition: 'background 0.2s ease',
+                  }}
+                  className={isSelected ? 'selected-site-row' : ''}
+                >
+                  <td><strong>🏢 {site.siteId}</strong></td>
                   <td className="cell-center">{site.deviceCount}</td>
                   <td className="cell-center">{site.switchCount}</td>
                   <td className="cell-center">{site.apCount}</td>
@@ -66,11 +75,6 @@ export default function SiteSummaryTable({ sites }) {
                     </strong>
                   </td>
                   <td className="cell-center">{site.apIncidents ?? 0} ({site.uniqueAPsWithIncidents ?? 0})</td>
-                  <td className="cell-center">
-                    {site.overallUptime === 'Data Not Available' || site.overallUptime === null
-                      ? <span className="na-text">N/A</span>
-                      : `${site.overallUptime}%`}
-                  </td>
                   <td className="cell-center">
                     {site.incidentFreePercent === 'Data Not Available' || site.incidentFreePercent === null
                       ? <span className="na-text">N/A</span>

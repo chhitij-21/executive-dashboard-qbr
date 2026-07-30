@@ -188,6 +188,14 @@ function parseIncidentSheet(rows) {
     const rawLoc = row['Location'] || row['Site'] || row['SiteID'] || row['Site Name'] || row.__source?.sheet || '';
     const normLoc = normalizeSiteName(rawLoc);
 
+    const cat = String(row['Category'] || row['Ticket Category'] || row['Type'] || row['Ticket Type'] || row['Class'] || '').trim();
+    const desc = String(row['Description'] || row['Short Description'] || row['Summary'] || '').trim();
+    const rcaStr = String(row['RCA 2'] || row['RCA'] || row['Root Cause'] || row['RCA Category'] || '').trim();
+
+    const isCR = /change|change\s*request|^cr$|normal\s*change|standard\s*change|emergency\s*change/i.test(cat) ||
+                 /change|change\s*request|^cr$/i.test(rcaStr) ||
+                 /change\s*request|change\s*management/i.test(desc);
+
     return {
       IncidentNumber: ticketNo,
       TicketNumber:   ticketNo,
@@ -201,6 +209,9 @@ function parseIncidentSheet(rows) {
       Priority:       row['Priority'] || row['Severity'] || '',
       RCA:            row['RCA 2'] || row['RCA'] || row['Root Cause'] || row['RCA Category'] || 'Unknown',
       Status:         row['Status'] || row['Ticket Status'] || 'Closed',
+      Category:       cat,
+      Description:    desc,
+      IsChangeRequest: isCR,
       ResolutionSLAStatus: row['Resolution SLA Status'] || '',
       ResponseSLAStatus:   row['Response SLA Status'] || '',
       CreatedTime:    row['Created Time'] || row['Open Time'] || row['OpenTime'] || '',

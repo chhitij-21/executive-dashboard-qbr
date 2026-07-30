@@ -469,9 +469,17 @@ function MainPortal() {
                 ))}
             </div>
 
-            {selectedSite === 'ALL' ? (
-              <SiteSummaryTable sites={siteSummary} />
-            ) : (() => {
+            {/* Always render full Site Summary Table so all sites stay visible when inspecting a site */}
+            <SiteSummaryTable
+              sites={siteSummary}
+              selectedSite={selectedSite}
+              onSelectSite={(siteId) => {
+                setSelectedSite(siteId);
+                setActiveLocation(siteId === 'ALL' ? 'All Locations' : siteId);
+              }}
+            />
+
+            {selectedSite !== 'ALL' && (() => {
               const currentSiteData = siteSummary.find((s) => s.siteId === selectedSite) || {};
               const normSite = normalizeLoc(selectedSite);
 
@@ -488,22 +496,24 @@ function MainPortal() {
               );
 
               return (
-                <div className="site-inspector">
+                <div className="site-inspector" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '2px dashed var(--border-color, #e2e8f0)' }}>
+                  <h3 style={{ marginBottom: '1rem', color: 'var(--primary-color, #2563eb)' }}>
+                    🏢 Site Inspection Details: {selectedSite}
+                  </h3>
+
                   <div className="kpi-grid">
                     <KpiCard title="Site Name" value={selectedSite} />
                     <KpiCard title="Active Device Count" value={currentSiteData.deviceCount ?? siteActiveDevs.length} />
-                    {/* Requirement 1: Stock count KPI card */}
                     <KpiCard title="Stock Devices Count" value={currentSiteData.stockCount ?? siteStockDevs.length} />
                     <KpiCard title="Switch Count" value={currentSiteData.switchCount} />
                     <KpiCard title="AP Count" value={currentSiteData.apCount} />
-                    <KpiCard title="Overall Uptime" value={currentSiteData.overallUptime ?? '100.00'} unit="%" />
                     <KpiCard title="Incident-Free %" value={currentSiteData.incidentFreePercent ?? '100.00'} unit="%" />
                     <KpiCard title="Total Incidents" value={currentSiteData.incidentCount ?? siteIncs.length} />
                     <KpiCard title="Primary RCA (All)" value={currentSiteData.primaryRca ?? 'None'} />
                     <KpiCard title="Primary RCA for APs" value={currentSiteData.primaryRcaForAPs ?? 'None'} />
                   </div>
 
-                  {/* Requirement 1: Stock Inventory Displayed per Site */}
+                  {/* Stock Inventory Displayed per Site */}
                   {siteStockDevs.length > 0 && (
                     <div style={{ marginTop: '1.5rem' }}>
                       <h4>📦 Stock Inventory Devices at {selectedSite} ({siteStockDevs.length})</h4>
@@ -518,18 +528,17 @@ function MainPortal() {
                     <div style={{ marginTop: '1.5rem' }}>
                       <h4>Registered Active Devices at {selectedSite}</h4>
                       <DataTable
-                        columns={['DeviceID', 'DeviceType', 'CoreNonCore', '__effectiveUptime']}
+                        columns={['DeviceID', 'DeviceType', 'Location', 'Rack', 'JFL Uptime %']}
                         rows={siteActiveDevs}
                       />
                     </div>
                   )}
 
-                  {/* Requirement 3: Removed OpenTime from Incident Log */}
                   {siteIncs.length > 0 && (
                     <div style={{ marginTop: '1.5rem' }}>
-                      <h4>Incident Log for {selectedSite}</h4>
+                      <h4>Incident Logs for {selectedSite} ({siteIncs.length})</h4>
                       <DataTable
-                        columns={['IncidentNumber', 'DeviceID', 'Priority', 'RCA', 'Status']}
+                        columns={['IncidentNumber', 'DeviceID', 'Location', 'Priority', 'RCA', 'Status']}
                         rows={siteIncs}
                       />
                     </div>

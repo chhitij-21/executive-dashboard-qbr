@@ -211,7 +211,16 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       return !acc || /jubilant|jfl/i.test(acc);
     });
   }
-  log(`Parsed incidents for target customer: ${incidents.length}`);
+
+  // Change Requests are NOT part of Incidents per business spec
+  incidents = incidents.filter(i => {
+    const isCR = i.IsChangeRequest ||
+                 /change|change\s*request|^cr$/i.test(i.Category || '') ||
+                 /change|change\s*request|^cr$/i.test(i.RCA || '') ||
+                 /change\s*request|change\s*management/i.test(i.Description || '');
+    return !isCR;
+  });
+  log(`Incidents for target customer (excluding Change Requests): ${incidents.length}`);
 
   // Build Serial Number -> Hostname mapping dictionary across inventory & compliance sheets
   const serialToHostMap = buildSerialToHostnameMap(devices, incidents);
@@ -647,8 +656,6 @@ function buildSwitchAnalytics(switches, incidents) {
       monthlyUptime: `${mAvg}%`,
       quarterlyUptime: `${qAvg}%`,
       avgUptime: `${qAvg}%`,
-      minUptime: `${Math.min(...item.qUptimes).toFixed(2)}%`,
-      maxUptime: `${Math.max(...item.qUptimes).toFixed(2)}%`,
     };
   }).sort((a, b) => a.site.localeCompare(b.site) || a.rack.localeCompare(b.rack));
 
