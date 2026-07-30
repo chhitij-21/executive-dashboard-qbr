@@ -1,17 +1,19 @@
 import React from 'react';
 
 /**
- * KpiCard — displays a single KPI metric.
+ * KpiCard — displays a single executive KPI metric with icon, unit, and status styling.
  * Shows "Data Not Available" for null/undefined values.
- * Tooltip shows the source reference for traceability.
  */
-export default function KpiCard({ title, value, unit = '', source, trend }) {
+export default function KpiCard({ title, value, unit = '', icon, source, trend, status }) {
   const displayValue = (value === null || value === undefined || value === '') ? 'Data Not Available' : value;
   const isUnavailable = displayValue === 'Data Not Available';
 
   return (
-    <div className="kpi-card" title={source ? `Source: ${source}` : title}>
-      <span className="kpi-label">{title}</span>
+    <div className={`kpi-card ${status ? `kpi-${status}` : ''}`} title={source ? `Source: ${source}` : title}>
+      <div className="kpi-header-row">
+        <span className="kpi-label">{title}</span>
+        {icon && <span className="kpi-icon">{icon}</span>}
+      </div>
       <div className="kpi-value-row">
         <span className={`kpi-value ${isUnavailable ? 'kpi-na' : ''}`}>
           {displayValue}
@@ -22,3 +24,4 @@ export default function KpiCard({ title, value, unit = '', source, trend }) {
     </div>
   );
 }
+

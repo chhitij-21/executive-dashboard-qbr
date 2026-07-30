@@ -385,22 +385,22 @@ function MainPortal() {
         {dashTab === 'executive' && (
           <div className="section-body card pad-md">
             <div className="kpi-grid">
-              <KpiCard title="Customer" value={exec.customerName || activeClient?.name} />
-              <KpiCard title="Reporting Period" value={exec.reportingPeriod} />
-              <KpiCard title="Total Sites" value={exec.totalSites} />
-              <KpiCard title="Active Operational Devices" value={exec.totalDevices} />
-              <KpiCard title="Stock Inventory Devices" value={exec.totalStockDevices ?? 0} />
-              <KpiCard title="Total Switches" value={exec.totalSwitches} />
-              <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} />
-              <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} />
-              <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} />
-              <KpiCard title="Primary RCA (All)" value={exec.primaryRca || rcaAn.topRca || 'None'} />
-              <KpiCard title="Primary RCA for APs" value={exec.primaryRcaForAPs || apAn.topApRca || 'None'} />
-              <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" />
-              <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" />
-              <KpiCard title="SLA Compliance" value={exec.slaCompliance} unit="%" />
-              <KpiCard title="Health Score" value={`${exec.healthScore} (${exec.healthLabel})`} />
-              <KpiCard title="Total Incidents" value={exec.totalIncidents} />
+              <KpiCard title="Customer" value={exec.customerName || activeClient?.name} icon="🏢" />
+              <KpiCard title="Reporting Period" value={exec.reportingPeriod} icon="📅" />
+              <KpiCard title="Total Sites" value={exec.totalSites} icon="📍" />
+              <KpiCard title="Active Operational Devices" value={exec.totalDevices} icon="💻" />
+              <KpiCard title="Stock Inventory Devices" value={exec.totalStockDevices ?? 0} icon="📦" />
+              <KpiCard title="Total Switches" value={exec.totalSwitches} icon="🔌" />
+              <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} icon="📶" />
+              <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} icon="⚠️" />
+              <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} icon="🔍" />
+              <KpiCard title="Primary RCA (All)" value={exec.primaryRca || rcaAn.topRca || 'None'} icon="🎯" />
+              <KpiCard title="Primary RCA for APs" value={exec.primaryRcaForAPs || apAn.topApRca || 'None'} icon="📡" />
+              <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" icon="⚡" />
+              <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" icon="🛡️" />
+              <KpiCard title="SLA Compliance" value={exec.slaCompliance} unit="%" icon="📈" />
+              <KpiCard title="Health Score" value={`${exec.healthScore} (${exec.healthLabel})`} icon="💚" />
+              <KpiCard title="Total Incidents" value={exec.totalIncidents} icon="🚨" />
             </div>
 
             {/* Stock Inventory List Table */}
@@ -558,20 +558,12 @@ function MainPortal() {
           <div className="section-body card pad-md">
             <h3 className="section-title">Switch Analytics</h3>
             <div className="kpi-grid">
-              <KpiCard title="Total Switches" value={switchAn.totalSwitches ?? 0} />
-              <KpiCard title="Core Switches" value={switchAn.coreSwitches ?? 0} />
-              <KpiCard title="Non-Core Switches" value={switchAn.nonCoreSwitches ?? 0} />
-              <KpiCard
-                title="Core Switch Uptime"
-                value={switchAn.coreUptime ?? '100.00'}
-                unit="%"
-              />
-              <KpiCard
-                title="Non-Core Switch Uptime"
-                value={switchAn.nonCoreUptime ?? '100.00'}
-                unit="%"
-              />
-              <KpiCard title="Total Switch Incidents" value={switchAn.switchIncidents ?? switchAn.totalSwitchIncidents ?? 0} />
+              <KpiCard title="Total Switches" value={switchAn.totalSwitches ?? 0} icon="🔌" />
+              <KpiCard title="Core Switches" value={switchAn.coreSwitches ?? 0} icon="🟣" />
+              <KpiCard title="Non-Core Switches" value={switchAn.nonCoreSwitches ?? 0} icon="🔵" />
+              <KpiCard title="Core Switch Uptime" value={switchAn.coreUptime ?? '100.00'} unit="%" icon="⚡" />
+              <KpiCard title="Non-Core Switch Uptime" value={switchAn.nonCoreUptime ?? '100.00'} unit="%" icon="⚡" />
+              <KpiCard title="Total Switch Incidents" value={switchAn.switchIncidents ?? switchAn.totalSwitchIncidents ?? 0} icon="🚨" />
             </div>
 
             {switchAn.top10SwitchOutages?.length > 0 && (
@@ -605,14 +597,10 @@ function MainPortal() {
           <div className="section-body card pad-md">
             <h3 className="section-title">Access Point (AP) Analytics</h3>
             <div className="kpi-grid">
-              <KpiCard title="Total APs" value={apAn.totalAPs ?? 0} />
-              <KpiCard
-                title="AP Average Uptime"
-                value={apAn.apAverageUptime ?? '100.00'}
-                unit="%"
-              />
-              <KpiCard title="Total AP Incidents" value={apAn.apIncidents ?? apAn.totalAPIncidentRows ?? 0} />
-              <KpiCard title="Unique APs with Incidents" value={apAn.uniqueAPsWithIncidents ?? 0} />
+              <KpiCard title="Total APs" value={apAn.totalAPs ?? 0} icon="📶" />
+              <KpiCard title="AP Average Uptime" value={apAn.apAverageUptime ?? '100.00'} unit="%" icon="⚡" />
+              <KpiCard title="Total AP Incidents" value={apAn.apIncidents ?? apAn.totalAPIncidentRows ?? 0} icon="🚨" />
+              <KpiCard title="Unique APs with Incidents" value={apAn.uniqueAPsWithIncidents ?? 0} icon="🔍" />
             </div>
 
             {apAn.top10APOutages?.length > 0 && (
@@ -643,11 +631,11 @@ function MainPortal() {
           <div className="section-body card pad-md">
             <h3 className="section-title">Incident Analytics</h3>
             <div className="kpi-grid">
-              <KpiCard title="Total Incidents" value={incAn.totalIncidents ?? 0} />
-              <KpiCard title="Critical (P1 / Core)" value={incAn.criticalIncidents ?? 0} />
-              <KpiCard title="Major (P2 / Non-Core)" value={incAn.majorIncidents ?? 0} />
-              <KpiCard title="Minor (P3-P4 / AP)" value={incAn.minorIncidents ?? 0} />
-              <KpiCard title="MTTR (Mean Time to Resolve)" value={`${incAn.mttrHours ?? '2.4'} hrs`} />
+              <KpiCard title="Total Incidents" value={incAn.totalIncidents ?? 0} icon="🚨" />
+              <KpiCard title="Critical (P1 / Core)" value={incAn.criticalIncidents ?? 0} icon="🔴" />
+              <KpiCard title="Major (P2 / Non-Core)" value={incAn.majorIncidents ?? 0} icon="🟠" />
+              <KpiCard title="Minor (P3-P4 / AP)" value={incAn.minorIncidents ?? 0} icon="🟡" />
+              <KpiCard title="MTTR (Mean Time to Resolve)" value={`${incAn.mttrHours ?? '2.4'} hrs`} icon="⏱️" />
             </div>
 
             {incidentTrendData.length > 0 && (
@@ -671,8 +659,8 @@ function MainPortal() {
           <div className="section-body card pad-md">
             <h3 className="section-title">Root Cause Analysis (RCA)</h3>
             <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
-              <KpiCard title="Total Analyzed Incidents" value={rcaAn.totalIncidents ?? 0} />
-              <KpiCard title="Primary Root Cause" value={rcaAn.topRca ?? 'None'} />
+              <KpiCard title="Total Analyzed Incidents" value={rcaAn.totalIncidents ?? 0} icon="📋" />
+              <KpiCard title="Primary Root Cause" value={rcaAn.topRca ?? 'None'} icon="🔍" />
             </div>
 
             {/* Requirement 5: Formatted presentation of RCA Category Distribution & Raw RCA Breakdown */}
@@ -705,14 +693,10 @@ function MainPortal() {
           <div className="section-body card pad-md">
             <h3 className="section-title">SLA Analytics (Active Operational Devices)</h3>
             <div className="kpi-grid">
-              <KpiCard
-                title="Overall SLA Compliance"
-                value={slaAn.overallSLAPercent ?? '100.00'}
-                unit="%"
-              />
-              <KpiCard title="SLA Target" value={slaAn.slaTarget ?? 99.3} unit="%" />
-              <KpiCard title="Compliant Active Devices" value={slaAn.compliantDevices ?? 0} />
-              <KpiCard title="Breaching Active Devices" value={slaAn.breachingDevices ?? 0} />
+              <KpiCard title="Overall SLA Compliance" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" icon="📈" />
+              <KpiCard title="SLA Target" value={slaAn.slaTarget ?? 99.3} unit="%" icon="🎯" />
+              <KpiCard title="Compliant Active Devices" value={slaAn.compliantDevices ?? 0} icon="✅" />
+              <KpiCard title="Breaching Active Devices" value={slaAn.breachingDevices ?? 0} icon="❌" />
             </div>
 
             {slaMonthlyData.length > 0 && (
