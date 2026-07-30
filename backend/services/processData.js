@@ -495,10 +495,21 @@ function buildSiteSummary(allDevices, switches, aps, incidents) {
     }
   });
 
+  const devToSiteMap = {};
+  allDevices.forEach(d => {
+    if (d.DeviceID) devToSiteMap[d.DeviceID] = d.SiteID || d.Location;
+  });
+
   incidents.forEach(inc => {
-    const site = inc.SiteID || inc.Location || 'Unknown';
-    if (!sitesMap[site]) sitesMap[site] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
-    sitesMap[site].incidents.push(inc);
+    const devSite = devToSiteMap[inc.DeviceID];
+    const rawSite = inc.SiteID || inc.Location || '';
+    const isGeneric = !rawSite || ['raw', 'sheet1', 'jfl', 'unknown'].includes(rawSite.toLowerCase());
+    const site = devSite || (!isGeneric ? rawSite : 'Unknown');
+
+    if (site && site !== 'Unknown') {
+      if (!sitesMap[site]) sitesMap[site] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
+      sitesMap[site].incidents.push(inc);
+    }
   });
 
   return Object.entries(sitesMap)
@@ -543,6 +554,7 @@ function buildSiteSummary(allDevices, switches, aps, incidents) {
       overallUptime:          siteAvgUptime.toFixed(2),
       incidentFreePercent:    incFreePct.toFixed(2),
       uniqueAPsWithIncidents,
+      apIncidents:            apIncidentsAtSite.length,
       incidentCount:          s.incidents.length,
       healthScore,
       healthLabel:            ruleEngine.getHealthLabel(healthScore),
