@@ -11,7 +11,7 @@
     "dev:backend": "node backend/index.js",
     "dev:frontend": "npx vite --config frontend/vite.config.js",
     "build": "cd frontend && npm install --include=dev && npm run build",
-    "start": "node backend/index.js"
+    "start": "node --max-old-space-size=460 backend/index.js"
   },
   "dependencies": {
     "adm-zip": "^0.5.10",
