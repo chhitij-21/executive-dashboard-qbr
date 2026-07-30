@@ -138,6 +138,23 @@ function MainPortal() {
     const breaches = activeDevices.filter((d) => d.__slaBreach).length;
     const slaPct   = activeDevices.length > 0 ? (((activeDevices.length - breaches) / activeDevices.length) * 100).toFixed(2) : '100.00';
 
+    const coreSwitches = switches.filter(s => String(s.CoreNonCore || '').toLowerCase().includes('core') && !String(s.CoreNonCore || '').toLowerCase().includes('non'));
+    const nonCoreSwitches = switches.filter(s => String(s.CoreNonCore || '').toLowerCase().includes('non'));
+    const coreUptimes = coreSwitches.map(s => s.__effectiveUptime ?? 100);
+    const nonCoreUptimes = nonCoreSwitches.map(s => s.__effectiveUptime ?? 100);
+    const coreUptime = coreUptimes.length > 0 ? (coreUptimes.reduce((a,b)=>a+b,0)/coreUptimes.length).toFixed(2) : '100.00';
+    const nonCoreUptime = nonCoreUptimes.length > 0 ? (nonCoreUptimes.reduce((a,b)=>a+b,0)/nonCoreUptimes.length).toFixed(2) : '100.00';
+
+    const apIncidentsAtSite = incidents.filter(i => aps.some(a => a.DeviceID === i.DeviceID));
+    const uniqueAPsWithInc = new Set(apIncidentsAtSite.map(i => i.DeviceID)).size;
+
+    const criticalIncs = incidents.filter(i => ['P1','Critical','CRITICAL','High','HIGH','Core','CORE'].includes(String(i.Priority||''))).length;
+    const majorIncs    = incidents.filter(i => ['P2','Major','MAJOR','Medium','MEDIUM','Non-Core','NON-CORE'].includes(String(i.Priority||''))).length;
+    const minorIncs    = incidents.length - criticalIncs - majorIncs;
+
+    const breachingDevs = activeDevices.filter(d => d.__slaBreach);
+    const compliantDevs = activeDevices.filter(d => !d.__slaBreach);
+
     const siteSummary = (dashboardData.siteSummary || []).filter((s) => {
       return normalizeLoc(s.siteId) === normalizedFilter || s.siteId.toLowerCase().includes(normalizedFilter);
     });
@@ -155,13 +172,18 @@ function MainPortal() {
         incidentFreePercent: incFreePct,
         slaCompliance: slaPct,
         totalIncidents: incidents.length,
+        criticalIncidents: criticalIncs,
+        majorIncidents: majorIncs,
+        minorIncidents: Math.max(0, minorIncs),
       },
       siteSummary,
       switchAnalytics: {
         ...dashboardData.switchAnalytics,
         totalSwitches: switches.length,
-        coreUptime: switchUptime,
-        nonCoreUptime: switchUptime,
+        coreSwitches: coreSwitches.length,
+        nonCoreSwitches: nonCoreSwitches.length,
+        coreUptime,
+        nonCoreUptime,
         overallUptime: switchUptime,
         switchIncidents: incidents.filter(i => switches.some(s => s.DeviceID === i.DeviceID)).length,
         top10SwitchOutages: (dashboardData.switchAnalytics?.top10SwitchOutages || []).filter(s => normalizeLoc(s.Location) === normalizedFilter || String(s.Location).toLowerCase().includes(normalizedFilter)),
@@ -170,8 +192,34 @@ function MainPortal() {
         ...dashboardData.apAnalytics,
         totalAPs: aps.length,
         apAverageUptime: apAvgUptime,
-        apIncidents: incidents.filter(i => aps.some(a => a.DeviceID === i.DeviceID)).length,
+        apIncidents: apIncidentsAtSite.length,
+        uniqueAPsWithIncidents: uniqueAPsWithInc,
         top10APOutages: (dashboardData.apAnalytics?.top10APOutages || []).filter(a => normalizeLoc(a.Location) === normalizedFilter || String(a.Location).toLowerCase().includes(normalizedFilter)),
+      },
+      incidentAnalytics: {
+        ...dashboardData.incidentAnalytics,
+        totalIncidents: incidents.length,
+        criticalIncidents: criticalIncs,
+        majorIncidents: majorIncs,
+        minorIncidents: Math.max(0, minorIncs),
+        siteWiseIncidents: [{ siteId: locFilter, count: incidents.length }],
+      },
+      rcaAnalytics: {
+        ...dashboardData.rcaAnalytics,
+        totalAnalyzedIncidents: incidents.length,
+      },
+      slaAnalytics: {
+        ...dashboardData.slaAnalytics,
+        overallSlaCompliance: slaPct,
+        compliantActiveDevices: compliantDevs.length,
+        breachingActiveDevices: breachingDevs.length,
+        breachingDevices: breachingDevs.map(d => ({
+          DeviceID: d.DeviceID,
+          Location: d.SiteID || d.Location,
+          CoreNonCore: d.CoreNonCore || 'N/A',
+          uptime: `${d.__effectiveUptime}%`,
+          breachesSLA: true,
+        })),
       },
       devices,
       incidents,
