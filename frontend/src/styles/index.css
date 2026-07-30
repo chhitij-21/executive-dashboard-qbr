@@ -1480,6 +1480,86 @@ body {
   gap: 0.5rem;
 }
 
+/* ── Executive Presentation Section Styling ───────────────────────────── */
+.exec-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+
+.exec-banner {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #ffffff;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.15);
+}
+
+.exec-banner-left h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0.25rem;
+}
+
+.exec-banner-left p {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.exec-banner-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.exec-badge-item {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 0.4rem;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.progress-green { background: linear-gradient(90deg, #16a34a, #22c55e); }
+.progress-blue  { background: linear-gradient(90deg, #2563eb, #3b82f6); }
+.progress-purple{ background: linear-gradient(90deg, #9333ea, #a855f7); }
+.progress-yellow{ background: linear-gradient(90deg, #d97706, #f59e0b); }
+.progress-red   { background: linear-gradient(90deg, #dc2626, #ef4444); }
+
+
 
 
 

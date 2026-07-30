@@ -384,6 +384,20 @@ function MainPortal() {
         {/* ── 1. Executive Summary ──────────────────────────────────────── */}
         {dashTab === 'executive' && (
           <div className="section-body card pad-md">
+            {/* Executive Hero Banner */}
+            <div className="exec-banner">
+              <div className="exec-banner-left">
+                <h3>📋 Executive Performance Overview</h3>
+                <p>Quarterly Business Review (QBR) &amp; SLA Compliance Audit for {exec.customerName || activeClient?.name || 'Jubilant Foodworks Ltd (JFL)'}</p>
+              </div>
+              <div className="exec-banner-badges">
+                <span className="exec-badge-item">📍 {exec.totalSites || 8} Monitored Sites</span>
+                <span className="exec-badge-item">💻 {exec.totalDevices || 372} Active Devices</span>
+                <span className="exec-badge-item" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>💚 Health: {exec.healthLabel || 'Excellent'}</span>
+              </div>
+            </div>
+
+            <div className="exec-section-title">📊 Key Performance Indicators</div>
             <div className="kpi-grid">
               <KpiCard title="Customer" value={exec.customerName || activeClient?.name} icon="🏢" />
               <KpiCard title="Reporting Period" value={exec.reportingPeriod} icon="📅" />
@@ -406,7 +420,9 @@ function MainPortal() {
             {/* Stock Inventory List Table */}
             {activeDashboardData.devices?.filter(d => d.__isStock).length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
-                <h4>📦 Stock Inventory Devices ({activeDashboardData.devices.filter(d => d.__isStock).length}) — Excluded from SLA Penalties</h4>
+                <h4 style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  📦 Stock Inventory Devices ({activeDashboardData.devices.filter(d => d.__isStock).length}) — Excluded from SLA Penalties
+                </h4>
                 <DataTable
                   columns={['DeviceID', 'DeviceType', 'Location', 'Rack', 'Status']}
                   rows={activeDashboardData.devices.filter(d => d.__isStock).map(d => ({
@@ -424,8 +440,11 @@ function MainPortal() {
             {switchUptimeChartData && (
               <div className="chart-panel" style={{ marginTop: '1.5rem' }}>
                 <h3 className="chart-panel-title">
-                  Device Uptime Distribution — All Switches (Core &amp; Non-Core) — Purple = Core, Blue = Non-Core, Red = below SLA 99.3%
+                  ⚡ Device Uptime Distribution — All Switches (Core &amp; Non-Core)
                 </h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                  Purple = Core Switches • Blue = Non-Core Switches • Red = Below SLA Target (99.3%)
+                </p>
                 <Chart
                   type="bar"
                   data={switchUptimeChartData}
