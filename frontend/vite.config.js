@@ -12,6 +12,15 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'dist'),  // → frontend/dist (served by Express)
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-charts': ['chart.js'],
+        },
+      },
+    },
   },
 
   server: {

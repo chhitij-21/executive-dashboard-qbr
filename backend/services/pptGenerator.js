@@ -66,6 +66,22 @@ const C = {
 const LOGO_PATH  = path.resolve(__dirname, '../../templates/extracted_media/image2.png');
 const COVER_PATH = path.resolve(__dirname, '../../templates/extracted_media/image1.jpeg');
 
+// Pre-cache Base64 image buffers at module initialization for ultra-fast slide generation
+let logoBase64 = null;
+let coverBase64 = null;
+
+try {
+  if (fs.existsSync(LOGO_PATH)) {
+    logoBase64 = 'image/png;base64,' + fs.readFileSync(LOGO_PATH).toString('base64');
+  }
+} catch (e) {}
+
+try {
+  if (fs.existsSync(COVER_PATH)) {
+    coverBase64 = 'image/jpeg;base64,' + fs.readFileSync(COVER_PATH).toString('base64');
+  }
+} catch (e) {}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,8 +166,10 @@ function addHeader(pres, slide, title, subtitle) {
     fontFace: 'Calibri',
   });
 
-  // Logo (top-right) — Fix #10: path relative to __dirname
-  if (fs.existsSync(LOGO_PATH)) {
+  // Logo (top-right)
+  if (logoBase64) {
+    slide.addImage({ data: logoBase64, x: 10.75, y: 0.12, w: 2.1, h: 0.68 });
+  } else if (fs.existsSync(LOGO_PATH)) {
     slide.addImage({ path: LOGO_PATH, x: 10.75, y: 0.12, w: 2.1, h: 0.68 });
   }
 
@@ -222,12 +240,14 @@ function buildTitleSlide(pres, exec) {
   s.background = { color: C.BG_DARK };
 
   // Logo top-left
-  if (fs.existsSync(LOGO_PATH)) {
+  if (logoBase64) {
+    s.addImage({ data: logoBase64, x: 0.75, y: 0.45, w: 2.6, h: 0.82 });
+  } else if (fs.existsSync(LOGO_PATH)) {
     s.addImage({ path: LOGO_PATH, x: 0.75, y: 0.45, w: 2.6, h: 0.82 });
   }
 
   // Left info card
-  const cardW = fs.existsSync(COVER_PATH) ? 6.3 : 12.33;
+  const cardW = (coverBase64 || fs.existsSync(COVER_PATH)) ? 6.3 : 12.33;
   s.addShape(pres.ShapeType.rect, {
     x: 0.75, y: 1.55, w: cardW, h: 5.0,
     fill: { color: C.NAVY_LIGHT },
@@ -252,7 +272,9 @@ function buildTitleSlide(pres, exec) {
   });
 
   // Cover image (right panel)
-  if (fs.existsSync(COVER_PATH)) {
+  if (coverBase64) {
+    s.addImage({ data: coverBase64, x: 7.3, y: 1.55, w: 5.28, h: 5.0 });
+  } else if (fs.existsSync(COVER_PATH)) {
     s.addImage({ path: COVER_PATH, x: 7.3, y: 1.55, w: 5.28, h: 5.0 });
   }
 

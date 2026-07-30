@@ -45,7 +45,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
 }));
-app.options('*', cors());
+const compression = require('compression');
+app.use(compression());
 app.use(express.json());
 
 // Vercel Serverless Path Normalizer: ONLY active on Vercel deployments.
