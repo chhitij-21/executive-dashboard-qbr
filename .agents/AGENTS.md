@@ -33,12 +33,11 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 ### Frontend State & Tab Visibility Rule
 * **Landing State**: Defaults to the Executive Dashboard overview on initial load.
 * **Site Inspection**: Site selector pills (`Bangalore`, `Noida`, `Greater Noida`, etc.) filter all KPI cards, device lists, stock tables, and incident logs in real time.
-* **Navigation Bar**: Provides instant access to 5 main tabs:
-  1. 📤 **Upload & Generate**: Drag-and-drop workbook processor & report generator.
+* **Navigation Bar**: Provides instant access to 4 main tabs:
+  1. 📤 **Upload & Generate**: Drag-and-drop workbook processor, AI Excel Audit pre-validator, & report generator.
   2. 📈 **Executive Dashboard**: Interactive 7-section CXO analytics dashboard.
-  3. 🤖 **AI Excel Audit**: AI Schema & Column Mapping Inspector.
-  4. 📜 **Report History**: Output report audit log.
-  5. ⚙️ **Client Management**: Multi-client configuration & custom `rules.yaml` editor.
+  3. 📜 **Report History**: Output report audit log.
+  4. ⚙️ **Client Management**: Multi-client configuration & custom `rules.yaml` editor.
 
 ---
 
@@ -72,26 +71,20 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 ### Verified Web Portal Routes & Sub-Tabs (`http://localhost:3000`)
 * **📋 Executive Summary**: 16 KPI cards fully loaded.
 * **🏢 Site Summary & Inspector**: Per-site breakdown across all 8 production sites (`Bangalore`, `Greater Noida`, `Guwahati`, `Hyderabad`, `Mohali`, `Mumbai`, `Nagpur`, `Noida`).
-* **🔌 Switch Analytics**: Total switches (155), core/non-core uptime, rackwise uptime summary.
+* **🔌 Switch Analytics**: Total switches (155), core/non-core uptime, rackwise uptime summary (Site Name, Monthly Uptime, Quarterly Uptime).
 * **📶 AP Analytics**: AP average uptime, total AP incidents (250), unique APs with incidents (102), top outage lists.
 * **⚠ Incident Analytics**: 363 incidents, MTTR hours, monthly incident volume trends.
 * **🔍 RCA Analytics**: Primary Root Cause (*Device Power Issues*), Category Distribution Chart.
 * **📈 SLA Analytics**: Overall SLA compliance (84.15% / Target: 99.3%), breaching device breakdown.
-* **🤖 AI Excel Audit**: AI Schema & Column Mapping Inspector tab.
 
 ---
 
-## 4. 🤖 Complete Backend + Frontend AI Excel Audit Feature
+## 4. 🤖 Integrated AI Excel Audit & Schema Pre-Validation Engine
 
-### Backend Endpoint (`POST /api/analyze-excel`)
-* Accepts any `.xlsx`, `.xls`, or `.csv` file.
-* Scans all worksheets, row counts, column header structures, and detects sheet roles (**Incident Logs**, **Inventory Registries**, **Location Sheets**).
-* Auto-maps standard metric fields (`Ticket ID`, `Device Serial`, `Location`, `RCA`, `Resolution Mins`).
-* Generates sample 3-row preview and RCA breakdown summary.
-
-### Frontend Component (`ExcelAnalyzer.jsx`)
-* Interactive drop-zone for file analysis.
-* Metadata cards grid, detected sheet roles display, resolved schema table, RCA distribution preview, and multi-worksheet data inspector.
+### Background Pre-Validation Workflow (`POST /api/analyze-excel`)
+* AI Excel Audit runs automatically in the background during file selection in the **`📤 Upload & Generate`** workflow.
+* Scans all worksheets, detects sheet roles (**Incident Logs**, **Inventory Registries**), checks column header alignments, and audits for data discrepancies or duplicate ticket conflicts prior to calculation.
+* Displays inline **🤖 AI Pre-Validation Audit: Passed** summary badge directly inside the upload dropzone card.
 
 ---
 
@@ -148,3 +141,12 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 * Every device serial number is cross-referenced with `JFL Updated Inventory.xlsx` and `SLA_Compliance_Report.csv` to map to its corresponding **`Hostname`** (e.g. `JFL-Guwahati-CORE-02`, `JFL-MOHALI-ACC-SW-02`).
 * **Fallback Behavior**: If a device has **no Hostname** (or `Hostname` is empty / N/A), `DeviceID` cleanly falls back to its **Serial Number** (e.g. `FTX240212AB`).
 * **Implementation**: Executed automatically in `buildSerialToHostnameMap` in `excelParser.js` and `processData.js` during every file processing pass.
+
+---
+
+## 9. 🤖 Integrated AI Pre-Validation & Excel Audit Workflow Rule
+
+### Workflow Integration Rule
+* The AI Excel Audit pass is **not displayed as a separate standalone navigation tab**.
+* Instead, it operates automatically as a pre-validation step inside the **`📤 Upload & Generate`** workflow.
+* Performs schema validation, discrepancy auditing, duplicate conflict detection, and sheet role verification prior to processing data.
