@@ -57,10 +57,26 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     setStatus('processing');
     setStageText('Uploading files to backend...');
 
-  // Cold-start warning timer if server takes longer than 3 seconds to respond
+    // Cold-start warning timer if server takes longer than 3 seconds to respond
     const wakeTimer = setTimeout(() => {
       setStageText('⚡ Server is waking up (Render Free Tier cold start takes ~30-45s)... Please wait.');
     }, 3500);
+
+    // Auto-authenticate if no token is stored in localStorage
+    let storedTok = localStorage.getItem('portal_token');
+    if (!storedTok) {
+      try {
+        const autoRes = await fetch(`${API_BASE_URL}/api/auth/auto`);
+        if (autoRes.ok) {
+          const autoJson = await autoRes.json();
+          if (autoJson.token) {
+            localStorage.setItem('portal_token', autoJson.token);
+          }
+        }
+      } catch (aErr) {
+        console.warn('Auto-auth attempt failed:', aErr);
+      }
+    }
 
     const form = new FormData();
     form.append('incidents', incidentFile);
@@ -74,15 +90,17 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       const res = await apiFetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
       clearTimeout(wakeTimer);
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setStatus('failed');
-        if (json.validationErrors) {
+        if (res.status === 401) {
+          setErrorMsg('Authentication required. Please click "Sign In" at top right or refresh.');
+        } else if (json.validationErrors) {
           setValidationErrors(json.validationErrors);
           setValidationWarnings(json.validationWarnings || []);
         } else {
-          setErrorMsg(json.error || 'Upload failed. Please verify your Excel format.');
+          setErrorMsg(json.error || `Upload failed (Status ${res.status}). Please verify your Excel format.`);
         }
         return;
       }
@@ -93,7 +111,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     } catch (err) {
       clearTimeout(wakeTimer);
       setStatus('failed');
-      setErrorMsg('Unable to connect to backend server. If running locally, please run Start_App.bat or node backend/index.js. If hosted on Render, please wait ~30s for the free-tier instance to wake up and try again.');
+      setErrorMsg('Unable to connect to backend server. Render Free Tier instance spins down on inactivity (~30s cold start). Please wait a few seconds and try uploading again.');
     }
   };
 
