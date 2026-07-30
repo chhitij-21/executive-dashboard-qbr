@@ -81,33 +81,54 @@ function normalizeSiteName(site) {
  * Merge all location sheets from the inventory file into one flat device array.
  */
 function mergeInventorySheets(workbookData, locationSheets) {
-  const devices = [];
+  const deviceMap = {};
+
   locationSheets.forEach((sheet) => {
     const rows = workbookData[sheet] || [];
     rows.forEach((row, idx) => {
-      const serial = row['Serial No.'] || row['Serial No'] || row['SerialNo'] || row['Device Serial'] || row['DeviceID'] || '';
+      const serial = String(row['Serial No.'] || row['Serial No'] || row['SerialNo'] || row['Device Serial'] || row['DeviceID'] || '').trim();
       if (!serial) return;
 
       const rawLoc = row['Location'] || sheet;
       const normLoc = normalizeSiteName(rawLoc);
 
-      devices.push({
-        DeviceID:   String(serial).trim(),
-        SerialNo:   String(serial).trim(),
-        Hostname:   row['Hostname'] || row['Host Name'] || row['Device Hostname'] || '',
-        Location:   normLoc,
-        SiteID:     normLoc,
-        DeviceType: row['Device Type'] || row['DeviceType'] || '',
-        Rack:       row['Rack no.'] || row['Rack'] || row['Rack Number'] || '',
-        CoreNonCore:row['Core/Non Core'] || row['Core Non Core'] || '',
-        Model:      row['Model'] || '',
-        NetworkName:row['Network Name'] || '',
-        ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
-        __source:   row.__source || { file: 'inventory', sheet, row: idx + 2 },
-      });
+      const host = String(row['Hostname'] || row['Host Name'] || row['Device Hostname'] || '').trim();
+      const devType = String(row['Device Type'] || row['DeviceType'] || '').trim();
+      const rack = String(row['Rack no.'] || row['Rack'] || row['Rack Number'] || '').trim();
+      const core = String(row['Core/Non Core'] || row['Core Non Core'] || '').trim();
+      const model = String(row['Model'] || '').trim();
+
+      if (!deviceMap[serial]) {
+        deviceMap[serial] = {
+          DeviceID:   serial,
+          SerialNo:   serial,
+          Hostname:   host,
+          Location:   normLoc,
+          SiteID:     normLoc,
+          DeviceType: devType,
+          Rack:       rack,
+          CoreNonCore:core,
+          Model:      model,
+          NetworkName:row['Network Name'] || '',
+          ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
+          __source:   row.__source || { file: 'inventory', sheet, row: idx + 2 },
+        };
+      } else {
+        const existing = deviceMap[serial];
+        if (host && (!existing.Hostname || existing.Hostname.toLowerCase() === 'n/a')) existing.Hostname = host;
+        if (devType && (!existing.DeviceType || existing.DeviceType === 'N/A')) existing.DeviceType = devType;
+        if (rack && !existing.Rack) existing.Rack = rack;
+        if (core && !existing.CoreNonCore) existing.CoreNonCore = core;
+        if (model && !existing.Model) existing.Model = model;
+        if (normLoc && normLoc !== 'Unknown' && existing.Location === 'Unknown') {
+          existing.Location = normLoc;
+          existing.SiteID = normLoc;
+        }
+      }
     });
   });
-  return devices;
+
+  return Object.values(deviceMap);
 }
 
 /**

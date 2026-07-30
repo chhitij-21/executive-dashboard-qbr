@@ -1,7 +1,7 @@
 {
   "customerName": "Jubilant Foodworks Ltd (JFL)",
   "reportingPeriod": "Q1 FY2026 (7 Apr – 6 Jul 2026)",
-  "generatedAt": "2026-07-30T18:19:08.742Z",
+  "generatedAt": "2026-07-30T18:23:18.427Z",
   "executiveSummary": {
     "customerName": "Jubilant Foodworks Ltd (JFL)",
     "reportingPeriod": "Q1 FY2026 (7 Apr – 6 Jul 2026)",
@@ -6460,7 +6460,7 @@
       "DeviceType": "SW",
       "Rack": "JFL-15F-L2-Stack1",
       "CoreNonCore": "Non-Core",
-      "Model": " C9300L-48P-4X",
+      "Model": "C9300L-48P-4X",
       "NetworkName": "",
       "ReplacedSerial": "",
       "__source": {
@@ -6485,7 +6485,7 @@
       "DeviceType": "SW",
       "Rack": "NA",
       "CoreNonCore": "Non-Core",
-      "Model": " C9300L-48P-4X",
+      "Model": "C9300L-48P-4X",
       "NetworkName": "",
       "ReplacedSerial": "",
       "__source": {
