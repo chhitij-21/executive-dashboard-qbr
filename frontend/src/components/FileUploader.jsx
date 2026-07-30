@@ -93,7 +93,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     } catch (err) {
       clearTimeout(wakeTimer);
       setStatus('failed');
-      setErrorMsg('Unable to connect to backend server. Please refresh or try again in a few seconds.');
+      setErrorMsg('Unable to connect to backend server. If running locally, please run Start_App.bat or node backend/index.js. If hosted on Render, please wait ~30s for the free-tier instance to wake up and try again.');
     }
   };
 
