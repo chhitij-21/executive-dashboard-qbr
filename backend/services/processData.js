@@ -106,25 +106,39 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   ruleEngine.loadRules();
 
-  // ── 1. Parse incident file ────────────────────────────────────────────────
+  // ── 1 & 2. Parse workbooks with automatic role detection ─────────────────
   let incWb, invWb;
+  let wb1 = null, wb2 = null;
+
   try {
-    incWb = loadWorkbook(incidentFilePath);
-    log(`Incident file parsed — sheets: ${incWb.__sheetNames.join(', ')}`);
+    if (incidentFilePath) wb1 = loadWorkbook(incidentFilePath);
   } catch (e) {
-    return fail(outputDir, 'parse_error', `Cannot parse incident file: ${e.message}`, log);
+    return fail(outputDir, 'parse_error', `Cannot parse file 1: ${e.message}`, log);
   }
 
-  // ── 2. Parse inventory file (optional) ───────────────────────────────────
   if (inventoryFilePath) {
     try {
-      invWb = loadWorkbook(inventoryFilePath);
-      log(`Inventory file parsed — sheets: ${invWb.__sheetNames.join(', ')}`);
+      wb2 = loadWorkbook(inventoryFilePath);
     } catch (e) {
-      log(`WARNING: Cannot parse inventory file — ${e.message}. Continuing with incident data only.`);
-      invWb = null;
+      log(`WARNING: Cannot parse file 2 — ${e.message}`);
     }
   }
+
+  // Auto-detect which workbook is Incident workbook vs Inventory workbook
+  const isWb1Incident = wb1 && (wb1['Raw'] || wb1['Updated inventory'] || wb1['JFL'] || wb1.__sheetNames.some(s => /incident|raw/i.test(s)));
+  const isWb2Incident = wb2 && (wb2['Raw'] || wb2['Updated inventory'] || wb2['JFL'] || wb2.__sheetNames.some(s => /incident|raw/i.test(s)));
+
+  if (wb2 && isWb2Incident && !isWb1Incident) {
+    incWb = wb2;
+    invWb = wb1;
+    log('Auto-detected swapped workbook arguments: assigning file 2 as incident workbook');
+  } else {
+    incWb = wb1;
+    invWb = wb2;
+  }
+
+  log(`Incident file parsed — sheets: ${incWb?.__sheetNames.join(', ') || 'none'}`);
+  if (invWb) log(`Inventory file parsed — sheets: ${invWb.__sheetNames.join(', ')}`);
 
   // ── 3. Extract sheets ─────────────────────────────────────────────────────
   const incSheetMap = detectSheets(incWb);
@@ -139,8 +153,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const uptimeSummaryMap = parseUptimeSummary(rawUptimeRows);
   log(`Uptime summary devices: ${Object.keys(uptimeSummaryMap).length}`);
 
-  // All-Location uptime summary (also in incident file)
-  const allLocationRows = incWb['All Location '] || incWb['All Location'] || [];
+  // All-Location uptime summary (check both workbooks)
+  const allLocationRows = (incWb && (incWb['All Location '] || incWb['All Location']))
+    || (invWb && (invWb['All Location '] || invWb['All Location']))
+    || [];
   log(`All Location sheet rows: ${allLocationRows.length}`);
 
   // ── 4. Build device list ──────────────────────────────────────────────────

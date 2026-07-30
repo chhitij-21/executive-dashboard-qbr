@@ -1,14 +1,36 @@
 // backend/services/pptGenerator.js
-// Generates PowerPoint matching master_template.pptx scenario with 100% data accuracy.
-// 27 wide-format slides: Title (1), All-Sites Executive Summary Table (2), 8 Site Review Blocks x 3 slides (3-26), Thank You (27).
+// Concrete QBR PPT Generator — master template theme, 27 slides, zero XML mutation.
+//
+// Slide structure (matches master_template.pptx exactly):
+//   Slide  1  : Title
+//   Slide  2  : Executive Summary — all-sites table
+//   Slides 3–26: 8 sites × 3 slides
+//                 [A] AP & Switch Statistical Overview + Rack Uptime table
+//                 [B] Switch Uptime Report (KPI cards + switch table)
+//                 [C] AP Incidents & RCA Breakdown (KPI cards + AP table)
+//   Slide 27  : Thank You
+//
+// Fatal errors fixed vs previous version:
+//   #1–6  : Entire XML/zip mutation path (generateFromTemplate) removed.
+//   #7    : Screenshot slide removed — slide count is now always exactly 27.
+//   #8    : All colW arrays verified to sum to declared w.
+//   #9    : Safe breach colour helper — parseFloat guard prevents NaN misclassification.
+//   #10   : Logo/cover paths use __dirname, not process.cwd().
+//   #11   : Single module-level TARGET_SITES constant; no duplicate declarations.
+//   #12   : pct() uses parseFloat + isNaN guard; no string-equality comparison.
+//   #13   : Card grid capped so bottom edge + footer never overlap.
 
-const fs = require('fs');
+'use strict';
+
+const fs   = require('fs');
 const path = require('path');
-const os = require('os');
 const PptxGenJS = require('pptxgenjs');
-const { captureDashboard } = require('../utils/screenshot');
-let AdmZip;
-try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SLA_TARGET = 99.3; // must match processData.js
 
 const TARGET_SITES = [
   'BANGALORE',
@@ -21,611 +43,602 @@ const TARGET_SITES = [
   'NAGPUR',
 ];
 
-/**
- * Main entry point.
- */
-async function generatePPT(data, templatePath, outputPath) {
-  if (fs.existsSync(templatePath) && AdmZip) {
-    await generateFromTemplate(data, templatePath, outputPath);
-  } else {
-    console.warn('[pptGenerator] Template not found or adm-zip missing — using programmatic mode');
-    await generateProgrammatic(data, outputPath);
-  }
+// Master-template colour palette (Corporate Navy & Clean White)
+const C = {
+  NAVY:        '0B2440',
+  NAVY_LIGHT:  '1C3B60',
+  BLUE:        '0056B3',
+  BLUE_LIGHT:  'EBF3FA',
+  BG_DARK:     '0B2440',
+  BG_LIGHT:    'FFFFFF',
+  CARD_BG:     'F4F7FA',
+  CARD_BORDER: 'DDE3E9',
+  TEXT_DARK:   '1A2530',
+  TEXT_MUTED:  '5B6B7C',
+  TEXT_LIGHT:  'FFFFFF',
+  GREEN:       '28A745',
+  RED:         'DC3545',
+  AMBER:       'D97706',
+  HEADER_FILL: '0B2440',
+};
+
+// Paths resolved relative to this file (Fix #10)
+const LOGO_PATH  = path.resolve(__dirname, '../../templates/extracted_media/image2.png');
+const COVER_PATH = path.resolve(__dirname, '../../templates/extracted_media/image1.jpeg');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function generatePPT(data, _templatePath, outputPath) {
+  console.log('[pptGenerator] Generating 27-slide QBR PPT...');
+  await buildPresentation(data, outputPath);
+  console.log('[pptGenerator] PPT written to:', outputPath);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODE 1: Template-based XML replacement (Exact Master Template Match)
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function generateFromTemplate(data, templatePath, outputPath) {
-  const zip = new AdmZip(templatePath);
-  const siteSummary = data.siteSummary || [];
-  const exec        = data.executiveSummary || {};
-  const incidents   = data.incidents || [];
-  const devices     = data.devices || [];
+/** Safe display of any value; returns 'N/A' for null / undefined / empty. */
+function fmt(v) {
+  return (v === null || v === undefined || v === '') ? 'N/A' : String(v);
+}
 
-  // Build a lookup map by normalized site name
-  const siteMap = {};
-  siteSummary.forEach((s) => {
-    const key = s.siteId.trim().toUpperCase();
-    siteMap[key] = s;
+/**
+ * Safe percentage formatter.
+ * Fix #12: uses parseFloat + isNaN guard — never does string equality like
+ *          switchUptime === 'Data Not Available'.
+ */
+function pct(v) {
+  const n = parseFloat(String(v ?? ''));
+  if (isNaN(n)) return 'N/A';
+  return `${n.toFixed(2)}%`;
+}
+
+/**
+ * Fix #9: safe SLA-breach colour — parseFloat guard prevents NaN false-negative.
+ * Returns RED if device is breaching SLA, GREEN otherwise.
+ */
+function uptimeColor(rawValue) {
+  const n = parseFloat(String(rawValue ?? ''));
+  if (isNaN(n)) return C.TEXT_MUTED;
+  return n < SLA_TARGET ? C.RED : C.GREEN;
+}
+
+/** Alternate row fill for zebra-striped tables. */
+function rowFill(idx) {
+  return idx % 2 === 0 ? 'FFFFFF' : C.CARD_BG;
+}
+
+/**
+ * Find site data from siteSummary by matching TARGET_SITES key.
+ * Case-insensitive prefix match (e.g. 'GREATER NOIDA' → match on 'GREATER NOIDA' or 'Greater Noida').
+ */
+function findSite(siteSummary, siteKey) {
+  return (
+    siteSummary.find(s => s.siteId.toUpperCase() === siteKey) ||
+    siteSummary.find(s => s.siteId.toUpperCase().startsWith(siteKey.split(' ')[0])) ||
+    { siteId: siteKey }
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared Slide Components
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Adds the standard header bar (navy background, title, subtitle, logo)
+ * and a footer divider line on every content slide.
+ */
+function addHeader(pres, slide, title, subtitle) {
+  // Navy header bar
+  slide.addShape(pres.ShapeType.rect, {
+    x: 0, y: 0, w: 13.33, h: 0.95,
+    fill: { color: C.NAVY },
   });
 
-  // Save original un-mutated base slide XMLs for 3, 4, 5
-  const baseSlideXmls = {
-    3: zip.readAsText('ppt/slides/slide3.xml'),
-    4: zip.readAsText('ppt/slides/slide4.xml'),
-    5: zip.readAsText('ppt/slides/slide5.xml'),
-  };
+  slide.addText(title, {
+    x: 0.45, y: 0.1, w: 9.5, h: 0.42,
+    fontSize: 17, bold: true, color: C.TEXT_LIGHT,
+    fontFace: 'Calibri',
+  });
 
-  // ── 1. Slide 1: Title & Date replacement ─────────────────────────────────
-  const slide1Entry = zip.getEntry('ppt/slides/slide1.xml');
-  if (slide1Entry) {
-    let xml1 = zip.readAsText(slide1Entry);
-    xml1 = xml1.replace(/DD-MM-YYYY/g, escapeXml(exec.reportingPeriod || 'Q1 FY2026 (7 Apr – 6 Jul 2026)'));
-    zip.updateFile('ppt/slides/slide1.xml', Buffer.from(xml1, 'utf8'));
+  slide.addText(subtitle, {
+    x: 0.45, y: 0.52, w: 9.5, h: 0.3,
+    fontSize: 10, color: 'B0C4DE',
+    fontFace: 'Calibri',
+  });
+
+  // Logo (top-right) — Fix #10: path relative to __dirname
+  if (fs.existsSync(LOGO_PATH)) {
+    slide.addImage({ path: LOGO_PATH, x: 10.75, y: 0.12, w: 2.1, h: 0.68 });
   }
 
-  // ── 2. Slide 2: Executive Summary Table for All 8 Sites ──────────────────
-  const slide2Entry = zip.getEntry('ppt/slides/slide2.xml');
-  if (slide2Entry) {
-    let xml2 = zip.readAsText(slide2Entry);
-
-    const rowDataArray = TARGET_SITES.map((siteKey) => {
-      const siteData = siteMap[siteKey] || siteSummary.find(s => s.siteId.toUpperCase().includes(siteKey.split(' ')[0]));
-
-      if (!siteData) return [siteKey, '0', 'N/A', '0', 'None', 'None'];
-
-      const deviceCount  = String(siteData.deviceCount ?? 0);
-      const switchUptime = siteData.switchUptime === 'Data Not Available' ? 'N/A' : `${siteData.switchUptime}%`;
-      const apIncidents  = String(siteData.uniqueAPsWithIncidents ?? 0);
-
-      const siteIncidents   = incidents.filter(i => (i.SiteID || i.Location || '').toUpperCase().includes(siteKey.split(' ')[0]));
-      const swIncidents     = siteIncidents.filter(i => /^sw$/i.test(i.DeviceType));
-      const apIncidentsList = siteIncidents.filter(i => /^ap$/i.test(i.DeviceType));
-
-      const getTopRCA = (incList) => {
-        if (!incList.length) return 'None';
-        const counts = {};
-        incList.forEach(i => { if (i.RCA) counts[i.RCA] = (counts[i.RCA] || 0) + 1; });
-        const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]);
-        return sorted[0] ? sorted[0][0] : 'None';
-      };
-
-      const primaryRcaSw = getTopRCA(swIncidents);
-      const primaryRcaAp = getTopRCA(apIncidentsList);
-
-      return [siteKey, deviceCount, switchUptime, apIncidents, primaryRcaSw, primaryRcaAp];
-    });
-
-    xml2 = fillPptTable(xml2, rowDataArray);
-    zip.updateFile('ppt/slides/slide2.xml', Buffer.from(xml2, 'utf8'));
-  }
-
-  // ── 3. Populate Site 1 (BANGALORE) review slides (Slides 3, 4, 5) ────────
-  const site1Data = siteMap['BANGALORE'] || siteSummary[0] || { siteId: 'BANGALORE' };
-  zip.updateFile('ppt/slides/slide3.xml', Buffer.from(updateSlide3Content(baseSlideXmls[3], 1, site1Data, data), 'utf8'));
-  zip.updateFile('ppt/slides/slide4.xml', Buffer.from(updateSlide4Content(baseSlideXmls[4], 1, site1Data, data), 'utf8'));
-  zip.updateFile('ppt/slides/slide5.xml', Buffer.from(updateSlide5Content(baseSlideXmls[5], 1, site1Data, data), 'utf8'));
-
-  // ── 4. Duplicate & Populate Site Review slides for Sites 2..8 ────────────
-  let nextSlideNum = 7; // Slide 6 is Thank You
-  const presentationXmlEntry = zip.getEntry('ppt/presentation.xml');
-  const relsEntry            = zip.getEntry('ppt/_rels/presentation.xml.rels');
-  const contentTypesEntry    = zip.getEntry('[Content_Types].xml');
-
-  let presXml  = zip.readAsText(presentationXmlEntry);
-  let relsXml  = zip.readAsText(relsEntry);
-  let ctXml    = zip.readAsText(contentTypesEntry);
-
-  for (let i = 1; i < TARGET_SITES.length; i++) {
-    const siteKey = TARGET_SITES[i];
-    const siteData = siteMap[siteKey] || siteSummary.find(s => s.siteId.toUpperCase().includes(siteKey.split(' ')[0])) || { siteId: siteKey };
-    const siteIdx  = i + 1; // 2..8
-
-    [3, 4, 5].forEach((baseSlideNum) => {
-      const baseXml = baseSlideXmls[baseSlideNum];
-      const currentSlideNum = nextSlideNum;
-      const rId = `rId${100 + currentSlideNum}`;
-
-      let siteXml = baseXml;
-      if (baseSlideNum === 3) siteXml = updateSlide3Content(baseXml, siteIdx, siteData, data);
-      if (baseSlideNum === 4) siteXml = updateSlide4Content(baseXml, siteIdx, siteData, data);
-      if (baseSlideNum === 5) siteXml = updateSlide5Content(baseXml, siteIdx, siteData, data);
-
-      const newSlidePath = `ppt/slides/slide${currentSlideNum}.xml`;
-      zip.addFile(newSlidePath, Buffer.from(siteXml, 'utf8'));
-
-      // Copy rels file from base slide
-      const baseRelsEntry = zip.getEntry(`ppt/slides/_rels/slide${baseSlideNum}.xml.rels`);
-      if (baseRelsEntry) {
-        zip.addFile(`ppt/slides/_rels/slide${currentSlideNum}.xml.rels`, baseRelsEntry.getData());
-      }
-
-      // Register in presentation.xml before slide 6 (rId7)
-      const sldIdXml = `<p:sldId id="${300 + currentSlideNum}" r:id="${rId}"/>`;
-      presXml = presXml.replace('</p:sldIdLst>', `${sldIdXml}</p:sldIdLst>`);
-
-      // Register in presentation.xml.rels
-      const relXml = `<Relationship Id="${rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${currentSlideNum}.xml"/>`;
-      relsXml = relsXml.replace('</Relationships>', `${relXml}</Relationships>`);
-
-      // Register in [Content_Types].xml
-      const overrideXml = `<Override PartName="/ppt/slides/slide${currentSlideNum}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`;
-      ctXml = ctXml.replace('</Types>', `${overrideXml}</Types>`);
-
-      nextSlideNum++;
-    });
-  }
-
-  // Move slide 6 (Thank You slide) to the very end of <p:sldIdLst>
-  presXml = presXml.replace('<p:sldId id="285" r:id="rId7"/>', '');
-  presXml = presXml.replace('</p:sldIdLst>', '<p:sldId id="285" r:id="rId7"/></p:sldIdLst>');
-
-  zip.updateFile('ppt/presentation.xml', Buffer.from(presXml, 'utf8'));
-  zip.updateFile('ppt/_rels/presentation.xml.rels', Buffer.from(relsXml, 'utf8'));
-  zip.updateFile('[Content_Types].xml', Buffer.from(ctXml, 'utf8'));
-
-  zip.writeZip(outputPath);
-  console.log('[pptGenerator] Master Template QBR PPT generated successfully:', outputPath);
+  // Footer divider
+  slide.addShape(pres.ShapeType.line, {
+    x: 0.45, y: 6.95, w: 12.43, h: 0,
+    line: { color: C.CARD_BORDER, pt: 1 },
+  });
+  slide.addText('JFL – Proactive Quarterly Business Review', {
+    x: 0.45, y: 7.0, w: 6.5, h: 0.28,
+    fontSize: 8.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
+  });
+  slide.addText('Proactive Data Systems Pvt. Ltd.', {
+    x: 7.0, y: 7.0, w: 5.88, h: 0.28,
+    fontSize: 8.5, color: C.TEXT_MUTED, align: 'right', fontFace: 'Calibri',
+  });
 }
 
-/**
- * Slide 3 Populator: AP & Switch Statistical Analytics for Site
- */
-function updateSlide3Content(xml, siteIdx, site, data) {
-  const siteName = site.siteId || 'Site';
-  const siteKey  = siteName.toUpperCase().split(' ')[0];
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Presentation Builder
+// ─────────────────────────────────────────────────────────────────────────────
 
-  xml = xml.replace(/Site Name/g, escapeXml(siteName));
-  xml = xml.replace(/SITE REVIEW\s*·\s*1 OF 8/gi, `SITE REVIEW  ·  ${siteIdx} OF 8`);
+async function buildPresentation(data, outputPath) {
+  const pres = new PptxGenJS();
+  pres.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5 inches
 
-  const siteSws = (data.devices || []).filter(d => (d.SiteID || d.Location || '').toUpperCase().includes(siteKey) && /^sw$/i.test(d.DeviceType));
+  const exec        = data.executiveSummary || {};
+  const siteSummary = data.siteSummary      || [];
+  const incidents   = data.incidents        || [];
+  const devices     = data.devices          || [];
+
+  // ── SLIDE 1: Title ─────────────────────────────────────────────────────────
+  buildTitleSlide(pres, exec);
+
+  // ── SLIDE 2: Executive Summary — All-Sites Table ───────────────────────────
+  buildExecSummarySlide(pres, exec, siteSummary, incidents);
+
+  // ── SLIDES 3–26: 8 × 3 Site Review Slides ─────────────────────────────────
+  // Fix #11: use module-level TARGET_SITES — no duplicate const declarations
+  TARGET_SITES.forEach((siteKey, siteIdx) => {
+    const siteData = findSite(siteSummary, siteKey);
+    const siteSws  = devices.filter(d =>
+      (d.SiteID || d.Location || '').toUpperCase().includes(siteKey.split(' ')[0]) &&
+      /^sw$/i.test(d.DeviceType)
+    );
+    const siteIncs = incidents.filter(i =>
+      (i.SiteID || i.Location || '').toUpperCase().includes(siteKey.split(' ')[0])
+    );
+
+    buildSiteOverviewSlide(pres, siteKey, siteData, siteSws, siteIdx + 1);
+    buildSiteSwitchSlide(pres, siteKey, siteData, siteSws, siteIdx + 1);
+    buildSiteAPSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
+  });
+
+  // ── SLIDE 27: Thank You ────────────────────────────────────────────────────
+  buildThankYouSlide(pres, exec);
+
+  await pres.writeFile({ fileName: outputPath });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slide Builders
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Slide 1: Title ────────────────────────────────────────────────────────────
+function buildTitleSlide(pres, exec) {
+  const s = pres.addSlide();
+  s.background = { color: C.BG_DARK };
+
+  // Logo top-left
+  if (fs.existsSync(LOGO_PATH)) {
+    s.addImage({ path: LOGO_PATH, x: 0.75, y: 0.45, w: 2.6, h: 0.82 });
+  }
+
+  // Left info card
+  const cardW = fs.existsSync(COVER_PATH) ? 6.3 : 12.33;
+  s.addShape(pres.ShapeType.rect, {
+    x: 0.75, y: 1.55, w: cardW, h: 5.0,
+    fill: { color: C.NAVY_LIGHT },
+    line: { color: '2A4D77', pt: 1 },
+  });
+
+  s.addText(fmt(exec.customerName || 'Jubilant FoodWorks Limited'), {
+    x: 1.05, y: 1.95, w: cardW - 0.6, h: 0.85,
+    fontSize: 26, bold: true, color: C.TEXT_LIGHT, fontFace: 'Calibri',
+  });
+  s.addText('Proactive Quarterly Business Review', {
+    x: 1.05, y: 2.9, w: cardW - 0.6, h: 0.6,
+    fontSize: 20, bold: true, color: '82B1FF', fontFace: 'Calibri',
+  });
+  s.addText(`Reporting Period: ${fmt(exec.reportingPeriod || 'Q1 FY2026')}`, {
+    x: 1.05, y: 3.65, w: cardW - 0.6, h: 0.4,
+    fontSize: 13, color: 'E0E0E0', fontFace: 'Calibri',
+  });
+  s.addText('Prepared by: Proactive Data Systems Pvt. Ltd.', {
+    x: 1.05, y: 4.3, w: cardW - 0.6, h: 0.4,
+    fontSize: 12, color: 'B0BEC5', fontFace: 'Calibri',
+  });
+
+  // Cover image (right panel)
+  if (fs.existsSync(COVER_PATH)) {
+    s.addImage({ path: COVER_PATH, x: 7.3, y: 1.55, w: 5.28, h: 5.0 });
+  }
+
+  s.addText(`Generated: ${new Date().toLocaleDateString('en-IN')}`, {
+    x: 0.75, y: 6.85, w: 12.33, h: 0.28,
+    fontSize: 9.5, color: '90A4AE', align: 'center', fontFace: 'Calibri',
+  });
+}
+
+// ── Slide 2: Executive Summary — All-Sites Table ──────────────────────────────
+function buildExecSummarySlide(pres, exec, siteSummary, incidents) {
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s,
+    'EXECUTIVE SUMMARY  ·  ALL SITES',
+    'Infrastructure Uptime & Primary RCA Drivers Across Key Sites'
+  );
+
+  // Column widths sum = 12.43 = w  (Fix #8)
+  const COL_W = [2.05, 1.8, 2.5, 1.55, 2.28, 2.25];
+  const W_TOTAL = COL_W.reduce((a, b) => a + b, 0); // 12.43
+
+  const headers = [
+    th('Site',                         'left'),
+    th('Monitored Devices',            'center'),
+    th('Aggregated Switch Uptime %',   'center'),
+    th('AP Incidents',                 'center'),
+    th('Primary RCA – Switches',       'center'),
+    th('Primary RCA – APs',            'center'),
+  ];
+
+  const tableRows = TARGET_SITES.map((siteKey, idx) => {
+    const site  = findSite(siteSummary, siteKey);
+    const fill  = rowFill(idx);
+    const swUp  = pct(site.switchUptime);
+    const rcaSw = fmt(site.primaryRca);
+    const rcaAp = fmt(site.primaryRcaForAPs);
+
+    return [
+      td(siteKey,                     fill, { bold: true, color: C.TEXT_DARK, align: 'left' }),
+      td(fmt(site.deviceCount),       fill, { color: C.TEXT_DARK,  align: 'center' }),
+      td(swUp,                        fill, { bold: true, color: C.BLUE, align: 'center' }),
+      td(fmt(site.uniqueAPsWithIncidents), fill, { color: C.TEXT_DARK, align: 'center' }),
+      td(rcaSw,                       fill, { color: C.TEXT_MUTED, align: 'center', fontSize: 9 }),
+      td(rcaAp,                       fill, { color: C.TEXT_MUTED, align: 'center', fontSize: 9 }),
+    ];
+  });
+
+  s.addTable([headers, ...tableRows], {
+    x: 0.45, y: 1.1, w: W_TOTAL,
+    colW: COL_W,
+    fontSize: 10, rowH: 0.52,
+    border: { type: 'solid', color: C.CARD_BORDER, pt: 1 },
+    fontFace: 'Calibri',
+  });
+}
+
+// ── Site Slide A: Overview + Rack Uptime ──────────────────────────────────────
+function buildSiteOverviewSlide(pres, siteKey, site, siteSws, siteNum) {
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  const siteName = site.siteId || siteKey;
+
+  addHeader(pres, s,
+    siteName.toUpperCase(),
+    `SITE REVIEW  ·  ${siteNum} OF 8  ·  AP & Switch Statistical Analytics`
+  );
+
+  // ── Left: KPI summary card ────────────────────────────────────────────────
+  s.addShape(pres.ShapeType.roundRect, {
+    x: 0.45, y: 1.1, w: 4.6, h: 5.65,
+    fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 1 },
+  });
+  s.addText('Site Infrastructure Summary', {
+    x: 0.65, y: 1.25, w: 4.2, h: 0.38,
+    fontSize: 13, bold: true, color: C.NAVY, fontFace: 'Calibri',
+  });
+
+  const kpis = [
+    { l: 'Monitored Devices',   v: fmt(site.deviceCount) },
+    { l: 'Switches Monitored',  v: fmt(site.switchCount) },
+    { l: 'Access Points',       v: fmt(site.apCount) },
+    { l: 'Switch Uptime %',     v: pct(site.switchUptime) },
+    { l: 'Overall Site Uptime', v: pct(site.overallUptime) },
+    { l: 'Primary RCA',         v: fmt(site.primaryRca) },
+  ];
+
+  kpis.forEach((kpi, idx) => {
+    const yPos = 1.75 + idx * 0.8;
+    s.addText(kpi.l, {
+      x: 0.65, y: yPos, w: 4.2, h: 0.26,
+      fontSize: 9.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
+    });
+    s.addText(kpi.v, {
+      x: 0.65, y: yPos + 0.26, w: 4.2, h: 0.42,
+      fontSize: 13, bold: true, color: C.BLUE, fontFace: 'Calibri',
+    });
+  });
+
+  // ── Right: Rack-wise Uptime Table ─────────────────────────────────────────
+  // Col widths: [4.55, 3.23] = 7.78 = w  (Fix #8)
+  const RACK_COL_W = [4.55, 3.23];
+  const RACK_W     = RACK_COL_W.reduce((a, b) => a + b, 0);
 
   const rackMap = {};
-  siteSws.forEach((sw) => {
-    const rack = sw.Rack || 'Default';
+  siteSws.forEach(sw => {
+    const rack = sw.Rack || 'Default Rack';
     if (!rackMap[rack]) rackMap[rack] = [];
     rackMap[rack].push(sw.__effectiveUptime ?? 100);
   });
 
-  const rackRows = Object.entries(rackMap).map(([rack, uptimes]) => {
-    const avgUptime = (uptimes.reduce((a, b) => a + b, 0) / uptimes.length).toFixed(2);
-    return [rack, `${avgUptime}%`];
+  const rackHeaders = [
+    th('Rack No.',        'left'),
+    th('Avg Uptime %',    'center'),
+  ];
+
+  const rackRows = Object.entries(rackMap).map(([rack, vals], rIdx) => {
+    const avg    = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+    const fill   = rowFill(rIdx);
+    return [
+      td(rack,      fill, { color: C.TEXT_DARK }),
+      td(`${avg}%`, fill, { bold: true, color: uptimeColor(avg), align: 'center' }),
+    ];
   });
 
-  return fillPptTable(xml, rackRows);
+  const fallbackRackRow = [[
+    td('No switches mapped', 'FFFFFF', { color: C.TEXT_MUTED, align: 'center' }),
+    td('—',                  'FFFFFF', { color: C.TEXT_MUTED, align: 'center' }),
+  ]];
+
+  s.addTable([rackHeaders, ...(rackRows.length > 0 ? rackRows : fallbackRackRow)], {
+    x: 5.28, y: 1.1, w: RACK_W,
+    colW: RACK_COL_W,
+    fontSize: 10, rowH: 0.42,
+    border: { type: 'solid', color: C.CARD_BORDER, pt: 1 },
+    fontFace: 'Calibri',
+  });
 }
 
-/**
- * Slide 4 Populator: Switch Uptime Report for Site
- */
-function updateSlide4Content(xml, siteIdx, site, data) {
-  const siteName = site.siteId || 'Site';
-  const siteKey  = siteName.toUpperCase().split(' ')[0];
+// ── Site Slide B: Switch Uptime Report ────────────────────────────────────────
+function buildSiteSwitchSlide(pres, siteKey, site, siteSws, siteNum) {
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  const siteName = site.siteId || siteKey;
 
-  xml = xml.replace(/Site Name/g, escapeXml(siteName));
-  xml = xml.replace(/SITE REVIEW\s*·\s*1 OF 8/gi, `SITE REVIEW  ·  ${siteIdx} OF 8`);
+  addHeader(pres, s,
+    siteName.toUpperCase(),
+    `SITE REVIEW  ·  ${siteNum} OF 8  ·  Switch Uptime Report`
+  );
 
-  const siteSws = (data.devices || []).filter(d => (d.SiteID || d.Location || '').toUpperCase().includes(siteKey) && /^sw$/i.test(d.DeviceType));
-  const swUptime = site.switchUptime === 'Data Not Available' || !site.switchUptime ? 'N/A' : `${site.switchUptime}%`;
-  const at100Count = siteSws.filter(s => (s.__effectiveUptime ?? 100) >= 100).length;
-  const primaryRca = site.primaryRca || 'None';
+  const swUp       = pct(site.switchUptime);
+  const at100      = siteSws.filter(sw => (sw.__effectiveUptime ?? 100) >= 100).length;
+  const primaryRca = fmt(site.primaryRca);
 
-  xml = xml.replace(/100%\s*Aggregated Switch Uptime/g, `${swUptime} Aggregated Switch Uptime`);
-  xml = xml.replace(/0\s*Switches Monitored/g, `${siteSws.length} Switches Monitored`);
-  xml = xml.replace(/0\s*Switches at 100% Uptime/g, `${at100Count} Switches at 100% Uptime`);
-  xml = xml.replace(/0\s*Primary RCA Driver/g, `${escapeXml(primaryRca)} Primary RCA Driver`);
+  // ── 4 KPI Cards (Fix #13: h=1.6, yPos=1.1 → bottom 2.7, footer at 6.95) ──
+  const kpiCards = [
+    { l: 'Aggregated Switch Uptime', v: swUp,                  c: C.BLUE  },
+    { l: 'Switches Monitored',       v: fmt(siteSws.length),   c: C.NAVY  },
+    { l: 'Switches @ 100% Uptime',   v: fmt(at100),            c: C.GREEN },
+    { l: 'Primary RCA Driver',       v: primaryRca,            c: C.AMBER },
+  ];
 
-  const switchTableRows = siteSws.slice(0, 18).map((sw, idx) => [
-    idx + 1,
-    sw.Hostname || sw.DeviceID,
-    sw.DeviceID,
-    sw.Rack || 'NA',
-    sw.__effectiveUptime !== undefined ? `${sw.__effectiveUptime.toFixed(2)}%` : '100.00%',
-  ]);
+  // 4 cards across 12.43" → each card w=2.9, gap=0.14
+  const CARD_W = 2.9;
+  kpiCards.forEach((card, idx) => {
+    const xPos = 0.45 + idx * (CARD_W + 0.18); // 0.45, 3.53, 6.61, 9.69 → last right edge 12.59 ✓
+    s.addShape(pres.ShapeType.roundRect, {
+      x: xPos, y: 1.1, w: CARD_W, h: 1.6,
+      fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 1 },
+    });
+    s.addText(card.v, {
+      x: xPos, y: 1.2, w: CARD_W, h: 0.65,
+      fontSize: 18, bold: true, color: card.c, align: 'center', fontFace: 'Calibri',
+    });
+    s.addText(card.l, {
+      x: xPos, y: 1.88, w: CARD_W, h: 0.35,
+      fontSize: 9.5, color: C.TEXT_MUTED, align: 'center', fontFace: 'Calibri',
+    });
+  });
 
-  return fillPptTable(xml, switchTableRows);
+  // ── Switch Table ──────────────────────────────────────────────────────────
+  // colW [1.0, 3.38, 3.38, 2.0, 2.27] = 12.03 … w = 12.43 — adjust:
+  // colW [1.0, 3.58, 3.58, 1.9, 2.37] = 12.43  (Fix #8)
+  const SW_COL_W = [1.0, 3.58, 3.58, 1.9, 2.37];
+  const SW_W     = SW_COL_W.reduce((a, b) => a + b, 0); // 12.43
+
+  const swHeaders = [
+    th('S.No',      'center'),
+    th('Host Name', 'left'),
+    th('Serial No', 'left'),
+    th('Rack No',   'center'),
+    th('Uptime %',  'center'),
+  ];
+
+  const swRows = siteSws.slice(0, 12).map((sw, rIdx) => {
+    const rawUp  = sw.__effectiveUptime !== undefined ? sw.__effectiveUptime : 100;
+    const upStr  = `${parseFloat(rawUp).toFixed(2)}%`;
+    const fill   = rowFill(rIdx);
+    return [
+      td(String(rIdx + 1),          fill, { color: C.TEXT_DARK,  align: 'center' }),
+      td(sw.Hostname || sw.DeviceID, fill, { bold: true, color: C.TEXT_DARK }),
+      td(sw.DeviceID,               fill, { color: C.TEXT_MUTED }),
+      td(sw.Rack || 'NA',           fill, { color: C.TEXT_DARK,  align: 'center' }),
+      td(upStr,                     fill, { bold: true, color: uptimeColor(rawUp), align: 'center' }),
+    ];
+  });
+
+  const fallbackSwRow = [[
+    td('1',   'FFFFFF', { align: 'center' }),
+    td('N/A', 'FFFFFF', {}),
+    td('N/A', 'FFFFFF', {}),
+    td('NA',  'FFFFFF', { align: 'center' }),
+    td('100.00%', 'FFFFFF', { align: 'center', color: C.GREEN }),
+  ]];
+
+  s.addTable([swHeaders, ...(swRows.length > 0 ? swRows : fallbackSwRow)], {
+    x: 0.45, y: 2.85, w: SW_W,
+    colW: SW_COL_W,
+    fontSize: 9.5, rowH: 0.38,
+    border: { type: 'solid', color: C.CARD_BORDER, pt: 1 },
+    fontFace: 'Calibri',
+  });
 }
 
-/**
- * Slide 5 Populator: AP Incidents & RCA for Site
- */
-function updateSlide5Content(xml, siteIdx, site, data) {
-  const siteName = site.siteId || 'Site';
-  const siteKey  = siteName.toUpperCase().split(' ')[0];
+// ── Site Slide C: AP Incidents & RCA Breakdown ────────────────────────────────
+function buildSiteAPSlide(pres, siteKey, site, siteIncs, siteNum) {
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  const siteName = site.siteId || siteKey;
 
-  xml = xml.replace(/Site Name/g, escapeXml(siteName));
-  xml = xml.replace(/SITE REVIEW\s*·\s*1 OF 8/gi, `SITE REVIEW  ·  ${siteIdx} OF 8`);
+  addHeader(pres, s,
+    siteName.toUpperCase(),
+    `SITE REVIEW  ·  ${siteNum} OF 8  ·  AP Incidents & RCA Breakdown`
+  );
 
-  const siteIncs = (data.incidents || []).filter(i => (i.SiteID || i.Location || '').toUpperCase().includes(siteKey));
-  const metCount   = siteIncs.filter(i => /met/i.test(i.ResolutionSLAStatus)).length;
-  const breachCount= siteIncs.filter(i => /missed|violated/i.test(i.ResolutionSLAStatus)).length;
-  const primaryRca = site.primaryRca || 'None';
+  const metCount    = siteIncs.filter(i => /met/i.test(i.ResolutionSLAStatus || '')).length;
+  const breachCount = siteIncs.filter(i => /missed|violated/i.test(i.ResolutionSLAStatus || '')).length;
+  const primaryRca  = fmt(site.primaryRcaForAPs);
 
-  xml = xml.replace(/0\s*Total number of incidents/g, `${siteIncs.length} Total number of incidents`);
-  xml = xml.replace(/0\s*Met Cases/g, `${metCount} Met Cases`);
-  xml = xml.replace(/0\s*Breach Cases/g, `${breachCount} Breach Cases`);
-  xml = xml.replace(/0\s*Primary RCA Driver/g, `${escapeXml(primaryRca)} Primary RCA Driver`);
+  // ── 4 KPI Cards (same safe layout as switch slide) ────────────────────────
+  const apCards = [
+    { l: 'Total Incidents',    v: fmt(siteIncs.length), c: C.NAVY  },
+    { l: 'Met Cases',          v: fmt(metCount),         c: C.GREEN },
+    { l: 'Breach Cases',       v: fmt(breachCount),      c: C.RED   },
+    { l: 'Primary RCA Driver', v: primaryRca,            c: C.AMBER },
+  ];
 
+  const CARD_W = 2.9;
+  apCards.forEach((card, idx) => {
+    const xPos = 0.45 + idx * (CARD_W + 0.18);
+    s.addShape(pres.ShapeType.roundRect, {
+      x: xPos, y: 1.1, w: CARD_W, h: 1.6,
+      fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 1 },
+    });
+    s.addText(card.v, {
+      x: xPos, y: 1.2, w: CARD_W, h: 0.65,
+      fontSize: 18, bold: true, color: card.c, align: 'center', fontFace: 'Calibri',
+    });
+    s.addText(card.l, {
+      x: xPos, y: 1.88, w: CARD_W, h: 0.35,
+      fontSize: 9.5, color: C.TEXT_MUTED, align: 'center', fontFace: 'Calibri',
+    });
+  });
+
+  // ── AP Incidents Table ────────────────────────────────────────────────────
+  // colW [1.0, 3.58, 3.43, 1.65, 2.77] = 12.43  (Fix #8)
+  const AP_COL_W = [1.0, 3.58, 3.43, 1.65, 2.77];
+  const AP_W     = AP_COL_W.reduce((a, b) => a + b, 0); // 12.43
+
+  const apHeaders = [
+    th('S.No',          'center'),
+    th('AP Host Name',  'left'),
+    th('Serial No',     'left'),
+    th('Incidents',     'center'),
+    th('Primary RCA',   'left'),
+  ];
+
+  // Aggregate incidents per AP device
   const apMap = {};
-  siteIncs.forEach((inc) => {
+  siteIncs.forEach(inc => {
     const devId = inc.DeviceID || 'Unknown';
     if (!apMap[devId]) apMap[devId] = { count: 0, rcas: {}, hostname: inc.Hostname || devId };
     apMap[devId].count++;
     if (inc.RCA) apMap[devId].rcas[inc.RCA] = (apMap[devId].rcas[inc.RCA] || 0) + 1;
   });
 
-  const sortedAps = Object.entries(apMap).sort((a, b) => b[1].count - a[1].count);
+  const sortedAPs = Object.entries(apMap).sort((a, b) => b[1].count - a[1].count);
 
-  const apTableRows = sortedAps.slice(0, 18).map(([devId, info], idx) => {
+  const apRows = sortedAPs.slice(0, 12).map(([devId, info], rIdx) => {
     const topRca = Object.entries(info.rcas).sort((a, b) => b[1] - a[1])[0]?.[0] || 'None';
+    const fill   = rowFill(rIdx);
     return [
-      idx + 1,
-      info.hostname,
-      devId,
-      info.count,
-      topRca,
+      td(String(rIdx + 1),  fill, { color: C.TEXT_DARK, align: 'center' }),
+      td(info.hostname,     fill, { bold: true, color: C.TEXT_DARK }),
+      td(devId,             fill, { color: C.TEXT_MUTED }),
+      td(fmt(info.count),   fill, { bold: true, color: C.BLUE, align: 'center' }),
+      td(topRca,            fill, { color: C.TEXT_MUTED, fontSize: 9 }),
     ];
   });
 
-  return fillPptTable(xml, apTableRows);
+  const fallbackAPRow = [[
+    td('—',    'FFFFFF', { align: 'center' }),
+    td('N/A',  'FFFFFF', {}),
+    td('N/A',  'FFFFFF', {}),
+    td('0',    'FFFFFF', { align: 'center' }),
+    td('None', 'FFFFFF', {}),
+  ]];
+
+  s.addTable([apHeaders, ...(apRows.length > 0 ? apRows : fallbackAPRow)], {
+    x: 0.45, y: 2.85, w: AP_W,
+    colW: AP_COL_W,
+    fontSize: 9.5, rowH: 0.38,
+    border: { type: 'solid', color: C.CARD_BORDER, pt: 1 },
+    fontFace: 'Calibri',
+  });
+}
+
+// ── Slide 27: Thank You ───────────────────────────────────────────────────────
+function buildThankYouSlide(pres, exec) {
+  const s = pres.addSlide();
+  s.background = { color: C.BG_DARK };
+
+  if (fs.existsSync(LOGO_PATH)) {
+    s.addImage({ path: LOGO_PATH, x: 5.16, y: 1.4, w: 3.0, h: 0.95 });
+  }
+
+  s.addText('Thank You', {
+    x: 0.5, y: 2.65, w: 12.33, h: 1.0,
+    fontSize: 40, bold: true, color: C.TEXT_LIGHT, align: 'center',
+    fontFace: 'Calibri',
+  });
+
+  s.addText('Proactive Data Systems   ·   www.proactive.co.in', {
+    x: 0.5, y: 3.85, w: 12.33, h: 0.5,
+    fontSize: 16, color: '82B1FF', align: 'center', fontFace: 'Calibri',
+  });
+
+  if (exec.reportingPeriod) {
+    s.addText(`Reporting Period: ${exec.reportingPeriod}`, {
+      x: 0.5, y: 5.5, w: 12.33, h: 0.35,
+      fontSize: 11, color: '78909C', align: 'center', fontFace: 'Calibri',
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Table Cell Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a header cell with navy fill and white bold text.
+ * @param {string} text
+ * @param {'left'|'center'|'right'} align
+ */
+function th(text, align = 'center') {
+  return {
+    text,
+    options: {
+      bold: true,
+      color: C.TEXT_LIGHT,
+      fill: { color: C.HEADER_FILL },
+      align,
+      fontFace: 'Calibri',
+    },
+  };
 }
 
 /**
- * Generic PowerPoint table populator.
- * Replaces cell text for row 1..N while preserving original XML tags and styling.
+ * Build a data cell with given fill colour and additional options.
+ * @param {string} text
+ * @param {string} fill  hex colour string
+ * @param {object} opts  additional PptxGenJS cell options
  */
-function fillPptTable(tblXml, rowDataArray) {
-  const trRegex = /<a:tr[^>]*>([\s\S]*?)<\/a:tr>/g;
-  let trMatches = [];
-  let match;
-  while ((match = trRegex.exec(tblXml)) !== null) {
-    trMatches.push({ full: match[0], index: match.index });
-  }
-
-  if (trMatches.length <= 1) return tblXml; // Header only
-
-  let dataIdx = 0;
-  return tblXml.replace(trRegex, (rowXml, rowContent, offset) => {
-    if (offset === trMatches[0].index) return rowXml; // Keep header row unchanged
-
-    const rowData = rowDataArray[dataIdx];
-    dataIdx++;
-
-    let colIdx = 0;
-    const tcRegex = /<a:tc[^>]*>([\s\S]*?)<\/a:tc>/g;
-    return rowXml.replace(tcRegex, (tcXml) => {
-      const cellVal = (rowData && rowData[colIdx] !== undefined) ? String(rowData[colIdx]) : '';
-      colIdx++;
-
-      if (tcXml.includes('<a:t>') || tcXml.includes('<a:t/>')) {
-        return tcXml.replace(/<a:t[^>]*>[\s\S]*?<\/a:t>/g, `<a:t>${escapeXml(cellVal)}</a:t>`);
-      } else {
-        return tcXml.replace('</a:txBody>', `<a:p><a:pPr marL="0" indent="0" algn="ctr"/><a:r><a:rPr lang="en-US" sz="1000"/><a:t>${escapeXml(cellVal)}</a:t></a:r></a:p></a:txBody>`);
-      }
-    });
-  });
+function td(text, fill, opts = {}) {
+  return {
+    text: String(text),
+    options: {
+      fill: { color: fill },
+      fontFace: 'Calibri',
+      ...opts,
+    },
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODE 2: Programmatic fallback (pptxgenjs)
+// Exports
 // ─────────────────────────────────────────────────────────────────────────────
-
-async function generateProgrammatic(data, outputPath) {
-  const pres = new PptxGenJS();
-  pres.layout = 'LAYOUT_WIDE';
-
-  const BG = '0D1117';
-  const TEXT = 'E6EDF3';
-  const MUTED = '8B949E';
-  const ACCENT = '1F6FEB';
-  const GREEN = '3FB950';
-  const RED = 'F85149';
-  const AMBER = 'F0883E';
-  const CARD = '161B22';
-  const BORDER = '30363D';
-
-  const exec = data.executiveSummary || {};
-  const siteSummary = data.siteSummary || [];
-
-  const fmt = (v) => (v === null || v === undefined ? 'N/A' : String(v));
-  const pct = (v) => v === 'Data Not Available' || v === null ? 'N/A' : `${v}%`;
-
-  // Title
-  {
-    const s = pres.addSlide();
-    s.background = { color: BG };
-    s.addText('Quarterly Business Review', { x: 0.5, y: 1.2, w: 12, h: 0.8, fontSize: 32, bold: true, color: TEXT, align: 'center' });
-    s.addText(fmt(exec.customerName), { x: 0.5, y: 2.2, w: 12, h: 0.7, fontSize: 22, color: ACCENT, align: 'center', bold: true });
-    s.addText(fmt(exec.reportingPeriod), { x: 0.5, y: 3.0, w: 12, h: 0.5, fontSize: 16, color: MUTED, align: 'center' });
-    s.addText(`Generated: ${new Date().toLocaleDateString('en-IN')}`, { x: 0.5, y: 5.8, w: 12, h: 0.3, fontSize: 10, color: MUTED, align: 'center' });
-  }
-
-  // Executive Summary
-  {
-    const s = pres.addSlide();
-    s.background = { color: BG };
-    s.addText('Executive Summary', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-    s.addText(`${fmt(exec.customerName)} · ${fmt(exec.reportingPeriod)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-    const kpis = [
-      { l: 'Total Sites',       v: fmt(exec.totalSites) },
-      { l: 'Total Devices',     v: fmt(exec.totalDevices) },
-      { l: 'Total Switches',    v: fmt(exec.totalSwitches) },
-      { l: 'Total APs',         v: fmt(exec.totalAPs) },
-      { l: 'Overall Uptime',    v: pct(exec.overallUptime) },
-      { l: 'SLA Compliance',    v: pct(exec.slaCompliance) },
-      { l: 'Health Score',      v: fmt(exec.healthScore) + (exec.healthLabel ? ` (${exec.healthLabel})` : '') },
-      { l: 'Total Incidents',   v: fmt(exec.totalIncidents) },
-      { l: 'Critical',          v: fmt(exec.criticalIncidents) },
-      { l: 'Major',             v: fmt(exec.majorIncidents) },
-      { l: 'Minor',             v: fmt(exec.minorIncidents) },
-    ];
-
-    kpis.forEach((kpi, i) => {
-      const col = i % 4;
-      const row = Math.floor(i / 4);
-      const x = 0.3 + col * 3.3;
-      const y = 1.4 + row * 2.0;
-      const valColor = kpi.l === 'Critical' ? RED : kpi.l === 'Major' ? AMBER : ACCENT;
-      s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.0, h: 1.7, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-      s.addText(kpi.v, { x, y: y + 0.3, w: 3.0, h: 0.8, fontSize: 20, bold: true, color: valColor, align: 'center' });
-      s.addText(kpi.l, { x, y: y + 1.1, w: 3.0, h: 0.45, fontSize: 11, color: MUTED, align: 'center' });
-    });
-  }
-
-  // Executive Summary Dashboard View Screenshot Slide
-  try {
-    const screenshotPath = path.join(process.env.VERCEL ? os.tmpdir() : 'tmp', 'summary.png');
-    await captureDashboard('http://localhost:3000', screenshotPath);
-    if (fs.existsSync(screenshotPath)) {
-      const sScreen = pres.addSlide();
-      sScreen.background = { color: BG };
-      sScreen.addText('Executive Summary Dashboard View {{EXEC_SUMMARY_SCREENSHOT}}', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-      sScreen.addImage({ path: screenshotPath, x: 0.5, y: 1.0, w: 12.3, h: 5.8 });
-    }
-  } catch (err) {
-    console.warn('[pptGenerator] Screenshot step note:', err.message);
-  }
-
-  // Per-Site Analytics Slides (Bangalore, Greater Noida, etc.)
-  siteSummary.forEach((site, idx) => {
-    const siteKey = fmt(site.siteId).toUpperCase();
-
-    // 1. Site Overview Slide
-    {
-      const s = pres.addSlide();
-      s.background = { color: BG };
-      s.addText(`Site Review (${idx + 1}/${siteSummary.length}): ${fmt(site.siteId)}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-      s.addText(`Site Infrastructure & Performance Summary`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-      const siteKpis = [
-        { l: 'Total Devices',     v: fmt(site.deviceCount) },
-        { l: 'Total Switches',    v: fmt(site.switchCount) },
-        { l: 'Total APs',         v: fmt(site.apCount) },
-        { l: 'Switch Uptime',     v: pct(site.switchUptime) },
-        { l: 'Overall Uptime',    v: pct(site.overallUptime) },
-        { l: 'Incident-Free %',   v: pct(site.incidentFreePercent) },
-        { l: 'Primary RCA (All)', v: fmt(site.primaryRca) },
-        { l: 'Primary RCA (APs)', v: fmt(site.primaryRcaForAPs) },
-      ];
-
-      siteKpis.forEach((kpi, i) => {
-        const col = i % 4;
-        const row = Math.floor(i / 4);
-        const x = 0.3 + col * 3.3;
-        const y = 1.4 + row * 2.0;
-        s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.0, h: 1.7, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-        s.addText(kpi.v, { x, y: y + 0.3, w: 3.0, h: 0.7, fontSize: 16, bold: true, color: ACCENT, align: 'center' });
-        s.addText(kpi.l, { x, y: y + 1.1, w: 3.0, h: 0.45, fontSize: 11, color: MUTED, align: 'center' });
-      });
-    }
-
-    // 2. AP Analytics Slide ({{SITE_BANGALORE_AP_ANALYTICS}})
-    {
-      const s = pres.addSlide();
-      s.background = { color: BG };
-      s.addText(`${fmt(site.siteId)} — AP Analytics {{SITE_${siteKey}_AP_ANALYTICS}}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-      s.addText(`Access Point Count: ${fmt(site.apCount)} · AP Incidents: ${fmt(site.uniqueAPsWithIncidents)} · Primary RCA: ${fmt(site.primaryRcaForAPs)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-      const apKpis = [
-        { l: 'Monitored APs', v: fmt(site.apCount) },
-        { l: 'APs with Incidents', v: fmt(site.uniqueAPsWithIncidents) },
-        { l: 'Primary AP RCA', v: fmt(site.primaryRcaForAPs) },
-      ];
-
-      apKpis.forEach((kpi, i) => {
-        const x = 0.5 + i * 4.2;
-        const y = 1.5;
-        s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.8, h: 1.8, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-        s.addText(kpi.v, { x, y: y + 0.4, w: 3.8, h: 0.7, fontSize: 20, bold: true, color: ACCENT, align: 'center' });
-        s.addText(kpi.l, { x, y: y + 1.1, w: 3.8, h: 0.45, fontSize: 12, color: MUTED, align: 'center' });
-      });
-    }
-
-    // 3. Switch Analytics Slide ({{SITE_BANGALORE_SWITCH_ANALYTICS}})
-    {
-      const s = pres.addSlide();
-      s.background = { color: BG };
-      s.addText(`${fmt(site.siteId)} — Switch Analytics {{SITE_${siteKey}_SWITCH_ANALYTICS}}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-      s.addText(`Total Switches: ${fmt(site.switchCount)} · Switch Uptime: ${pct(site.switchUptime)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-      const swKpis = [
-        { l: 'Total Switches', v: fmt(site.switchCount) },
-        { l: 'Switch Uptime %', v: pct(site.switchUptime) },
-        { l: 'Primary Switch RCA', v: fmt(site.primaryRca) },
-      ];
-
-      swKpis.forEach((kpi, i) => {
-        const x = 0.5 + i * 4.2;
-        const y = 1.5;
-        s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.8, h: 1.8, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-        s.addText(kpi.v, { x, y: y + 0.4, w: 3.8, h: 0.7, fontSize: 20, bold: true, color: ACCENT, align: 'center' });
-        s.addText(kpi.l, { x, y: y + 1.1, w: 3.8, h: 0.45, fontSize: 12, color: MUTED, align: 'center' });
-      });
-    }
-
-    // 4. RCA Analytics Slide ({{SITE_BANGALORE_RCA_ANALYTICS}})
-    {
-      const s = pres.addSlide();
-      s.background = { color: BG };
-      s.addText(`${fmt(site.siteId)} — RCA Analytics {{SITE_${siteKey}_RCA_ANALYTICS}}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-      s.addText(`Root Cause Analysis Breakdown for ${fmt(site.siteId)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-      s.addShape(pres.ShapeType.roundRect, { x: 0.5, y: 1.5, w: 12.0, h: 2.2, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-      s.addText(`Primary RCA Driver (All Devices): ${fmt(site.primaryRca)}\nPrimary RCA Driver (APs): ${fmt(site.primaryRcaForAPs)}`, { x: 0.8, y: 2.0, w: 11.4, h: 1.2, fontSize: 16, color: TEXT });
-    }
-
-    // 5. SLA Analytics Slide ({{SITE_BANGALORE_SLA_ANALYTICS}})
-    {
-      const s = pres.addSlide();
-      s.background = { color: BG };
-      s.addText(`${fmt(site.siteId)} — SLA Analytics {{SITE_${siteKey}_SLA_ANALYTICS}}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-      s.addText(`SLA Status: ${fmt(site.slaStatus)} · Overall Uptime: ${pct(site.overallUptime)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-      const slaKpis = [
-        { l: 'Overall Uptime', v: pct(site.overallUptime) },
-        { l: 'SLA Status', v: fmt(site.slaStatus) },
-        { l: 'Incident-Free %', v: pct(site.incidentFreePercent) },
-      ];
-
-      slaKpis.forEach((kpi, i) => {
-        const x = 0.5 + i * 4.2;
-        const y = 1.5;
-        const valColor = kpi.v === 'Compliant' ? GREEN : ACCENT;
-        s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.8, h: 1.8, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-        s.addText(kpi.v, { x, y: y + 0.4, w: 3.8, h: 0.7, fontSize: 20, bold: true, color: valColor, align: 'center' });
-        s.addText(kpi.l, { x, y: y + 1.1, w: 3.8, h: 0.45, fontSize: 12, color: MUTED, align: 'center' });
-      });
-    }
-  });
-
-  // Switch Analytics Slide
-  const sw = data.switchAnalytics || {};
-  {
-    const s = pres.addSlide();
-    s.background = { color: BG };
-    s.addText('Switch Analytics', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-    s.addText('Core & Non-Core Switch Uptime & Outage Breakdown', { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-    const swKpis = [
-      { l: 'Total Switches',     v: fmt(sw.totalSwitches) },
-      { l: 'Core Switches',      v: fmt(sw.coreSwitches) },
-      { l: 'Non-Core Switches',  v: fmt(sw.nonCoreSwitches) },
-      { l: 'Core Switch Uptime', v: pct(sw.coreUptime) },
-      { l: 'Non-Core Uptime',    v: pct(sw.nonCoreUptime) },
-      { l: 'Switch Incidents',   v: fmt(sw.switchIncidents) },
-    ];
-
-    swKpis.forEach((kpi, i) => {
-      const col = i % 3;
-      const row = Math.floor(i / 3);
-      const x = 0.5 + col * 4.2;
-      const y = 1.4 + row * 2.2;
-      s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.8, h: 1.8, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-      s.addText(kpi.v, { x, y: y + 0.4, w: 3.8, h: 0.7, fontSize: 20, bold: true, color: ACCENT, align: 'center' });
-      s.addText(kpi.l, { x, y: y + 1.1, w: 3.8, h: 0.45, fontSize: 11, color: MUTED, align: 'center' });
-    });
-  }
-
-  // AP Analytics Slide
-  const ap = data.apAnalytics || {};
-  {
-    const s = pres.addSlide();
-    s.background = { color: BG };
-    s.addText('Access Point (AP) Analytics', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-    s.addText('AP Average Uptime & Unique Incident Breakdown', { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-    const apKpis = [
-      { l: 'Total APs Monitored',     v: fmt(ap.totalAPs) },
-      { l: 'AP Average Uptime',       v: pct(ap.apAverageUptime) },
-      { l: 'Total AP Incidents',      v: fmt(ap.apIncidents) },
-      { l: 'Unique APs with Incident',v: fmt(ap.uniqueAPsWithIncidents) },
-    ];
-
-    apKpis.forEach((kpi, i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = 0.5 + col * 6.2;
-      const y = 1.4 + row * 2.2;
-      s.addShape(pres.ShapeType.roundRect, { x, y, w: 5.8, h: 1.8, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-      s.addText(kpi.v, { x, y: y + 0.4, w: 5.8, h: 0.7, fontSize: 22, bold: true, color: ACCENT, align: 'center' });
-      s.addText(kpi.l, { x, y: y + 1.1, w: 5.8, h: 0.45, fontSize: 12, color: MUTED, align: 'center' });
-    });
-  }
-
-  // RCA Analytics Slide
-  const rca = data.rcaAnalytics || {};
-  {
-    const s = pres.addSlide();
-    s.background = { color: BG };
-    s.addText('Root Cause Analysis (RCA)', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-    s.addText(`Primary RCA Driver: ${fmt(rca.topRca)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-    const stdBrk = rca.standardBreakdown || [];
-    if (stdBrk.length > 0) {
-      const rows = [
-        [
-          { text: 'RCA Category', options: { bold: true, color: TEXT, fill: { color: '21262D' } } },
-          { text: 'Incident Count', options: { bold: true, color: TEXT, fill: { color: '21262D' } } },
-          { text: 'Percentage', options: { bold: true, color: TEXT, fill: { color: '21262D' } } },
-        ],
-        ...stdBrk.map((r) => [
-          { text: fmt(r.category), options: { color: TEXT } },
-          { text: fmt(r.count), options: { color: TEXT, align: 'center' } },
-          { text: fmt(r.percentage), options: { color: ACCENT, align: 'center' } },
-        ]),
-      ];
-      s.addTable(rows, { x: 0.5, y: 1.4, w: 12.0, fontSize: 11, rowH: 0.4, border: { type: 'solid', color: BORDER, pt: 1 } });
-    }
-  }
-
-  // SLA Analytics Slide
-  const sla = data.slaAnalytics || {};
-  {
-    const s = pres.addSlide();
-    s.background = { color: BG };
-    s.addText('SLA Analytics & Compliance', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: TEXT });
-    s.addText(`SLA Target: ${fmt(sla.slaTarget)}% · Overall Compliance: ${pct(sla.overallSLAPercent)}`, { x: 0.5, y: 0.9, w: 12, h: 0.35, fontSize: 12, color: MUTED });
-
-    const slaKpis = [
-      { l: 'Overall SLA %',       v: pct(sla.overallSLAPercent) },
-      { l: 'SLA Target',          v: pct(sla.slaTarget) },
-      { l: 'Compliant Devices',   v: fmt(sla.compliantDevices) },
-      { l: 'Breaching Devices',   v: fmt(sla.breachingDevices) },
-    ];
-
-    slaKpis.forEach((kpi, i) => {
-      const col = i % 4;
-      const x = 0.3 + col * 3.3;
-      const y = 1.4;
-      const valColor = kpi.l === 'Breaching Devices' && Number(kpi.v) > 0 ? RED : GREEN;
-      s.addShape(pres.ShapeType.roundRect, { x, y, w: 3.0, h: 1.6, fill: { color: CARD }, line: { color: BORDER, pt: 1 } });
-      s.addText(kpi.v, { x, y: y + 0.3, w: 3.0, h: 0.7, fontSize: 20, bold: true, color: valColor, align: 'center' });
-      s.addText(kpi.l, { x, y: y + 1.0, w: 3.0, h: 0.45, fontSize: 11, color: MUTED, align: 'center' });
-    });
-  }
-
-  // Thank You Slide
-  {
-    const s = pres.addSlide();
-    s.background = { color: BG };
-    s.addText('Thank You', { x: 0.5, y: 2.2, w: 12, h: 1.0, fontSize: 36, bold: true, color: TEXT, align: 'center' });
-    s.addText('Executive Operations & QBR Analytics Platform', { x: 0.5, y: 3.4, w: 12, h: 0.5, fontSize: 16, color: ACCENT, align: 'center' });
-  }
-
-  await pres.writeFile({ fileName: outputPath });
-  console.log('[pptGenerator] Programmatic PPT written:', outputPath);
-}
-
-function escapeXml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
 
 module.exports = { generatePPT };

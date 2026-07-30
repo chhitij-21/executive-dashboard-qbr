@@ -425,19 +425,91 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
 });
 
 // ── Download Helpers ─────────────────────────────────────────────────────────
-const sendFileHelper = (pathKey, defaultFilename) => (req, res) => {
-  const jobId = req.params.jobId;
-  const job = jobs[jobId] || historyService.getReportByJobId(jobId);
-  if (!job) return res.status(404).json({ error: 'Job not found' });
+const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
+  try {
+    const reqJobId = req.params.jobId;
+    let job = null;
 
-  const targetPath = job[pathKey] || path.join(REPORTS_DIR, `job_${jobId}`, defaultFilename);
-  if (!targetPath || !fs.existsSync(targetPath)) {
-    return res.status(404).json({ error: `${pathKey} file not available` });
+    if (reqJobId === 'latest' || reqJobId === 'default') {
+      const history = historyService.getHistory();
+      job = history.find((h) => h.status === 'completed') || Object.values(jobs).find((j) => j.status === 'completed');
+    } else {
+      job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+    }
+
+    // Auto-generate default dataset if job doesn't exist yet
+    if (!job) {
+      const incPath = fs.existsSync(path.resolve('jfl incidents.xlsx'))
+        ? path.resolve('jfl incidents.xlsx')
+        : path.join(__dirname, '..', 'jfl incidents.xlsx');
+      const invPath = fs.existsSync(path.resolve('JFL Updated Inventory.xlsx'))
+        ? path.resolve('JFL Updated Inventory.xlsx')
+        : path.join(__dirname, '..', 'JFL Updated Inventory.xlsx');
+
+      if (fs.existsSync(incPath)) {
+        console.log('[server] Auto-processing sample dataset for download request...');
+        const autoJobId = 'master-jfl-q1-fy2026';
+        const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
+
+        const result = await processJFLWorkbooks(
+          incPath,
+          fs.existsSync(invPath) ? invPath : null,
+          outputDir
+        );
+
+        if (result && result.success) {
+          job = historyService.recordReport({
+            jobId: autoJobId,
+            clientId: 'client-jfl',
+            clientName: 'Jubilant Foodworks Ltd (JFL)',
+            location: 'All Locations',
+            reportPeriod: 'Q1 FY2026',
+            uploadedBy: 'System Auto-Engine',
+            status: 'completed',
+            dashboardPath: result.dashboardPath,
+            pptPath: result.pptPath,
+            reportPath: result.reportPath,
+            dataQualityPath: result.dataQualityPath,
+            processingLogPath: result.processingLogPath,
+          });
+          jobs[autoJobId] = { status: 'completed', ...result, ...job };
+        }
+      }
+    }
+
+    if (!job) return res.status(404).json({ error: 'Report job not found' });
+
+    let targetPath = job[pathKey];
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      const activeJobId = job.jobId || reqJobId;
+      targetPath = path.join(REPORTS_DIR, `job_${activeJobId}`, defaultFilename);
+    }
+
+    // Search directory for matching file extension if targetPath not directly found
+    if (!fs.existsSync(targetPath)) {
+      const activeJobId = job.jobId || reqJobId;
+      const jobDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
+      if (fs.existsSync(jobDir)) {
+        const files = fs.readdirSync(jobDir);
+        const match = files.find(f => f.toLowerCase().endsWith('.pptx') && pathKey === 'pptPath')
+          || files.find(f => f.toLowerCase().endsWith('.md') && pathKey === 'reportPath');
+        if (match) targetPath = path.join(jobDir, match);
+      }
+    }
+
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      return res.status(404).json({ error: `${pathKey} file not available on server` });
+    }
+
+    console.log(`[server] Serving file download: ${targetPath}`);
+    res.download(targetPath);
+  } catch (err) {
+    console.error('[server] Download error:', err.message);
+    res.status(500).json({ error: err.message });
   }
-  res.download(targetPath);
 };
 
-app.get(['/api/ppt/:jobId', '/ppt/:jobId'], sendFileHelper('pptPath', 'QBR_Presentation.pptx'));
+app.get(['/api/ppt/:jobId', '/ppt/:jobId'], sendFileHelper('pptPath', 'JFL_QBR_Report.pptx'));
 app.get(['/api/report/:jobId', '/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
 app.get(['/api/error-report/:jobId', '/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
 app.get(['/api/data-quality/:jobId', '/data-quality/:jobId'], sendFileHelper('dataQualityPath', 'data_quality_report.md'));

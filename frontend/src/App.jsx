@@ -46,6 +46,7 @@ function MainPortal() {
         if (isSubscribed) {
           setDashboardData(json);
           setStatus('completed');
+          setTab((prev) => (prev === 'upload' ? 'dashboard' : prev));
         }
         return true;
       } catch (e) {

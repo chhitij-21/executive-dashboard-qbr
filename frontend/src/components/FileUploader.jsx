@@ -57,7 +57,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     setStatus('processing');
     setStageText('Uploading files to backend...');
 
-    // Cold-start warning timer if server takes longer than 3 seconds to respond
+  // Cold-start warning timer if server takes longer than 3 seconds to respond
     const wakeTimer = setTimeout(() => {
       setStageText('⚡ Server is waking up (Render Free Tier cold start takes ~30-45s)... Please wait.');
     }, 3500);
@@ -96,6 +96,45 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       setErrorMsg('Unable to connect to backend server. Please refresh or try again in a few seconds.');
     }
   };
+
+  // Poll job status until completed or failed
+  useEffect(() => {
+    if (!currentJobId || status !== 'processing') return;
+
+    let isSubscribed = true;
+    let timerId = null;
+
+    const checkStatus = async () => {
+      try {
+        const res = await apiFetch(`${API_BASE_URL}/api/status/${currentJobId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (!isSubscribed) return;
+
+        if (data.status === 'completed') {
+          setStatus('completed');
+          setStageText('QBR Report & PowerPoint Generated Successfully!');
+          if (onJobCompleted) onJobCompleted(currentJobId);
+        } else if (data.status === 'failed' || data.status === 'error') {
+          setStatus('failed');
+          setErrorMsg(data.error || 'Report generation failed. Please check your input files.');
+        } else {
+          timerId = setTimeout(checkStatus, 1500);
+        }
+      } catch (err) {
+        console.error('Job status check error:', err);
+        if (isSubscribed) timerId = setTimeout(checkStatus, 2000);
+      }
+    };
+
+    checkStatus();
+
+    return () => {
+      isSubscribed = false;
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [currentJobId, status, onJobCompleted]);
 
   return (
     <div className="upload-container">
