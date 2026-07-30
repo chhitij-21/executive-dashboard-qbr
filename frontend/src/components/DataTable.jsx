@@ -4,6 +4,22 @@ import React, { useState } from 'react';
  * DataTable — sortable, scrollable table with "Data Not Available" fallback.
  * Each cell shows its source as a tooltip (from row.__source).
  */
+const COLUMN_HEADER_MAP = {
+  site: 'Site Name',
+  rack: 'Rack Number',
+  deviceCount: 'Switch Count',
+  monthlyUptime: 'Monthly Uptime %',
+  quarterlyUptime: 'Quarterly Uptime %',
+  avgUptime: 'Average Uptime %',
+  minUptime: 'Min Uptime %',
+  maxUptime: 'Max Uptime %',
+  DeviceID: 'Device / Hostname',
+  Location: 'Site Location',
+  CoreNonCore: 'Switch Type',
+  uptime: 'Effective Uptime %',
+  incCount: 'Incidents',
+};
+
 export default function DataTable({ columns, rows, title }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -49,9 +65,9 @@ export default function DataTable({ columns, rows, title }) {
                   key={col}
                   onClick={() => handleSort(col)}
                   className={sortCol === col ? 'sorted' : ''}
-                  title={`Sort by ${col}`}
+                  title={`Sort by ${COLUMN_HEADER_MAP[col] || col}`}
                 >
-                  {col}
+                  {COLUMN_HEADER_MAP[col] || col}
                   <span className="sort-icon">
                     {sortCol === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
                   </span>

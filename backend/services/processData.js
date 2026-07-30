@@ -289,40 +289,42 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     if (totMin > 0) incDowntimeMap[devId].proactiveDowntime += totMin;
   });
 
+  const MONTHLY_MINUTES = 30 * 24 * 60; // 43,200 mins
+  const QUARTERLY_MINUTES = 90 * 24 * 60; // 129,600 mins
+
   devices = devices.map((d) => {
-    const upData = allLocMap[d.DeviceID] || uptimeSummaryMap[d.DeviceID] || null;
+    const upData = allLocMap[d.DeviceID] || allLocMap[d.SerialNo] || uptimeSummaryMap[d.DeviceID] || uptimeSummaryMap[d.SerialNo] || null;
     let jflUptime = upData ? upData.jflUptime : null;
     let proactiveUptime = upData ? upData.proactiveUptime : null;
 
-    // Fallback: if no summary sheet entry, dynamically calculate uptime from raw incident resolution times
-    if (jflUptime === null || isNaN(jflUptime)) {
-      const incDown = incDowntimeMap[d.DeviceID];
-      if (incDown && incDown.jflDowntime > 0) {
-        jflUptime = Math.max(0, parseFloat(((PERIOD_MINUTES - incDown.jflDowntime) / PERIOD_MINUTES * 100).toFixed(2)));
-      } else {
-        jflUptime = 100; // No downtime / no incidents = 100% per spec
-      }
-    }
-    if (jflUptime > 100) jflUptime = 100;
+    const incDown = incDowntimeMap[d.DeviceID] || incDowntimeMap[d.SerialNo];
+    const downMins = incDown ? incDown.jflDowntime : 0;
 
-    if (proactiveUptime === null || isNaN(proactiveUptime)) {
-      const incDown = incDowntimeMap[d.DeviceID];
-      if (incDown && incDown.proactiveDowntime > 0) {
-        proactiveUptime = Math.max(0, parseFloat(((PERIOD_MINUTES - incDown.proactiveDowntime) / PERIOD_MINUTES * 100).toFixed(2)));
+    let monthlyUptime = 100;
+    if (downMins > 0) {
+      monthlyUptime = Math.max(0, parseFloat(((MONTHLY_MINUTES - Math.min(MONTHLY_MINUTES, downMins)) / MONTHLY_MINUTES * 100).toFixed(2)));
+    }
+
+    let quarterlyUptime = jflUptime;
+    if (quarterlyUptime === null || isNaN(quarterlyUptime)) {
+      if (downMins > 0) {
+        quarterlyUptime = Math.max(0, parseFloat(((QUARTERLY_MINUTES - Math.min(QUARTERLY_MINUTES, downMins)) / QUARTERLY_MINUTES * 100).toFixed(2)));
       } else {
-        proactiveUptime = 100;
+        quarterlyUptime = 100;
       }
     }
-    if (proactiveUptime > 100) proactiveUptime = 100;
+    if (quarterlyUptime > 100) quarterlyUptime = 100;
 
     const isStock = isStockDevice(d);
-    const slaBreach = !isStock && (jflUptime < SLA_TARGET);
+    const slaBreach = !isStock && (quarterlyUptime < SLA_TARGET);
 
     return {
       ...d,
-      'JFL Uptime %':       upData?.jflUptime ?? `${jflUptime}%`,
+      'JFL Uptime %':       upData?.jflUptime ?? `${quarterlyUptime}%`,
       'Proactive Uptime %': upData?.proactiveUptime ?? `${proactiveUptime}%`,
-      __effectiveUptime:    jflUptime,
+      __effectiveUptime:    quarterlyUptime,
+      __monthlyUptime:      monthlyUptime,
+      __quarterlyUptime:    quarterlyUptime,
       __proactiveUptime:    proactiveUptime,
       __isStock:            isStock,
       __slaBreach:          slaBreach,
@@ -628,17 +630,27 @@ function buildSwitchAnalytics(switches, incidents) {
   const rackMap = {};
   switches.forEach(d => {
     const rack = d.Rack || 'Default Rack';
-    if (!rackMap[rack]) rackMap[rack] = [];
-    rackMap[rack].push(d.__effectiveUptime ?? 100);
+    const site = d.SiteID || d.Location || 'Unknown';
+    const key = `${site}__${rack}`;
+    if (!rackMap[key]) rackMap[key] = { site, rack, mUptimes: [], qUptimes: [] };
+    rackMap[key].mUptimes.push(d.__monthlyUptime ?? d.__effectiveUptime ?? 100);
+    rackMap[key].qUptimes.push(d.__quarterlyUptime ?? d.__effectiveUptime ?? 100);
   });
 
-  const rackwiseUptime = Object.entries(rackMap).map(([rack, vals]) => ({
-    rack,
-    deviceCount: vals.length,
-    avgUptime:   avg(vals).toFixed(2),
-    minUptime:   Math.min(...vals).toFixed(2),
-    maxUptime:   Math.max(...vals).toFixed(2),
-  })).sort((a, b) => parseFloat(a.avgUptime) - parseFloat(b.avgUptime));
+  const rackwiseUptime = Object.values(rackMap).map(item => {
+    const mAvg = avg(item.mUptimes).toFixed(2);
+    const qAvg = avg(item.qUptimes).toFixed(2);
+    return {
+      site: item.site,
+      rack: item.rack,
+      deviceCount: item.qUptimes.length,
+      monthlyUptime: `${mAvg}%`,
+      quarterlyUptime: `${qAvg}%`,
+      avgUptime: `${qAvg}%`,
+      minUptime: `${Math.min(...item.qUptimes).toFixed(2)}%`,
+      maxUptime: `${Math.max(...item.qUptimes).toFixed(2)}%`,
+    };
+  }).sort((a, b) => a.site.localeCompare(b.site) || a.rack.localeCompare(b.rack));
 
   const top10SwitchOutages = [...switches]
     .sort((a, b) => a.__effectiveUptime - b.__effectiveUptime)

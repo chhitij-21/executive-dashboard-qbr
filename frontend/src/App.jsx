@@ -579,7 +579,7 @@ function MainPortal() {
                   Rack-wise Switch Uptime Summary
                 </h4>
                 <DataTable
-                  columns={['rack', 'deviceCount', 'avgUptime', 'minUptime', 'maxUptime']}
+                  columns={['site', 'rack', 'deviceCount', 'monthlyUptime', 'quarterlyUptime', 'minUptime', 'maxUptime']}
                   rows={switchAn.rackwiseUptime}
                 />
               </div>
