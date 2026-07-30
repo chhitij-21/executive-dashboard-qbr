@@ -40,7 +40,7 @@ function validateUpload(incidentInput, inventoryInput) {
   // 2. Validate Incident Workbook Structure
   let incWb;
   try {
-    incWb = xlsx.readFile(incidentFilePath, { cellDates: false, raw: true });
+    incWb = xlsx.readFile(incidentFilePath, { cellDates: false, raw: true, dense: true });
   } catch (err) {
     errors.push(`Corrupted or unreadable Incident Excel file: ${err.message}`);
     return { valid: false, errors, warnings };
@@ -85,7 +85,7 @@ function validateUpload(incidentInput, inventoryInput) {
   if (inventoryFilePath) {
     let invWb;
     try {
-      invWb = xlsx.readFile(inventoryFilePath, { cellDates: false, raw: true });
+      invWb = xlsx.readFile(inventoryFilePath, { cellDates: false, raw: true, dense: true });
     } catch (err) {
       warnings.push(`Inventory file unreadable: ${err.message}. Processing will fall back to incident-only data.`);
     }
