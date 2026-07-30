@@ -31,6 +31,7 @@ export default function SiteSummaryTable({ sites }) {
               <th>Switches</th>
               <th>APs</th>
               <th>Switch Uptime</th>
+              <th>Total Incidents</th>
               <th>AP Incidents (Unique APs)</th>
               <th>Overall Uptime</th>
               <th>Incident-Free %</th>
@@ -59,7 +60,12 @@ export default function SiteSummaryTable({ sites }) {
                       ? <span className="na-text">N/A</span>
                       : `${site.switchUptime}%`}
                   </td>
-                  <td className="cell-center">{site.uniqueAPsWithIncidents}</td>
+                  <td className="cell-center">
+                    <strong style={{ color: site.incidentCount > 0 ? '#dc2626' : '#16a34a' }}>
+                      {site.incidentCount ?? 0}
+                    </strong>
+                  </td>
+                  <td className="cell-center">{site.apIncidents ?? 0} ({site.uniqueAPsWithIncidents ?? 0})</td>
                   <td className="cell-center">
                     {site.overallUptime === 'Data Not Available' || site.overallUptime === null
                       ? <span className="na-text">N/A</span>
