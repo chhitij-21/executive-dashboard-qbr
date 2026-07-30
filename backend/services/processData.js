@@ -7,6 +7,7 @@ const fs   = require('fs');
 const {
   loadWorkbook, detectSheets,
   mergeInventorySheets, parseIncidentSheet, parseUptimeSummary,
+  buildSerialToHostnameMap,
 } = require('./excelParser');
 const ruleEngine = require('./ruleEngine');
 const { generatePPT } = require('./pptGenerator');
@@ -212,18 +213,48 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   }
   log(`Parsed incidents for target customer: ${incidents.length}`);
 
+  // Build Serial Number -> Hostname mapping dictionary across inventory & compliance sheets
+  const serialToHostMap = buildSerialToHostnameMap(devices, incidents);
+
+  // Map DeviceID to Hostname if available, else fall back to Serial Number
+  devices = devices.map((d) => {
+    const rawSerial = String(d.SerialNo || d.DeviceID || '').trim();
+    const mappedHost = serialToHostMap[rawSerial] || String(d.Hostname || '').trim();
+    const displayId = (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown') ? mappedHost : rawSerial;
+    return {
+      ...d,
+      SerialNo: rawSerial,
+      DeviceID: displayId,
+      Hostname: mappedHost || rawSerial,
+    };
+  });
+
+  incidents = incidents.map((i) => {
+    const rawSerial = String(i.SerialNo || i.DeviceID || '').trim();
+    const mappedHost = serialToHostMap[rawSerial] || String(i.Hostname || '').trim();
+    const displayId = (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown') ? mappedHost : rawSerial;
+    return {
+      ...i,
+      SerialNo: rawSerial,
+      DeviceID: displayId,
+      Hostname: mappedHost || rawSerial,
+    };
+  });
+
   // Build device location map from inventory to enrich incidents missing explicit site locations
   const devLocMap = {};
   devices.forEach((d) => {
-    if (d.DeviceID && (d.SiteID || d.Location)) {
+    if ((d.DeviceID || d.SerialNo) && (d.SiteID || d.Location)) {
       devLocMap[d.DeviceID] = d.SiteID || d.Location;
+      if (d.SerialNo) devLocMap[d.SerialNo] = d.SiteID || d.Location;
     }
   });
 
   incidents.forEach((inc) => {
     const isGenericLoc = !inc.Location || ['unknown', 'sheet1', 'raw', 'jfl'].includes(inc.Location.toLowerCase());
-    if (isGenericLoc && devLocMap[inc.DeviceID]) {
-      const resolvedSite = normalizeSiteName(devLocMap[inc.DeviceID]);
+    const matchedLoc = devLocMap[inc.DeviceID] || devLocMap[inc.SerialNo];
+    if (isGenericLoc && matchedLoc) {
+      const resolvedSite = normalizeSiteName(matchedLoc);
       inc.Location = resolvedSite;
       inc.SiteID   = resolvedSite;
     }

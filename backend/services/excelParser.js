@@ -93,7 +93,8 @@ function mergeInventorySheets(workbookData, locationSheets) {
 
       devices.push({
         DeviceID:   String(serial).trim(),
-        Hostname:   row['Hostname'] || row['Host Name'] || '',
+        SerialNo:   String(serial).trim(),
+        Hostname:   row['Hostname'] || row['Host Name'] || row['Device Hostname'] || '',
         Location:   normLoc,
         SiteID:     normLoc,
         DeviceType: row['Device Type'] || row['DeviceType'] || '',
@@ -107,6 +108,26 @@ function mergeInventorySheets(workbookData, locationSheets) {
     });
   });
   return devices;
+}
+
+/**
+ * Build a lookup map of Serial Number -> Hostname from inventory and incident rows.
+ */
+function buildSerialToHostnameMap(devices = [], incidents = []) {
+  const serialToHostMap = {};
+
+  const processRow = (serial, hostname) => {
+    const s = String(serial || '').trim();
+    const h = String(hostname || '').trim();
+    if (s && h && h.toLowerCase() !== 'n/a' && h.toLowerCase() !== 'unknown' && h.toLowerCase() !== 'null') {
+      serialToHostMap[s] = h;
+    }
+  };
+
+  devices.forEach(d => processRow(d.SerialNo || d.DeviceID, d.Hostname));
+  incidents.forEach(i => processRow(i.SerialNo || i.DeviceID, i.Hostname));
+
+  return serialToHostMap;
 }
 
 /**
@@ -150,6 +171,8 @@ function parseIncidentSheet(rows) {
       IncidentNumber: ticketNo,
       TicketNumber:   ticketNo,
       DeviceID:       devId,
+      SerialNo:       devId,
+      Hostname:       row['Hostname'] || row['Host Name'] || row['Device Hostname'] || row['Device Name'] || '',
       Location:       normLoc,
       SiteID:         normLoc,
       DeviceType:     row['Device Type'] || row['DeviceType'] || '',
@@ -284,5 +307,6 @@ module.exports = {
   mergeInventorySheets,
   parseIncidentSheet,
   parseUptimeSummary,
+  buildSerialToHostnameMap,
   analyzeWorkbookSchema,
 };
