@@ -382,10 +382,11 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
     if (!job) {
       // Process default master dataset if no completed report exists in history
       const incCandidates = [
+        path.join(__dirname, '..', '..', 'New folder', 'SLA_Compliance_Report.csv'),
+        path.resolve('SLA_Compliance_Report.csv'),
         path.resolve('jfl incidents.xlsx'),
         path.join(__dirname, '..', 'jfl incidents.xlsx'),
         path.join(__dirname, '..', '..', 'New folder', 'jfl incidents.xlsx'),
-        path.join(__dirname, '..', '..', 'New folder', 'SLA_Compliance_Report.csv'),
       ];
       const invCandidates = [
         path.resolve('JFL Updated Inventory.xlsx'),
