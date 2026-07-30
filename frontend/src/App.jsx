@@ -31,16 +31,16 @@ const normalizeLoc = (str) => {
 
 function MainPortal() {
   const { user, activeClient, activeLocation, setActiveLocation } = useAuth();
-  const [tab, setTab] = useState('dashboard'); // default to executive dashboard view
+  const [tab, setTab] = useState('upload'); // Default to Upload view until files are uploaded
   const [dashTab, setDashTab] = useState('executive');
   const [selectedSite, setSelectedSite] = useState('ALL');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState('idle');
-  const [dashboardData, setDashboardData] = useState(defaultDashboardData);
+  const [dashboardData, setDashboardData] = useState(null);
 
-  // On initial mount, fetch the latest completed report from backend
+  // On initial mount, check if a previous report exists in history
   useEffect(() => {
     let isSubscribed = true;
     const fetchInitialData = async () => {
@@ -50,11 +50,12 @@ function MainPortal() {
           const json = await res.json();
           if (json && !json.error && isSubscribed) {
             setDashboardData(json);
+            setTab('dashboard');
             if (json.metadata?.jobId) setJobId(json.metadata.jobId);
           }
         }
       } catch (err) {
-        console.warn('Initial dashboard fetch fallback to default dataset:', err);
+        console.warn('Initial dashboard fetch check:', err);
       }
     };
 
@@ -362,30 +363,36 @@ function MainPortal() {
               <KpiCard title="Reporting Period" value={exec.reportingPeriod} />
               <KpiCard title="Total Sites" value={exec.totalSites} />
               <KpiCard title="Active Operational Devices" value={exec.totalDevices} />
-              <KpiCard title="Stock Inventory (Excluded from SLA)" value={exec.totalStockDevices ?? 0} />
+              <KpiCard title="Stock Inventory Devices" value={exec.totalStockDevices ?? 0} />
               <KpiCard title="Total Switches" value={exec.totalSwitches} />
-              <KpiCard title="Total APs" value={exec.totalAPs} />
-              <KpiCard
-                title="Overall Uptime"
-                value={exec.overallUptime}
-                unit="%"
-              />
-              <KpiCard
-                title="Incident-Free %"
-                value={exec.incidentFreePercent}
-                unit="%"
-              />
-              <KpiCard
-                title="SLA Compliance"
-                value={exec.slaCompliance}
-                unit="%"
-              />
-              <KpiCard
-                title="Health Score"
-                value={`${exec.healthScore} (${exec.healthLabel})`}
-              />
+              <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} />
+              <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} />
+              <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} />
+              <KpiCard title="Primary RCA (All)" value={exec.primaryRca || rcaAn.topRca || 'None'} />
+              <KpiCard title="Primary RCA for APs" value={exec.primaryRcaForAPs || apAn.topApRca || 'None'} />
+              <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" />
+              <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" />
+              <KpiCard title="SLA Compliance" value={exec.slaCompliance} unit="%" />
+              <KpiCard title="Health Score" value={`${exec.healthScore} (${exec.healthLabel})`} />
               <KpiCard title="Total Incidents" value={exec.totalIncidents} />
             </div>
+
+            {/* Stock Inventory List Table */}
+            {activeDashboardData.devices?.filter(d => d.__isStock).length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4>📦 Stock Inventory Devices ({activeDashboardData.devices.filter(d => d.__isStock).length}) — Excluded from SLA Penalties</h4>
+                <DataTable
+                  columns={['DeviceID', 'DeviceType', 'Location', 'Rack', 'Status']}
+                  rows={activeDashboardData.devices.filter(d => d.__isStock).map(d => ({
+                    DeviceID: d.DeviceID,
+                    DeviceType: d.DeviceType || 'N/A',
+                    Location: d.SiteID || d.Location,
+                    Rack: d.Rack || 'STOCK',
+                    Status: 'Stock Inventory'
+                  }))}
+                />
+              </div>
+            )}
 
             {/* Requirement 1: All Switches Core and Non-Core Uptime Distribution */}
             {switchUptimeChartData && (

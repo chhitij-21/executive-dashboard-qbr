@@ -442,6 +442,15 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const sevSplit = splitBySeverity(incidents);
   const sites = new Set(activeDevices.map(d => d.SiteID || d.Location).filter(Boolean));
 
+  const rcaBrk = classifyRCALocal(incidents);
+  const primaryRca = rcaBrk.length > 0 ? rcaBrk[0].rca : 'None';
+
+  const apIds = new Set(aps.map(d => d.DeviceID));
+  const apIncidents = incidents.filter(i => apIds.has(i.DeviceID));
+  const uniqueAPsWithIncidents = new Set(apIncidents.map(i => i.DeviceID)).size;
+  const apRcaBrk = classifyRCALocal(apIncidents);
+  const primaryRcaForAPs = apRcaBrk.length > 0 ? apRcaBrk[0].rca : 'None';
+
   return {
     customerName:       CUSTOMER_NAME,
     reportingPeriod:    REPORTING_PERIOD,
@@ -450,6 +459,10 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
     totalStockDevices:  stockDevices.length,
     totalSwitches:      switches.length,
     totalAPs:           aps.length,
+    apIncidents:        apIncidents.length,
+    uniqueAPsWithIncidents,
+    primaryRca,
+    primaryRcaForAPs,
     overallUptime,
     incidentFreePercent:incidentFreePct,
     healthScore,
