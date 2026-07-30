@@ -138,11 +138,11 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           setStatus('failed');
           setErrorMsg(data.error || 'Report generation failed. Please check your input files.');
         } else {
-          timerId = setTimeout(checkStatus, 1500);
+          timerId = setTimeout(checkStatus, 500);
         }
       } catch (err) {
         console.error('Job status check error:', err);
-        if (isSubscribed) timerId = setTimeout(checkStatus, 2000);
+        if (isSubscribed) timerId = setTimeout(checkStatus, 500);
       }
     };
 

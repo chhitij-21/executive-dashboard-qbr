@@ -73,21 +73,16 @@ function MainPortal() {
     fetchDashboard().then((loaded) => {
       if (loaded || !isSubscribed) return;
 
-      // Exponential backoff: 1.5s → 3s → 6s → 12s, capped at 20s
-      let delay = 1500;
-      const MAX_DELAY = 20000;
       let timeoutId;
-
       const poll = async () => {
         if (!isSubscribed) return;
         const done = await fetchDashboard();
         if (!done && isSubscribed) {
-          delay = Math.min(delay * 2, MAX_DELAY);
-          timeoutId = setTimeout(poll, delay);
+          timeoutId = setTimeout(poll, 500);
         }
       };
 
-      timeoutId = setTimeout(poll, delay);
+      timeoutId = setTimeout(poll, 500);
       return () => clearTimeout(timeoutId);
     });
 
