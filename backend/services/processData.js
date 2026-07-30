@@ -387,10 +387,10 @@ function buildAllAnalytics(devices, incidents, allLocMap, log) {
   const stockDevices  = devices.filter(d => d.__isStock);
 
   const switches = activeDevices.filter(d =>
-    /^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType) || /core/i.test(d.CoreNonCore || '') || /sw/i.test(d.CoreNonCore || '')
+    /^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType) || (!/^ap$/i.test(d.DeviceType) && !/access/i.test(d.DeviceType))
   );
   const aps = activeDevices.filter(d =>
-    /^ap$/i.test(d.DeviceType) || /access.?point/i.test(d.DeviceType)
+    /^ap$/i.test(d.DeviceType) || /access/i.test(d.DeviceType)
   );
 
   const coreDevices = activeDevices.filter(d => /core/i.test(d.CoreNonCore || '') && !/non/i.test(d.CoreNonCore || ''));
@@ -477,8 +477,8 @@ function buildSiteSummary(allDevices, switches, aps, incidents) {
       sitesMap[site].stockDevices.push(d);
     } else {
       sitesMap[site].activeDevices.push(d);
-      if (/^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType) || /sw/i.test(d.CoreNonCore || '')) sitesMap[site].switches.push(d);
-      if (/^ap$/i.test(d.DeviceType) || /access.?point/i.test(d.DeviceType)) sitesMap[site].aps.push(d);
+      if (/^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType) || (!/^ap$/i.test(d.DeviceType) && !/access/i.test(d.DeviceType))) sitesMap[site].switches.push(d);
+      if (/^ap$/i.test(d.DeviceType) || /access/i.test(d.DeviceType)) sitesMap[site].aps.push(d);
     }
   });
 
@@ -488,7 +488,9 @@ function buildSiteSummary(allDevices, switches, aps, incidents) {
     sitesMap[site].incidents.push(inc);
   });
 
-  return Object.entries(sitesMap).map(([siteId, s]) => {
+  return Object.entries(sitesMap)
+    .filter(([siteId]) => !['unknown', 'raw', 'sheet1', 'jfl'].includes(siteId.toLowerCase()))
+    .map(([siteId, s]) => {
     const swUptimes = s.switches.map(d => d.__effectiveUptime ?? 100);
     const switchUptime = swUptimes.length > 0 ? avg(swUptimes).toFixed(2) : '100.00';
 

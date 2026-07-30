@@ -138,15 +138,14 @@ function MainPortal() {
     const activeDevices = devices.filter((d) => !d.__isStock);
     const stockDevices  = devices.filter((d) => d.__isStock);
 
-    const switches = activeDevices.filter((d) => {
-      const type = String(d.DeviceType || '').toLowerCase();
-      const core = String(d.CoreNonCore || '').toLowerCase();
-      return type.includes('sw') || type.includes('switch') || core.includes('core') || core.includes('non');
-    });
-
     const aps = activeDevices.filter((d) => {
       const type = String(d.DeviceType || '').toLowerCase();
       return type.includes('ap') || type.includes('access');
+    });
+
+    const switches = activeDevices.filter((d) => {
+      const type = String(d.DeviceType || '').toLowerCase();
+      return type.includes('sw') || type.includes('switch') || (!type.includes('ap') && !type.includes('access'));
     });
 
     const switchUptimes = switches.map((d) => d.__effectiveUptime ?? 100);
@@ -438,18 +437,18 @@ function MainPortal() {
               <SiteSummaryTable sites={siteSummary} />
             ) : (() => {
               const currentSiteData = siteSummary.find((s) => s.siteId === selectedSite) || {};
-              const siteKey = selectedSite.toUpperCase().split(' ')[0];
+              const normSite = normalizeLoc(selectedSite);
 
               const siteActiveDevs = (dashboardData?.devices || []).filter((d) =>
-                (d.SiteID || d.Location || '').toUpperCase().includes(siteKey) && !d.__isStock
+                normalizeLoc(d.SiteID || d.Location || '') === normSite && !d.__isStock
               );
 
               const siteStockDevs = currentSiteData.stockDevices || (dashboardData?.devices || []).filter((d) =>
-                (d.SiteID || d.Location || '').toUpperCase().includes(siteKey) && d.__isStock
+                normalizeLoc(d.SiteID || d.Location || '') === normSite && d.__isStock
               ).map(d => ({ DeviceID: d.DeviceID, DeviceType: d.DeviceType || 'N/A', Location: d.SiteID || d.Location, Status: 'Stock Inventory' }));
 
               const siteIncs = (dashboardData?.incidents || []).filter((i) =>
-                (i.SiteID || i.Location || '').toUpperCase().includes(siteKey)
+                normalizeLoc(i.SiteID || i.Location || '') === normSite
               );
 
               return (
