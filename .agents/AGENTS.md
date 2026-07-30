@@ -129,3 +129,13 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
    * Compares effective uptime against target ($99.3\%$). If uptime $< 99.3\%$, flags `__slaBreach = true`.
 6. **Triple-Pass Validation**:
    * Validates row counts, cross-checks total device counts across sheets, and recalculates independent metrics prior to dashboard and PPT generation.
+
+---
+
+## 7. 🎯 Multi-Client Account Name Filtering Logic (JFL 424 Incidents)
+
+### Multi-Client Account Isolation Rule
+* In multi-client CSV files (`SLA_Compliance_Report.csv` containing 839 rows across `Jubilant Foodworks Ltd (JFL)`, `MMTC`, `Fabtech`, `PNB MetLife`), incident rows must be filtered strictly by `Account Name`.
+* When target customer is JFL, raw incident rows are filtered using `/jubilant|jfl/i`.
+* **Filtered JFL Incidents Baseline**: **424 Incidents** (423 ticket rows).
+* Tickets belonging to other corporate accounts (`MMTC`, `Fabtech`, `PNB MetLife`) are automatically excluded from JFL KPI calculations.
