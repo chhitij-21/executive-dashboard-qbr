@@ -125,8 +125,23 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   }
 
   // Auto-detect which workbook is Incident workbook vs Inventory workbook
-  const isWb1Incident = wb1 && (wb1['Raw'] || wb1['Updated inventory'] || wb1['JFL'] || wb1.__sheetNames.some(s => /incident|raw/i.test(s)));
-  const isWb2Incident = wb2 && (wb2['Raw'] || wb2['Updated inventory'] || wb2['JFL'] || wb2.__sheetNames.some(s => /incident|raw/i.test(s)));
+  const isIncidentWb = (wb) => {
+    if (!wb || !wb.__sheetNames) return false;
+    const names = wb.__sheetNames.map((s) => s.trim().toLowerCase());
+    if (names.some((s) => s === 'raw' || s === 'jfl' || s.includes('incident') || s.includes('compliance') || s.includes('sla'))) {
+      return true;
+    }
+    // Check first sheet column names for incident headers
+    const firstSheet = wb[wb.__sheetNames[0]];
+    if (firstSheet && firstSheet.length > 0) {
+      const keys = Object.keys(firstSheet[0]).map((k) => k.toLowerCase());
+      if (keys.some((k) => k.includes('ticket') || k.includes('resolution') || k.includes('rca'))) return true;
+    }
+    return false;
+  };
+
+  const isWb1Incident = isIncidentWb(wb1);
+  const isWb2Incident = isIncidentWb(wb2);
 
   if (wb2 && isWb2Incident && !isWb1Incident) {
     incWb = wb2;
@@ -190,6 +205,23 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const incidents = parseIncidentSheet(rawIncidentRows);
   log(`Parsed incidents: ${incidents.length}`);
 
+  // Build device location map from inventory to enrich incidents missing explicit site locations
+  const devLocMap = {};
+  devices.forEach((d) => {
+    if (d.DeviceID && (d.SiteID || d.Location)) {
+      devLocMap[d.DeviceID] = d.SiteID || d.Location;
+    }
+  });
+
+  incidents.forEach((inc) => {
+    const isGenericLoc = !inc.Location || ['unknown', 'sheet1', 'raw', 'jfl'].includes(inc.Location.toLowerCase());
+    if (isGenericLoc && devLocMap[inc.DeviceID]) {
+      const resolvedSite = normalizeSiteName(devLocMap[inc.DeviceID]);
+      inc.Location = resolvedSite;
+      inc.SiteID   = resolvedSite;
+    }
+  });
+
   // ── 6. Attach uptime to each device from summary map ─────────────────────
   const allLocMap = {};
   allLocationRows.forEach((row) => {
@@ -203,20 +235,57 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     };
   });
 
+  // ── 6. Attach uptime to each device from summary map or dynamic resolution calculation ──
+  const PERIOD_MINUTES = 90 * 24 * 60; // 129,600 minutes per 90-day quarter spec
+
+  // Aggregate downtime per device ID from raw incidents
+  const incDowntimeMap = {};
+  incidents.forEach((inc) => {
+    const devId = inc.DeviceID;
+    if (!devId) return;
+    const actMin = parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0;
+    const totMin = parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0;
+
+    if (!incDowntimeMap[devId]) incDowntimeMap[devId] = { jflDowntime: 0, proactiveDowntime: 0 };
+    if (actMin > 0) incDowntimeMap[devId].jflDowntime += actMin;
+    if (totMin > 0) incDowntimeMap[devId].proactiveDowntime += totMin;
+  });
+
   devices = devices.map((d) => {
     const upData = allLocMap[d.DeviceID] || uptimeSummaryMap[d.DeviceID] || null;
     let jflUptime = upData ? upData.jflUptime : null;
-    if (jflUptime === null || isNaN(jflUptime)) jflUptime = 100;
+    let proactiveUptime = upData ? upData.proactiveUptime : null;
+
+    // Fallback: if no summary sheet entry, dynamically calculate uptime from raw incident resolution times
+    if (jflUptime === null || isNaN(jflUptime)) {
+      const incDown = incDowntimeMap[d.DeviceID];
+      if (incDown && incDown.jflDowntime > 0) {
+        jflUptime = Math.max(0, parseFloat(((PERIOD_MINUTES - incDown.jflDowntime) / PERIOD_MINUTES * 100).toFixed(2)));
+      } else {
+        jflUptime = 100; // No downtime / no incidents = 100% per spec
+      }
+    }
     if (jflUptime > 100) jflUptime = 100;
+
+    if (proactiveUptime === null || isNaN(proactiveUptime)) {
+      const incDown = incDowntimeMap[d.DeviceID];
+      if (incDown && incDown.proactiveDowntime > 0) {
+        proactiveUptime = Math.max(0, parseFloat(((PERIOD_MINUTES - incDown.proactiveDowntime) / PERIOD_MINUTES * 100).toFixed(2)));
+      } else {
+        proactiveUptime = 100;
+      }
+    }
+    if (proactiveUptime > 100) proactiveUptime = 100;
 
     const isStock = isStockDevice(d);
     const slaBreach = !isStock && (jflUptime < SLA_TARGET);
 
     return {
       ...d,
-      'JFL Uptime %':       upData?.jflUptime ?? 'N/A',
-      'Proactive Uptime %': upData?.proactiveUptime ?? 'N/A',
+      'JFL Uptime %':       upData?.jflUptime ?? `${jflUptime}%`,
+      'Proactive Uptime %': upData?.proactiveUptime ?? `${proactiveUptime}%`,
       __effectiveUptime:    jflUptime,
+      __proactiveUptime:    proactiveUptime,
       __isStock:            isStock,
       __slaBreach:          slaBreach,
       __slaTarget:          SLA_TARGET,

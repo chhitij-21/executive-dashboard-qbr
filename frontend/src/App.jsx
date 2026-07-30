@@ -164,7 +164,7 @@ function MainPortal() {
     const slaPct   = activeDevices.length > 0 ? (((activeDevices.length - breaches) / activeDevices.length) * 100).toFixed(2) : '100.00';
 
     const siteSummary = (dashboardData.siteSummary || []).filter((s) => {
-      return s.siteId.toLowerCase().includes(locKey);
+      return normalizeLoc(s.siteId) === normalizedFilter || s.siteId.toLowerCase().includes(normalizedFilter);
     });
 
     return {
@@ -189,14 +189,14 @@ function MainPortal() {
         nonCoreUptime: switchUptime,
         overallUptime: switchUptime,
         switchIncidents: incidents.filter(i => switches.some(s => s.DeviceID === i.DeviceID)).length,
-        top10SwitchOutages: (dashboardData.switchAnalytics?.top10SwitchOutages || []).filter(s => String(s.Location).toLowerCase().includes(locKey)),
+        top10SwitchOutages: (dashboardData.switchAnalytics?.top10SwitchOutages || []).filter(s => normalizeLoc(s.Location) === normalizedFilter || String(s.Location).toLowerCase().includes(normalizedFilter)),
       },
       apAnalytics: {
         ...dashboardData.apAnalytics,
         totalAPs: aps.length,
         apAverageUptime: apAvgUptime,
         apIncidents: incidents.filter(i => aps.some(a => a.DeviceID === i.DeviceID)).length,
-        top10APOutages: (dashboardData.apAnalytics?.top10APOutages || []).filter(a => String(a.Location).toLowerCase().includes(locKey)),
+        top10APOutages: (dashboardData.apAnalytics?.top10APOutages || []).filter(a => normalizeLoc(a.Location) === normalizedFilter || String(a.Location).toLowerCase().includes(normalizedFilter)),
       },
       devices,
       incidents,

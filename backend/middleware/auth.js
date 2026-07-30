@@ -37,21 +37,20 @@ function requireAdmin(req, res, next) {
  * Uses SERVICE_USER env var — no hardcoded credentials.
  */
 function handleAutoAuthRoute(req, res) {
-  const user = {
+  const session = authService.registerServiceSession({
     id: 'user-svc-001',
     email: `${SERVICE_USER}@proactivedata.com`,
+    username: SERVICE_USER,
     name: 'Service Account (Auto)',
     role: 'admin',
     assignedClient: 'all',
     avatar: '🤖',
-  };
-
-  const token = `svc_tok_${SERVICE_USER}_${Date.now()}`;
+  });
 
   res.json({
     success: true,
-    user,
-    token,
+    user: session.user,
+    token: session.token,
     message: 'Auto-login successful using service account credentials',
   });
 }

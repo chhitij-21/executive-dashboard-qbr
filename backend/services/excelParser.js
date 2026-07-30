@@ -143,7 +143,7 @@ function parseIncidentSheet(rows) {
       ''
     ).trim();
 
-    const rawLoc = row['Device Name'] || row['Location'] || row['Site'] || row['SiteID'] || row.__source?.sheet || '';
+    const rawLoc = row['Location'] || row['Site'] || row['SiteID'] || row['Site Name'] || row.__source?.sheet || '';
     const normLoc = normalizeSiteName(rawLoc);
 
     return {
@@ -163,9 +163,10 @@ function parseIncidentSheet(rows) {
       OpenTime:       row['Created Time'] || row['Open Time'] || row['OpenTime'] || '',
       ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
       NewSerial:      row['New Serial'] || row['Replacement Serial'] || '',
-      ProactiveUptimePct: row['Proactive -Uptime%'] || row['Average of Proactive -Uptime%'] || '',
-      JFLUptimePct:       row['JFL -Uptime %'] || row['Average of JFL -Uptime %'] || '',
-      TotalResolutionMin: row['Total Resolution Time (min)'] || '',
+      ProactiveUptimePct:  row['Proactive -Uptime%'] || row['Average of Proactive -Uptime%'] || '',
+      JFLUptimePct:        row['JFL -Uptime %'] || row['Average of JFL -Uptime %'] || '',
+      ActualResolutionMin: row['Actual Resolution Time (min)'] || row['Actual Resolution Time'] || '',
+      TotalResolutionMin:  row['Total Resolution Time (min)'] || row['Total Resolution Time'] || row['Resolution Time (min)'] || '',
       __source:       row.__source,
     };
   });

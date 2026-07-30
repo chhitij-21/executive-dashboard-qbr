@@ -90,6 +90,19 @@ function invalidateToken(authHeader) {
   tokens.delete(token);
 }
 
+function registerServiceSession(user) {
+  const token = `svc_tok_${user.username || 'svc'}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const expiresAt = Date.now() + TOKEN_TTL_MS;
+  const session = {
+    user: _safeUser(user),
+    token,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(expiresAt).toISOString(),
+  };
+  tokens.set(token, { ...session, expiresAt });
+  return session;
+}
+
 function getDemoUsers() {
   // Never expose password field
   return USERS.map((u) => ({
@@ -102,6 +115,7 @@ function getDemoUsers() {
 
 module.exports = {
   authenticateUser,
+  registerServiceSession,
   verifyToken,
   invalidateToken,
   getDemoUsers,

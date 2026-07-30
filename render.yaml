@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: qbr-dashboard
+    name: executive-dashboard-qbr-2
     env: node
     plan: free
     region: singapore          # closest to India
@@ -15,4 +15,4 @@ services:
       - key: ADMIN_PASSWORD
         value: admin123
       - key: ALLOWED_ORIGINS
-        value: https://qbr-dashboard.onrender.com
+        value: https://executive-dashboard-qbr-2.onrender.com

@@ -37,9 +37,10 @@ export default function LoginModal({ isOpen, onClose }) {
 
   const handleDemoClick = async (demoUser) => {
     setError(null);
+    const pass = demoUser.password || 'admin123';
     setEmail(demoUser.email);
-    setPassword(demoUser.password);
-    const res = await login(demoUser.email, demoUser.password);
+    setPassword(pass);
+    const res = await login(demoUser.email, pass);
     if (res.success) {
       onClose();
     } else {

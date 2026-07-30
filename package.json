@@ -4,6 +4,7 @@
   "description": "Executive Dashboard and Automated QBR Generator",
   "main": "backend/index.js",
   "scripts": {
+    "dev": "npm run build && node backend/index.js",
     "dev:backend": "node backend/index.js",
     "dev:frontend": "npx vite --config frontend/vite.config.js",
     "build": "cd frontend && npm install && npm run build",
