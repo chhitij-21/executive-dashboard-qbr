@@ -7,7 +7,42 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 
 ---
 
-## 1. 🛡️ Business Rules & Data Synchronization Audit
+## 1. ⚙️ Rules for Frontend and Backend Synchronization
+
+### Single-Source-of-Truth Rule (Backend Rule Engine)
+* All business calculation logic (SLA targets, health score formulas, severity mappings, device classifications, stock isolations, RCA categories) is owned exclusively by the **Backend Business Rules Engine (`backend/services/ruleEngine.js` & `backend/config/rules.yaml`)**.
+* The frontend never hardcodes metric formulas or customer rules. It dynamically renders the structured data payload returned by `/api/dashboard/latest`.
+
+### Data Integrity & Zero Assumptions Rule
+* **Rule 1 (Zero Assumptions)**: Neither backend nor frontend may estimate, fabricate, or guess missing values. If a metric is unavailable, it must be displayed as `"Data Not Available"`.
+* **Rule 2 (Triple Validation)**: Before backend JSON data is delivered to the frontend or compiled into a 27-slide PowerPoint (`.pptx`):
+  1. **Pass 1**: Direct extraction from source Excel/CSV files.
+  2. **Pass 2**: Cross-sheet totals and device count reconciliation.
+  3. **Pass 3**: Independent metric recalculation.
+
+### Stock Hardware Isolation Rule
+* **Backend Responsibility**: Detects stock/spare hardware (`Rack: STOCK`, `Location: Inventory`) and attaches `__isStock: true`. Stock devices are strictly excluded from SLA penalties, uptime breach counts, and health score calculations.
+* **Frontend Responsibility**: Displays stock devices in dedicated **📦 Stock Inventory List** tables and Site Inspector stock KPI cards so spare inventory is fully visible to CXOs.
+
+### Dual Uptime Engine Rule
+* Computed across the $129,600 \text{-minute}$ quarter window ($90 \text{ days} \times 24 \text{ hrs} \times 60 \text{ mins}$):
+  * **JFL Uptime % (Excluding Hold Time)**: Uses `Actual Resolution Time (min)`.
+  * **Proactive Uptime % (Including Hold Time)**: Uses `Total Resolution Time (min)`.
+* Both values are synchronized across backend API endpoints, frontend dashboard cards, and slide presentations.
+
+### Frontend State & Tab Visibility Rule
+* **Landing State**: Defaults to the Executive Dashboard overview on initial load.
+* **Site Inspection**: Site selector pills (`Bangalore`, `Noida`, `Greater Noida`, etc.) filter all KPI cards, device lists, stock tables, and incident logs in real time.
+* **Navigation Bar**: Provides instant access to 5 main tabs:
+  1. 📤 **Upload & Generate**: Drag-and-drop workbook processor & report generator.
+  2. 📈 **Executive Dashboard**: Interactive 7-section CXO analytics dashboard.
+  3. 🤖 **AI Excel Audit**: AI Schema & Column Mapping Inspector.
+  4. 📜 **Report History**: Output report audit log.
+  5. ⚙️ **Client Management**: Multi-client configuration & custom `rules.yaml` editor.
+
+---
+
+## 2. 🛡️ Business Rules & Data Synchronization Audit
 
 ### Severity Mapping (`incident_severity_values`)
 * Raw incident data in `jfl incidents.xlsx` categorizes severity using `"Core"`, `"Non-Core"`, and `"AP"`.
@@ -32,7 +67,7 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 
 ---
 
-## 2. 🔬 End-to-End System Verification Report
+## 3. 🔬 End-to-End System Verification Report
 
 ### Verified Web Portal Routes & Sub-Tabs (`http://localhost:3000`)
 * **📋 Executive Summary**: 16 KPI cards fully loaded.
@@ -46,7 +81,7 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 
 ---
 
-## 3. 🤖 Complete Backend + Frontend AI Excel Audit Feature
+## 4. 🤖 Complete Backend + Frontend AI Excel Audit Feature
 
 ### Backend Endpoint (`POST /api/analyze-excel`)
 * Accepts any `.xlsx`, `.xls`, or `.csv` file.
@@ -60,7 +95,7 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 
 ---
 
-## 4. 📊 AI Forensic Study of Excel & CSV Datasets
+## 5. 📊 AI Forensic Study of Excel & CSV Datasets
 
 ### Master File Inventory
 1. **`jfl incidents.xlsx`** (0.32 MB): 12 Worksheets (`Raw`, `RCA`, `Device Wise Uptime`, `All Location`, `BLR`, `Grater Noida`, `Guwahati`, `Hyd`, `mohali`, `Mumbai`, `Nagpur`, `Noida`). Contains 363 raw incidents and pre-calculated location uptimes.
@@ -77,7 +112,7 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 
 ---
 
-## 5. ⚙️ How the Raw SLA Compliance File is Processed
+## 6. ⚙️ How the Raw SLA Compliance File is Processed
 
 ### Processing Pipeline Logic
 1. **Header Normalization & Ticket Extraction**:
