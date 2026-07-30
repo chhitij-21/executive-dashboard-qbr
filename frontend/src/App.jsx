@@ -15,6 +15,20 @@ import TrendChart from './components/TrendChart';
 import { API_BASE_URL, apiFetch } from './config/api';
 import defaultDashboardData from './data/defaultDashboardData.json';
 
+// Normalize a site name for comparison (mirrors normalizeSiteName in processData.js)
+const normalizeLoc = (str) => {
+  const s = String(str || '').trim().toLowerCase();
+  if (/blr|bangalore/i.test(s)) return 'bangalore';
+  if (/g.*noida|gr.*noida|greater.*noida/i.test(s)) return 'greater noida';
+  if (/guwahati/i.test(s)) return 'guwahati';
+  if (/hyd|hyderabad/i.test(s)) return 'hyderabad';
+  if (/mohali/i.test(s)) return 'mohali';
+  if (/mumbai/i.test(s)) return 'mumbai';
+  if (/nagpur/i.test(s)) return 'nagpur';
+  if (/^noida$/i.test(s)) return 'noida';
+  return s;
+};
+
 function MainPortal() {
   const { user, activeClient, activeLocation, setActiveLocation } = useAuth();
   const [tab, setTab] = useState('dashboard'); // default to executive dashboard view
@@ -110,20 +124,6 @@ function MainPortal() {
       : (selectedSite && selectedSite !== 'ALL' ? selectedSite : null);
 
     if (!locFilter) return dashboardData;
-
-    // Normalize a site name for comparison (mirrors normalizeSiteName in processData.js)
-    const normalizeLoc = (str) => {
-      const s = String(str || '').trim().toLowerCase();
-      if (/blr|bangalore/i.test(s)) return 'bangalore';
-      if (/g.*noida|gr.*noida|greater.*noida/i.test(s)) return 'greater noida';
-      if (/guwahati/i.test(s)) return 'guwahati';
-      if (/hyd|hyderabad/i.test(s)) return 'hyderabad';
-      if (/mohali/i.test(s)) return 'mohali';
-      if (/mumbai/i.test(s)) return 'mumbai';
-      if (/nagpur/i.test(s)) return 'nagpur';
-      if (/^noida$/i.test(s)) return 'noida';
-      return s;
-    };
 
     const normalizedFilter = normalizeLoc(locFilter);
 
