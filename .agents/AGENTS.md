@@ -139,3 +139,12 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 * When target customer is JFL, raw incident rows are filtered using `/jubilant|jfl/i`.
 * **Filtered JFL Incidents Baseline**: **424 Incidents** (423 ticket rows).
 * Tickets belonging to other corporate accounts (`MMTC`, `Fabtech`, `PNB MetLife`) are automatically excluded from JFL KPI calculations.
+
+---
+
+## 8. 🏷️ Serial-to-Hostname Mapping Rule
+
+### Serial Number to Hostname Resolution Rule
+* Every device serial number is cross-referenced with `JFL Updated Inventory.xlsx` and `SLA_Compliance_Report.csv` to map to its corresponding **`Hostname`** (e.g. `JFL-Guwahati-CORE-02`, `JFL-MOHALI-ACC-SW-02`).
+* **Fallback Behavior**: If a device has **no Hostname** (or `Hostname` is empty / N/A), `DeviceID` cleanly falls back to its **Serial Number** (e.g. `FTX240212AB`).
+* **Implementation**: Executed automatically in `buildSerialToHostnameMap` in `excelParser.js` and `processData.js` during every file processing pass.
