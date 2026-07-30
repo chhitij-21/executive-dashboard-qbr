@@ -6,6 +6,7 @@ import LoginModal from './components/LoginModal';
 import FileUploader from './components/FileUploader';
 import ReportHistory from './components/ReportHistory';
 import ClientManager from './components/ClientManager';
+import ExcelAnalyzer from './components/ExcelAnalyzer';
 
 import KpiCard from './components/KpiCard';
 import Chart from './components/Chart';
@@ -731,6 +732,8 @@ function MainPortal() {
             }}
           />
         )}
+
+        {tab === 'analyzer' && <ExcelAnalyzer />}
 
         {tab === 'clients' && <ClientManager />}
       </main>

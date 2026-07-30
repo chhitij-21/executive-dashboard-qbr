@@ -196,10 +196,92 @@ function parseUptimeSummary(rows) {
   return map;
 }
 
+/**
+ * AI Excel Schema Analyzer:
+ * Performs an automated structure, column mapping, data health, and metric study of ANY Excel/CSV file.
+ */
+function analyzeWorkbookSchema(filePath) {
+  const fs = require('fs');
+  const stat = fs.statSync(filePath);
+  const fileSizeMB = (stat.size / (1024 * 1024)).toFixed(2);
+  const fileName = path.basename(filePath);
+
+  const wb = loadWorkbook(filePath);
+  const detected = detectSheets(wb);
+
+  const sheetsInfo = wb.__sheetNames.map((sheetName) => {
+    const rows = wb[sheetName] || [];
+    const sampleRow = rows[0] || {};
+    const columns = Object.keys(sampleRow).filter((k) => k !== '__source');
+
+    return {
+      sheetName,
+      rowCount: rows.length,
+      columnCount: columns.length,
+      columns,
+      sampleRows: rows.slice(0, 3).map((r) => {
+        const copy = { ...r };
+        delete copy.__source;
+        return copy;
+      }),
+    };
+  });
+
+  // Data schema detection
+  const primarySheetName = detected.incidentSheet || wb.__sheetNames[0];
+  const primaryRows = wb[primarySheetName] || [];
+  const parsedIncidents = parseIncidentSheet(primaryRows);
+
+  const totalIncidents = parsedIncidents.length;
+  const uniqueDevices = new Set(parsedIncidents.map((i) => i.DeviceID).filter(Boolean)).size;
+
+  const rcaCounts = {};
+  parsedIncidents.forEach((i) => {
+    rcaCounts[i.RCA] = (rcaCounts[i.RCA] || 0) + 1;
+  });
+  const topRcas = Object.entries(rcaCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([rca, count]) => ({ rca, count, pct: ((count / Math.max(1, totalIncidents)) * 100).toFixed(1) + '%' }));
+
+  const stockCount = parsedIncidents.filter((i) =>
+    /stock|inventory|spare|warehouse/i.test(i.Location || '') || /stock|spare/i.test(i.Rack || '')
+  ).length;
+
+  return {
+    fileName,
+    fileSizeMB: `${fileSizeMB} MB`,
+    analyzedAt: new Date().toISOString(),
+    totalSheets: wb.__sheetNames.length,
+    sheetNames: wb.__sheetNames,
+    detectedRoles: {
+      incidentSheet: detected.incidentSheet,
+      uptimeSheet: detected.uptimeSheet,
+      locationSheets: detected.locationSheets,
+    },
+    sheetsInfo,
+    metricsSummary: {
+      totalRowsAnalyzed: primaryRows.length,
+      parsedIncidentsCount: totalIncidents,
+      uniqueDevicesCount: uniqueDevices,
+      stockDevicesDetected: stockCount,
+      topRcaBreakdown: topRcas,
+    },
+    columnMappings: [
+      { field: 'Ticket / Incident ID', mappedColumn: sheetsInfo[0]?.columns.find(c => /ticket|incident|id/i.test(c)) || 'Auto-Generated' },
+      { field: 'Device Serial Number', mappedColumn: sheetsInfo[0]?.columns.find(c => /device|serial|hostname/i.test(c)) || 'N/A' },
+      { field: 'Location / Site', mappedColumn: sheetsInfo[0]?.columns.find(c => /location|site|city/i.test(c)) || 'N/A' },
+      { field: 'RCA Category', mappedColumn: sheetsInfo[0]?.columns.find(c => /rca|cause|reason/i.test(c)) || 'N/A' },
+      { field: 'Resolution Time (Min)', mappedColumn: sheetsInfo[0]?.columns.find(c => /resolution|downtime|duration/i.test(c)) || 'N/A' },
+    ],
+  };
+}
+
 module.exports = {
   loadWorkbook,
   detectSheets,
   mergeInventorySheets,
   parseIncidentSheet,
   parseUptimeSummary,
+  analyzeWorkbookSchema,
 };

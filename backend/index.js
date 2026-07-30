@@ -231,6 +231,27 @@ app.delete(['/api/history/:jobId', '/history/:jobId'], requireAuth, (req, res) =
 // ── Health Route ─────────────────────────────────────────────────────────────
 app.get(['/api/health', '/health'], (req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 
+// ── AI Excel Schema Analyzer Endpoint ──────────────────────────────────────
+app.post(['/api/analyze-excel', '/analyze-excel'], requireAuth, upload.single('excel'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No Excel or CSV file provided for AI analysis.' });
+    }
+    const filePath = req.file.path;
+    const { analyzeWorkbookSchema } = require('./services/excelParser');
+    const analysis = analyzeWorkbookSchema(filePath);
+
+    setTimeout(() => {
+      try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
+    }, 2000);
+
+    res.json({ success: true, analysis });
+  } catch (err) {
+    console.error('[server] Error in /api/analyze-excel:', err.message);
+    res.status(500).json({ error: `AI Excel Analysis failed: ${err.message}` });
+  }
+});
+
 // ── Upload & Report Generation Workflow Endpoint ────────────────────────────
 app.post(['/api/upload', '/upload'], requireAuth, upload.fields([
   { name: 'incidents', maxCount: 1 },

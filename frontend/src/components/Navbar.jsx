@@ -88,6 +88,13 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
           📜 Report History
         </button>
 
+        <button
+          className={activeTab === 'analyzer' ? 'active' : ''}
+          onClick={() => setActiveTab('analyzer')}
+        >
+          🤖 AI Excel Audit
+        </button>
+
         {isAdmin && (
           <button
             className={activeTab === 'clients' ? 'active' : ''}
