@@ -531,7 +531,8 @@ function buildSiteSummary(allDevices, switches, aps, incidents) {
 
     const deviceUptimes = s.activeDevices.map(d => d.__effectiveUptime ?? 100);
     const siteAvgUptime = deviceUptimes.length > 0 ? avg(deviceUptimes) : 100;
-    const incFreeCount  = s.activeDevices.filter(d => !s.incidents.find(i => i.DeviceID === d.DeviceID)).length;
+    const siteIncDevIds = new Set(s.incidents.map(i => i.DeviceID));
+    const incFreeCount  = s.activeDevices.filter(d => !siteIncDevIds.has(d.DeviceID)).length;
     const incFreePct    = s.activeDevices.length > 0 ? (incFreeCount / s.activeDevices.length) * 100 : 100;
     const healthScore   = ruleEngine.calculateHealthScore(siteAvgUptime, incFreePct);
 

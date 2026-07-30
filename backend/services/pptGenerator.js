@@ -207,17 +207,25 @@ async function buildPresentation(data, outputPath) {
   // ── SLIDE 2: Executive Summary — All-Sites Table ───────────────────────────
   buildExecSummarySlide(pres, exec, siteSummary, incidents);
 
-  // ── SLIDES 3–26: 8 × 3 Site Review Slides ─────────────────────────────────
-  // Fix #11: use module-level TARGET_SITES — no duplicate const declarations
-  TARGET_SITES.forEach((siteKey, siteIdx) => {
-    const siteData = findSite(siteSummary, siteKey);
-    const siteSws  = devices.filter(d =>
-      (d.SiteID || d.Location || '').toUpperCase().includes(siteKey.split(' ')[0]) &&
+  // Pre-index site switches and site incidents in O(1) Hash Maps for max speed
+  const siteSwsMap = {};
+  const siteIncsMap = {};
+  TARGET_SITES.forEach((siteKey) => {
+    const prefix = siteKey.split(' ')[0];
+    siteSwsMap[siteKey] = devices.filter(d =>
+      (d.SiteID || d.Location || '').toUpperCase().includes(prefix) &&
       /^sw$/i.test(d.DeviceType)
     );
-    const siteIncs = incidents.filter(i =>
-      (i.SiteID || i.Location || '').toUpperCase().includes(siteKey.split(' ')[0])
+    siteIncsMap[siteKey] = incidents.filter(i =>
+      (i.SiteID || i.Location || '').toUpperCase().includes(prefix)
     );
+  });
+
+  // ── SLIDES 3–26: 8 × 3 Site Review Slides ─────────────────────────────────
+  TARGET_SITES.forEach((siteKey, siteIdx) => {
+    const siteData = findSite(siteSummary, siteKey);
+    const siteSws  = siteSwsMap[siteKey] || [];
+    const siteIncs = siteIncsMap[siteKey] || [];
 
     buildSiteOverviewSlide(pres, siteKey, siteData, siteSws, siteIdx + 1);
     buildSiteSwitchSlide(pres, siteKey, siteData, siteSws, siteIdx + 1);
