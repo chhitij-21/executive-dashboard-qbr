@@ -41,7 +41,7 @@ function MainPortal() {
   const [status, setStatus] = useState('idle');
   const [dashboardData, setDashboardData] = useState(null); // No pre-populated data on initial load
 
-  // Fetch & poll for dashboard data with exponential backoff (1.5s → 3 → 6 → 12 → max 20s)
+  // Fetch & poll for dashboard data with exponential backoff (1s → 2s → 4s → 8s → cap 10s)
   useEffect(() => {
     if (!jobId) return;
     let isSubscribed = true;
@@ -74,15 +74,19 @@ function MainPortal() {
       if (loaded || !isSubscribed) return;
 
       let timeoutId;
+      let delay = 1000; // start at 1 second
+      const MAX_DELAY = 10000; // cap at 10 seconds
+
       const poll = async () => {
         if (!isSubscribed) return;
         const done = await fetchDashboard();
         if (!done && isSubscribed) {
-          timeoutId = setTimeout(poll, 500);
+          timeoutId = setTimeout(poll, delay);
+          delay = Math.min(delay * 2, MAX_DELAY); // exponential backoff
         }
       };
 
-      timeoutId = setTimeout(poll, 500);
+      timeoutId = setTimeout(poll, delay);
       return () => clearTimeout(timeoutId);
     });
 

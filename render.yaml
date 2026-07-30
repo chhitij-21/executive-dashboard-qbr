@@ -13,6 +13,9 @@ services:
       - key: PORT
         value: 3000
       - key: ADMIN_PASSWORD
-        value: admin123
+        # SECURITY: Do NOT set a plaintext value here.
+        # Set ADMIN_PASSWORD as a Secret in the Render Dashboard:
+        # Dashboard → executive-dashboard-qbr-2 → Environment → Secret Files
+        sync: false
       - key: ALLOWED_ORIGINS
         value: https://executive-dashboard-qbr-2.onrender.com

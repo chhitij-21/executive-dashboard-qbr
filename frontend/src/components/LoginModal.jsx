@@ -5,8 +5,8 @@ import { API_BASE_URL } from '../config/api';
 
 export default function LoginModal({ isOpen, onClose }) {
   const { login, isBackendOffline } = useAuth();
-  const [email, setEmail] = useState('admin@portal.com');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState(import.meta.env.VITE_ADMIN_EMAIL || 'admin@portal.com');
+  const [password, setPassword] = useState(import.meta.env.VITE_ADMIN_PASSWORD || 'admin123');
   const [error, setError] = useState(null);
   const [demoAccounts, setDemoAccounts] = useState([]);
 

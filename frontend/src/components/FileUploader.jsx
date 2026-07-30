@@ -144,17 +144,25 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     }
   };
 
-  // Poll job status until completed or failed
+  // Poll job status until completed or failed with exponential backoff (1s → 2s → 4s → 8s → cap 10s)
   useEffect(() => {
     if (!currentJobId || status !== 'processing') return;
 
     let isSubscribed = true;
     let timerId = null;
+    let delay = 1000;
+    const MAX_DELAY = 10000;
 
     const checkStatus = async () => {
       try {
         const res = await apiFetch(`${API_BASE_URL}/api/status/${currentJobId}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (isSubscribed) {
+            timerId = setTimeout(checkStatus, delay);
+            delay = Math.min(delay * 2, MAX_DELAY);
+          }
+          return;
+        }
         const data = await res.json();
 
         if (!isSubscribed) return;
@@ -167,11 +175,15 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           setStatus('failed');
           setErrorMsg(data.error || 'Report generation failed. Please check your input files.');
         } else {
-          timerId = setTimeout(checkStatus, 500);
+          timerId = setTimeout(checkStatus, delay);
+          delay = Math.min(delay * 2, MAX_DELAY);
         }
       } catch (err) {
         console.error('Job status check error:', err);
-        if (isSubscribed) timerId = setTimeout(checkStatus, 500);
+        if (isSubscribed) {
+          timerId = setTimeout(checkStatus, delay);
+          delay = Math.min(delay * 2, MAX_DELAY);
+        }
       }
     };
 

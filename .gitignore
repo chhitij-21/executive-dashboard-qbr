@@ -30,6 +30,13 @@ data/reports_metadata.json
 .env
 .env.local
 .env.*.local
+frontend/.env          # contains local dev credentials — never commit
+# NOTE: .env.production is committed but contains ONLY empty placeholders.
+#       Set VITE_ADMIN_EMAIL, VITE_ADMIN_PASSWORD, ADMIN_PASSWORD in the
+#       Render Dashboard (Environment > Secret Files) — never in committed files.
+# NOTE: .env.local contains VERCEL_OIDC_TOKEN — verify it is not in git history:
+#       git log --all --oneline -- .env.local
+
 
 # Logs
 *.log

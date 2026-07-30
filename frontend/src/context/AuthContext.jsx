@@ -41,11 +41,14 @@ export function AuthProvider({ children }) {
       }
 
       // Auto-login fallback to ensure authenticated user on initial load
+      // Credentials are read from environment variables; never hardcoded.
+      const _autoEmail    = import.meta.env.VITE_ADMIN_EMAIL    || 'admin@portal.com';
+      const _autoPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
       try {
         const loginRes = await fetch(`${API_BASE_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'admin@portal.com', password: 'admin123' }),
+          body: JSON.stringify({ email: _autoEmail, password: _autoPassword }),
         });
 
         if (loginRes.ok) {
@@ -73,8 +76,8 @@ export function AuthProvider({ children }) {
     checkSession();
   }, []);
 
-  // Fetch client list from backend
-  const refreshClients = async () => {
+  // Fetch client list from backend with auto-retry for Render cold starts
+  const refreshClients = async (retryCount = 0) => {
     try {
       setLoadingClients(true);
       const res = await apiFetch(`${API_BASE_URL}/api/clients`);
@@ -90,12 +93,20 @@ export function AuthProvider({ children }) {
             setActiveClientState(json.clients[0]);
           }
         }
+      } else if (retryCount < 8) {
+        // Render cold start retry: wait 3s and retry up to 8 times (~24s window)
+        setTimeout(() => refreshClients(retryCount + 1), 3000);
       } else {
         setIsBackendOffline(true);
       }
     } catch (err) {
-      console.error('Failed to fetch clients:', err);
-      setIsBackendOffline(true);
+      console.warn(`[AuthContext] Connection attempt ${retryCount + 1} failed (server spinning up...):`, err.message);
+      if (retryCount < 8) {
+        // Render cold start retry: wait 3s and retry up to 8 times (~24s window)
+        setTimeout(() => refreshClients(retryCount + 1), 3000);
+      } else {
+        setIsBackendOffline(true);
+      }
     } finally {
       setLoadingClients(false);
     }
