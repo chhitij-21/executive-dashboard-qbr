@@ -763,8 +763,6 @@ function MainPortal() {
           />
         )}
 
-        {tab === 'analyzer' && <ExcelAnalyzer />}
-
         {tab === 'clients' && <ClientManager />}
       </main>
 
