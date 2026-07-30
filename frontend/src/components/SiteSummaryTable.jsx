@@ -21,22 +21,22 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
   }
 
   return (
-    <div className="data-table-container">
-      <div className="table-scroll">
-        <table className="data-table">
+    <div className="data-table-container" style={{ overflow: 'visible' }}>
+      <div className="table-scroll-no-vertical" style={{ overflowX: 'auto', overflowY: 'visible', maxHeight: 'none' }}>
+        <table className="data-table site-summary-master-table">
           <thead>
             <tr>
-              <th>Site / Location</th>
-              <th>Devices</th>
-              <th>Switches</th>
-              <th>APs</th>
-              <th>Switch Uptime</th>
-              <th>Total Incidents</th>
-              <th>AP Incidents (Unique APs)</th>
-              <th>Incident-Free %</th>
-              <th>Health Score</th>
-              <th>Primary RCA (All)</th>
-              <th>Primary RCA for APs</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }}>Site / Location</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }} className="cell-center">Devices</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }} className="cell-center">Switches</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }} className="cell-center">APs</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }} className="cell-center">Switch Uptime</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }} className="cell-center">Site Tickets</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }} className="cell-center">AP Incidents (Unique)</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }} className="cell-center">Incident-Free %</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }} className="cell-center">Health Score</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }}>Primary RCA (All)</th>
+              <th style={{ padding: '0.6rem 0.75rem', fontSize: '0.8rem' }}>Primary RCA for APs</th>
             </tr>
           </thead>
           <tbody>
@@ -60,37 +60,45 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
                   }}
                   className={isSelected ? 'selected-site-row' : ''}
                 >
-                  <td><strong>🏢 {site.siteId}</strong></td>
-                  <td className="cell-center">{site.deviceCount}</td>
-                  <td className="cell-center">{site.switchCount}</td>
-                  <td className="cell-center">{site.apCount}</td>
-                  <td className="cell-center">
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }}><strong>🏢 {site.siteId}</strong></td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} className="cell-center">{site.deviceCount}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} className="cell-center">{site.switchCount}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} className="cell-center">{site.apCount}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} className="cell-center">
                     {site.switchUptime === 'Data Not Available' || site.switchUptime === null
                       ? <span className="na-text">N/A</span>
                       : `${site.switchUptime}%`}
                   </td>
-                  <td className="cell-center">
-                    <strong style={{ color: site.incidentCount > 0 ? '#dc2626' : '#16a34a' }}>
-                      {site.incidentCount ?? 0}
-                    </strong>
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} className="cell-center">
+                    <span style={{
+                      padding: '0.2rem 0.55rem',
+                      borderRadius: '12px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      background: site.incidentCount > 0 ? 'rgba(220, 38, 38, 0.12)' : 'rgba(22, 163, 74, 0.12)',
+                      color: site.incidentCount > 0 ? '#dc2626' : '#16a34a',
+                      border: `1px solid ${site.incidentCount > 0 ? 'rgba(220, 38, 38, 0.3)' : 'rgba(22, 163, 74, 0.3)'}`
+                    }}>
+                      🎟️ {site.incidentCount ?? 0} Tickets
+                    </span>
                   </td>
-                  <td className="cell-center">{site.apIncidents ?? 0} ({site.uniqueAPsWithIncidents ?? 0})</td>
-                  <td className="cell-center">
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} className="cell-center">{site.apIncidents ?? 0} ({site.uniqueAPsWithIncidents ?? 0})</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} className="cell-center">
                     {site.incidentFreePercent === 'Data Not Available' || site.incidentFreePercent === null
                       ? <span className="na-text">N/A</span>
                       : `${site.incidentFreePercent}%`}
                   </td>
-                  <td className="cell-center">
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} className="cell-center">
                     <span className={`health-badge ${healthColor}`}>
                       {site.healthScore === 'Data Not Available' || site.healthScore === null ? 'N/A' : `${site.healthScore} (${site.healthLabel})`}
                     </span>
                   </td>
-                  <td title={site.primaryRca}>
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} title={site.primaryRca}>
                     {site.primaryRca === 'Data Not Available' || !site.primaryRca
                       ? <span className="na-text">None</span>
                       : site.primaryRca}
                   </td>
-                  <td title={site.primaryRcaForAPs}>
+                  <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.82rem' }} title={site.primaryRcaForAPs}>
                     {site.primaryRcaForAPs === 'Data Not Available' || !site.primaryRcaForAPs
                       ? <span className="na-text">None</span>
                       : site.primaryRcaForAPs}

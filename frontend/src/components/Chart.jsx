@@ -21,23 +21,30 @@ export default function Chart({ type = 'bar', data, options = {} }) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#E6EDF3' } },
+        legend: {
+          labels: {
+            color: '#0f172a',
+            font: { weight: 'bold', size: 12 },
+            padding: 12,
+          },
+        },
         tooltip: {
-          backgroundColor: '#161B22',
-          titleColor: '#E6EDF3',
-          bodyColor: '#8B949E',
-          borderColor: '#30363D',
+          backgroundColor: '#0f172a',
+          titleColor: '#ffffff',
+          bodyColor: '#f1f5f9',
+          borderColor: '#334155',
           borderWidth: 1,
+          padding: 10,
         },
       },
       scales: type === 'pie' || type === 'doughnut' ? {} : {
         x: {
-          ticks: { color: '#8B949E', maxRotation: 45 },
-          grid: { color: '#21262D' },
+          ticks: { color: '#0f172a', font: { weight: 'bold' }, maxRotation: 45 },
+          grid: { color: '#e2e8f0' },
         },
         y: {
-          ticks: { color: '#8B949E' },
-          grid: { color: '#21262D' },
+          ticks: { color: '#0f172a', font: { weight: 'bold' } },
+          grid: { color: '#e2e8f0' },
         },
       },
     };

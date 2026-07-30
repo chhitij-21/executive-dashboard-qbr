@@ -520,26 +520,56 @@ function MainPortal() {
 
               return (
                 <div className="site-inspector" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '2px dashed var(--border-color, #e2e8f0)' }}>
-                  <h3 style={{ marginBottom: '1rem', color: 'var(--primary-color, #2563eb)' }}>
-                    🏢 Site Inspection Details: {selectedSite}
-                  </h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.8rem' }}>
+                    <h3 style={{ color: 'var(--primary-color, #2563eb)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      🏢 Site Inspection &amp; Ticket Analytics: {selectedSite}
+                    </h3>
+                    <span style={{
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '20px',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      background: siteIncs.length > 0 ? 'rgba(220, 38, 38, 0.12)' : 'rgba(22, 163, 74, 0.12)',
+                      color: siteIncs.length > 0 ? '#dc2626' : '#16a34a',
+                      border: `1px solid ${siteIncs.length > 0 ? 'rgba(220, 38, 38, 0.3)' : 'rgba(22, 163, 74, 0.3)'}`
+                    }}>
+                      🎟️ {siteIncs.length} Dedicated Site Tickets
+                    </span>
+                  </div>
 
                   <div className="kpi-grid">
-                    <KpiCard title="Site Name" value={selectedSite} />
-                    <KpiCard title="Active Device Count" value={currentSiteData.deviceCount ?? siteActiveDevs.length} />
-                    <KpiCard title="Stock Devices Count" value={currentSiteData.stockCount ?? siteStockDevs.length} />
-                    <KpiCard title="Switch Count" value={currentSiteData.switchCount} />
-                    <KpiCard title="AP Count" value={currentSiteData.apCount} />
-                    <KpiCard title="Incident-Free %" value={currentSiteData.incidentFreePercent ?? '100.00'} unit="%" />
-                    <KpiCard title="Total Incidents" value={currentSiteData.incidentCount ?? siteIncs.length} />
-                    <KpiCard title="Primary RCA (All)" value={currentSiteData.primaryRca ?? 'None'} />
-                    <KpiCard title="Primary RCA for APs" value={currentSiteData.primaryRcaForAPs ?? 'None'} />
+                    <KpiCard title="Site Name" value={selectedSite} icon="🏢" />
+                    <KpiCard title="Active Device Count" value={currentSiteData.deviceCount ?? siteActiveDevs.length} icon="💻" />
+                    <KpiCard title="Stock Devices Count" value={currentSiteData.stockCount ?? siteStockDevs.length} icon="📦" />
+                    <KpiCard title="Switch Count" value={currentSiteData.switchCount} icon="🔌" />
+                    <KpiCard title="AP Count" value={currentSiteData.apCount} icon="📶" />
+                    <KpiCard title="Incident-Free %" value={currentSiteData.incidentFreePercent ?? '100.00'} unit="%" icon="🛡️" />
+                    <KpiCard title="Total Site Tickets" value={currentSiteData.incidentCount ?? siteIncs.length} icon="🎟️" />
+                    <KpiCard title="Primary RCA (All)" value={currentSiteData.primaryRca ?? 'None'} icon="🎯" />
+                    <KpiCard title="Primary RCA for APs" value={currentSiteData.primaryRcaForAPs ?? 'None'} icon="📡" />
+                  </div>
+
+                  {/* Site Dedicated Incident Tickets */}
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <h4 style={{ marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+                      🎟️ Site Dedicated Incident Tickets Log — {selectedSite} ({siteIncs.length} Tickets)
+                    </h4>
+                    {siteIncs.length > 0 ? (
+                      <DataTable
+                        columns={['IncidentNumber', 'DeviceID', 'Location', 'Priority', 'RCA', 'Status']}
+                        rows={siteIncs}
+                      />
+                    ) : (
+                      <div className="alert-box alert-success" style={{ background: '#d4edda', color: '#155724', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #c3e6cb', fontWeight: 500 }}>
+                        ✅ <strong>Zero Incident Tickets Logged</strong> — {selectedSite} operated with 100% SLA compliance throughout the reporting period.
+                      </div>
+                    )}
                   </div>
 
                   {/* Stock Inventory Displayed per Site */}
                   {siteStockDevs.length > 0 && (
                     <div style={{ marginTop: '1.5rem' }}>
-                      <h4>📦 Stock Inventory Devices at {selectedSite} ({siteStockDevs.length})</h4>
+                      <h4 style={{ marginBottom: '0.5rem' }}>📦 Stock Inventory Devices at {selectedSite} ({siteStockDevs.length})</h4>
                       <DataTable
                         columns={['DeviceID', 'DeviceType', 'Location', 'Status']}
                         rows={siteStockDevs}
@@ -549,20 +579,10 @@ function MainPortal() {
 
                   {siteActiveDevs.length > 0 && (
                     <div style={{ marginTop: '1.5rem' }}>
-                      <h4>Registered Active Devices at {selectedSite}</h4>
+                      <h4 style={{ marginBottom: '0.5rem' }}>Registered Active Devices at {selectedSite} ({siteActiveDevs.length})</h4>
                       <DataTable
                         columns={['DeviceID', 'DeviceType', 'Location', 'Rack', 'JFL Uptime %']}
                         rows={siteActiveDevs}
-                      />
-                    </div>
-                  )}
-
-                  {siteIncs.length > 0 && (
-                    <div style={{ marginTop: '1.5rem' }}>
-                      <h4>Incident Logs for {selectedSite} ({siteIncs.length})</h4>
-                      <DataTable
-                        columns={['IncidentNumber', 'DeviceID', 'Location', 'Priority', 'RCA', 'Status']}
-                        rows={siteIncs}
                       />
                     </div>
                   )}
