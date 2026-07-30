@@ -207,8 +207,7 @@ function MainPortal() {
     const allSwitches = (activeDashboardData?.devices || []).filter((d) => {
       if (d.__isStock) return false;
       const type = String(d.DeviceType || '').toLowerCase();
-      const core = String(d.CoreNonCore || '').toLowerCase();
-      return type.includes('sw') || type.includes('switch') || core.includes('core') || core.includes('non');
+      return type.includes('sw') || type.includes('switch') || (!type.includes('ap') && !type.includes('access'));
     });
 
     if (!allSwitches.length) return null;
