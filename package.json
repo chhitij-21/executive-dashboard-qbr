@@ -10,7 +10,7 @@
     "dev": "npm run build && node backend/index.js",
     "dev:backend": "node backend/index.js",
     "dev:frontend": "npx vite --config frontend/vite.config.js",
-    "build": "cd frontend && npm install --include=dev && npm run build",
+    "build": "npm install --prefer-offline && cd frontend && npm install --include=dev --prefer-offline && npm run build",
     "start": "node backend/index.js"
   },
   "dependencies": {
