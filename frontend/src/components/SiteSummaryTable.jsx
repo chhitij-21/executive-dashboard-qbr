@@ -4,7 +4,14 @@ import React from 'react';
  * SiteSummaryTable — per-site breakdown table with health badges and primary RCA for APs.
  */
 export default function SiteSummaryTable({ sites }) {
-  if (!sites || sites.length === 0) {
+  const filteredSites = (sites || []).filter(site => {
+    const name = String(site.siteId || '').toLowerCase().trim();
+    return !['sla_compliance_report', 'sla compliance report', 'raw', 'sheet1', 'jfl', 'unknown'].includes(name) &&
+           !name.includes('sla_compliance') &&
+           !name.includes('sla compliance');
+  });
+
+  if (!filteredSites || filteredSites.length === 0) {
     return (
       <div className="empty-state">
         <span className="empty-state-icon">🏢</span>
@@ -33,7 +40,7 @@ export default function SiteSummaryTable({ sites }) {
             </tr>
           </thead>
           <tbody>
-            {sites.map((site, i) => {
+            {filteredSites.map((site, i) => {
               const healthNum = parseFloat(site.healthScore);
               const healthColor =
                 isNaN(healthNum) ? '' :

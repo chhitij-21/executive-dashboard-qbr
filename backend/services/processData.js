@@ -519,8 +519,15 @@ function buildSiteSummary(allDevices, switches, aps, incidents) {
     }
   });
 
+  const isGenericSite = (id) => {
+    const lower = String(id || '').toLowerCase().trim();
+    return ['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report', 'sla compliance report'].includes(lower) ||
+           lower.includes('sla_compliance') ||
+           lower.includes('sla compliance');
+  };
+
   return Object.entries(sitesMap)
-    .filter(([siteId]) => !['unknown', 'raw', 'sheet1', 'jfl'].includes(siteId.toLowerCase()))
+    .filter(([siteId]) => !isGenericSite(siteId))
     .map(([siteId, s]) => {
     const swUptimes = s.switches.map(d => d.__effectiveUptime ?? 100);
     const switchUptime = swUptimes.length > 0 ? avg(swUptimes).toFixed(2) : '100.00';

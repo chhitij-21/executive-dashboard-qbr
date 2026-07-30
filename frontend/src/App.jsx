@@ -403,15 +403,22 @@ function MainPortal() {
               >
                 🌐 All Sites Overview
               </button>
-              {siteSummary.map((s) => (
-                <button
-                  key={s.siteId}
-                  className={`dash-tab ${selectedSite === s.siteId ? 'active' : ''}`}
-                  onClick={() => { setSelectedSite(s.siteId); setActiveLocation(s.siteId); }}
-                >
-                  🏢 {s.siteId}
-                </button>
-              ))}
+              {siteSummary
+                .filter(s => {
+                  const name = String(s.siteId || '').toLowerCase().trim();
+                  return !['sla_compliance_report', 'sla compliance report', 'raw', 'sheet1', 'jfl', 'unknown'].includes(name) &&
+                         !name.includes('sla_compliance') &&
+                         !name.includes('sla compliance');
+                })
+                .map((s) => (
+                  <button
+                    key={s.siteId}
+                    className={`dash-tab ${selectedSite === s.siteId ? 'active' : ''}`}
+                    onClick={() => { setSelectedSite(s.siteId); setActiveLocation(s.siteId); }}
+                  >
+                    🏢 {s.siteId}
+                  </button>
+                ))}
             </div>
 
             {selectedSite === 'ALL' ? (
