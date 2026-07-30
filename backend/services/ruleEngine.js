@@ -87,7 +87,7 @@ function getHealthLabel(score) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getSLATarget() {
-  return rules.sla?.uptime_target_percent ?? 99.3;
+  return rules.sla?.monthly_uptime_target_percent ?? rules.sla?.uptime_target_percent ?? 99.3;
 }
 
 /**
