@@ -95,14 +95,6 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 2. **`JFL Updated Inventory.xlsx`** (0.09 MB): 9 Worksheets (`Updated inventory`, `Gr._Noida`, `Noida`, `Nagpur`, `Mumbai_DC`, `Mohali`, `Hyderabad`, `Guwahati`, `Bangalore`). 441 total devices (429 active + 12 stock).
 3. **`SLA_Compliance_Report.csv`** (0.29 MB): 839 raw ticket records with hold times, actual resolution minutes, and total resolution minutes.
 
-### Root Cause Distribution (363 Tickets)
-1. **Device Power Issues**: 191 incidents (52.6%) $\rightarrow$ Primary RCA (All) & Primary RCA for APs (57.3%)
-2. **Client Side Activity**: 112 incidents (30.9%)
-3. **New Configuration**: 24 incidents (6.6%)
-4. **Third Party Device issue**: 13 incidents (3.6%)
-5. **Device Boot Issues**: 6 incidents (1.7%)
-6. **Others / Software Bugs / Component Failures**: 17 incidents (4.6%)
-
 ---
 
 ## 6. ⚙️ How the Raw SLA Compliance File is Processed
@@ -150,3 +142,19 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 * The AI Excel Audit pass is **not displayed as a separate standalone navigation tab**.
 * Instead, it operates automatically as a pre-validation step inside the **`📤 Upload & Generate`** workflow.
 * Performs schema validation, discrepancy auditing, duplicate conflict detection, and sheet role verification prior to processing data.
+
+---
+
+## 10. 🚫 Change Request Exclusion & Site Summary Layout Rules
+
+### Change Request Exclusion Rule
+* **Change Requests** (`Category`, `RCA`, `Description` containing `/change|change\s*request|^cr$/i`) are **strictly excluded** from Incident Analytics, RCA Analytics, and Incident Counts.
+* Change Requests are not classified as operational incidents.
+
+### Rack-wise Switch Uptime Summary Layout Rule
+* Display columns: `Site Name`, `Rack Number`, `Switch Count`, `Monthly Uptime %`, `Quarterly Uptime %`.
+* `Min Uptime %` and `Max Uptime %` are **removed** per executive specification.
+
+### Site Summary & Inspector Layout Rules
+* **Overall Uptime** column is **removed** from `SiteSummaryTable` and Site Inspector KPI cards.
+* **Persistent All Sites Table**: Clicking any individual site pill highlights that site row in the main `SiteSummaryTable` while preserving all other site rows in view. Detailed inspection cards and logs render immediately below the main table.
