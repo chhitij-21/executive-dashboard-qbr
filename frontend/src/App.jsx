@@ -132,6 +132,8 @@ function MainPortal() {
       return normalizeLoc(d.SiteID || d.Location || '') === normalizedFilter;
     });
 
+    if (devices.length === 0) return dashboardData;
+
     const incidents = (dashboardData.incidents || []).filter((i) => {
       return normalizeLoc(i.SiteID || i.Location || '') === normalizedFilter;
     });

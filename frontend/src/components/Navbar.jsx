@@ -7,7 +7,10 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
 
   const locationsList = React.useMemo(() => {
     const defaultLocs = activeClient?.locations || ['All Locations'];
-    const merged = Array.from(new Set(['All Locations', ...reportSites, ...defaultLocs]));
+    const validReportSites = (reportSites || []).filter(s =>
+      s && !['sla_compliance_report', 'raw', 'sheet1', 'jfl', 'unknown'].includes(String(s).trim().toLowerCase())
+    );
+    const merged = Array.from(new Set(['All Locations', ...validReportSites, ...defaultLocs]));
     return merged;
   }, [activeClient, reportSites]);
 
