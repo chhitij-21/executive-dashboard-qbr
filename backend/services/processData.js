@@ -202,8 +202,15 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   }
 
   // ── 5. Parse incidents ────────────────────────────────────────────────────
-  const incidents = parseIncidentSheet(rawIncidentRows);
-  log(`Parsed incidents: ${incidents.length}`);
+  let incidents = parseIncidentSheet(rawIncidentRows);
+  const hasAccountCol = rawIncidentRows.some(r => r['Account Name'] || r['AccountName'] || r['Customer Name'] || r['Customer']);
+  if (hasAccountCol) {
+    incidents = incidents.filter(i => {
+      const acc = String(i.AccountName || '').trim();
+      return !acc || /jubilant|jfl/i.test(acc);
+    });
+  }
+  log(`Parsed incidents for target customer: ${incidents.length}`);
 
   // Build device location map from inventory to enrich incidents missing explicit site locations
   const devLocMap = {};

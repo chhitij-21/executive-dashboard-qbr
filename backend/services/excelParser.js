@@ -163,6 +163,7 @@ function parseIncidentSheet(rows) {
       OpenTime:       row['Created Time'] || row['Open Time'] || row['OpenTime'] || '',
       ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
       NewSerial:      row['New Serial'] || row['Replacement Serial'] || '',
+      AccountName:    row['Account Name'] || row['AccountName'] || row['Customer Name'] || row['Customer'] || '',
       ProactiveUptimePct:  row['Proactive -Uptime%'] || row['Average of Proactive -Uptime%'] || '',
       JFLUptimePct:        row['JFL -Uptime %'] || row['Average of JFL -Uptime %'] || '',
       ActualResolutionMin: row['Actual Resolution Time (min)'] || row['Actual Resolution Time'] || '',
