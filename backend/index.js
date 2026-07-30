@@ -357,24 +357,32 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
     const history = historyService.getHistory();
     job = history.find((h) => h.status === 'completed') || Object.values(jobs).find((j) => j.status === 'completed');
 
-    if (!job && reqJobId === 'default') {
-      // Process default master dataset only when explicitly requested via 'default' route
-      const incPath = fs.existsSync(path.resolve('jfl incidents.xlsx'))
-        ? path.resolve('jfl incidents.xlsx')
-        : path.join(__dirname, '..', 'jfl incidents.xlsx');
-      const invPath = fs.existsSync(path.resolve('JFL Updated Inventory.xlsx'))
-        ? path.resolve('JFL Updated Inventory.xlsx')
-        : path.join(__dirname, '..', 'JFL Updated Inventory.xlsx');
+    if (!job) {
+      // Process default master dataset if no completed report exists in history
+      const incCandidates = [
+        path.resolve('jfl incidents.xlsx'),
+        path.join(__dirname, '..', 'jfl incidents.xlsx'),
+        path.join(__dirname, '..', '..', 'New folder', 'jfl incidents.xlsx'),
+        path.join(__dirname, '..', '..', 'New folder', 'SLA_Compliance_Report.csv'),
+      ];
+      const invCandidates = [
+        path.resolve('JFL Updated Inventory.xlsx'),
+        path.join(__dirname, '..', 'JFL Updated Inventory.xlsx'),
+        path.join(__dirname, '..', '..', 'New folder', 'JFL Updated Inventory.xlsx'),
+      ];
 
-      if (fs.existsSync(incPath)) {
+      const incPath = incCandidates.find((p) => fs.existsSync(p));
+      const invPath = invCandidates.find((p) => fs.existsSync(p));
+
+      if (incPath) {
         try {
-          console.log('[server] Processing default sample dataset upon manual user request...');
+          console.log('[server] Auto-processing master JFL dataset for initial dashboard load...');
           const autoJobId = 'master-jfl-q1-fy2026';
           const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
 
           const result = await processJFLWorkbooks(
             incPath,
-            fs.existsSync(invPath) ? invPath : null,
+            invPath || null,
             outputDir
           );
 

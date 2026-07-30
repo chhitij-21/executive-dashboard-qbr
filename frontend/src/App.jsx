@@ -731,7 +731,7 @@ function MainPortal() {
         {tab === 'clients' && <ClientManager />}
       </main>
 
-      <LoginModal isOpen={!user || isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+      <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
     </div>
   );
 }
