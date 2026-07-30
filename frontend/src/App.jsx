@@ -32,36 +32,14 @@ const normalizeLoc = (str) => {
 
 function MainPortal() {
   const { user, activeClient, activeLocation, setActiveLocation } = useAuth();
-  const [tab, setTab] = useState('dashboard'); // Default to executive dashboard view
+  const [tab, setTab] = useState('upload'); // Land directly on File Upload view per strict business rule
   const [dashTab, setDashTab] = useState('executive');
   const [selectedSite, setSelectedSite] = useState('ALL');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState('idle');
-  const [dashboardData, setDashboardData] = useState(defaultDashboardData);
-
-  // On initial mount, fetch the latest completed report from backend if available
-  useEffect(() => {
-    let isSubscribed = true;
-    const fetchInitialData = async () => {
-      try {
-        const res = await apiFetch(`${API_BASE_URL}/api/dashboard/latest`);
-        if (res.ok) {
-          const json = await res.json();
-          if (json && !json.error && isSubscribed) {
-            setDashboardData(json);
-            if (json.metadata?.jobId) setJobId(json.metadata.jobId);
-          }
-        }
-      } catch (err) {
-        console.warn('Initial dashboard fetch fallback to default dataset:', err);
-      }
-    };
-
-    fetchInitialData();
-    return () => { isSubscribed = false; };
-  }, []);
+  const [dashboardData, setDashboardData] = useState(null); // No pre-populated data on initial load
 
   // Fetch & poll for dashboard data with exponential backoff (1.5s → 3 → 6 → 12 → max 20s)
   useEffect(() => {
