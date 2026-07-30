@@ -308,65 +308,68 @@ app.post(['/api/upload', '/upload'], requireAuth, upload.fields([
     metadata: initialMeta
   };
 
-  // 3. Trigger Existing Processing Engine (UNTOUCHED Core logic)
-  processJFLWorkbooks(incidentFile.path, inventoryFile ? inventoryFile.path : null, outputDir)
-    .then((result) => {
-      const isSuccess = result && result.success;
-      const status = isSuccess ? 'completed' : 'failed';
+  // 3. Trigger Existing Processing Engine asynchronously via setImmediate
+  // Ensures res.json() flushes HTTP 200 to client/proxy BEFORE heavy background processing starts.
+  setImmediate(() => {
+    processJFLWorkbooks(incidentFile.path, inventoryFile ? inventoryFile.path : null, outputDir)
+      .then((result) => {
+        const isSuccess = result && result.success;
+        const status = isSuccess ? 'completed' : 'failed';
 
-      const dashboardPath = result?.dashboardPath || path.join(outputDir, 'dashboard_data.json');
-      const pptPath = result?.pptPath || path.join(outputDir, 'QBR_Presentation.pptx');
-      const reportPath = result?.reportPath || path.join(outputDir, 'validation_report.md');
-      const dataQualityPath = result?.dataQualityPath || path.join(outputDir, 'data_quality_report.md');
-      const processingLogPath = result?.processingLogPath || path.join(outputDir, 'processing_log.md');
+        const dashboardPath = result?.dashboardPath || path.join(outputDir, 'dashboard_data.json');
+        const pptPath = result?.pptPath || path.join(outputDir, 'QBR_Presentation.pptx');
+        const reportPath = result?.reportPath || path.join(outputDir, 'validation_report.md');
+        const dataQualityPath = result?.dataQualityPath || path.join(outputDir, 'data_quality_report.md');
+        const processingLogPath = result?.processingLogPath || path.join(outputDir, 'processing_log.md');
 
-      const updatedJob = {
-        status,
-        ...result,
-        dashboardPath: (dashboardPath && fs.existsSync(dashboardPath)) ? dashboardPath : null,
-        pptPath: (pptPath && fs.existsSync(pptPath)) ? pptPath : null,
-        reportPath: (reportPath && fs.existsSync(reportPath)) ? reportPath : null,
-        dataQualityPath: (dataQualityPath && fs.existsSync(dataQualityPath)) ? dataQualityPath : null,
-        processingLogPath: (processingLogPath && fs.existsSync(processingLogPath)) ? processingLogPath : null,
-      };
+        const updatedJob = {
+          status,
+          ...result,
+          dashboardPath: (dashboardPath && fs.existsSync(dashboardPath)) ? dashboardPath : null,
+          pptPath: (pptPath && fs.existsSync(pptPath)) ? pptPath : null,
+          reportPath: (reportPath && fs.existsSync(reportPath)) ? reportPath : null,
+          dataQualityPath: (dataQualityPath && fs.existsSync(dataQualityPath)) ? dataQualityPath : null,
+          processingLogPath: (processingLogPath && fs.existsSync(processingLogPath)) ? processingLogPath : null,
+        };
 
-      jobs[jobId] = updatedJob;
+        jobs[jobId] = updatedJob;
 
-      // Update persistent metadata history
-      historyService.recordReport({
-        jobId,
-        clientId,
-        clientName,
-        location,
-        reportPeriod,
-        uploadedBy,
-        status,
-        dashboardPath: updatedJob.dashboardPath,
-        pptPath: updatedJob.pptPath,
-        reportPath: updatedJob.reportPath,
-        dataQualityPath: updatedJob.dataQualityPath,
-        processingLogPath: updatedJob.processingLogPath,
-        error: result?.error || null,
+        // Update persistent metadata history
+        historyService.recordReport({
+          jobId,
+          clientId,
+          clientName,
+          location,
+          reportPeriod,
+          uploadedBy,
+          status,
+          dashboardPath: updatedJob.dashboardPath,
+          pptPath: updatedJob.pptPath,
+          reportPath: updatedJob.reportPath,
+          dataQualityPath: updatedJob.dataQualityPath,
+          processingLogPath: updatedJob.processingLogPath,
+          error: result?.error || null,
+        });
+      })
+      .catch((err) => {
+        console.error('[index] Engine error:', err.message);
+        jobs[jobId] = { status: 'error', error: err.message };
+        historyService.recordReport({
+          jobId,
+          clientId,
+          clientName,
+          location,
+          reportPeriod,
+          uploadedBy,
+          status: 'error',
+          error: err.message,
+        });
+      })
+      .finally(() => {
+        // 4. PRIVACY ENFORCEMENT: Delete raw Excel upload files post-processing
+        historyService.cleanupTempFiles([incidentFile.path, inventoryFile?.path]);
       });
-    })
-    .catch((err) => {
-      console.error('[index] Engine error:', err.message);
-      jobs[jobId] = { status: 'error', error: err.message };
-      historyService.recordReport({
-        jobId,
-        clientId,
-        clientName,
-        location,
-        reportPeriod,
-        uploadedBy,
-        status: 'error',
-        error: err.message,
-      });
-    })
-    .finally(() => {
-      // 4. PRIVACY ENFORCEMENT: Delete raw Excel upload files post-processing
-      historyService.cleanupTempFiles([incidentFile.path, inventoryFile?.path]);
-    });
+  });
 
   res.json({ jobId, status: 'processing', metadata: initialMeta });
 });
