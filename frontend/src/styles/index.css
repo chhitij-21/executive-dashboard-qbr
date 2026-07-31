@@ -1559,6 +1559,146 @@ body {
 .progress-yellow{ background: linear-gradient(90deg, #d97706, #f59e0b); }
 .progress-red   { background: linear-gradient(90deg, #dc2626, #ef4444); }
 
+/* ── Mobile & Tablet Responsiveness ─────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .nav-bar {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+  .nav-selectors {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .nav-tabs {
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 0.25rem;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    font-size: 13px;
+  }
+  
+  .app-container {
+    padding: 0 0.5rem;
+  }
+
+  .nav-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 0.75rem 0.75rem;
+  }
+
+  .nav-brand {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .nav-selectors {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .selector-group {
+    width: 100%;
+  }
+
+  .nav-select {
+    width: 100%;
+  }
+
+  .nav-tabs {
+    display: flex;
+    overflow-x: auto;
+    width: 100%;
+    gap: 0.35rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nav-tabs button {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+    white-space: nowrap;
+  }
+
+  .exec-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .exec-banner-badges {
+    width: 100%;
+  }
+
+  .dash-tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dash-tab {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    padding: 0.45rem 0.75rem;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+    gap: 0.6rem !important;
+  }
+
+  .kpi-card {
+    padding: 0.75rem !important;
+  }
+
+  .kpi-value {
+    font-size: 1.25rem !important;
+  }
+
+  .kpi-label {
+    font-size: 0.75rem !important;
+  }
+
+  .data-table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+  }
+
+  .data-table {
+    min-width: 650px !important;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .download-header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .btn-primary {
+    width: 100%;
+    text-align: center;
+  }
+}
+
 
 
 
