@@ -65,12 +65,30 @@ export default function SiteInspector({
       }));
   }, [currentSiteData, devices, targetNormSite]);
 
+  // Device lookup map to resolve site location for incidents missing explicit site tags
+  const devToSiteMap = useMemo(() => {
+    const map = {};
+    devices.forEach((d) => {
+      const site = d.SiteID || d.Location;
+      if (site) {
+        if (d.DeviceID) map[d.DeviceID] = site;
+        if (d.SerialNo) map[d.SerialNo] = site;
+        if (d.Hostname) map[d.Hostname] = site;
+      }
+    });
+    return map;
+  }, [devices]);
+
   // Memoized tickets & incidents for target site
   const siteIncidents = useMemo(() => {
-    return incidents.filter(
-      (i) => normalizeLoc(i.SiteID || i.Location || '') === targetNormSite
-    );
-  }, [incidents, targetNormSite]);
+    return incidents.filter((i) => {
+      const rawLoc = String(i.SiteID || i.Location || '').trim();
+      const isGeneric = !rawLoc || ['raw', 'sheet1', 'jfl', 'unknown', 'sla_compliance_report', 'sla compliance report'].includes(rawLoc.toLowerCase()) || rawLoc.toLowerCase().includes('sla_compliance') || rawLoc.toLowerCase().includes('sla compliance');
+      const devLoc = devToSiteMap[i.DeviceID] || devToSiteMap[i.SerialNo] || devToSiteMap[i.Hostname];
+      const resolvedSite = (!isGeneric ? rawLoc : null) || devLoc || 'Unknown';
+      return normalizeLoc(resolvedSite) === targetNormSite;
+    });
+  }, [incidents, devToSiteMap, targetNormSite]);
 
   // Incident breakdown counts
   const incidentBreakdown = useMemo(() => {

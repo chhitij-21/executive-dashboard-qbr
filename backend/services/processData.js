@@ -253,15 +253,18 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // Build device location map from inventory to enrich incidents missing explicit site locations
   const devLocMap = {};
   devices.forEach((d) => {
-    if ((d.DeviceID || d.SerialNo) && (d.SiteID || d.Location)) {
-      devLocMap[d.DeviceID] = d.SiteID || d.Location;
-      if (d.SerialNo) devLocMap[d.SerialNo] = d.SiteID || d.Location;
+    const site = d.SiteID || d.Location;
+    if (site) {
+      if (d.DeviceID) devLocMap[d.DeviceID] = site;
+      if (d.SerialNo) devLocMap[d.SerialNo] = site;
+      if (d.Hostname) devLocMap[d.Hostname] = site;
     }
   });
 
   incidents.forEach((inc) => {
-    const isGenericLoc = !inc.Location || ['unknown', 'sheet1', 'raw', 'jfl'].includes(inc.Location.toLowerCase());
-    const matchedLoc = devLocMap[inc.DeviceID] || devLocMap[inc.SerialNo];
+    const rawLoc = String(inc.Location || inc.SiteID || '').toLowerCase().trim();
+    const isGenericLoc = !rawLoc || ['unknown', 'sheet1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report'].includes(rawLoc) || rawLoc.includes('sla_compliance') || rawLoc.includes('sla compliance');
+    const matchedLoc = devLocMap[inc.DeviceID] || devLocMap[inc.SerialNo] || devLocMap[inc.Hostname];
     if (isGenericLoc && matchedLoc) {
       const resolvedSite = normalizeSiteName(matchedLoc);
       inc.Location = resolvedSite;
@@ -546,14 +549,19 @@ function buildSiteSummary(allDevices, switches, aps, incidents) {
 
   const devToSiteMap = {};
   allDevices.forEach(d => {
-    if (d.DeviceID) devToSiteMap[d.DeviceID] = d.SiteID || d.Location;
+    const site = d.SiteID || d.Location;
+    if (site) {
+      if (d.DeviceID) devToSiteMap[d.DeviceID] = site;
+      if (d.SerialNo) devToSiteMap[d.SerialNo] = site;
+      if (d.Hostname) devToSiteMap[d.Hostname] = site;
+    }
   });
 
   incidents.forEach(inc => {
-    const devSite = devToSiteMap[inc.DeviceID];
-    const rawSite = inc.SiteID || inc.Location || '';
-    const isGeneric = !rawSite || ['raw', 'sheet1', 'jfl', 'unknown'].includes(rawSite.toLowerCase());
-    const site = devSite || (!isGeneric ? rawSite : 'Unknown');
+    const devSite = devToSiteMap[inc.DeviceID] || devToSiteMap[inc.SerialNo] || devToSiteMap[inc.Hostname];
+    const rawSite = String(inc.SiteID || inc.Location || '').trim();
+    const isGeneric = !rawSite || ['raw', 'sheet1', 'jfl', 'unknown', 'sla_compliance_report', 'sla compliance report'].includes(rawSite.toLowerCase()) || rawSite.toLowerCase().includes('sla_compliance') || rawSite.toLowerCase().includes('sla compliance');
+    const site = (!isGeneric ? rawSite : null) || devSite || 'Unknown';
 
     if (site && site !== 'Unknown') {
       if (!sitesMap[site]) sitesMap[site] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
