@@ -523,12 +523,12 @@ function MainPortal() {
           <div className="section-body card pad-md">
             <h3 className="section-title">Switch Analytics</h3>
             <div className="kpi-grid">
-              <KpiCard title="Total Switches" value={switchAn.totalSwitches ?? 0} icon="🔌" />
-              <KpiCard title="Core Switches" value={switchAn.coreSwitches ?? 0} icon="🟣" />
-              <KpiCard title="Non-Core Switches" value={switchAn.nonCoreSwitches ?? 0} icon="🔵" />
-              <KpiCard title="Core Switch Uptime" value={switchAn.coreUptime ?? '100.00'} unit="%" icon="⚡" />
-              <KpiCard title="Non-Core Switch Uptime" value={switchAn.nonCoreUptime ?? '100.00'} unit="%" icon="⚡" />
-              <KpiCard title="Total Switch Incidents" value={switchAn.switchIncidents ?? switchAn.totalSwitchIncidents ?? 0} icon="🚨" />
+              <KpiCard title="Total Switches" value={switchAn.totalSwitches ?? 0} />
+              <KpiCard title="Core Switches" value={switchAn.coreSwitches ?? 0} />
+              <KpiCard title="Non-Core Switches" value={switchAn.nonCoreSwitches ?? 0} />
+              <KpiCard title="Core Switch Uptime" value={switchAn.coreUptime ?? '100.00'} unit="%" />
+              <KpiCard title="Non-Core Switch Uptime" value={switchAn.nonCoreUptime ?? '100.00'} unit="%" />
+              <KpiCard title="Total Switch Incidents" value={switchAn.switchIncidents ?? switchAn.totalSwitchIncidents ?? 0} />
             </div>
 
             {switchAn.top10SwitchOutages?.length > 0 && (
@@ -549,7 +549,7 @@ function MainPortal() {
                   Rack-wise Switch Uptime Summary
                 </h4>
                 <DataTable
-                  columns={['site', 'rack', 'deviceCount', 'monthlyUptime', 'quarterlyUptime', 'minUptime', 'maxUptime']}
+                  columns={['site', 'rack', 'deviceCount', 'monthlyUptime', 'quarterlyUptime']}
                   rows={switchAn.rackwiseUptime}
                 />
               </div>
