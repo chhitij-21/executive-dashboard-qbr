@@ -1,7 +1,8 @@
 import React from 'react';
 
 /**
- * SiteSummaryTable — per-site breakdown table with health badges and primary RCA for APs.
+ * SiteSummaryTable — Executive overview table displaying high-level operational KPIs.
+ * Features 100% responsive column width without horizontal scrolling.
  */
 export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) {
   const filteredSites = (sites || []).filter(site => {
@@ -13,9 +14,8 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
 
   if (!filteredSites || filteredSites.length === 0) {
     return (
-      <div className="empty-state">
-        <span className="empty-state-icon">🏢</span>
-        <p>No site data available.</p>
+      <div className="empty-state" style={{ padding: '2rem', textAlign: 'center' }}>
+        <p style={{ color: 'var(--text-secondary)' }}>No site overview data available.</p>
       </div>
     );
   }
@@ -32,7 +32,7 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
               <th style={{ width: '7%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">APs</th>
               <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Switch Uptime</th>
               <th style={{ width: '13%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">AP Incidents (Unique)</th>
-              <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Incident-Free %</th>
+              <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Incident Free %</th>
               <th style={{ width: '13%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Health Score</th>
               <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Primary RCA (All)</th>
               <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Primary RCA for APs</th>
@@ -60,7 +60,7 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
                   className={isSelected ? 'selected-site-row' : ''}
                 >
                   <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={site.siteId}>
-                    <strong>🏢 {site.siteId}</strong>
+                    <strong>{site.siteId}</strong>
                   </td>
                   <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">{site.deviceCount}</td>
                   <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">{site.switchCount}</td>

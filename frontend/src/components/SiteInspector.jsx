@@ -3,9 +3,10 @@ import KpiCard from './KpiCard';
 import DataTable from './DataTable';
 
 /**
- * SiteInspector — Operational Site Dashboard & Ticket Analytics.
- * Renders executive site KPIs, dedicated ticket analytics with search, sorting, filtering,
- * and active/stock device breakdown tables.
+ * SiteInspector — Enterprise Operational Site Dashboard & Ticket Analytics.
+ * Renders complete site operational metrics, incident & ticket analytics,
+ * search/filter controls, and active/stock inventory breakdown tables.
+ * Clean, professional executive styling with zero emojis.
  */
 export default function SiteInspector({
   siteId,
@@ -19,7 +20,7 @@ export default function SiteInspector({
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('date_desc');
   const [ticketPage, setTicketPage] = useState(1);
-  const [activeSubTab, setActiveSubTab] = useState('tickets'); // 'tickets' | 'active_devs' | 'stock_devs'
+  const [activeSubTab, setActiveSubTab] = useState('tickets'); // 'tickets' | 'incidents' | 'active_devs' | 'stock_devs'
 
   const PAGE_SIZE = 10;
 
@@ -64,14 +65,51 @@ export default function SiteInspector({
       }));
   }, [currentSiteData, devices, targetNormSite]);
 
-  // Memoized tickets for target site
-  const siteTickets = useMemo(() => {
+  // Memoized tickets & incidents for target site
+  const siteIncidents = useMemo(() => {
     return incidents.filter(
       (i) => normalizeLoc(i.SiteID || i.Location || '') === targetNormSite
     );
   }, [incidents, targetNormSite]);
 
-  // Calculated ticket KPI metrics
+  // Incident breakdown counts
+  const incidentBreakdown = useMemo(() => {
+    let apIncidents = 0;
+    let switchIncidents = 0;
+    let otherIncidents = 0;
+    const uniqueAPs = new Set();
+    const rcaCounts = {};
+
+    siteIncidents.forEach((inc) => {
+      const devType = String(inc.DeviceType || '').toLowerCase();
+      const devId = String(inc.DeviceID || inc.SerialNo || '').toLowerCase();
+
+      if (devType.includes('ap') || devId.includes('ap') || devType.includes('access point')) {
+        apIncidents++;
+        if (inc.DeviceID || inc.SerialNo) uniqueAPs.add(inc.DeviceID || inc.SerialNo);
+      } else if (devType.includes('switch') || devId.includes('sw')) {
+        switchIncidents++;
+      } else {
+        otherIncidents++;
+      }
+
+      const rca = inc.RCA || 'Unknown';
+      rcaCounts[rca] = (rcaCounts[rca] || 0) + 1;
+    });
+
+    const topRca = Object.entries(rcaCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'None';
+
+    return {
+      total: siteIncidents.length,
+      apIncidents,
+      switchIncidents,
+      otherIncidents,
+      uniqueAPsCount: uniqueAPs.size,
+      topRca,
+    };
+  }, [siteIncidents]);
+
+  // Ticket KPI metrics
   const ticketMetrics = useMemo(() => {
     let openCount = 0;
     let closedCount = 0;
@@ -79,7 +117,7 @@ export default function SiteInspector({
     let totalDuration = 0;
     let durationCount = 0;
 
-    siteTickets.forEach((t) => {
+    siteIncidents.forEach((t) => {
       const st = String(t.Status || '').toLowerCase();
       if (st.includes('closed') || st.includes('resolved') || st.includes('complete')) {
         closedCount++;
@@ -102,19 +140,18 @@ export default function SiteInspector({
     const avgResTime = durationCount > 0 ? (totalDuration / durationCount).toFixed(1) : '2.4';
 
     return {
-      total: siteTickets.length,
+      total: siteIncidents.length,
       open: openCount,
       closed: closedCount,
       critical: criticalCount,
       avgResTime,
     };
-  }, [siteTickets]);
+  }, [siteIncidents]);
 
   // Filtered & sorted ticket list
   const processedTickets = useMemo(() => {
-    let list = [...siteTickets];
+    let list = [...siteIncidents];
 
-    // Search filter
     if (ticketSearch.trim()) {
       const query = ticketSearch.trim().toLowerCase();
       list = list.filter((t) => {
@@ -133,7 +170,6 @@ export default function SiteInspector({
       });
     }
 
-    // Priority filter
     if (priorityFilter !== 'ALL') {
       list = list.filter((t) => {
         const prio = String(t.Priority || '').toLowerCase();
@@ -144,7 +180,6 @@ export default function SiteInspector({
       });
     }
 
-    // Status filter
     if (statusFilter !== 'ALL') {
       list = list.filter((t) => {
         const st = String(t.Status || '').toLowerCase();
@@ -154,7 +189,6 @@ export default function SiteInspector({
       });
     }
 
-    // Sorting
     list.sort((a, b) => {
       if (sortBy === 'priority') {
         const pA = String(a.Priority || '');
@@ -169,16 +203,14 @@ export default function SiteInspector({
       if (sortBy === 'rca') {
         return String(a.RCA || '').localeCompare(String(b.RCA || ''));
       }
-      // Default: date_desc (ticket number / created time)
       const tA = String(a.TicketNumber || a.IncidentNumber || '');
       const tB = String(b.TicketNumber || b.IncidentNumber || '');
       return tB.localeCompare(tA);
     });
 
     return list;
-  }, [siteTickets, ticketSearch, priorityFilter, statusFilter, sortBy]);
+  }, [siteIncidents, ticketSearch, priorityFilter, statusFilter, sortBy]);
 
-  // Paginated tickets
   const totalPages = Math.ceil(processedTickets.length / PAGE_SIZE) || 1;
   const paginatedTickets = useMemo(() => {
     const start = (ticketPage - 1) * PAGE_SIZE;
@@ -190,8 +222,8 @@ export default function SiteInspector({
       {/* Header Banner */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--primary-color, #2563eb)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            🏢 Site Inspection & Operational Dashboard: <strong>{siteId}</strong>
+          <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--primary-color, #2563eb)', fontWeight: 700 }}>
+            Site Operational Inspection: <strong>{siteId}</strong>
           </h3>
           <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
             Location specific breakdown of switches, APs, stock inventory, and source incident tickets.
@@ -199,7 +231,7 @@ export default function SiteInspector({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span className="status-badge completed" style={{ fontSize: '0.78rem' }}>
-            ✓ Verified SLA Engine
+            Verified SLA Engine
           </span>
           {onClose && (
             <button
@@ -207,22 +239,22 @@ export default function SiteInspector({
               className="btn-action-sm"
               style={{ padding: '0.35rem 0.75rem', background: '#f1f5f9', border: '1px solid #cbd5e1', cursor: 'pointer', fontWeight: 600 }}
             >
-              ✖ Close Site View
+              Close Site View
             </button>
           )}
         </div>
       </div>
 
-      {/* High-Level Site KPIs Grid */}
+      {/* High-Level Site Executive KPIs Grid */}
       <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
-        <KpiCard title="Site Name" value={siteId} icon="🏢" />
-        <KpiCard title="Active Devices" value={currentSiteData.deviceCount ?? siteActiveDevices.length} icon="💻" />
-        <KpiCard title="Stock Devices" value={currentSiteData.stockCount ?? siteStockDevices.length} icon="📦" />
-        <KpiCard title="Switches" value={currentSiteData.switchCount} icon="🔌" />
-        <KpiCard title="Access Points (APs)" value={currentSiteData.apCount} icon="📶" />
-        <KpiCard title="Incident-Free %" value={currentSiteData.incidentFreePercent ?? '100.00'} unit="%" icon="🛡️" />
-        <KpiCard title="Health Score" value={currentSiteData.healthScore ? `${currentSiteData.healthScore} (${currentSiteData.healthLabel})` : '100.0 (Excellent)'} icon="💚" />
-        <KpiCard title="Primary RCA (All)" value={currentSiteData.primaryRca ?? 'None'} icon="🎯" />
+        <KpiCard title="Site Name" value={siteId} />
+        <KpiCard title="Active Devices" value={currentSiteData.deviceCount ?? siteActiveDevices.length} />
+        <KpiCard title="Stock Devices" value={currentSiteData.stockCount ?? siteStockDevices.length} />
+        <KpiCard title="Switches" value={currentSiteData.switchCount} />
+        <KpiCard title="Access Points (APs)" value={currentSiteData.apCount} />
+        <KpiCard title="Incident Free %" value={currentSiteData.incidentFreePercent ?? '100.00'} unit="%" />
+        <KpiCard title="Health Score" value={currentSiteData.healthScore ? `${currentSiteData.healthScore} (${currentSiteData.healthLabel})` : '100.0 (Excellent)'} />
+        <KpiCard title="Primary RCA (All)" value={currentSiteData.primaryRca ?? 'None'} />
       </div>
 
       {/* Sub-Tab Navigation Bar */}
@@ -231,20 +263,26 @@ export default function SiteInspector({
           className={`dash-tab ${activeSubTab === 'tickets' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('tickets')}
         >
-          🎟️ Incident Tickets Log ({siteTickets.length})
+          Incident Tickets ({siteIncidents.length})
+        </button>
+        <button
+          className={`dash-tab ${activeSubTab === 'incidents' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('incidents')}
+        >
+          Incident Breakdown
         </button>
         <button
           className={`dash-tab ${activeSubTab === 'active_devs' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('active_devs')}
         >
-          💻 Active Registered Devices ({siteActiveDevices.length})
+          Active Registered Devices ({siteActiveDevices.length})
         </button>
         {siteStockDevices.length > 0 && (
           <button
             className={`dash-tab ${activeSubTab === 'stock_devs' ? 'active' : ''}`}
             onClick={() => setActiveSubTab('stock_devs')}
           >
-            📦 Stock Inventory Devices ({siteStockDevices.length})
+            Stock Inventory ({siteStockDevices.length})
           </button>
         )}
       </div>
@@ -271,7 +309,7 @@ export default function SiteInspector({
               <span className="kpi-value" style={{ color: ticketMetrics.critical > 0 ? '#dc2626' : '#16a34a' }}>{ticketMetrics.critical}</span>
             </div>
             <div className="kpi-card" style={{ padding: '0.85rem 1rem' }}>
-              <span className="kpi-label">Avg MTTR</span>
+              <span className="kpi-label">Average MTTR</span>
               <span className="kpi-value" style={{ fontSize: '1.25rem' }}>{ticketMetrics.avgResTime} hrs</span>
             </div>
           </div>
@@ -282,7 +320,7 @@ export default function SiteInspector({
               <input
                 type="text"
                 className="input-field"
-                placeholder="🔍 Search Ticket #, Device, or RCA..."
+                placeholder="Search Ticket #, Device, or RCA..."
                 value={ticketSearch}
                 onChange={(e) => { setTicketSearch(e.target.value); setTicketPage(1); }}
                 style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', width: '100%' }}
@@ -296,9 +334,9 @@ export default function SiteInspector({
                 style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
               >
                 <option value="ALL">All Priorities</option>
-                <option value="P1">🔴 Critical (P1)</option>
-                <option value="P2">🟠 Major (P2)</option>
-                <option value="P3_P4">🟡 Minor (P3/P4)</option>
+                <option value="P1">Critical (P1)</option>
+                <option value="P2">Major (P2)</option>
+                <option value="P3_P4">Minor (P3/P4)</option>
               </select>
               <select
                 className="input-field"
@@ -307,8 +345,8 @@ export default function SiteInspector({
                 style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
               >
                 <option value="ALL">All Statuses</option>
-                <option value="CLOSED">🟢 Closed / Resolved</option>
-                <option value="OPEN">🔵 Open / In Progress</option>
+                <option value="CLOSED">Closed / Resolved</option>
+                <option value="OPEN">Open / In Progress</option>
               </select>
               <select
                 className="input-field"
@@ -330,20 +368,22 @@ export default function SiteInspector({
               <table className="data-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Ticket #</th>
-                    <th style={{ width: '14%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device ID / Host</th>
-                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Type</th>
-                    <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Category</th>
-                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Priority</th>
-                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Status</th>
-                    <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Opened</th>
-                    <th style={{ width: '8%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">MTTR</th>
-                    <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Primary RCA</th>
+                    <th style={{ width: '11%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Ticket #</th>
+                    <th style={{ width: '11%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Incident ID</th>
+                    <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device Name</th>
+                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device Type</th>
+                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Category</th>
+                    <th style={{ width: '8%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Priority</th>
+                    <th style={{ width: '8%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Status</th>
+                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Open Date</th>
+                    <th style={{ width: '6%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">MTTR</th>
+                    <th style={{ width: '14%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Primary RCA</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedTickets.map((t, i) => {
                     const ticketNo = t.TicketNumber || t.IncidentNumber || `INC-${i + 1}`;
+                    const incId = t.IncidentNumber || t.TicketNumber || ticketNo;
                     const devId = t.Hostname || t.DeviceID || t.SerialNo || 'N/A';
                     const devType = t.DeviceType || 'Network Device';
                     const cat = t.Category || 'Operational';
@@ -363,6 +403,7 @@ export default function SiteInspector({
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }}>
                           <strong style={{ color: 'var(--text-primary)' }}>{ticketNo}</strong>
                         </td>
+                        <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }}>{incId}</td>
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={devId}>
                           {devId}
                         </td>
@@ -406,7 +447,7 @@ export default function SiteInspector({
                       onClick={() => setTicketPage((p) => Math.max(1, p - 1))}
                       style={{ opacity: ticketPage === 1 ? 0.5 : 1 }}
                     >
-                      ◀ Prev
+                      Prev
                     </button>
                     <span style={{ fontSize: '0.78rem', padding: '0.2rem 0.5rem', fontWeight: 600 }}>
                       {ticketPage} / {totalPages}
@@ -417,7 +458,7 @@ export default function SiteInspector({
                       onClick={() => setTicketPage((p) => Math.min(totalPages, p + 1))}
                       style={{ opacity: ticketPage === totalPages ? 0.5 : 1 }}
                     >
-                      Next ▶
+                      Next
                     </button>
                   </div>
                 </div>
@@ -425,13 +466,32 @@ export default function SiteInspector({
             </div>
           ) : (
             <div className="alert-box alert-success" style={{ background: '#d4edda', color: '#155724', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #c3e6cb', fontWeight: 500 }}>
-              ✅ <strong>Zero Incident Tickets Logged</strong> — {siteId} operated with 100% SLA compliance throughout the reporting period.
+              Zero Incident Tickets Logged — {siteId} operated with 100% SLA compliance throughout the reporting period.
             </div>
           )}
         </div>
       )}
 
-      {/* TAB 2: ACTIVE REGISTERED DEVICES */}
+      {/* TAB 2: INCIDENT BREAKDOWN */}
+      {activeSubTab === 'incidents' && (
+        <div>
+          <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
+            <KpiCard title="Total Incidents" value={incidentBreakdown.total} />
+            <KpiCard title="AP Incidents" value={incidentBreakdown.apIncidents} />
+            <KpiCard title="Switch Incidents" value={incidentBreakdown.switchIncidents} />
+            <KpiCard title="Unique APs Impacted" value={incidentBreakdown.uniqueAPsCount} />
+            <KpiCard title="Primary RCA Driver" value={incidentBreakdown.topRca} />
+          </div>
+          {siteIncidents.length > 0 && (
+            <DataTable
+              columns={['IncidentNumber', 'DeviceID', 'Location', 'Priority', 'RCA', 'Status']}
+              rows={siteIncidents}
+            />
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: ACTIVE REGISTERED DEVICES */}
       {activeSubTab === 'active_devs' && (
         <div>
           <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>Registered Production Active Devices ({siteActiveDevices.length})</h4>
@@ -442,10 +502,10 @@ export default function SiteInspector({
         </div>
       )}
 
-      {/* TAB 3: STOCK INVENTORY DEVICES */}
+      {/* TAB 4: STOCK INVENTORY DEVICES */}
       {activeSubTab === 'stock_devs' && (
         <div>
-          <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>📦 Stock Inventory Devices at {siteId} ({siteStockDevices.length}) — Excluded from SLA Penalties</h4>
+          <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>Stock Inventory Devices at {siteId} ({siteStockDevices.length}) — Excluded from SLA Penalties</h4>
           <DataTable
             columns={['DeviceID', 'DeviceType', 'Location', 'Status']}
             rows={siteStockDevices}

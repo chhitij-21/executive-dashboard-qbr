@@ -338,24 +338,24 @@ function MainPortal() {
       <div className="dashboard-section">
         {/* Success Notifications Banner */}
         <div className="alert-box alert-success" style={{ marginBottom: '1rem', background: '#d4edda', color: '#155724', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #c3e6cb', fontWeight: 500 }}>
-          ✨ <strong>Dashboard Generated Successfully</strong> • 📊 <strong>PowerPoint Generated Successfully</strong> • ✅ <strong>Validation Completed</strong> — <strong>Ready for Download</strong>
+          <strong>Dashboard Generated Successfully</strong> • <strong>PowerPoint Generated Successfully</strong> • <strong>Validation Completed</strong> — <strong>Ready for Download</strong>
         </div>
 
         {/* Customer header */}
         <div className="section-header card pad-md">
           <div>
             <h2 className="section-title">
-              {activeClient?.logo} {exec.customerName || activeClient?.name || 'Executive Dashboard'}
+              {exec.customerName || activeClient?.name || 'Executive Dashboard'}
             </h2>
             <p className="section-meta">
-              📍 Location Context: <strong>{activeLocation}</strong> • 📅 Period: {exec.reportingPeriod || 'Q1 FY2026'}
+              Location Context: <strong>{activeLocation}</strong> • Period: {exec.reportingPeriod || 'Q1 FY2026'}
             </p>
           </div>
           <div className="download-header-actions">
             <div className="status-badge completed">✓ Validated Engine</div>
             {jobId && (
               <a href={`${API_BASE_URL}/api/ppt/${jobId}`} className="btn-primary" download>
-                📊 Download PPT QBR Report
+                Download PPT QBR Report
               </a>
             )}
           </div>
@@ -364,13 +364,13 @@ function MainPortal() {
         {/* Sub-tab navigation */}
         <div className="dash-tabs">
           {[
-            { id: 'executive', label: '📋 Executive Summary' },
-            { id: 'sites', label: '🏢 Site Summary' },
-            { id: 'switches', label: '🔌 Switch Analytics' },
-            { id: 'aps', label: '📶 AP Analytics' },
-            { id: 'incidents', label: '⚠ Incident Analytics' },
-            { id: 'rca', label: '🔍 RCA Analytics' },
-            { id: 'sla', label: '📈 SLA Analytics' },
+            { id: 'executive', label: 'Executive Summary' },
+            { id: 'sites', label: 'Site Summary' },
+            { id: 'switches', label: 'Switch Analytics' },
+            { id: 'aps', label: 'AP Analytics' },
+            { id: 'incidents', label: 'Incident Analytics' },
+            { id: 'rca', label: 'RCA Analytics' },
+            { id: 'sla', label: 'SLA Analytics' },
           ].map(({ id, label }) => (
             <button
               key={id}
@@ -388,41 +388,41 @@ function MainPortal() {
             {/* Executive Hero Banner */}
             <div className="exec-banner">
               <div className="exec-banner-left">
-                <h3>📋 Executive Performance Overview</h3>
+                <h3>Executive Performance Overview</h3>
                 <p>Quarterly Business Review (QBR) &amp; SLA Compliance Audit for {exec.customerName || activeClient?.name || 'Jubilant Foodworks Ltd (JFL)'}</p>
               </div>
               <div className="exec-banner-badges">
-                <span className="exec-badge-item">📍 {exec.totalSites || 8} Monitored Sites</span>
-                <span className="exec-badge-item">💻 {exec.totalDevices || 372} Active Devices</span>
-                <span className="exec-badge-item" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>💚 Health: {exec.healthLabel || 'Excellent'}</span>
+                <span className="exec-badge-item">{exec.totalSites || 8} Monitored Sites</span>
+                <span className="exec-badge-item">{exec.totalDevices || 372} Active Devices</span>
+                <span className="exec-badge-item" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>Health: {exec.healthLabel || 'Excellent'}</span>
               </div>
             </div>
 
-            <div className="exec-section-title">📊 Key Performance Indicators</div>
+            <div className="exec-section-title">Key Performance Indicators</div>
             <div className="kpi-grid">
-              <KpiCard title="Customer" value={exec.customerName || activeClient?.name} icon="🏢" />
-              <KpiCard title="Reporting Period" value={exec.reportingPeriod} icon="📅" />
-              <KpiCard title="Total Sites" value={exec.totalSites} icon="📍" />
-              <KpiCard title="Active Operational Devices" value={exec.totalDevices} icon="💻" />
-              <KpiCard title="Stock Inventory Devices" value={exec.totalStockDevices ?? 0} icon="📦" />
-              <KpiCard title="Total Switches" value={exec.totalSwitches} icon="🔌" />
-              <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} icon="📶" />
-              <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} icon="⚠️" />
-              <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} icon="🔍" />
-              <KpiCard title="Primary RCA (All)" value={exec.primaryRca || rcaAn.topRca || 'None'} icon="🎯" />
-              <KpiCard title="Primary RCA for APs" value={exec.primaryRcaForAPs || apAn.topApRca || 'None'} icon="📡" />
-              <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" icon="⚡" />
-              <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" icon="🛡️" />
-              <KpiCard title="SLA Compliance" value={exec.slaCompliance} unit="%" icon="📈" />
-              <KpiCard title="Health Score" value={`${exec.healthScore} (${exec.healthLabel})`} icon="💚" />
-              <KpiCard title="Total Incidents" value={exec.totalIncidents} icon="🚨" />
+              <KpiCard title="Customer" value={exec.customerName || activeClient?.name} />
+              <KpiCard title="Reporting Period" value={exec.reportingPeriod} />
+              <KpiCard title="Total Sites" value={exec.totalSites} />
+              <KpiCard title="Active Operational Devices" value={exec.totalDevices} />
+              <KpiCard title="Stock Inventory Devices" value={exec.totalStockDevices ?? 0} />
+              <KpiCard title="Total Switches" value={exec.totalSwitches} />
+              <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} />
+              <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} />
+              <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} />
+              <KpiCard title="Primary RCA (All)" value={exec.primaryRca || rcaAn.topRca || 'None'} />
+              <KpiCard title="Primary RCA for APs" value={exec.primaryRcaForAPs || apAn.topApRca || 'None'} />
+              <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" />
+              <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" />
+              <KpiCard title="SLA Compliance" value={exec.slaCompliance} unit="%" />
+              <KpiCard title="Health Score" value={`${exec.healthScore} (${exec.healthLabel})`} />
+              <KpiCard title="Total Incidents" value={exec.totalIncidents} />
             </div>
 
             {/* Stock Inventory List Table */}
             {activeDashboardData.devices?.filter(d => d.__isStock).length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  📦 Stock Inventory Devices ({activeDashboardData.devices.filter(d => d.__isStock).length}) — Excluded from SLA Penalties
+                <h4 style={{ marginBottom: '0.5rem' }}>
+                  Stock Inventory Devices ({activeDashboardData.devices.filter(d => d.__isStock).length}) — Excluded from SLA Penalties
                 </h4>
                 <DataTable
                   columns={['DeviceID', 'DeviceType', 'Location', 'Rack', 'Status']}
@@ -441,7 +441,7 @@ function MainPortal() {
             {switchUptimeChartData && (
               <div className="chart-panel" style={{ marginTop: '1.5rem' }}>
                 <h3 className="chart-panel-title">
-                  ⚡ Device Uptime Distribution — All Switches (Core &amp; Non-Core)
+                  Device Uptime Distribution — All Switches (Core &amp; Non-Core)
                 </h3>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
                   Purple = Core Switches • Blue = Non-Core Switches • Red = Below SLA Target (99.3%)
@@ -473,7 +473,7 @@ function MainPortal() {
                 className={`dash-tab ${selectedSite === 'ALL' ? 'active' : ''}`}
                 onClick={() => { setSelectedSite('ALL'); setActiveLocation('All Locations'); }}
               >
-                🌐 All Sites Overview
+                All Sites Overview
               </button>
               {siteSummary
                 .filter(s => {
@@ -488,7 +488,7 @@ function MainPortal() {
                     className={`dash-tab ${selectedSite === s.siteId ? 'active' : ''}`}
                     onClick={() => { setSelectedSite(s.siteId); setActiveLocation(s.siteId); }}
                   >
-                    🏢 {s.siteId}
+                    {s.siteId}
                   </button>
                 ))}
             </div>
