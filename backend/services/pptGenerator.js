@@ -559,7 +559,14 @@ async function buildPresentation(data, outputPath) {
   // Slide 39: Action Plan
   buildActionPlanSlide(pres, exec, siteSummary, incidents);
 
-  // Slide 40: Thank You
+  // Appendix Section (Slides 40-44)
+  buildAppendixCoverSlide(pres, exec);
+  buildAppendixDeviceInventorySlide(pres, devices);
+  buildAppendixSwitchInventorySlide(pres, devices);
+  buildAppendixAPInventorySlide(pres, devices);
+  buildAppendixIncidentRecordsSlide(pres, incidents);
+
+  // Slide 45: Thank You
   buildThankYouSlide(pres, exec);
 
   await pres.writeFile({ fileName: outputPath });
@@ -675,6 +682,7 @@ function buildTOCSlide(pres, exec) {
     { num: '05', title: 'Site Health & Risk Assessment', desc: 'Site health ranking and traffic-light risk assessment', slide: '12–13' },
     { num: '06', title: 'Site Reviews (8 Sites)', desc: 'Detailed per-site operational review, analytics, and incident tickets', slide: '14–37' },
     { num: '07', title: 'Recommendations & Action Plan', desc: 'AI-generated recommendations and prioritized action tracker', slide: '38–39' },
+    { num: '08', title: 'Appendix & Raw Data Logs', desc: 'Complete device inventories, switch/AP logs, and master incident audit trail', slide: '40–44' },
   ];
 
   sections.forEach((sec, i) => {
@@ -1750,6 +1758,185 @@ function buildActionPlanSlide(pres, exec, siteSummary, incidents) {
     `This action plan should be reviewed and updated monthly with JFL IT leadership.`,
   ];
   addNarrativeBox(s, 6.45, narrative, 'Action Plan — Executive Note');
+}
+
+// ── Slide 40: Appendix Section Divider ────────────────────────────────────
+function buildAppendixCoverSlide(pres, exec) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_DARK };
+
+  s.addShape('rect', { x: 0, y: 0, w: 13.33, h: 0.15, fill: { color: C.ACCENT_GOLD } });
+
+  s.addText('APPENDIX', {
+    x: 0.75, y: 2.2, w: 11.83, h: 0.8,
+    fontSize: 38, bold: true, color: C.TEXT_LIGHT, fontFace: 'Calibri',
+  });
+  s.addText('Detailed Inventory Logs & Raw Incident Records', {
+    x: 0.75, y: 3.1, w: 11.83, h: 0.5,
+    fontSize: 18, color: '82B1FF', fontFace: 'Calibri',
+  });
+
+  s.addShape('line', {
+    x: 0.75, y: 3.8, w: 6.0, h: 0,
+    line: { color: C.ACCENT_GOLD, pt: 1.5 },
+  });
+
+  s.addText('Reference materials supporting Executive QBR analysis.', {
+    x: 0.75, y: 4.1, w: 11.83, h: 0.4,
+    fontSize: 12, color: 'B0BEC5', fontFace: 'Calibri',
+  });
+}
+
+// ── Slide 41: Appendix — Complete Device Inventory ───────────────────────
+function buildAppendixDeviceInventorySlide(pres, devices) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'APPENDIX — COMPLETE DEVICE INVENTORY', 'Full Monitored Active & Stock Device List', _slideNum);
+
+  const COL_W = [0.8, 2.8, 2.5, 2.5, 2.0, 1.83];
+  const headers = [
+    th('#', 'center'), th('Device ID / Serial', 'left'), th('Device Type', 'left'),
+    th('Location / Site', 'left'), th('Rack', 'center'), th('Status', 'center'),
+  ];
+
+  const rows = devices.slice(0, 12).map((d, idx) => {
+    const fill = rowFill(idx);
+    return [
+      td(String(idx + 1), fill, { align: 'center', color: C.TEXT_MUTED }),
+      td(d.DeviceID || d.SerialNo || 'N/A', fill, { bold: true, color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(d.DeviceType || 'Network Device', fill, { color: C.TEXT_MID, fontSize: 8.5 }),
+      td(d.SiteID || d.Location || 'N/A', fill, { color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(d.Rack || 'N/A', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8.5 }),
+      td(d.__isStock ? 'Stock Inventory' : 'Active Production', fill, { align: 'center', bold: true, color: d.__isStock ? C.AMBER : C.GREEN, fontSize: 8.5 }),
+    ];
+  });
+
+  s.addTable([headers, ...rows], {
+    x: 0.45, y: 1.1, w: 12.43, colW: COL_W,
+    fontSize: 9, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+  });
+
+  s.addText(`Showing top 12 of ${devices.length} total monitored devices across all sites. Full dataset available in Excel export.`, {
+    x: 0.45, y: 6.75, w: 12.43, h: 0.3,
+    fontSize: 8.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
+  });
+}
+
+// ── Slide 42: Appendix — Complete Switch Inventory ───────────────────────
+function buildAppendixSwitchInventorySlide(pres, devices) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'APPENDIX — COMPLETE SWITCH INVENTORY', 'Network Switch Inventory & Effective Uptime Log', _slideNum);
+
+  const switches = devices.filter(d => !d.__isStock && (/^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType)));
+
+  const COL_W = [0.8, 3.2, 2.5, 2.3, 1.8, 1.83];
+  const headers = [
+    th('#', 'center'), th('Hostname / Device ID', 'left'), th('Location', 'left'),
+    th('Rack', 'center'), th('Uptime %', 'center'), th('SLA Status', 'center'),
+  ];
+
+  const rows = switches.slice(0, 12).map((sw, idx) => {
+    const fill = rowFill(idx);
+    const rawUp = sw.__effectiveUptime !== undefined ? sw.__effectiveUptime : 100;
+    const slaOk = parseFloat(rawUp) >= SLA_TARGET;
+    return [
+      td(String(idx + 1), fill, { align: 'center', color: C.TEXT_MUTED }),
+      td(sw.Hostname || sw.DeviceID || 'N/A', fill, { bold: true, color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(sw.SiteID || sw.Location || 'N/A', fill, { color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(sw.Rack || 'N/A', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8.5 }),
+      td(`${parseFloat(rawUp).toFixed(2)}%`, fill, { align: 'center', bold: true, color: uptimeColor(rawUp), fontSize: 8.5 }),
+      td(slaOk ? 'MET' : 'BREACH', fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED, fontSize: 8.5 }),
+    ];
+  });
+
+  s.addTable([headers, ...rows], {
+    x: 0.45, y: 1.1, w: 12.43, colW: COL_W,
+    fontSize: 9, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+  });
+
+  s.addText(`Showing top 12 of ${switches.length} total active switches monitored across all 8 sites.`, {
+    x: 0.45, y: 6.75, w: 12.43, h: 0.3,
+    fontSize: 8.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
+  });
+}
+
+// ── Slide 43: Appendix — Complete AP Inventory ───────────────────────────
+function buildAppendixAPInventorySlide(pres, devices) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'APPENDIX — COMPLETE ACCESS POINT (AP) INVENTORY', 'Wireless Access Point Estate Breakdown', _slideNum);
+
+  const aps = devices.filter(d => !d.__isStock && (/^ap$/i.test(d.DeviceType) || /access/i.test(d.DeviceType)));
+
+  const COL_W = [0.8, 3.5, 2.5, 2.5, 3.13];
+  const headers = [
+    th('#', 'center'), th('Access Point ID / Serial', 'left'), th('Location / Site', 'left'),
+    th('Rack / Controller', 'center'), th('Operational Status', 'center'),
+  ];
+
+  const rows = aps.slice(0, 12).map((ap, idx) => {
+    const fill = rowFill(idx);
+    return [
+      td(String(idx + 1), fill, { align: 'center', color: C.TEXT_MUTED }),
+      td(ap.DeviceID || ap.SerialNo || 'N/A', fill, { bold: true, color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(ap.SiteID || ap.Location || 'N/A', fill, { color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(ap.Rack || 'WLC Controller', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8.5 }),
+      td('Monitored Active', fill, { align: 'center', bold: true, color: C.GREEN, fontSize: 8.5 }),
+    ];
+  });
+
+  s.addTable([headers, ...rows], {
+    x: 0.45, y: 1.1, w: 12.43, colW: COL_W,
+    fontSize: 9, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+  });
+
+  s.addText(`Showing top 12 of ${aps.length} total wireless access points monitored across all 8 sites.`, {
+    x: 0.45, y: 6.75, w: 12.43, h: 0.3,
+    fontSize: 8.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
+  });
+}
+
+// ── Slide 44: Appendix — Raw Incident Records Log ────────────────────────
+function buildAppendixIncidentRecordsSlide(pres, incidents) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'APPENDIX — RAW INCIDENT RECORDS LOG', 'Detailed Master Incident Ticket Audit Log', _slideNum);
+
+  const COL_W = [1.8, 2.2, 1.8, 1.5, 1.5, 3.63];
+  const headers = [
+    th('Ticket #', 'left'), th('Device / Host', 'left'), th('Location', 'left'),
+    th('Priority', 'center'), th('Status', 'center'), th('Root Cause Analysis (RCA)', 'left'),
+  ];
+
+  const rows = incidents.slice(0, 12).map((inc, idx) => {
+    const fill = rowFill(idx);
+    const prio = String(inc.Priority || 'N/A').toUpperCase();
+    const isClosed = /closed|resolved/i.test(inc.Status || '');
+    return [
+      td(inc.TicketNumber || inc.IncidentNumber || `INC-${idx + 1}`, fill, { color: C.NAVY, fontSize: 8.5 }),
+      td(String(inc.Hostname || inc.DeviceID || 'N/A').substring(0, 20), fill, { color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(String(inc.SiteID || inc.Location || 'N/A').substring(0, 18), fill, { color: C.TEXT_MID, fontSize: 8.5 }),
+      td(prio.substring(0, 10), fill, { align: 'center', bold: true, color: prio.includes('P1') ? C.RED : C.AMBER, fontSize: 8.5 }),
+      td(isClosed ? 'Closed' : 'Open', fill, { align: 'center', bold: true, color: isClosed ? C.GREEN : C.AMBER, fontSize: 8.5 }),
+      td(String(inc.RCA || 'Unknown').substring(0, 35), fill, { color: C.TEXT_MUTED, fontSize: 8.5 }),
+    ];
+  });
+
+  s.addTable([headers, ...rows], {
+    x: 0.45, y: 1.1, w: 12.43, colW: COL_W,
+    fontSize: 9, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+  });
+
+  s.addText(`Showing top 12 of ${incidents.length} raw incident records logged during the reporting period. Full audit trail saved in dashboard_data.json.`, {
+    x: 0.45, y: 6.75, w: 12.43, h: 0.3,
+    fontSize: 8.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
+  });
 }
 
 // ── Slide 40: Thank You ───────────────────────────────────────────────────
