@@ -158,3 +158,49 @@ Build and maintain a production-grade **Executive Dashboard** and **Automated Qu
 ### Site Summary & Inspector Layout Rules
 * **Overall Uptime** column is **removed** from `SiteSummaryTable` and Site Inspector KPI cards.
 * **Persistent All Sites Table**: Clicking any individual site pill highlights that site row in the main `SiteSummaryTable` while preserving all other site rows in view. Detailed inspection cards and logs render immediately below the main table.
+
+---
+
+## 11. 📊 Board-Level Executive QBR PowerPoint Generation Rules
+
+### Executive Presentation Benchmark & Design Philosophy
+* Benchmarked against consulting presentations (Cisco, Deloitte, Accenture, ServiceNow, Microsoft Power BI).
+* **Presentation Format**: 45-slide wide-format presentation (`13.33 x 7.5` inches).
+* **Strict Visual Standards**:
+  - Zero emojis in slides — clean text labels and executive badges only.
+  - No plain dashboard dumps or raw long tables. Main deck uses Top 10 summaries, KPI cards, charts, Pareto bars, heatmaps, and ranking scorecards.
+  - Full raw lists (complete device inventory, complete switch inventory, complete AP inventory, master raw incident audit trail) are moved exclusively to the **Appendix** slides (Slides 40–44).
+  - Every slide includes a consistent navy header bar, gold accent strip, subtitle, reporting period, confidential footer, slide number, and logo.
+
+### 45-Slide Presentation Structure
+* **Slide 1**: Cover Page (Gold accent bar, customer branding, classification label, preparation metadata)
+* **Slide 2**: Table of Contents (8 structured sections with numbered indices and slide numbers)
+* **Slide 3**: Executive Summary (8 KPI cards + AI-generated executive narrative + Top RCA bar chart)
+* **Slide 4**: Overall Network Health (Health score display + per-site health score bar charts)
+* **Slide 5**: Infrastructure Summary (Devices/Switches/APs per site allocation breakdown table)
+* **Slide 6**: Inventory Summary (Active vs. Stock inventory analysis, SLA penalty exclusion notes)
+* **Slide 7**: Incident Overview (Incidents by site bar chart + priority distribution breakdown + AI findings)
+* **Slide 8**: RCA Pareto Analysis (Horizontal Pareto bar chart + RCA frequency table + remediation recommendations)
+* **Slide 9**: RCA Incident Heatmap (Sites × RCA category matrix with color-coded intensity)
+* **Slide 10**: SLA Dashboard (SLA compliance score, site-wise SLA compliance table)
+* **Slide 11**: Ticket Analytics (KPIs + Top 10 longest/highest priority tickets table + AI resolution insights)
+* **Slide 12**: Site Health Ranking (All 8 sites ranked healthiest → critical with status medals)
+* **Slide 13**: Risk Assessment (Traffic-light risk classification LOW/MODERATE/ELEVATED/HIGH with recommendations)
+* **Slides 14–37 (8 Sites × 3 Slides)**:
+  - **Slide 1**: Site Overview (KPI cards + Key Highlights + Key Risks + AI Site Summary narrative)
+  - **Slide 2**: Operational Analytics (Switch uptime report, Top 10 switches table, site RCA distribution)
+  - **Slide 3**: Incident & Ticket Review (Ticket KPIs, Top 10 incident tickets table, recommended actions)
+* **Slide 38**: AI-Generated Recommendations (High / Medium / Low priority remediation plan)
+* **Slide 39**: Action Plan Tracker (Priority / Action / Owner / Timeline / Status table)
+* **Slides 40–44 (Appendix Section)**:
+  - **Slide 40**: Appendix Cover
+  - **Slide 41**: Complete Device Inventory Table
+  - **Slide 42**: Complete Switch Inventory Table
+  - **Slide 43**: Complete Access Point (AP) Inventory Table
+  - **Slide 44**: Master Raw Incident Audit Log
+* **Slide 45**: Thank You Slide (Corporate closing slide with logo & confidentiality statement)
+
+### Dynamic AI Narrative Engine Rule
+* Every major slide ends with a dynamically computed narrative (pure JS, calculated from live data without hardcoding or external APIs).
+* Answers: *What happened?*, *Why did it happen?*, *Business impact*, and *What should be done next?*.
+
