@@ -568,7 +568,8 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
   const isQuarterlyMode = /quarter|q1|q2|q3|q4/i.test(String(reportingPeriod || ''));
 
   allDevices.forEach(d => {
-    const site = d.SiteID || d.Location || 'Unknown';
+    const rawSite = d.SiteID || d.Location || 'Unknown';
+    const site = !isGenericLocation(rawSite) ? normalizeSiteName(rawSite) : 'Unknown';
     if (!sitesMap[site]) sitesMap[site] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
     sitesMap[site].devices.push(d);
 
