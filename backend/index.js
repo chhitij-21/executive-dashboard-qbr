@@ -265,7 +265,8 @@ app.post(['/api/upload', '/upload'], requireAuth, upload.fields([
 
   const clientId = req.body.clientId || 'client-jfl';
   const location = req.body.location || 'All Locations';
-  const reportPeriod = req.body.reportPeriod || 'Q1 FY2026';
+  const periodMode = req.body.periodMode || 'monthly';
+  const reportPeriod = req.body.reportPeriod || req.body.reportingPeriod || (periodMode === 'monthly' ? '1 July 2026 – 31 July 2026' : 'Q1 FY2026 (7 Apr – 6 Jul 2026)');
   const uploadedBy = req.body.uploadedBy || 'System User';
 
   const client = clientService.getClientById(clientId);
@@ -311,7 +312,7 @@ app.post(['/api/upload', '/upload'], requireAuth, upload.fields([
   // 3. Trigger Existing Processing Engine asynchronously via setImmediate
   // Ensures res.json() flushes HTTP 200 to client/proxy BEFORE heavy background processing starts.
   setImmediate(() => {
-    processJFLWorkbooks(incidentFile.path, inventoryFile ? inventoryFile.path : null, outputDir)
+    processJFLWorkbooks(incidentFile.path, inventoryFile ? inventoryFile.path : null, outputDir, { reportingPeriod: reportPeriod, periodMode })
       .then((result) => {
         const isSuccess = result && result.success;
         const status = isSuccess ? 'completed' : 'failed';
@@ -459,6 +460,65 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
   }
 });
 
+// ── Period Mode Switch Endpoint (Monthly vs Quarterly) ──────────────────────
+app.all(['/api/switch-mode', '/switch-mode'], async (req, res) => {
+  try {
+    const mode = (req.query.mode || req.body?.mode || 'monthly').toLowerCase();
+    const periodMode = mode.includes('quarter') ? 'quarterly' : 'monthly';
+    const reportingPeriod = periodMode === 'monthly' ? '1 July 2026 – 31 July 2026' : 'Q1 FY2026 (7 Apr – 6 Jul 2026)';
+
+    console.log(`[server] Switch period mode request received: ${periodMode}`);
+
+    const incCandidates = [
+      periodMode === 'monthly' ? path.resolve('../JLF MONTHLY REPORT - 1 JULY to 31 JULY 2026.xlsx') : null,
+      path.resolve('SLA_Compliance_Report.xlsx'),
+      path.resolve('../SLA_Compliance_Report.xlsx'),
+      path.resolve('../JLF MONTHLY REPORT - 1 JULY to 31 JULY 2026.xlsx'),
+      path.resolve('jfl incidents.xlsx'),
+    ].filter(Boolean);
+
+    const invCandidates = [
+      path.resolve('JFL Updated Inventory.xlsx'),
+      path.resolve('../JFL Updated Inventory.xlsx'),
+    ];
+
+    const incPath = incCandidates.find((p) => fs.existsSync(p)) || path.resolve('SLA_Compliance_Report.xlsx');
+    const invPath = invCandidates.find((p) => fs.existsSync(p)) || path.resolve('JFL Updated Inventory.xlsx');
+
+    const autoJobId = `jfl-${periodMode}-active`;
+    const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
+
+    const result = await processJFLWorkbooks(incPath, invPath, outputDir, { periodMode, reportingPeriod });
+
+    if (result && result.success) {
+      const record = historyService.recordReport({
+        jobId: autoJobId,
+        clientId: 'client-jfl',
+        clientName: 'Jubilant Foodworks Ltd (JFL)',
+        location: 'All Locations',
+        reportPeriod: reportingPeriod,
+        uploadedBy: 'User Mode Switch',
+        status: 'completed',
+        dashboardPath: result.dashboardPath,
+        pptPath: result.pptPath,
+        reportPath: result.reportPath,
+        dataQualityPath: result.dataQualityPath,
+        processingLogPath: result.processingLogPath,
+      });
+
+      jobs[autoJobId] = { status: 'completed', ...result, ...record };
+
+      const content = fs.readFileSync(result.dashboardPath, 'utf8');
+      return res.json({ jobId: autoJobId, ...JSON.parse(content) });
+    }
+
+    res.status(500).json({ error: 'Failed to process report mode' });
+  } catch (err) {
+    console.error('[server] Error in /api/switch-mode:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Download Helpers ─────────────────────────────────────────────────────────
 const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
   try {
@@ -558,10 +618,20 @@ app.get(['/api/status/:jobId', '/status/:jobId'], (req, res) => {
   res.json({ jobId, ...job });
 });
 
+// ── Static Frontend Assets (Production / Render) ──────────────────────────────
+const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+const rootDistPath = path.join(__dirname, '..', 'dist');
+
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+} else if (fs.existsSync(rootDistPath)) {
+  app.use(express.static(rootDistPath));
+}
+
 // ── SPA Fallback ─────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
-  const idxFrontend = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
-  const idxRoot = path.join(__dirname, '..', 'dist', 'index.html');
+  const idxFrontend = path.join(frontendDistPath, 'index.html');
+  const idxRoot = path.join(rootDistPath, 'index.html');
   if (fs.existsSync(idxFrontend)) return res.sendFile(idxFrontend);
   if (fs.existsSync(idxRoot)) return res.sendFile(idxRoot);
   res.json({ message: 'Executive Dashboard & Multi-Client QBR Portal API running.' });

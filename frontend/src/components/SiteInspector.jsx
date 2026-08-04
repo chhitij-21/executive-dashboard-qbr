@@ -2,6 +2,26 @@ import React, { useState, useMemo } from 'react';
 import KpiCard from './KpiCard';
 import DataTable from './DataTable';
 
+function formatExcelDate(val) {
+  if (!val && val !== 0) return 'N/A';
+  if (typeof val === 'string' && val.includes('-') && val.includes(':')) {
+    return val;
+  }
+  const num = Number(val);
+  if (!isNaN(num) && num > 30000 && num < 60000) {
+    const jsDate = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(jsDate.getTime())) {
+      const year = jsDate.getUTCFullYear();
+      const month = String(jsDate.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(jsDate.getUTCDate()).padStart(2, '0');
+      const hours = String(jsDate.getUTCHours()).padStart(2, '0');
+      const mins = String(jsDate.getUTCMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${mins}`;
+    }
+  }
+  return String(val);
+}
+
 /**
  * SiteInspector — Enterprise Operational Site Dashboard & Ticket Analytics.
  * Renders complete site operational metrics, incident & ticket analytics,
@@ -28,14 +48,26 @@ export default function SiteInspector({
     if (!loc) return '';
     const str = String(loc).trim().toLowerCase();
     if (str.includes('blr') || str.includes('bangalore')) return 'bangalore';
-    if (str.includes('gr') && str.includes('noida')) return 'greater noida';
-    if (str.includes('guwahati')) return 'guwahati';
+    if ((str.includes('gr') && str.includes('noida')) || str.includes('greater noida') || str.includes('gnsc')) return 'greater noida';
+    if (str.includes('guwahati') || str.includes('gau')) return 'guwahati';
     if (str.includes('hyd') || str.includes('hyderabad')) return 'hyderabad';
-    if (str.includes('mohali')) return 'mohali';
-    if (str.includes('mumbai')) return 'mumbai';
-    if (str.includes('nagpur')) return 'nagpur';
-    if (str === 'noida') return 'noida';
+    if (str.includes('mohali') || str.includes('moh')) return 'mohali';
+    if (str.includes('mumbai') || str.includes('mumd')) return 'mumbai';
+    if (str.includes('nagpur') || str.includes('nag')) return 'nagpur';
+    if (str.includes('noida')) return 'noida';
     return str;
+  };
+
+  const isGenericLocation = (loc) => {
+    if (!loc) return true;
+    const str = String(loc).trim().toLowerCase();
+    if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
+    if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
+    if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('july') || str.includes('august') || str.includes('september') || str.includes('report') || str.includes('compliance')) return true;
+    const norm = normalizeLoc(str);
+    const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'nagpur', 'noida'];
+    if (!validSites.includes(norm)) return true;
+    return false;
   };
 
   const currentSiteData = useMemo(() => {
@@ -83,9 +115,8 @@ export default function SiteInspector({
   const siteIncidents = useMemo(() => {
     return incidents.filter((i) => {
       const rawLoc = String(i.SiteID || i.Location || '').trim();
-      const isGeneric = !rawLoc || ['raw', 'sheet1', 'jfl', 'unknown', 'sla_compliance_report', 'sla compliance report'].includes(rawLoc.toLowerCase()) || rawLoc.toLowerCase().includes('sla_compliance') || rawLoc.toLowerCase().includes('sla compliance');
       const devLoc = devToSiteMap[i.DeviceID] || devToSiteMap[i.SerialNo] || devToSiteMap[i.Hostname];
-      const resolvedSite = (!isGeneric ? rawLoc : null) || devLoc || 'Unknown';
+      const resolvedSite = (!isGenericLocation(rawLoc) ? rawLoc : null) || devLoc || 'Unknown';
       return normalizeLoc(resolvedSite) === targetNormSite;
     });
   }, [incidents, devToSiteMap, targetNormSite]);
@@ -266,7 +297,8 @@ export default function SiteInspector({
       {/* High-Level Site Executive KPIs Grid */}
       <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
         <KpiCard title="Site Name" value={siteId} />
-        <KpiCard title="Active Devices" value={currentSiteData.deviceCount ?? siteActiveDevices.length} />
+        <KpiCard title="Total Devices (inc. Stock)" value={currentSiteData.deviceCount ?? (siteActiveDevices.length + siteStockDevices.length)} />
+        <KpiCard title="Active Operational Devices" value={currentSiteData.activeDeviceCount ?? siteActiveDevices.length} />
         <KpiCard title="Stock Devices" value={currentSiteData.stockCount ?? siteStockDevices.length} />
         <KpiCard title="Switches" value={currentSiteData.switchCount} />
         <KpiCard title="Access Points (APs)" value={currentSiteData.apCount} />
@@ -408,9 +440,10 @@ export default function SiteInspector({
                     const prio = String(t.Priority || 'P3').toUpperCase();
                     const st = String(t.Status || 'Closed');
                     const isClosed = st.toLowerCase().includes('closed') || st.toLowerCase().includes('resolved');
-                    const rca = t.RCA || 'Unknown';
-                    const openDate = t.CreatedTime || t.OpenTime || 'N/A';
+                    const openRaw = t.CreatedTime || t.OpenTime || 'N/A';
+                    const openDate = formatExcelDate(openRaw);
                     const duration = t.DurationHours ? `${t.DurationHours}h` : '2.4h';
+                    const rca = t.RCA || 'Unknown';
 
                     const prioColor =
                       prio.includes('P1') || prio.includes('CRITICAL') || prio.includes('1') ? '#dc2626' :

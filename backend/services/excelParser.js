@@ -66,15 +66,29 @@ function normalizeSiteName(site) {
   const lower = str.toLowerCase();
 
   if (/blr|bangalore/i.test(lower)) return 'Bangalore';
-  if (/g.*noida|gr.*noida|greater.*noida|grater.*noida/i.test(lower)) return 'Greater Noida';
-  if (/guwahati/i.test(lower)) return 'Guwahati';
+  if (/g.*noida|gr.*noida|greater.*noida|grater.*noida|gnsc/i.test(lower)) return 'Greater Noida';
+  if (/guwahati|gau/i.test(lower)) return 'Guwahati';
   if (/hyd|hyderabad/i.test(lower)) return 'Hyderabad';
-  if (/mohali/i.test(lower)) return 'Mohali';
-  if (/mumbai/i.test(lower)) return 'Mumbai';
-  if (/nagpur/i.test(lower)) return 'Nagpur';
-  if (/^noida$/i.test(lower)) return 'Noida';
+  if (/mohali|moh/i.test(lower)) return 'Mohali';
+  if (/mumbai|mumd|mumbai_dc/i.test(lower)) return 'Mumbai';
+  if (/nagpur|nag/i.test(lower)) return 'Nagpur';
+  if (/noida/i.test(lower)) return 'Noida';
 
   return str;
+}
+
+function isGenericLocation(loc) {
+  if (!loc) return true;
+  const str = String(loc).trim().toLowerCase();
+  if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
+  if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
+  if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('july') || str.includes('august') || str.includes('september') || str.includes('report') || str.includes('compliance')) return true;
+
+  const norm = normalizeSiteName(str);
+  const validSites = ['Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Nagpur', 'Noida'];
+  if (!validSites.includes(norm)) return true;
+
+  return false;
 }
 
 /**
@@ -151,6 +165,29 @@ function buildSerialToHostnameMap(devices = [], incidents = []) {
   return serialToHostMap;
 }
 
+function formatExcelDate(val) {
+  if (!val && val !== 0) return 'N/A';
+  if (val instanceof Date) {
+    return val.toISOString().replace('T', ' ').substring(0, 16);
+  }
+  if (typeof val === 'string' && val.includes('-') && val.includes(':')) {
+    return val;
+  }
+  const num = Number(val);
+  if (!isNaN(num) && num > 30000 && num < 60000) {
+    const jsDate = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(jsDate.getTime())) {
+      const year = jsDate.getUTCFullYear();
+      const month = String(jsDate.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(jsDate.getUTCDate()).padStart(2, '0');
+      const hours = String(jsDate.getUTCHours()).padStart(2, '0');
+      const mins = String(jsDate.getUTCMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${mins}`;
+    }
+  }
+  return String(val);
+}
+
 /**
  * Parse and normalise the main incident sheet.
  * Maps unique ticket number to BOTH TicketNumber AND IncidentNumber.
@@ -177,6 +214,7 @@ function parseIncidentSheet(rows) {
 
     const devId = String(
       row['Device Serial'] ||
+      row['Serial/Subscription'] ||
       row['Device Serial No'] ||
       row['Device Serial Number'] ||
       row['Serial No'] ||
@@ -185,12 +223,15 @@ function parseIncidentSheet(rows) {
       ''
     ).trim();
 
-    const rawLoc = row['Location'] || row['Site'] || row['SiteID'] || row['Site Name'] || row.__source?.sheet || '';
+    let rawLoc = row['Location'] || row['Site'] || row['SiteID'] || row['Site Name'] || '';
+    if (rawLoc.toLowerCase().includes('raw') || rawLoc.toLowerCase().includes('sheet') || rawLoc.toLowerCase().includes('sla_compliance')) {
+      rawLoc = '';
+    }
     const normLoc = normalizeSiteName(rawLoc);
 
     const cat = String(row['Category'] || row['Ticket Category'] || row['Type'] || row['Ticket Type'] || row['Class'] || '').trim();
-    const desc = String(row['Description'] || row['Short Description'] || row['Summary'] || '').trim();
-    const rcaStr = String(row['RCA 2'] || row['RCA'] || row['Root Cause'] || row['RCA Category'] || '').trim();
+    const desc = String(row['Description'] || row['Short Description'] || row['Subject'] || row['Summary'] || '').trim();
+    const rcaStr = String(row['RCA'] || row['RCA 2'] || row['Root Cause'] || row['RCA Category'] || '').trim();
 
     const isCR = /change|change\s*request|^cr$|normal\s*change|standard\s*change|emergency\s*change/i.test(cat) ||
                  /change|change\s*request|^cr$/i.test(rcaStr) ||
@@ -201,28 +242,29 @@ function parseIncidentSheet(rows) {
       TicketNumber:   ticketNo,
       DeviceID:       devId,
       SerialNo:       devId,
-      Hostname:       row['Hostname'] || row['Host Name'] || row['Device Hostname'] || row['Device Name'] || '',
+      Hostname:       row['Hostname'] || row['Device Name'] || row['Host Name'] || row['Device Hostname'] || row['Subject'] || '',
       Location:       normLoc,
       SiteID:         normLoc,
       DeviceType:     row['Device Type'] || row['DeviceType'] || '',
       Rack:           row['Rack Number'] || row['Rack'] || '',
       Priority:       row['Priority'] || row['Severity'] || '',
-      RCA:            row['RCA 2'] || row['RCA'] || row['Root Cause'] || row['RCA Category'] || 'Unknown',
+      RCA:            rcaStr || 'Unknown',
       Status:         row['Status'] || row['Ticket Status'] || 'Closed',
       Category:       cat,
       Description:    desc,
       IsChangeRequest: isCR,
       ResolutionSLAStatus: row['Resolution SLA Status'] || '',
       ResponseSLAStatus:   row['Response SLA Status'] || '',
-      CreatedTime:    row['Created Time'] || row['Open Time'] || row['OpenTime'] || '',
-      OpenTime:       row['Created Time'] || row['Open Time'] || row['OpenTime'] || '',
+      CreatedTime:    formatExcelDate(row['Created Time'] || row['Open Time'] || row['OpenTime'] || ''),
+      OpenTime:       formatExcelDate(row['Created Time'] || row['Open Time'] || row['OpenTime'] || ''),
       ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
       NewSerial:      row['New Serial'] || row['Replacement Serial'] || '',
       AccountName:    row['Account Name'] || row['AccountName'] || row['Customer Name'] || row['Customer'] || '',
-      ProactiveUptimePct:  row['Proactive -Uptime%'] || row['Average of Proactive -Uptime%'] || '',
-      JFLUptimePct:        row['JFL -Uptime %'] || row['Average of JFL -Uptime %'] || '',
+      ProactiveUptimePct:  row['Proactive -Uptime%'] || row['Proactive Uptime %'] || row['Average of Proactive -Uptime%'] || '',
+      JFLUptimePct:        row['JFL -Uptime %'] || row['JFL Uptime %'] || row['Average of JFL -Uptime %'] || '',
       ActualResolutionMin: row['Actual Resolution Time (min)'] || row['Actual Resolution Time'] || '',
       TotalResolutionMin:  row['Total Resolution Time (min)'] || row['Total Resolution Time'] || row['Resolution Time (min)'] || '',
+      HoldTimeMin:         row['Time on Hold (min)'] || row['Time on Hold'] || row['Hold Time'] || '',
       __source:       row.__source,
     };
   });
@@ -341,4 +383,6 @@ module.exports = {
   parseUptimeSummary,
   buildSerialToHostnameMap,
   analyzeWorkbookSchema,
+  normalizeSiteName,
+  isGenericLocation,
 };

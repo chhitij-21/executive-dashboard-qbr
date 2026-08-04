@@ -2,7 +2,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSites = [] }) {
+export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSites = [], activePeriod, onPeriodChange }) {
   const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin, logout } = useAuth();
 
   const locationsList = React.useMemo(() => {
@@ -64,6 +64,20 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
                 📍 {loc}
               </option>
             ))}
+          </select>
+        </div>
+
+        {/* Reporting Period Timeframe Selector */}
+        <div className="selector-group">
+          <label className="selector-label">TIMEFRAME</label>
+          <select
+            className="nav-select"
+            value={activePeriod || 'monthly'}
+            onChange={(e) => onPeriodChange && onPeriodChange(e.target.value)}
+          >
+            <option value="monthly">📅 Monthly (1 July – 31 July 2026)</option>
+            <option value="quarterly">📅 Quarterly (Q1 FY2026)</option>
+            <option value="custom">📅 Custom Date Range</option>
           </select>
         </div>
       </div>

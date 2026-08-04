@@ -21,14 +21,26 @@ import defaultDashboardData from './data/defaultDashboardData.json';
 const normalizeLoc = (str) => {
   const s = String(str || '').trim().toLowerCase();
   if (/blr|bangalore/i.test(s)) return 'bangalore';
-  if (/g.*noida|gr.*noida|greater.*noida/i.test(s)) return 'greater noida';
-  if (/guwahati/i.test(s)) return 'guwahati';
+  if (/g.*noida|gr.*noida|greater.*noida|gnsc/i.test(s)) return 'greater noida';
+  if (/guwahati|gau/i.test(s)) return 'guwahati';
   if (/hyd|hyderabad/i.test(s)) return 'hyderabad';
-  if (/mohali/i.test(s)) return 'mohali';
-  if (/mumbai/i.test(s)) return 'mumbai';
-  if (/nagpur/i.test(s)) return 'nagpur';
-  if (/^noida$/i.test(s)) return 'noida';
+  if (/mohali|moh/i.test(s)) return 'mohali';
+  if (/mumbai|mumd|mumbai_dc/i.test(s)) return 'mumbai';
+  if (/nagpur|nag/i.test(s)) return 'nagpur';
+  if (/noida/i.test(s)) return 'noida';
   return s;
+};
+
+const isGenericLocation = (loc) => {
+  if (!loc) return true;
+  const str = String(loc).trim().toLowerCase();
+  if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
+  if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
+  if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('july') || str.includes('august') || str.includes('september') || str.includes('report') || str.includes('compliance')) return true;
+  const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'nagpur', 'noida'];
+  const norm = str.replace(/[^a-z0-9]/g, '');
+  const isMatched = validSites.some(v => v.replace(/[^a-z0-9]/g, '') === norm || norm.includes(v.replace(/[^a-z0-9]/g, '')));
+  return !isMatched;
 };
 
 function MainPortal() {
@@ -38,11 +50,33 @@ function MainPortal() {
   const [selectedSite, setSelectedSite] = useState('ALL');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  const [jobId, setJobId] = useState(null);
+  const [jobId, setJobId] = useState('latest');
   const [status, setStatus] = useState('idle');
-  const [dashboardData, setDashboardData] = useState(null); // No pre-populated data on initial load
+  const [dashboardData, setDashboardData] = useState(defaultDashboardData);
+  const [activePeriod, setActivePeriod] = useState('monthly'); // 'monthly', 'quarterly', 'custom'
 
-  // Fetch & poll for dashboard data with exponential backoff (1s → 2s → 4s → 8s → cap 10s)
+  // Dynamic Mode Switcher: Refetches & recalculates backend data when activePeriod changes
+  useEffect(() => {
+    let isSubscribed = true;
+    const loadModeData = async () => {
+      try {
+        const res = await apiFetch(`${API_BASE_URL}/api/switch-mode?mode=${activePeriod}`);
+        if (res.ok && isSubscribed) {
+          const json = await res.json();
+          setDashboardData(json);
+          if (json.jobId) setJobId(json.jobId);
+          setStatus('completed');
+        }
+      } catch (e) {
+        console.warn('Mode switch fetch error:', e);
+      }
+    };
+
+    loadModeData();
+    return () => { isSubscribed = false; };
+  }, [activePeriod]);
+
+  // Fetch & poll for dashboard data if jobId changes
   useEffect(() => {
     if (!jobId) return;
     let isSubscribed = true;
@@ -62,7 +96,6 @@ function MainPortal() {
         if (isSubscribed) {
           setDashboardData(json);
           setStatus('completed');
-          setTab((prev) => (prev === 'upload' ? 'dashboard' : prev));
         }
         return true;
       } catch (e) {
@@ -71,26 +104,7 @@ function MainPortal() {
       }
     };
 
-    fetchDashboard().then((loaded) => {
-      if (loaded || !isSubscribed) return;
-
-      let timeoutId;
-      let delay = 1000; // start at 1 second
-      const MAX_DELAY = 10000; // cap at 10 seconds
-
-      const poll = async () => {
-        if (!isSubscribed) return;
-        const done = await fetchDashboard();
-        if (!done && isSubscribed) {
-          timeoutId = setTimeout(poll, delay);
-          delay = Math.min(delay * 2, MAX_DELAY); // exponential backoff
-        }
-      };
-
-      timeoutId = setTimeout(poll, delay);
-      return () => clearTimeout(timeoutId);
-    });
-
+    fetchDashboard();
     return () => { isSubscribed = false; };
   }, [jobId]);
 
@@ -342,20 +356,31 @@ function MainPortal() {
         </div>
 
         {/* Customer header */}
-        <div className="section-header card pad-md">
+        <div className="section-header card pad-md" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h2 className="section-title">
               {exec.customerName || activeClient?.name || 'Executive Dashboard'}
             </h2>
             <p className="section-meta">
-              Location Context: <strong>{activeLocation}</strong> • Period: {exec.reportingPeriod || 'Q1 FY2026'}
+              Location Context: <strong>{activeLocation}</strong> • Period: <strong>{exec.reportingPeriod || (activePeriod === 'monthly' ? '1 July 2026 – 31 July 2026' : 'Q1 FY2026')}</strong>
             </p>
           </div>
-          <div className="download-header-actions">
+          <div className="download-header-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', padding: '0.4rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>TIMEFRAME MODE:</label>
+              <select
+                value={activePeriod}
+                onChange={(e) => setActivePeriod(e.target.value)}
+                style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', fontWeight: 700, borderRadius: '6px', border: '1px solid #94a3b8', cursor: 'pointer', background: '#f8fafc', color: '#1e293b' }}
+              >
+                <option value="monthly">📅 Monthly (July 2026)</option>
+                <option value="quarterly">📊 Quarterly (Q1 FY2026)</option>
+              </select>
+            </div>
             <div className="status-badge completed">✓ Validated Engine</div>
             {jobId && (
               <a href={`${API_BASE_URL}/api/ppt/${jobId}`} className="btn-primary" download>
-                Download PPT QBR Report
+                Download PPT ({activePeriod === 'monthly' ? 'Monthly' : 'Quarterly'})
               </a>
             )}
           </div>
@@ -476,12 +501,7 @@ function MainPortal() {
                 All Sites Overview
               </button>
               {siteSummary
-                .filter(s => {
-                  const name = String(s.siteId || '').toLowerCase().trim();
-                  return !['sla_compliance_report', 'sla compliance report', 'raw', 'sheet1', 'jfl', 'unknown'].includes(name) &&
-                         !name.includes('sla_compliance') &&
-                         !name.includes('sla compliance');
-                })
+                .filter(s => !isGenericLocation(s.siteId))
                 .map((s) => (
                   <button
                     key={s.siteId}
@@ -691,7 +711,14 @@ function MainPortal() {
 
   return (
     <div className="app-container">
-      <Navbar activeTab={tab} setActiveTab={setTab} onOpenLogin={() => setIsLoginOpen(true)} reportSites={reportSites} />
+      <Navbar
+        activeTab={tab}
+        setActiveTab={setTab}
+        onOpenLogin={() => setIsLoginOpen(true)}
+        reportSites={reportSites}
+        activePeriod={activePeriod}
+        onPeriodChange={setActivePeriod}
+      />
 
       <main className="main-content">
         {tab === 'upload' && (

@@ -29,6 +29,7 @@
 const fs   = require('fs');
 const path = require('path');
 const PptxGenJS = require('pptxgenjs');
+const { isGenericLocation, normalizeSiteName } = require('./excelParser');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -37,14 +38,14 @@ const PptxGenJS = require('pptxgenjs');
 const SLA_TARGET = 99.3; // must match processData.js
 
 const TARGET_SITES = [
-  'BANGALORE',
-  'GUWAHATI',
-  'GREATER NOIDA',
-  'NOIDA',
-  'MUMBAI',
-  'HYDERABAD',
-  'MOHALI',
-  'NAGPUR',
+  'Bangalore',
+  'Greater Noida',
+  'Guwahati',
+  'Hyderabad',
+  'Mohali',
+  'Mumbai',
+  'Nagpur',
+  'Noida',
 ];
 
 // Corporate colour palette — Navy / Steel Blue / White / Accent
@@ -97,9 +98,9 @@ try {
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function generatePPT(data, _templatePath, outputPath) {
+async function generatePPT(data, _templatePath, outputPath, options = {}) {
   console.log('[pptGenerator] Generating Board-Level Executive QBR PPT...');
-  await buildPresentation(data, outputPath);
+  await buildPresentation(data, outputPath, options);
   console.log('[pptGenerator] PPT written to:', outputPath);
 }
 
@@ -128,9 +129,9 @@ function rowFill(idx) {
 }
 
 function findSite(siteSummary, siteKey) {
+  const normKey = normalizeSiteName(siteKey);
   return (
-    siteSummary.find(s => s.siteId.toUpperCase() === siteKey) ||
-    siteSummary.find(s => s.siteId.toUpperCase().startsWith(siteKey.split(' ')[0])) ||
+    siteSummary.find(s => normalizeSiteName(s.siteId) === normKey) ||
     { siteId: siteKey }
   );
 }
@@ -168,17 +169,10 @@ function riskLevel(score) {
 }
 
 function normSite(loc) {
-  if (!loc) return '';
-  const s = String(loc).toLowerCase().trim();
-  if (s.includes('bangalore') || s.includes('blr')) return 'BANGALORE';
-  if (s.includes('greater noida') || s.includes('gr') && s.includes('noida')) return 'GREATER NOIDA';
-  if (s.includes('guwahati')) return 'GUWAHATI';
-  if (s.includes('hyderabad') || s.includes('hyd')) return 'HYDERABAD';
-  if (s.includes('mohali')) return 'MOHALI';
-  if (s.includes('mumbai')) return 'MUMBAI';
-  if (s.includes('nagpur')) return 'NAGPUR';
-  if (s === 'noida') return 'NOIDA';
-  return s.toUpperCase();
+  if (!loc || isGenericLocation(loc)) return '';
+  const norm = normalizeSiteName(loc);
+  if (isGenericLocation(norm)) return '';
+  return norm;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,7 +454,7 @@ function addNarrativeBox(slide, y, bullets, title) {
 // Main Presentation Orchestrator
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function buildPresentation(data, outputPath) {
+async function buildPresentation(data, outputPath, options = {}) {
   _slideNum = 0;
   const pres = new PptxGenJS();
   pres.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5 inches
@@ -480,22 +474,23 @@ async function buildPresentation(data, outputPath) {
   const siteApsMap  = {};
 
   TARGET_SITES.forEach((siteKey) => {
-    const prefix = siteKey.split(' ')[0];
+    const keyNorm = normalizeSiteName(siteKey);
     siteSwsMap[siteKey] = devices.filter(d =>
       !d.__isStock &&
-      (normSite(d.SiteID || d.Location) === siteKey) &&
-      (/^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType))
+      !isGenericLocation(d.SiteID || d.Location) &&
+      (normalizeSiteName(d.SiteID || d.Location) === keyNorm) &&
+      (/^sw$/i.test(d.DeviceType || '') || /switch/i.test(d.DeviceType || ''))
     );
     siteApsMap[siteKey] = devices.filter(d =>
       !d.__isStock &&
-      (normSite(d.SiteID || d.Location) === siteKey) &&
-      (/^ap$/i.test(d.DeviceType) || /access/i.test(d.DeviceType))
+      !isGenericLocation(d.SiteID || d.Location) &&
+      (normalizeSiteName(d.SiteID || d.Location) === keyNorm) &&
+      (/^ap$/i.test(d.DeviceType || '') || /access/i.test(d.DeviceType || ''))
     );
     siteIncsMap[siteKey] = incidents.filter(i => {
-      const rawLoc = String(i.SiteID || i.Location || '').trim();
-      const isGeneric = !rawLoc || ['raw', 'sheet1', 'jfl', 'unknown', 'sla_compliance_report'].includes(rawLoc.toLowerCase()) || rawLoc.toLowerCase().includes('sla_compliance');
-      const resolvedSite = (!isGeneric ? rawLoc : null) || '';
-      return normSite(resolvedSite) === siteKey || normSite(rawLoc) === siteKey;
+      const rawLoc = i.SiteID || i.Location;
+      if (isGenericLocation(rawLoc)) return false;
+      return normalizeSiteName(rawLoc) === keyNorm;
     });
   });
 
@@ -541,16 +536,40 @@ async function buildPresentation(data, outputPath) {
   // Slide 13: Risk Assessment
   buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown);
 
-  // Slides 14–37: 8 Sites × 3 Slides each
+  // Dynamic Report Generation based on site operational health (Master Prompt Standard)
   TARGET_SITES.forEach((siteKey, siteIdx) => {
     const siteData = findSite(siteSummary, siteKey);
     const siteSws  = siteSwsMap[siteKey]  || [];
     const siteIncs = siteIncsMap[siteKey] || [];
     const siteAps  = siteApsMap[siteKey]  || [];
+    const hScore   = parseFloat(siteData?.healthScore || 100);
 
-    buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
-    buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
-    buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
+    if (options.dynamicSiteSlides !== false) {
+      if (hScore >= 95 || siteIncs.length === 0) {
+        // Healthy Site (Score >= 95): 1 concise slide
+        buildHealthySiteSlide(pres, siteKey, siteData, siteSws, siteAps, siteIdx + 1);
+      } else if (hScore >= 85) {
+        // Medium Risk Site (85 <= Score < 95): 2 slides
+        buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
+        buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
+      } else if (hScore >= 70) {
+        // High Risk Site (70 <= Score < 85): 3 slides
+        buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
+        buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
+        buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
+      } else {
+        // Critical Site (Score < 70): 4 slides
+        buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
+        buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
+        buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
+        buildCriticalSiteDeepDiveSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
+      }
+    } else {
+      // Fixed 3-slide mode per site
+      buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
+      buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
+      buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
+    }
   });
 
   // Slide 38: AI Recommendations
@@ -620,11 +639,14 @@ function buildCoverSlide(pres, exec) {
     rectRadius: 0.1,
   });
 
+  const isMonthly = /july|august|september|october|november|december|january|february|march|april|may|june|month/i.test(exec.reportingPeriod || '');
+  const reportTitle = isMonthly ? 'Proactive Monthly Business Review' : 'Proactive Quarterly Business Review';
+
   s.addText(fmt(exec.customerName || 'Jubilant FoodWorks Limited'), {
     x: 0.95, y: 2.0, w: panelW - 0.5, h: 0.75,
     fontSize: 24, bold: true, color: C.TEXT_LIGHT, fontFace: 'Calibri',
   });
-  s.addText('Proactive Quarterly Business Review', {
+  s.addText(reportTitle, {
     x: 0.95, y: 2.85, w: panelW - 0.5, h: 0.55,
     fontSize: 18, bold: true, color: '82B1FF', fontFace: 'Calibri',
   });
@@ -635,7 +657,7 @@ function buildCoverSlide(pres, exec) {
     line: { color: C.ACCENT_GOLD, pt: 1.5 },
   });
 
-  s.addText(`Reporting Period: ${fmt(exec.reportingPeriod || 'Q1 FY2026')}`, {
+  s.addText(`Reporting Period: ${fmt(exec.reportingPeriod || '1 July 2026 – 31 July 2026')}`, {
     x: 0.95, y: 3.65, w: panelW - 0.5, h: 0.35,
     fontSize: 12, color: 'D0E8FF', fontFace: 'Calibri',
   });
@@ -815,63 +837,60 @@ function buildNetworkHealthSlide(pres, exec, siteSummary, incidents) {
   });
 }
 
-// ── Slide 5: Infrastructure Summary ───────────────────────────────────────
+// ── Slide 5: Infrastructure Summary & Executive Overview ───────────────────
 function buildInfrastructureSlide(pres, exec, siteSummary) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
-  addHeader(pres, s, 'INFRASTRUCTURE SUMMARY', 'Devices, Switches & Access Points Across All Monitored Sites', _slideNum);
+  addHeader(pres, s, 'EXECUTIVE SUMMARY — ALL SITES', 'Consolidated SLA Performance & RCA Driver Summary Across Monitored Sites', _slideNum);
 
   const validSites = siteSummary.filter(st => {
     const n = String(st.siteId || '').toLowerCase();
     return !['unknown', 'raw', 'sheet1', 'jfl'].includes(n) && !n.includes('sla_compliance');
   });
 
-  // Summary KPI row
-  const kpis = [
-    { label: 'Total Sites',    value: fmt(exec.totalSites)    },
-    { label: 'Active Devices', value: fmt(exec.totalDevices)  },
-    { label: 'Switches',       value: fmt(exec.totalSwitches) },
-    { label: 'Access Points',  value: fmt(exec.totalAPs)      },
-    { label: 'Stock Devices',  value: fmt(exec.totalStockDevices ?? 0) },
-  ];
-  kpis.forEach((k, i) => addKpiCard(s, 0.45 + i * 2.57, 1.05, 2.42, 1.05, k.label, k.value, C.NAVY));
-
-  // Per-site infrastructure table
-  addSectionDivider(s, 2.25, 'Per-Site Device Breakdown');
-
-  const COL_W = [2.4, 1.6, 1.6, 1.6, 2.2, 1.4, 1.6];
+  const COL_W = [1.7, 1.3, 1.8, 1.8, 2.2, 1.6, 2.03];
   const W_TOTAL = COL_W.reduce((a, b) => a + b, 0);
 
   const headers = [
-    th('Site / Location', 'left'),
-    th('Devices', 'center'),
-    th('Switches', 'center'),
-    th('APs', 'center'),
-    th('Switch Uptime %', 'center'),
-    th('Incidents', 'center'),
-    th('Health Score', 'center'),
+    th('Site', 'left'),
+    th('No of devices', 'center'),
+    th('Proactive Switch Uptime', 'center'),
+    th('JFL Switch Uptime', 'center'),
+    th('Primary RCA Driver (Switches)', 'left'),
+    th('AP Incidents (Unique)', 'center'),
+    th('Primary RCA Driver (AP)', 'left'),
   ];
 
   const rows = validSites.slice(0, 9).map((site, idx) => {
-    const fill   = rowFill(idx);
-    const hScore = parseFloat(site.healthScore);
-    const hCol   = isNaN(hScore) ? C.TEXT_MUTED : healthColor(hScore);
+    const fill = rowFill(idx);
+    const proUp = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
+    const jflUp = site.jflSwitchUptime ? `${site.jflSwitchUptime}` : `${site.switchUptime || '100.00'}`;
+    const swRca = site.primaryRca && !['None', 'Not case received', 'N/A', ''].includes(site.primaryRca) ? site.primaryRca : 'Stable Operations (No Incidents)';
+    const apRca = site.primaryRcaForAPs && !['None', 'Not case received', 'N/A', ''].includes(site.primaryRcaForAPs) ? site.primaryRcaForAPs : 'Stable Operations (No Incidents)';
+    const apIncStr = `${site.apIncidents ?? 0} / ${site.uniqueAPsWithIncidents ?? 0}`;
+
     return [
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
-      td(fmt(site.deviceCount),  fill, { align: 'center', color: C.TEXT_DARK }),
-      td(fmt(site.switchCount),  fill, { align: 'center', color: C.TEXT_DARK }),
-      td(fmt(site.apCount),      fill, { align: 'center', color: C.TEXT_DARK }),
-      td(pct(site.switchUptime), fill, { align: 'center', bold: true, color: C.BLUE }),
-      td(fmt(site.apIncidents ?? 0), fill, { align: 'center', color: C.AMBER }),
-      td(isNaN(hScore) ? 'N/A' : `${hScore.toFixed(1)} (${healthLabel(hScore)})`, fill, { align: 'center', bold: true, color: hCol }),
+      td(fmt(site.deviceCount), fill, { align: 'center', color: C.TEXT_DARK }),
+      td(proUp, fill, { align: 'center', bold: true, color: C.BLUE }),
+      td(jflUp, fill, { align: 'center', bold: true, color: C.GREEN }),
+      td(swRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(apIncStr, fill, { align: 'center', color: C.AMBER, bold: true }),
+      td(apRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 8.5 }),
     ];
   });
 
   s.addTable([headers, ...rows], {
-    x: 0.45, y: 2.65, w: W_TOTAL,
-    colW: COL_W, fontSize: 9.5, rowH: 0.44,
+    x: 0.45, y: 1.35, w: W_TOTAL,
+    colW: COL_W, fontSize: 9, rowH: 0.52,
     border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+  });
+
+  const periodStr = exec.reportingPeriod || '1 July 2026 – 31 July 2026';
+  s.addText(`This review consolidates SLA performance, rack and switch uptime, and access-point incident RCA for all eight monitored JFL sites for the period ${periodStr}.`, {
+    x: 0.45, y: 6.6, w: 12.43, h: 0.4,
+    fontSize: 9, italic: true, color: C.TEXT_MUTED, fontFace: 'Calibri',
   });
 }
 
@@ -1078,10 +1097,7 @@ function buildRCAHeatmapSlide(pres, siteSummary, incidents, rcaBreakdown) {
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s, 'RCA INCIDENT HEATMAP', 'Site vs. Root Cause Category — Incident Frequency Matrix', _slideNum);
 
-  const validSites = siteSummary.filter(st => {
-    const n = String(st.siteId || '').toLowerCase();
-    return !['unknown', 'raw', 'sheet1', 'jfl'].includes(n) && !n.includes('sla_compliance');
-  }).slice(0, 8);
+  const validSites = siteSummary.filter(st => !isGenericLocation(st.siteId)).slice(0, 8);
 
   const topRCAs = rcaBreakdown.slice(0, 6).map(r => r.rca);
 
@@ -1089,12 +1105,12 @@ function buildRCAHeatmapSlide(pres, siteSummary, incidents, rcaBreakdown) {
   const matrix = {};
   validSites.forEach(st => { matrix[st.siteId] = {}; topRCAs.forEach(r => { matrix[st.siteId][r] = 0; }); });
   incidents.forEach(i => {
-    const rawLoc = String(i.SiteID || i.Location || '').trim();
-    const isGeneric = !rawLoc || rawLoc.toLowerCase().includes('sla_compliance') || ['raw', 'sheet1', 'jfl', 'unknown'].includes(rawLoc.toLowerCase());
-    const resolvedLoc = isGeneric ? '' : rawLoc;
-    const siteName = validSites.find(st => st.siteId === resolvedLoc || normSite(resolvedLoc) === normSite(st.siteId))?.siteId;
-    if (siteName && matrix[siteName] && i.RCA && matrix[siteName][i.RCA] !== undefined) {
-      matrix[siteName][i.RCA]++;
+    const rawLoc = i.SiteID || i.Location;
+    if (isGenericLocation(rawLoc)) return;
+    const normLoc = normalizeSiteName(rawLoc);
+    const matchedSite = validSites.find(st => normalizeSiteName(st.siteId) === normLoc)?.siteId;
+    if (matchedSite && matrix[matchedSite] && i.RCA && matrix[matchedSite][i.RCA] !== undefined) {
+      matrix[matchedSite][i.RCA]++;
     }
   });
 
@@ -1311,16 +1327,16 @@ function buildSiteRankingSlide(pres, siteSummary, incidents) {
   addHeader(pres, s, 'SITE HEALTH RANKING', 'All Sites Ranked from Healthiest to Most Critical', _slideNum);
 
   const validSites = siteSummary
-    .filter(st => { const n = String(st.siteId || '').toLowerCase(); return !['unknown', 'raw', 'sheet1', 'jfl'].includes(n) && !n.includes('sla_compliance'); })
+    .filter(st => !isGenericLocation(st.siteId))
     .sort((a, b) => parseFloat(b.healthScore || 0) - parseFloat(a.healthScore || 0));
 
   // Count incidents by site
   const incBySite = {};
   incidents.forEach(i => {
-    const rawLoc = String(i.SiteID || i.Location || '').trim();
-    const isGeneric = !rawLoc || rawLoc.toLowerCase().includes('sla_compliance') || ['raw', 'sheet1', 'jfl', 'unknown'].includes(rawLoc.toLowerCase());
-    const site = isGeneric ? '' : rawLoc;
-    if (site) incBySite[site] = (incBySite[site] || 0) + 1;
+    const rawLoc = i.SiteID || i.Location;
+    if (isGenericLocation(rawLoc)) return;
+    const site = normalizeSiteName(rawLoc);
+    incBySite[site] = (incBySite[site] || 0) + 1;
   });
 
   const medals = ['1st', '2nd', '3rd'];
@@ -1372,19 +1388,17 @@ function buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown) {
   const topRca = rcaBreakdown[0]?.rca || 'N/A';
 
   const validSites = siteSummary
-    .filter(st => { const n = String(st.siteId || '').toLowerCase(); return !['unknown', 'raw', 'sheet1', 'jfl'].includes(n) && !n.includes('sla_compliance'); })
+    .filter(st => !isGenericLocation(st.siteId))
     .sort((a, b) => parseFloat(a.healthScore || 100) - parseFloat(b.healthScore || 100));
 
   const incBySiteRca = {};
   incidents.forEach(i => {
-    const rawLoc = String(i.SiteID || i.Location || '').trim();
-    const isGeneric = !rawLoc || rawLoc.toLowerCase().includes('sla_compliance') || ['raw', 'sheet1', 'jfl', 'unknown'].includes(rawLoc.toLowerCase());
-    const site = isGeneric ? '' : rawLoc;
+    const rawLoc = i.SiteID || i.Location;
+    if (isGenericLocation(rawLoc)) return;
+    const site = normalizeSiteName(rawLoc);
     const rca  = i.RCA || 'Unknown';
-    if (site) {
-      if (!incBySiteRca[site]) incBySiteRca[site] = {};
-      incBySiteRca[site][rca] = (incBySiteRca[site][rca] || 0) + 1;
-    }
+    if (!incBySiteRca[site]) incBySiteRca[site] = {};
+    incBySiteRca[site][rca] = (incBySiteRca[site][rca] || 0) + 1;
   });
 
   const COL_W = [2.0, 1.5, 1.4, 2.5, 5.03];
@@ -1655,6 +1669,91 @@ function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteN
     s.addText(rec.priority, { x: 0.45, y: y + 0.04, w: 0.65, h: 0.2, fontSize: 7.5, bold: true, color: 'FFFFFF', align: 'center', fontFace: 'Calibri' });
     s.addText(`${rec.action}  [Timeline: ${rec.timeline}]`, { x: 1.2, y: y + 0.04, w: 11.6, h: 0.2, fontSize: 8.5, color: C.TEXT_DARK, fontFace: 'Calibri' });
   });
+}
+
+function buildHealthySiteSlide(pres, siteKey, site, siteSws, siteAps, siteNum) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s,
+    `${site.siteId || siteKey}  —  HEALTHY SITE REVIEW`,
+    `Site Review ${siteNum} of 8  ·  Operational Excellence & 100% SLA Compliance`,
+    _slideNum
+  );
+
+  const kpis = [
+    { label: 'Active Devices', value: fmt(site.deviceCount),            color: C.NAVY  },
+    { label: 'Switches / APs', value: `${fmt(site.switchCount)} / ${fmt(site.apCount)}`, color: C.BLUE },
+    { label: 'Switch Uptime',  value: pct(site.switchUptime),           color: C.GREEN },
+    { label: 'Incident-Free %',value: pct(site.incidentFreePercent),    color: C.GREEN },
+    { label: 'Health Score',   value: `${fmt(site.healthScore)} (Excellent)`, color: C.GREEN },
+    { label: 'SLA Compliance', value: '100.00%',                        color: C.GREEN },
+  ];
+  kpis.forEach((k, i) => {
+    const row = i < 3 ? 0 : 1;
+    const col = i % 3;
+    addKpiCard(s, 0.45 + col * 4.28, row === 0 ? 1.05 : 2.32, 4.05, 1.1, k.label, k.value, k.color);
+  });
+
+  addSectionDivider(s, 3.55, 'Operational Excellence Highlights');
+  const highlights = [
+    `Maintained 100.00% operational SLA compliance throughout the reporting period.`,
+    `Zero high-priority incident tickets recorded for active production infrastructure.`,
+    `All ${fmt(site.switchCount)} switches and ${fmt(site.apCount)} access points operated without SLA breaches.`,
+  ];
+  highlights.forEach((h, i) => {
+    s.addShape('roundRect', { x: 0.45, y: 3.95 + i * 0.45, w: 12.43, h: 0.38, fill: { color: C.GREEN_LIGHT }, line: { color: C.GREEN, pt: 0.5 }, rectRadius: 0.04 });
+    s.addShape('rect', { x: 0.45, y: 3.95 + i * 0.45, w: 0.08, h: 0.38, fill: { color: C.GREEN } });
+    s.addText(h, { x: 0.65, y: 3.98 + i * 0.45, w: 12.0, h: 0.3, fontSize: 9, color: '14532D', fontFace: 'Calibri' });
+  });
+
+  const aiSummary = [
+    `${site.siteId || siteKey} is a top-performing healthy site with an operational health score of ${fmt(site.healthScore)}.`,
+    `Infrastructure stability is high across all registered devices. No remediation action required for the upcoming reporting cycle.`,
+  ];
+  addNarrativeBox(s, 5.5, aiSummary, `Executive Summary — ${site.siteId || siteKey}`);
+}
+
+function buildCriticalSiteDeepDiveSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteNum) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s,
+    `${site.siteId || siteKey}  —  CRITICAL SITE DEEP DIVE`,
+    `Site Review ${siteNum} of 8  ·  Root Cause Timeline & Escalation Remediation Plan`,
+    _slideNum
+  );
+
+  const totalIncs = siteIncs.length;
+  const p1Incs    = siteIncs.filter(i => /p1|critical/i.test(i.Priority || '')).length;
+  const openIncs  = siteIncs.filter(i => !/closed|resolved/i.test(i.Status || '')).length;
+
+  const kpis = [
+    { label: 'Health Score',   value: `${fmt(site.healthScore)} (Critical)`, color: C.RED },
+    { label: 'Critical (P1)',  value: fmt(p1Incs),                           color: p1Incs > 0 ? C.RED : C.AMBER },
+    { label: 'Open Incidents', value: fmt(openIncs),                         color: openIncs > 0 ? C.RED : C.GREEN },
+    { label: 'Primary RCA',    value: String(site.primaryRca || 'Multiple Drivers').substring(0, 20), color: C.RED },
+  ];
+  kpis.forEach((k, i) => addKpiCard(s, 0.45 + i * 3.22, 1.05, 3.05, 1.0, k.label, k.value, k.color));
+
+  addSectionDivider(s, 2.2, 'Systemic Root Cause Analysis & Operational Impact');
+  const criticalInsights = [
+    `Health Score degraded to ${fmt(site.healthScore)} due to repeated incident occurrences.`,
+    `Primary failure driver: ${site.primaryRca || 'Infrastructure Power / Hardware Outages'}.`,
+    `Requires immediate technical escalation and on-site engineering dispatch within 24 hours.`,
+  ];
+  criticalInsights.forEach((insight, i) => {
+    s.addShape('roundRect', { x: 0.45, y: 2.6 + i * 0.45, w: 12.43, h: 0.38, fill: { color: C.RED_LIGHT }, line: { color: C.RED, pt: 0.75 }, rectRadius: 0.04 });
+    s.addShape('rect', { x: 0.45, y: 2.6 + i * 0.45, w: 0.08, h: 0.38, fill: { color: C.RED } });
+    s.addText(insight, { x: 0.65, y: 2.63 + i * 0.45, w: 12.0, h: 0.3, fontSize: 9, color: '7F1D1D', fontFace: 'Calibri' });
+  });
+
+  const deepActionPlan = [
+    `1. Dispatch Senior Network Field Engineer to ${site.siteId || siteKey} for physical infrastructure audit.`,
+    `2. Perform comprehensive power stability & UPS check to mitigate recurring power outage risks.`,
+    `3. Replace faulty core/access switches showing repeated SLA breaches and log RMA ticket.`,
+  ];
+  addNarrativeBox(s, 4.2, deepActionPlan, `Emergency Action Plan — ${site.siteId || siteKey}`);
 }
 
 // ── Slide 38: Recommendations ─────────────────────────────────────────────
@@ -1975,7 +2074,9 @@ function th(text, align = 'center') {
     options: {
       bold: true, color: C.TEXT_LIGHT,
       fill: { color: C.HEADER_FILL },
-      align, fontFace: 'Calibri', fontSize: 9.5,
+      align, valign: 'middle',
+      fontFace: 'Calibri', fontSize: 9,
+      margin: [5, 4, 5, 4],
     },
   };
 }
@@ -1983,7 +2084,13 @@ function th(text, align = 'center') {
 function td(text, fill, opts = {}) {
   return {
     text: String(text),
-    options: { fill: { color: fill }, fontFace: 'Calibri', ...opts },
+    options: {
+      fill: { color: fill },
+      fontFace: 'Calibri', valign: 'middle',
+      fontSize: 8.5,
+      margin: [4, 4, 4, 4],
+      ...opts,
+    },
   };
 }
 

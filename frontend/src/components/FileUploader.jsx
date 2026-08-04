@@ -6,7 +6,8 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin } = useAuth();
   const [incidentFile, setIncidentFile] = useState(null);
   const [inventoryFile, setInventoryFile] = useState(null);
-  const [reportPeriod, setReportPeriod] = useState('Q1 FY2026 (7 Apr – 6 Jul 2026)');
+  const [periodMode, setPeriodMode] = useState('monthly'); // 'monthly', 'quarterly', 'custom'
+  const [reportPeriod, setReportPeriod] = useState('1 July 2026 – 31 July 2026');
 
   const [status, setStatus] = useState('idle'); // idle, processing, failed, completed
   const [stageText, setStageText] = useState('Uploading Excel Files...');
@@ -112,7 +113,9 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     if (inventoryFile) form.append('inventory', inventoryFile);
     form.append('clientId', activeClient?.id || 'client-jfl');
     form.append('location', activeLocation || 'All Locations');
+    form.append('periodMode', periodMode);
     form.append('reportPeriod', reportPeriod);
+    form.append('reportingPeriod', reportPeriod);
     form.append('uploadedBy', user?.name || 'System User');
 
     try {
@@ -264,13 +267,31 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
             </div>
 
             <div className="context-card">
-              <label>REPORTING PERIOD</label>
+              <label>REPORT TIMEFRAME</label>
+              <select
+                value={periodMode}
+                onChange={(e) => {
+                  const mode = e.target.value;
+                  setPeriodMode(mode);
+                  if (mode === 'monthly') setReportPeriod('1 July 2026 – 31 July 2026');
+                  if (mode === 'quarterly') setReportPeriod('Q1 FY2026 (7 Apr – 6 Jul 2026)');
+                }}
+                className="select-field"
+              >
+                <option value="monthly">📅 Monthly Report (1 July – 31 July 2026)</option>
+                <option value="quarterly">📅 Quarterly Report (Q1 FY2026)</option>
+                <option value="custom">📅 Custom Date Range</option>
+              </select>
+            </div>
+
+            <div className="context-card">
+              <label>REPORT PERIOD LABEL</label>
               <input
                 type="text"
                 value={reportPeriod}
                 onChange={(e) => setReportPeriod(e.target.value)}
                 className="input-field"
-                placeholder="e.g. Q1 FY2026"
+                placeholder="e.g. 1 July 2026 – 31 July 2026"
               />
             </div>
           </div>

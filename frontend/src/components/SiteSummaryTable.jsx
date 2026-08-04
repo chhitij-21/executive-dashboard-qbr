@@ -36,17 +36,13 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
         <table className="data-table site-summary-master-table" style={{ width: '100%', minWidth: '1150px', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th style={{ width: '11%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Site</th>
-              <th style={{ width: '5%', padding: '0.6rem 0.4rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Devices</th>
-              <th style={{ width: '5%', padding: '0.6rem 0.4rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Switches</th>
-              <th style={{ width: '5%', padding: '0.6rem 0.4rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">APs</th>
-              <th style={{ width: '11%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Proactive Switch Uptime</th>
-              <th style={{ width: '11%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">JFL Switch Uptime</th>
-              <th style={{ width: '10%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">AP Incidents (Unique)</th>
-              <th style={{ width: '9%', padding: '0.6rem 0.4rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Incident-Free %</th>
-              <th style={{ width: '11%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Health Score</th>
-              <th style={{ width: '11%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA (Switches)</th>
-              <th style={{ width: '11%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA (APs)</th>
+              <th style={{ width: '14%', minWidth: '130px', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Site</th>
+              <th style={{ width: '10%', padding: '0.6rem 0.4rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">No of devices</th>
+              <th style={{ width: '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Proactive Switch Uptime</th>
+              <th style={{ width: '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">JFL Switch Uptime</th>
+              <th style={{ width: '18%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA Driver (Switches)</th>
+              <th style={{ width: '12%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">AP Incidents (Unique)</th>
+              <th style={{ width: '18%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA Driver (AP)</th>
             </tr>
           </thead>
           <tbody>
@@ -54,15 +50,8 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
               const isSelected = selectedSite === site.siteId;
               const proUp = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
               const jflUp = site.jflSwitchUptime ? `${site.jflSwitchUptime}` : `${site.switchUptime || '100.00'}`;
-              const swRca = site.primaryRca && site.primaryRca !== 'None' ? site.primaryRca : 'Not case received';
-              const apRca = site.primaryRcaForAPs && site.primaryRcaForAPs !== 'None' ? site.primaryRcaForAPs : 'Not case received';
-
-              const healthNum = parseFloat(site.healthScore);
-              const healthColorClass =
-                isNaN(healthNum) ? '' :
-                healthNum >= 95 ? 'health-excellent' :
-                healthNum >= 85 ? 'health-good' :
-                healthNum >= 70 ? 'health-fair' : 'health-poor';
+              const swRca = site.primaryRca && !['None', 'Not case received', 'N/A', ''].includes(site.primaryRca) ? site.primaryRca : 'Stable Operations (No Incidents)';
+              const apRca = site.primaryRcaForAPs && !['None', 'Not case received', 'N/A', ''].includes(site.primaryRcaForAPs) ? site.primaryRcaForAPs : 'Stable Operations (No Incidents)';
 
               return (
                 <tr
@@ -75,35 +64,23 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
                   }}
                   className={isSelected ? 'selected-site-row' : ''}
                 >
-                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={site.siteId}>
+                  <td style={{ minWidth: '130px', padding: '0.55rem 0.5rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }} title={site.siteId}>
                     <strong>{site.siteId}</strong>
                   </td>
                   <td style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem' }} className="cell-center">{site.deviceCount}</td>
-                  <td style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem' }} className="cell-center">{site.switchCount}</td>
-                  <td style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem' }} className="cell-center">{site.apCount}</td>
                   <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
                     <strong style={{ color: '#2563eb' }}>{proUp}%</strong>
                   </td>
                   <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
                     <strong style={{ color: '#16a34a' }}>{jflUp}%</strong>
                   </td>
-                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
-                    <strong>{site.apIncidents ?? 0}</strong> ({site.uniqueAPsWithIncidents ?? 0})
-                  </td>
-                  <td style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem' }} className="cell-center">
-                    {site.incidentFreePercent === 'Data Not Available' || site.incidentFreePercent === null
-                      ? <span className="na-text">N/A</span>
-                      : `${site.incidentFreePercent}%`}
-                  </td>
-                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
-                    <span className={`health-badge ${healthColorClass}`} style={{ fontSize: '0.72rem', padding: '0.15rem 0.45rem', whiteSpace: 'nowrap' }}>
-                      {site.healthScore === 'Data Not Available' || site.healthScore === null ? 'N/A' : `${site.healthScore} (${site.healthLabel})`}
-                    </span>
-                  </td>
-                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }} title={swRca}>
+                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }} title={swRca}>
                     {swRca}
                   </td>
-                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }} title={apRca}>
+                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
+                    <strong>{site.apIncidents ?? 0} / {site.uniqueAPsWithIncidents ?? 0}</strong>
+                  </td>
+                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }} title={apRca}>
                     {apRca}
                   </td>
                 </tr>

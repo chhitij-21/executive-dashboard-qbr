@@ -1,0 +1,15 @@
+node_modules
+frontend/node_modules
+frontend/dist
+dist
+reports
+tmp
+data/incoming
+.git
+.env
+.env.local
+.env.*.local
+*.log
+*.pptx
+*.xlsx
+*.xls
