@@ -30,12 +30,24 @@ const fs   = require('fs');
 const path = require('path');
 const PptxGenJS = require('pptxgenjs');
 const { isGenericLocation, normalizeSiteName } = require('./excelParser');
+// FINDING-010/012/029 FIX: Import ruleEngine to use canonical health labels and
+// period-aware SLA target instead of duplicated local functions.
+const ruleEngine = require('./ruleEngine');
+const pptDataMapper = require('./pptDataMapper');
+const reconciliationEngine = require('./reconciliationEngine');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SLA_TARGET = 99.3; // must match processData.js
+// FINDING-010 FIX: SLA_TARGET is no longer hardcoded here.
+// It is read from data.slaAnalytics.slaTarget which is set by processData.js
+// using the period-aware ruleEngine.getSLATarget(periodMode).
+// A module-level fallback is kept only for backward compatibility with old data.
+const SLA_TARGET_FALLBACK = 99.3;
+// Mutable: overwritten at start of buildPresentation() from the canonical data value.
+let SLA_TARGET = SLA_TARGET_FALLBACK;
+
 
 const TARGET_SITES = [
   'Bangalore',
@@ -99,6 +111,13 @@ try {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function generatePPT(data, _templatePath, outputPath, options = {}) {
+  console.log('[pptGenerator] Mapping canonical snapshot to PPT presentation model...');
+  const pptData = pptDataMapper.mapSnapshotToPPTData(data);
+
+  console.log('[pptGenerator] Running pre-generation automated data reconciliation...');
+  const outputDir = path.dirname(outputPath);
+  reconciliationEngine.reconcileDashboardAndPPT(data, pptData, outputDir);
+
   console.log('[pptGenerator] Generating Board-Level Executive QBR PPT...');
   await buildPresentation(data, outputPath, options);
   console.log('[pptGenerator] PPT written to:', outputPath);
@@ -118,10 +137,11 @@ function pct(v) {
   return `${n.toFixed(2)}%`;
 }
 
-function uptimeColor(rawValue) {
+function uptimeColor(rawValue, slaTarget) {
   const n = parseFloat(String(rawValue ?? ''));
   if (isNaN(n)) return C.TEXT_MUTED;
-  return n < SLA_TARGET ? C.RED : C.GREEN;
+  // FINDING-010 FIX: Use the passed slaTarget from data, not a hardcoded constant.
+  return n < (slaTarget ?? SLA_TARGET_FALLBACK) ? C.RED : C.GREEN;
 }
 
 function rowFill(idx) {
@@ -141,22 +161,20 @@ function avg(arr) {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
-function healthColor(score) {
-  const n = parseFloat(score);
-  if (isNaN(n)) return C.TEXT_MUTED;
-  if (n >= 95) return C.GREEN;
-  if (n >= 85) return C.BLUE;
-  if (n >= 70) return C.AMBER;
-  return C.RED;
+// FINDING-012/029 FIX: Removed duplicate healthLabel() and healthColor() functions.
+// Now uses ruleEngine.getHealthLabel() which reads from rules.yaml.
+// healthColor maps the canonical label to a colour — no separate threshold logic.
+function healthLabel(score) {
+  return ruleEngine.getHealthLabel(score);
 }
 
-function healthLabel(score) {
-  const n = parseFloat(score);
-  if (isNaN(n)) return 'N/A';
-  if (n >= 95) return 'Excellent';
-  if (n >= 85) return 'Good';
-  if (n >= 70) return 'Fair';
-  return 'Critical';
+function healthColor(score) {
+  const label = ruleEngine.getHealthLabel(score);
+  if (label === 'Excellent') return C.GREEN;
+  if (label === 'Good')      return C.BLUE;
+  if (label === 'Fair')      return C.AMBER;
+  if (label === 'Poor')      return C.RED;
+  return C.TEXT_MUTED;
 }
 
 function riskLevel(score) {
@@ -467,6 +485,11 @@ async function buildPresentation(data, outputPath, options = {}) {
   const slaAn       = data.slaAnalytics     || {};
   const switchAn    = data.switchAnalytics  || {};
   const apAn        = data.apAnalytics      || {};
+
+  // FINDING-010 FIX: Resolve SLA_TARGET from the processed data (set by processData.js).
+  // This guarantees the PPT uses the same threshold that was used to determine breaches.
+  // eslint-disable-next-line no-global-assign
+  SLA_TARGET = parseFloat(slaAn.slaTarget || exec.slaTarget) || SLA_TARGET_FALLBACK;
 
   // Pre-build site-level index maps
   const siteSwsMap  = {};
@@ -1525,7 +1548,7 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   );
 
   const at100 = siteSws.filter(sw => (sw.__effectiveUptime ?? 100) >= 100).length;
-  const swUp  = siteSws.length > 0 ? avg(siteSws.map(sw => sw.__effectiveUptime ?? 100)) : 100;
+  const swUp  = parseFloat(site.jflSwitchUptime || site.switchUptime || site.overallUptime || '100.00');
 
   const kpis = [
     { label: 'Avg Switch Uptime', value: `${swUp.toFixed(2)}%`, color: swUp >= SLA_TARGET ? C.GREEN : C.RED },

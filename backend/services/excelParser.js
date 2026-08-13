@@ -223,11 +223,12 @@ function parseIncidentSheet(rows) {
       ''
     ).trim();
 
-    let rawLoc = row['Location'] || row['Site'] || row['SiteID'] || row['Site Name'] || '';
+    let rawLoc = row['Location'] || row['Site'] || row['SiteID'] || row['Site Name'] || row['Device Name'] || '';
     if (rawLoc.toLowerCase().includes('raw') || rawLoc.toLowerCase().includes('sheet') || rawLoc.toLowerCase().includes('sla_compliance')) {
       rawLoc = '';
     }
     const normLoc = normalizeSiteName(rawLoc);
+
 
     const cat = String(row['Category'] || row['Ticket Category'] || row['Type'] || row['Ticket Type'] || row['Class'] || '').trim();
     const desc = String(row['Description'] || row['Short Description'] || row['Subject'] || row['Summary'] || '').trim();
@@ -273,6 +274,16 @@ function parseIncidentSheet(rows) {
 /**
  * Parse the "All Location" uptime summary sheet.
  */
+// Normalise a raw uptime value from an Excel pivot table.
+// Pivot tables store percentage fields as decimals (0.9987 = 99.87%).
+// When the numeric value is in the range (0, 1] we scale it to 0–100.
+function normaliseUptimePct(raw) {
+  const n = parseFloat(String(raw).replace('%', ''));
+  if (isNaN(n)) return null;
+  if (n > 0 && n <= 1) return Math.max(0, Math.min(100, parseFloat((n * 100).toFixed(2))));
+  return Math.max(0, Math.min(100, parseFloat(n.toFixed(2))));
+}
+
 function parseUptimeSummary(rows) {
   const map = {};
   rows.forEach((row) => {
@@ -284,8 +295,8 @@ function parseUptimeSummary(rows) {
 
     if (serial && typeof serial === 'string' && serial.length > 3) {
       map[serial] = {
-        proactiveUptime: parseFloat(String(proactive).replace('%', '')) || null,
-        jflUptime:       parseFloat(String(jfl).replace('%', '')) || null,
+        proactiveUptime: normaliseUptimePct(proactive),
+        jflUptime:       normaliseUptimePct(jfl),
         location:        String(location),
         deviceType:      String(devType),
       };

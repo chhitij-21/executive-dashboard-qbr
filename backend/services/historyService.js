@@ -7,9 +7,12 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const DATA_DIR = process.env.VERCEL
-  ? path.join(os.tmpdir(), 'data')
-  : path.resolve(__dirname, '..', '..', 'data');
+const BASE_STORAGE_DIR = process.env.PERSISTENT_DIR || process.env.STORAGE_DIR || process.env.RENDER_DISK_PATH;
+const DATA_DIR = BASE_STORAGE_DIR
+  ? path.join(BASE_STORAGE_DIR, 'data')
+  : (process.env.VERCEL
+      ? path.join(os.tmpdir(), 'data')
+      : path.resolve(__dirname, '..', '..', 'data'));
 const METADATA_FILE = path.join(DATA_DIR, 'reports_metadata.json');
 
 function ensureDataDir() {

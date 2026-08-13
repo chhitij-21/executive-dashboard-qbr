@@ -7,6 +7,12 @@ echo =======================================================================
 echo.
 echo Starting JFL Executive Dashboard & Operations Server...
 
+:: Ensure Node.js is accessible in PATH
+where node >nul 2>&1
+if %errorlevel% neq 0 (
+    set "PATH=C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VisualStudio\NodeJs;C:\Users\Chhitij\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;C:\Program Files\nodejs;%PATH%"
+)
+
 cd /d "%~dp0"
 
 :: Clear any stale process listening on port 3000

@@ -92,20 +92,13 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       setStageText('⚡ Server is waking up (Render Free Tier cold start takes ~30-45s)... Please wait.');
     }, 3500);
 
-    // Auto-authenticate if no token is stored in localStorage
-    let storedTok = localStorage.getItem('portal_token');
+    // User must be authenticated via the login flow before uploading.
+    // The auto-auth endpoint now requires server-side credentials and cannot be called from the browser.
+    const storedTok = localStorage.getItem('portal_token');
     if (!storedTok) {
-      try {
-        const autoRes = await fetch(`${API_BASE_URL}/api/auth/auto`);
-        if (autoRes.ok) {
-          const autoJson = await autoRes.json();
-          if (autoJson.token) {
-            localStorage.setItem('portal_token', autoJson.token);
-          }
-        }
-      } catch (aErr) {
-        console.warn('Auto-auth attempt failed:', aErr);
-      }
+      setStatus('failed');
+      setErrorMsg('Authentication required. Please sign in before uploading.');
+      return;
     }
 
     const form = new FormData();
@@ -147,18 +140,24 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     }
   };
 
-  // Poll job status every 1 second until completed or failed
+  // Poll job status with exponential backoff (FINDING-038 FIX).
+  // Starts at 1s, doubles each retry up to 10s max to reduce server load on free-tier.
   useEffect(() => {
     if (!currentJobId || status !== 'processing') return;
 
     let isSubscribed = true;
     let timerId = null;
+    let pollInterval = 1000; // Start at 1 second
+    const MAX_INTERVAL = 10000; // Cap at 10 seconds
 
     const checkStatus = async () => {
       try {
         const res = await apiFetch(`${API_BASE_URL}/api/status/${currentJobId}`);
         if (!res.ok) {
-          if (isSubscribed) timerId = setTimeout(checkStatus, 1000);
+          if (isSubscribed) {
+            pollInterval = Math.min(pollInterval * 2, MAX_INTERVAL);
+            timerId = setTimeout(checkStatus, pollInterval);
+          }
           return;
         }
         const data = await res.json();
@@ -173,11 +172,16 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           setStatus('failed');
           setErrorMsg(data.error || 'Report generation failed. Please check your input files.');
         } else {
-          timerId = setTimeout(checkStatus, 1000);
+          // Still processing — apply backoff
+          pollInterval = Math.min(pollInterval * 1.5, MAX_INTERVAL);
+          timerId = setTimeout(checkStatus, Math.round(pollInterval));
         }
       } catch (err) {
         console.error('Job status check error:', err);
-        if (isSubscribed) timerId = setTimeout(checkStatus, 1000);
+        if (isSubscribed) {
+          pollInterval = Math.min(pollInterval * 2, MAX_INTERVAL);
+          timerId = setTimeout(checkStatus, pollInterval);
+        }
       }
     };
 
@@ -188,6 +192,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       if (timerId) clearTimeout(timerId);
     };
   }, [currentJobId, status, onJobCompleted]);
+
 
   return (
     <div className="upload-container">

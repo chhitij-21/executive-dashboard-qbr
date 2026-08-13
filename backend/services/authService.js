@@ -1,4 +1,5 @@
 // backend/services/authService.js
+const crypto = require('crypto');
 // Authentication & Role-Based Access Control (RBAC) service.
 // Supports Admin and Client User roles out-of-the-box.
 
@@ -47,7 +48,18 @@ function authenticateUser(email, password) {
 
   _purgeExpiredTokens();
 
-  const token = `tok_${user.id}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  // SECURITY: Use cryptographically secure random token. Never embed user ID or timestamp.
+  const token = crypto.randomBytes(32).toString('hex');
+
+  // Guard against unbounded memory growth on long-running servers
+  if (tokens.size >= 10000) {
+    _purgeExpiredTokens();
+    // If still too large after purge, clear oldest 20%
+    if (tokens.size >= 9000) {
+      const keys = [...tokens.keys()].slice(0, Math.floor(tokens.size * 0.2));
+      keys.forEach(k => tokens.delete(k));
+    }
+  }
   const expiresAt = Date.now() + TOKEN_TTL_MS;
 
   const session = {
@@ -91,7 +103,7 @@ function invalidateToken(authHeader) {
 }
 
 function registerServiceSession(user) {
-  const token = `svc_tok_${user.username || 'svc'}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const token = 'svc_' + crypto.randomBytes(32).toString('hex');
   const expiresAt = Date.now() + TOKEN_TTL_MS;
   const session = {
     user: _safeUser(user),

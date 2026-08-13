@@ -5,7 +5,13 @@
 const authService = require('../services/authService');
 
 const SERVICE_USER = process.env.SERVICE_USER || 'svc_dashboard';
-const SERVICE_PASS = process.env.SERVICE_PASS || 'svc_pass_default';
+// SECURITY: No hardcoded fallback — must be set as env var.
+// If not set, the auto-auth route will reject all requests.
+const SERVICE_PASS = process.env.SERVICE_PASS || null;
+
+if (!SERVICE_PASS) {
+  console.warn('[auth] WARNING: SERVICE_PASS env var is not set. /api/auth/auto will be disabled.');
+}
 
 /**
  * Middleware: validates Bearer token from Authorization header.
@@ -37,6 +43,17 @@ function requireAdmin(req, res, next) {
  * Uses SERVICE_USER env var — no hardcoded credentials.
  */
 function handleAutoAuthRoute(req, res) {
+  // SECURITY: Require X-Service-Pass header matching the SERVER-SIDE env var.
+  // This prevents the auto-auth endpoint from being an open backdoor.
+  if (!SERVICE_PASS) {
+    return res.status(503).json({ error: 'Auto-auth is not configured on this server.' });
+  }
+
+  const providedPass = req.headers['x-service-pass'] || req.headers['x-service-token'];
+  if (!providedPass || providedPass !== SERVICE_PASS) {
+    return res.status(401).json({ error: 'Invalid or missing service credentials.' });
+  }
+
   const session = authService.registerServiceSession({
     id: 'user-svc-001',
     email: `${SERVICE_USER}@proactivedata.com`,

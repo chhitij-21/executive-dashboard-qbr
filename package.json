@@ -11,7 +11,8 @@
     "dev:backend": "node backend/index.js",
     "dev:frontend": "npx vite --config frontend/vite.config.js",
     "build": "npm install --prefer-offline && cd frontend && npm install --include=dev --prefer-offline && npm run build",
-    "start": "node backend/index.js"
+    "start": "node backend/index.js",
+    "test": "node --test backend/tests/*.test.js"
   },
   "dependencies": {
     "adm-zip": "^0.5.10",

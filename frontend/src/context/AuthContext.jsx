@@ -40,37 +40,10 @@ export function AuthProvider({ children }) {
         }
       }
 
-      // Auto-login fallback to ensure authenticated user on initial load
-      // Credentials are read from environment variables; never hardcoded.
-      const _autoEmail    = import.meta.env.VITE_ADMIN_EMAIL    || 'admin@portal.com';
-      const _autoPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
-      try {
-        const loginRes = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: _autoEmail, password: _autoPassword }),
-        });
+      // Explicit Login Enforcement: No automatic login fallback.
+      // Unauthenticated users must log in via the login modal.
+      setAuthenticating(false);
 
-        if (loginRes.ok) {
-          const json = await loginRes.json();
-          const userObj = json.user || json;
-          setUser(userObj);
-          setSession(json);
-          if (json.token) {
-            setToken(json.token);
-            localStorage.setItem('portal_token', json.token);
-            localStorage.setItem('portal_user', JSON.stringify(userObj));
-          }
-          setIsBackendOffline(false);
-        } else {
-          setIsBackendOffline(false);
-        }
-      } catch (err) {
-        console.warn('Auto-login network fallback:', err.message);
-        setIsBackendOffline(false);
-      } finally {
-        setAuthenticating(false);
-      }
     };
 
     checkSession();
@@ -152,7 +125,13 @@ export function AuthProvider({ children }) {
       if (json.token) setToken(json.token);
       setIsBackendOffline(false);
 
-      localStorage.setItem('portal_user', JSON.stringify(userObj));
+      const safeUserStorage = {
+        email: userObj.email,
+        name: userObj.name,
+        role: userObj.role,
+        assignedClient: userObj.assignedClient,
+      };
+      localStorage.setItem('portal_user', JSON.stringify(safeUserStorage));
       if (json.token) localStorage.setItem('portal_token', json.token);
 
       if (userObj.role === 'client_user' && userObj.assignedClient !== 'all') {

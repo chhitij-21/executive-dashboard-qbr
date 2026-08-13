@@ -6,48 +6,59 @@ const fs = require('fs');
 const yaml = require('yaml');
 const path = require('path');
 
-const RULES_PATH = path.resolve(__dirname, '..', 'config', 'rules.yaml');
 let rules = {};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Rules Loading
-// ─────────────────────────────────────────────────────────────────────────────
-function loadRules() {
+function getRulesPath(configFile = 'rules.yaml') {
+  const safeFilename = path.basename(configFile || 'rules.yaml');
+  return path.resolve(__dirname, '..', 'config', safeFilename);
+}
+
+function loadRules(configFile = 'rules.yaml') {
   try {
-    const file = fs.readFileSync(RULES_PATH, 'utf8');
+    const targetPath = getRulesPath(configFile);
+    let filePath = targetPath;
+    if (!fs.existsSync(targetPath)) {
+      filePath = path.resolve(__dirname, '..', 'config', 'rules.yaml');
+    }
+    const file = fs.readFileSync(filePath, 'utf8');
     rules = yaml.parse(file);
-    console.log('[ruleEngine] Business rules loaded successfully');
+    console.log(`[ruleEngine] Business rules loaded successfully from ${path.basename(filePath)}`);
+    return rules;
   } catch (err) {
-    console.error('[ruleEngine] Failed to load rules.yaml:', err.message);
+    console.error('[ruleEngine] Failed to load rules file:', err.message);
     rules = {};
+    return rules;
   }
 }
 
-function getRulesYaml() {
+function getRulesYaml(configFile = 'rules.yaml') {
   try {
-    if (fs.existsSync(RULES_PATH)) {
-      return fs.readFileSync(RULES_PATH, 'utf8');
+    const targetPath = getRulesPath(configFile);
+    const filePath = fs.existsSync(targetPath) ? targetPath : path.resolve(__dirname, '..', 'config', 'rules.yaml');
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf8');
     }
   } catch (err) {
-    console.error('[ruleEngine] Error reading rules.yaml:', err.message);
+    console.error('[ruleEngine] Error reading rules file:', err.message);
   }
   return '';
 }
 
-function saveRulesYaml(rawYaml) {
+function saveRulesYaml(rawYaml, configFile = 'rules.yaml') {
   try {
     const parsed = yaml.parse(rawYaml);
     if (!parsed || typeof parsed !== 'object') {
       throw new Error('Invalid YAML format: Root content must be an object.');
     }
-    const dir = path.dirname(RULES_PATH);
+    const targetPath = getRulesPath(configFile);
+    const dir = path.dirname(targetPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(RULES_PATH, rawYaml, 'utf8');
+    fs.writeFileSync(targetPath, rawYaml, 'utf8');
     rules = parsed;
-    console.log('[ruleEngine] Business rules updated and reloaded in memory successfully.');
-    return { success: true, rules: parsed };
+    console.log(`[ruleEngine] Business rules updated and saved to ${path.basename(targetPath)} successfully.`);
+    return { success: true, rules: parsed, configFile: path.basename(targetPath) };
   } catch (err) {
-    console.error('[ruleEngine] Error saving rules.yaml:', err.message);
+    console.error('[ruleEngine] Error saving rules file:', err.message);
     throw err;
   }
 }
@@ -86,16 +97,25 @@ function getHealthLabel(score) {
 // SLA
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getSLATarget() {
-  return rules.sla?.monthly_uptime_target_percent ?? rules.sla?.uptime_target_percent ?? 99.3;
+/**
+ * Returns the correct SLA uptime target for the given reporting period.
+ * FINDING-010 FIX: Period-aware — monthly uses 99.9%, quarterly uses 99.3%.
+ * @param {string} [periodMode] - 'monthly' | 'quarterly' | undefined (default: quarterly)
+ */
+function getSLATarget(periodMode) {
+  const monthly  = rules.sla?.monthly_uptime_target_percent ?? 99.9;
+  const quarterly = rules.sla?.uptime_target_percent ?? 99.3;
+  return periodMode === 'monthly' ? monthly : quarterly;
 }
 
 /**
  * Enrich each device with SLA fields.
  * N/A or blank uptime → treated as 100% (no incidents reported).
+ * @param {Array} devicesArray
+ * @param {string} [periodMode] - 'monthly' | 'quarterly'
  */
-function applySLAThresholds(devicesArray) {
-  const target = getSLATarget();
+function applySLAThresholds(devicesArray, periodMode) {
+  const target = getSLATarget(periodMode);
   return devicesArray.map((d) => {
     const raw = d['JFL Uptime %'];
     let effective;
@@ -131,7 +151,6 @@ function getDeviceSeverity(deviceType, isCoreDevice) {
  * Uses incident_severity_values from rules.yaml for matching.
  */
 function splitBySeverity(incidents) {
-  const sevCol = detectSeverityColumn(incidents);
   const sevValues = rules.incident_severity_values || {
     critical: ['P1', 'Critical', 'High'],
     major: ['P2', 'Major', 'Medium'],
@@ -141,7 +160,8 @@ function splitBySeverity(incidents) {
   let critical = 0, major = 0, minor = 0;
 
   incidents.forEach((inc) => {
-    const raw = String(sevCol ? (inc[sevCol] ?? '') : '').trim();
+    const rawVal = inc.Severity ?? inc.Priority ?? inc.Impact ?? inc['P1/P2/P3'] ?? inc.severity ?? inc.priority ?? '';
+    const raw = String(rawVal ?? '').trim();
     if (sevValues.critical.some((v) => v.toLowerCase() === raw.toLowerCase())) {
       critical++;
     } else if (sevValues.major.some((v) => v.toLowerCase() === raw.toLowerCase())) {
@@ -154,17 +174,6 @@ function splitBySeverity(incidents) {
   });
 
   return { critical, major, minor, total: incidents.length };
-}
-
-function detectSeverityColumn(rows) {
-  if (!rows || rows.length === 0) return null;
-  const candidates = ['Severity', 'Priority', 'Impact', 'P1/P2/P3', 'severity'];
-  const sample = rows[0];
-  for (const c of candidates) {
-    if (c in sample) return c;
-  }
-  const keys = Object.keys(sample);
-  return keys.find((k) => /severity|priority|impact/i.test(k)) || null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

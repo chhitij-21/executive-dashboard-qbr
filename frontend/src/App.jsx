@@ -16,32 +16,11 @@ import SiteInspector from './components/SiteInspector';
 import TrendChart from './components/TrendChart';
 import { API_BASE_URL, apiFetch } from './config/api';
 import defaultDashboardData from './data/defaultDashboardData.json';
+// FINDING-025 FIX: Import shared utilities instead of duplicating them inline.
+import { normalizeLoc, isGenericLocation } from './utils/siteUtils';
 
-// Normalize a site name for comparison (mirrors normalizeSiteName in processData.js)
-const normalizeLoc = (str) => {
-  const s = String(str || '').trim().toLowerCase();
-  if (/blr|bangalore/i.test(s)) return 'bangalore';
-  if (/g.*noida|gr.*noida|greater.*noida|gnsc/i.test(s)) return 'greater noida';
-  if (/guwahati|gau/i.test(s)) return 'guwahati';
-  if (/hyd|hyderabad/i.test(s)) return 'hyderabad';
-  if (/mohali|moh/i.test(s)) return 'mohali';
-  if (/mumbai|mumd|mumbai_dc/i.test(s)) return 'mumbai';
-  if (/nagpur|nag/i.test(s)) return 'nagpur';
-  if (/noida/i.test(s)) return 'noida';
-  return s;
-};
-
-const isGenericLocation = (loc) => {
-  if (!loc) return true;
-  const str = String(loc).trim().toLowerCase();
-  if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
-  if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
-  if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('july') || str.includes('august') || str.includes('september') || str.includes('report') || str.includes('compliance')) return true;
-  const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'nagpur', 'noida'];
-  const norm = str.replace(/[^a-z0-9]/g, '');
-  const isMatched = validSites.some(v => v.replace(/[^a-z0-9]/g, '') === norm || norm.includes(v.replace(/[^a-z0-9]/g, '')));
-  return !isMatched;
-};
+// FINDING-025: normalizeLoc and isGenericLocation imported from ./utils/siteUtils above.
+// Local duplicates removed.
 
 function MainPortal() {
   const { user, activeClient, activeLocation, setActiveLocation } = useAuth();
@@ -54,21 +33,26 @@ function MainPortal() {
   const [status, setStatus] = useState('idle');
   const [dashboardData, setDashboardData] = useState(defaultDashboardData);
   const [activePeriod, setActivePeriod] = useState('monthly'); // 'monthly', 'quarterly', 'custom'
+  const [apiError, setApiError] = useState(null);
 
   // Dynamic Mode Switcher: Refetches & recalculates backend data when activePeriod changes
   useEffect(() => {
     let isSubscribed = true;
     const loadModeData = async () => {
       try {
+        setApiError(null);
         const res = await apiFetch(`${API_BASE_URL}/api/switch-mode?mode=${activePeriod}`);
         if (res.ok && isSubscribed) {
           const json = await res.json();
           setDashboardData(json);
           if (json.jobId) setJobId(json.jobId);
           setStatus('completed');
+        } else if (!res.ok && isSubscribed) {
+          setApiError('Unable to switch period mode. Please verify server connection.');
         }
       } catch (e) {
         console.warn('Mode switch fetch error:', e);
+        if (isSubscribed) setApiError('Network connection issue while switching period mode.');
       }
     };
 
@@ -76,174 +60,58 @@ function MainPortal() {
     return () => { isSubscribed = false; };
   }, [activePeriod]);
 
-  // Fetch & poll for dashboard data if jobId changes
+  // Fetch & poll for dashboard data if jobId, activePeriod, or site selection changes
   useEffect(() => {
-    if (!jobId) return;
     let isSubscribed = true;
 
     const fetchDashboard = async () => {
       try {
-        const res = await apiFetch(`${API_BASE_URL}/api/dashboard/${jobId}`);
+        const siteParam = (activeLocation && activeLocation !== 'All Locations' && activeLocation !== 'ALL')
+          ? activeLocation
+          : (selectedSite && selectedSite !== 'ALL' ? selectedSite : 'ALL');
+
+        const query = new URLSearchParams({
+          jobId: jobId || 'latest',
+          site: siteParam,
+          period: activePeriod,
+        }).toString();
+
+        const res = await apiFetch(`${API_BASE_URL}/api/dashboard?${query}`);
         if (res.status === 202) return false;
-        if (!res.ok) return false;
+        if (!res.ok) {
+          if (isSubscribed) setApiError('Could not retrieve dashboard data from server.');
+          return false;
+        }
         const json = await res.json();
         if (json.status && json.status !== 'completed') {
           if (json.status === 'failed' || json.status === 'error') {
-            if (isSubscribed) setStatus('failed');
+            if (isSubscribed) {
+              setStatus('failed');
+              setApiError(json.error || 'Report processing failed.');
+            }
           }
           return false;
         }
         if (isSubscribed) {
           setDashboardData(json);
           setStatus('completed');
+          setApiError(null);
         }
         return true;
       } catch (e) {
         console.error('Fetch dashboard error:', e);
+        if (isSubscribed) setApiError('Network error connecting to backend API.');
         return false;
       }
     };
 
     fetchDashboard();
     return () => { isSubscribed = false; };
-  }, [jobId]);
+  }, [jobId, activePeriod, selectedSite, activeLocation]);
 
-  // Filter dashboard data reactively based on activeLocation / selectedSite filter
-  const activeDashboardData = useMemo(() => {
-    if (!dashboardData) return null;
+  // Use canonical backend dashboard data directly (SSOT)
+  const activeDashboardData = dashboardData;
 
-    const locFilter = activeLocation && activeLocation !== 'All Locations' && activeLocation !== 'ALL'
-      ? activeLocation
-      : (selectedSite && selectedSite !== 'ALL' ? selectedSite : null);
-
-    if (!locFilter) return dashboardData;
-
-    const normalizedFilter = normalizeLoc(locFilter);
-
-    const devices = (dashboardData.devices || []).filter((d) => {
-      return normalizeLoc(d.SiteID || d.Location || '') === normalizedFilter;
-    });
-
-    if (devices.length === 0) return dashboardData;
-
-    const incidents = (dashboardData.incidents || []).filter((i) => {
-      return normalizeLoc(i.SiteID || i.Location || '') === normalizedFilter;
-    });
-
-    const activeDevices = devices.filter((d) => !d.__isStock);
-    const stockDevices  = devices.filter((d) => d.__isStock);
-
-    const aps = activeDevices.filter((d) => {
-      const type = String(d.DeviceType || '').toLowerCase();
-      return type.includes('ap') || type.includes('access');
-    });
-
-    const switches = activeDevices.filter((d) => {
-      const type = String(d.DeviceType || '').toLowerCase();
-      return type.includes('sw') || type.includes('switch') || (!type.includes('ap') && !type.includes('access'));
-    });
-
-    const switchUptimes = switches.map((d) => d.__effectiveUptime ?? 100);
-    const apUptimes     = aps.map((d) => d.__effectiveUptime ?? 100);
-    const allUptimes    = activeDevices.map((d) => d.__effectiveUptime ?? 100);
-
-    const overallUptime = allUptimes.length > 0 ? (allUptimes.reduce((a,b)=>a+b,0)/allUptimes.length).toFixed(2) : '100.00';
-    const switchUptime  = switchUptimes.length > 0 ? (switchUptimes.reduce((a,b)=>a+b,0)/switchUptimes.length).toFixed(2) : '100.00';
-    const apAvgUptime   = apUptimes.length > 0 ? (apUptimes.reduce((a,b)=>a+b,0)/apUptimes.length).toFixed(2) : '100.00';
-
-    const incFreeCount  = activeDevices.filter((d) => !incidents.some((i) => i.DeviceID === d.DeviceID)).length;
-    const incFreePct    = activeDevices.length > 0 ? ((incFreeCount / activeDevices.length) * 100).toFixed(2) : '100.00';
-
-    const breaches = activeDevices.filter((d) => d.__slaBreach).length;
-    const slaPct   = activeDevices.length > 0 ? (((activeDevices.length - breaches) / activeDevices.length) * 100).toFixed(2) : '100.00';
-
-    const coreSwitches = switches.filter(s => String(s.CoreNonCore || '').toLowerCase().includes('core') && !String(s.CoreNonCore || '').toLowerCase().includes('non'));
-    const nonCoreSwitches = switches.filter(s => String(s.CoreNonCore || '').toLowerCase().includes('non'));
-    const coreUptimes = coreSwitches.map(s => s.__effectiveUptime ?? 100);
-    const nonCoreUptimes = nonCoreSwitches.map(s => s.__effectiveUptime ?? 100);
-    const coreUptime = coreUptimes.length > 0 ? (coreUptimes.reduce((a,b)=>a+b,0)/coreUptimes.length).toFixed(2) : '100.00';
-    const nonCoreUptime = nonCoreUptimes.length > 0 ? (nonCoreUptimes.reduce((a,b)=>a+b,0)/nonCoreUptimes.length).toFixed(2) : '100.00';
-
-    const apIncidentsAtSite = incidents.filter(i => aps.some(a => a.DeviceID === i.DeviceID));
-    const uniqueAPsWithInc = new Set(apIncidentsAtSite.map(i => i.DeviceID)).size;
-
-    const criticalIncs = incidents.filter(i => ['P1','Critical','CRITICAL','High','HIGH','Core','CORE'].includes(String(i.Priority||''))).length;
-    const majorIncs    = incidents.filter(i => ['P2','Major','MAJOR','Medium','MEDIUM','Non-Core','NON-CORE'].includes(String(i.Priority||''))).length;
-    const minorIncs    = incidents.length - criticalIncs - majorIncs;
-
-    const breachingDevs = activeDevices.filter(d => d.__slaBreach);
-    const compliantDevs = activeDevices.filter(d => !d.__slaBreach);
-
-    const siteSummary = (dashboardData.siteSummary || []).filter((s) => {
-      return normalizeLoc(s.siteId) === normalizedFilter || s.siteId.toLowerCase().includes(normalizedFilter);
-    });
-
-    return {
-      ...dashboardData,
-      executiveSummary: {
-        ...dashboardData.executiveSummary,
-        totalSites: siteSummary.length || 1,
-        totalDevices: activeDevices.length,
-        totalStockDevices: stockDevices.length,
-        totalSwitches: switches.length,
-        totalAPs: aps.length,
-        overallUptime,
-        incidentFreePercent: incFreePct,
-        slaCompliance: slaPct,
-        totalIncidents: incidents.length,
-        criticalIncidents: criticalIncs,
-        majorIncidents: majorIncs,
-        minorIncidents: Math.max(0, minorIncs),
-      },
-      siteSummary,
-      switchAnalytics: {
-        ...dashboardData.switchAnalytics,
-        totalSwitches: switches.length,
-        coreSwitches: coreSwitches.length,
-        nonCoreSwitches: nonCoreSwitches.length,
-        coreUptime,
-        nonCoreUptime,
-        overallUptime: switchUptime,
-        switchIncidents: incidents.filter(i => switches.some(s => s.DeviceID === i.DeviceID)).length,
-        top10SwitchOutages: (dashboardData.switchAnalytics?.top10SwitchOutages || []).filter(s => normalizeLoc(s.Location) === normalizedFilter || String(s.Location).toLowerCase().includes(normalizedFilter)),
-      },
-      apAnalytics: {
-        ...dashboardData.apAnalytics,
-        totalAPs: aps.length,
-        apAverageUptime: apAvgUptime,
-        apIncidents: apIncidentsAtSite.length,
-        uniqueAPsWithIncidents: uniqueAPsWithInc,
-        top10APOutages: (dashboardData.apAnalytics?.top10APOutages || []).filter(a => normalizeLoc(a.Location) === normalizedFilter || String(a.Location).toLowerCase().includes(normalizedFilter)),
-      },
-      incidentAnalytics: {
-        ...dashboardData.incidentAnalytics,
-        totalIncidents: incidents.length,
-        criticalIncidents: criticalIncs,
-        majorIncidents: majorIncs,
-        minorIncidents: Math.max(0, minorIncs),
-        siteWiseIncidents: [{ siteId: locFilter, count: incidents.length }],
-      },
-      rcaAnalytics: {
-        ...dashboardData.rcaAnalytics,
-        totalAnalyzedIncidents: incidents.length,
-      },
-      slaAnalytics: {
-        ...dashboardData.slaAnalytics,
-        overallSlaCompliance: slaPct,
-        compliantActiveDevices: compliantDevs.length,
-        breachingActiveDevices: breachingDevs.length,
-        breachingDevices: breachingDevs.map(d => ({
-          DeviceID: d.DeviceID,
-          Location: d.SiteID || d.Location,
-          CoreNonCore: d.CoreNonCore || 'N/A',
-          uptime: `${d.__effectiveUptime}%`,
-          breachesSLA: true,
-        })),
-      },
-      devices,
-      incidents,
-    };
-  }, [dashboardData, activeLocation, selectedSite]);
 
   // Requirement 1: Device Uptime Distribution for ALL Switches (Core and Non-Core)
   const switchUptimeChartData = useMemo(() => {
@@ -271,7 +139,7 @@ function MainPortal() {
         },
       ],
     };
-  }, [activeDashboardData]);
+  }, [activeDashboardData?.devices]);
 
   // Formatted RCA Category Distribution chart
   const rcaChartData = useMemo(() => {
@@ -295,17 +163,17 @@ function MainPortal() {
         },
       ],
     };
-  }, [activeDashboardData]);
+  }, [activeDashboardData?.rcaAnalytics]);
 
   const slaMonthlyData = useMemo(() => {
     const trend = activeDashboardData?.slaAnalytics?.monthlySLATrend || [];
     return trend.map((t) => ({ label: t.month, value: parseFloat(t.slaPercent) }));
-  }, [activeDashboardData]);
+  }, [activeDashboardData?.slaAnalytics]);
 
   const incidentTrendData = useMemo(() => {
     const trend = activeDashboardData?.incidentAnalytics?.monthlyTrend || [];
     return trend.map((t) => ({ label: t.month, value: t.count }));
-  }, [activeDashboardData]);
+  }, [activeDashboardData?.incidentAnalytics]);
 
   // Render full 7-section Executive Dashboard
   const renderDashboard = () => {
@@ -350,10 +218,20 @@ function MainPortal() {
 
     return (
       <div className="dashboard-section">
-        {/* Success Notifications Banner */}
-        <div className="alert-box alert-success" style={{ marginBottom: '1rem', background: '#d4edda', color: '#155724', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #c3e6cb', fontWeight: 500 }}>
-          <strong>Dashboard Generated Successfully</strong> • <strong>PowerPoint Generated Successfully</strong> • <strong>Validation Completed</strong> — <strong>Ready for Download</strong>
-        </div>
+        {apiError && (
+          <div className="alert-box alert-error" style={{ marginBottom: '1rem', background: '#f8d7da', color: '#721c24', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #f5c6cb', fontWeight: 500 }}>
+            <strong>Server Alert:</strong> {apiError}
+          </div>
+        )}
+        {/* FINDING-024 FIX: Success banner is now conditional — shown only when actual
+            report data exists and a real job was processed (jobId set by upload), not for demo data. */}
+        {activeDashboardData && !apiError && jobId && jobId !== 'latest' && jobId !== 'default' && (
+          <div className="alert-box alert-success" style={{ marginBottom: '1rem', background: '#d4edda', color: '#155724', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #c3e6cb', fontWeight: 500 }}>
+            <strong>Dashboard Generated Successfully</strong> •{' '}
+            {/* Only show PPT success if there's a real job to download */}
+            <strong>PowerPoint Generated Successfully</strong> • <strong>Validation Completed</strong> — <strong>Ready for Download</strong>
+          </div>
+        )}
 
         {/* Customer header */}
         <div className="section-header card pad-md" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>

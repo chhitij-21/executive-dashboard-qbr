@@ -1,13 +1,15 @@
 // backend/index.js — Executive Dashboard & Multi-Client QBR Web Portal API
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const path = require('path');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const os = require('os');
 
-const { processJFLWorkbooks } = require('./services/processData');
+const { processJFLWorkbooks, filterDashboardBySite } = require('./services/processData');
+
 const clientService = require('./services/clientService');
 const historyService = require('./services/historyService');
 const { validateUpload } = require('./services/uploadValidationService');
@@ -16,7 +18,9 @@ const ruleEngine = require('./services/ruleEngine');
 
 const app = express();
 
-// ── CORS: allow localhost, onrender.com subdomains, and configured origins ────
+// ── CORS: only allow explicit origins from ALLOWED_ORIGINS + localhost for dev ─
+// SECURITY FIX (FINDING-008): Removed wildcard *.onrender.com — any Render app
+// could previously make credentialed requests to this server.
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(o => o.trim())
@@ -24,30 +28,73 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (curl, Postman, same-origin in prod)
+    // Allow requests with no origin (curl, Postman, server-to-server)
     if (!origin) return callback(null, true);
 
     try {
       const hostname = new URL(origin).hostname;
-      if (
-        hostname.endsWith('.onrender.com') ||
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        ALLOWED_ORIGINS.some((o) => origin.startsWith(o))
-      ) {
-        return callback(null, true);
-      }
+      // Development: allow localhost
+      const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+      // Production: only explicitly configured origins
+      const isAllowed = ALLOWED_ORIGINS.some((o) => origin === o || origin.startsWith(o));
+
+      if (isLocalhost || isAllowed) return callback(null, true);
     } catch (e) {}
 
     callback(new Error(`CORS: Origin ${origin} is not allowed.`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Service-Pass'],
   credentials: true,
 }));
-const compression = require('compression');
 app.use(compression());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+
+// ── Inline rate limiter for auth routes (FINDING-009) ─────────────────────────
+// Limits each IP to 20 login attempts per 15 minutes without a new dependency.
+const _authRateMap = new Map();
+const AUTH_LIMIT = 20;
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+
+function authRateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  const record = _authRateMap.get(ip) || { count: 0, windowStart: now };
+
+  if (now - record.windowStart > AUTH_WINDOW_MS) {
+    record.count = 0;
+    record.windowStart = now;
+  }
+
+  record.count += 1;
+  _authRateMap.set(ip, record);
+
+  if (record.count > AUTH_LIMIT) {
+    return res.status(429).json({ error: 'Too many login attempts. Please try again in 15 minutes.' });
+  }
+  next();
+}
+
+const _heavyRateMap = new Map();
+const HEAVY_LIMIT = 30; // max 30 heavy upload/analysis ops per 15 mins
+function heavyRateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  const record = _heavyRateMap.get(ip) || { count: 0, windowStart: now };
+
+  if (now - record.windowStart > AUTH_WINDOW_MS) {
+    record.count = 0;
+    record.windowStart = now;
+  }
+
+  record.count += 1;
+  _heavyRateMap.set(ip, record);
+
+  if (record.count > HEAVY_LIMIT) {
+    return res.status(429).json({ error: 'Rate limit exceeded for report generation and analysis. Please try again shortly.' });
+  }
+  next();
+}
 
 // Vercel Serverless Path Normalizer: ONLY active on Vercel deployments.
 // Ensures /api prefix is preserved when Vercel strips it in function rewrites.
@@ -60,16 +107,17 @@ if (process.env.VERCEL) {
   });
 }
 
-app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
-app.use(express.static(path.join(__dirname, '..', 'dist')));
+// Frontend static assets are served later (after API routes) with existence check.
+// Removed duplicate early static registrations that pre-empted API routes on some paths.
 
-// Directories (os.tmpdir fallback for Vercel serverless environment)
-const INCOMING_DIR = process.env.VERCEL
-  ? path.join(os.tmpdir(), 'incoming')
-  : path.resolve('data', 'incoming');
-const REPORTS_DIR = process.env.VERCEL
-  ? path.join(os.tmpdir(), 'reports')
-  : path.resolve('reports');
+// Directories (os.tmpdir fallback for Vercel serverless environment, PERSISTENT_DIR for cloud persistent storage)
+const BASE_STORAGE_DIR = process.env.PERSISTENT_DIR || process.env.STORAGE_DIR || process.env.RENDER_DISK_PATH;
+const INCOMING_DIR = BASE_STORAGE_DIR
+  ? path.join(BASE_STORAGE_DIR, 'data', 'incoming')
+  : (process.env.VERCEL ? path.join(os.tmpdir(), 'incoming') : path.resolve('data', 'incoming'));
+const REPORTS_DIR = BASE_STORAGE_DIR
+  ? path.join(BASE_STORAGE_DIR, 'reports')
+  : (process.env.VERCEL ? path.join(os.tmpdir(), 'reports') : path.resolve('reports'));
 
 [INCOMING_DIR, REPORTS_DIR].forEach((d) => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -118,9 +166,12 @@ app.use('/api', (req, res, next) => {
 // ── Auth Routes ─────────────────────────────────────────────────────────────
 app.get(['/api/auth/auto', '/auth/auto'], handleAutoAuthRoute);
 
-app.post(['/api/auth/login', '/auth/login'], (req, res) => {
+app.post(['/api/auth/login', '/auth/login'], authRateLimit, (req, res) => {
   const { email, password } = req.body;
-  const session = authService.authenticateUser(email, password);
+  if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+  const session = authService.authenticateUser(email.trim(), password);
   if (!session) return res.status(401).json({ error: 'Invalid email or password' });
   res.json(session);
 });
@@ -138,12 +189,12 @@ app.get('/api/auth/demo-accounts', (req, res) => {
   res.json({ users: authService.getDemoUsers() });
 });
 
-// ── Client & Location Management Routes ─────────────────────────────────────
-app.get(['/api/clients', '/clients'], (req, res) => {
+// SECURITY FIX (FINDING-019): Added requireAuth to prevent unauthenticated client enumeration.
+app.get(['/api/clients', '/clients'], requireAuth, (req, res) => {
   res.json({ clients: clientService.getAllClients() });
 });
 
-app.get('/api/clients/:id', (req, res) => {
+app.get('/api/clients/:id', requireAuth, (req, res) => {
   const client = clientService.getClientById(req.params.id);
   if (!client) return res.status(404).json({ error: 'Client not found' });
   res.json({ client });
@@ -189,6 +240,10 @@ app.put(['/api/rules', '/rules'], requireAuth, requireAdmin, (req, res) => {
     if (!rawYaml || typeof rawYaml !== 'string') {
       return res.status(400).json({ error: 'YAML content is required.' });
     }
+    // SECURITY FIX (FINDING-031): Limit YAML payload size to prevent DoS
+    if (rawYaml.length > 50 * 1024) {
+      return res.status(413).json({ error: 'YAML content too large. Maximum size is 50KB.' });
+    }
     const result = ruleEngine.saveRulesYaml(rawYaml);
     res.json({ success: true, message: 'rules.yaml updated successfully', ...result });
   } catch (err) {
@@ -196,8 +251,8 @@ app.put(['/api/rules', '/rules'], requireAuth, requireAdmin, (req, res) => {
   }
 });
 
-// ── Report History Route ────────────────────────────────────────────────────
-app.get(['/api/history', '/history'], (req, res) => {
+// SECURITY FIX (FINDING-019): Added requireAuth to prevent unauthenticated history enumeration.
+app.get(['/api/history', '/history'], requireAuth, (req, res) => {
   const { clientId, location, status } = req.query;
   const history = historyService.getHistory({ clientId, location, status });
   res.json({ history });
@@ -233,7 +288,7 @@ app.delete(['/api/history/:jobId', '/history/:jobId'], requireAuth, (req, res) =
 app.get(['/api/health', '/health'], (req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 
 // ── AI Excel Schema Analyzer Endpoint ──────────────────────────────────────
-app.post(['/api/analyze-excel', '/analyze-excel'], requireAuth, upload.any(), (req, res) => {
+app.post(['/api/analyze-excel', '/analyze-excel'], requireAuth, heavyRateLimit, upload.any(), (req, res) => {
   try {
     const uploadedFile = req.files?.[0] || req.file;
     if (!uploadedFile) {
@@ -255,7 +310,7 @@ app.post(['/api/analyze-excel', '/analyze-excel'], requireAuth, upload.any(), (r
 });
 
 // ── Upload & Report Generation Workflow Endpoint ────────────────────────────
-app.post(['/api/upload', '/upload'], requireAuth, upload.fields([
+app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields([
   { name: 'incidents', maxCount: 1 },
   { name: 'inventory', maxCount: 1 },
   { name: 'excel', maxCount: 1 }, // legacy fallback
@@ -312,7 +367,13 @@ app.post(['/api/upload', '/upload'], requireAuth, upload.fields([
   // 3. Trigger Existing Processing Engine asynchronously via setImmediate
   // Ensures res.json() flushes HTTP 200 to client/proxy BEFORE heavy background processing starts.
   setImmediate(() => {
-    processJFLWorkbooks(incidentFile.path, inventoryFile ? inventoryFile.path : null, outputDir, { reportingPeriod: reportPeriod, periodMode })
+    processJFLWorkbooks(incidentFile.path, inventoryFile ? inventoryFile.path : null, outputDir, {
+      clientId,
+      clientName,
+      ruleConfigFile: client?.ruleConfigFile,
+      reportingPeriod: reportPeriod,
+      periodMode,
+    })
       .then((result) => {
         const isSuccess = result && result.success;
         const status = isSuccess ? 'completed' : 'failed';
@@ -509,7 +570,10 @@ app.all(['/api/switch-mode', '/switch-mode'], async (req, res) => {
       jobs[autoJobId] = { status: 'completed', ...result, ...record };
 
       const content = fs.readFileSync(result.dashboardPath, 'utf8');
-      return res.json({ jobId: autoJobId, ...JSON.parse(content) });
+      const rawData = JSON.parse(content);
+      const site = req.query.site || req.body?.site;
+      const finalData = site ? filterDashboardBySite(rawData, site) : rawData;
+      return res.json({ jobId: autoJobId, ...finalData });
     }
 
     res.status(500).json({ error: 'Failed to process report mode' });
@@ -518,6 +582,37 @@ app.all(['/api/switch-mode', '/switch-mode'], async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Server-Side Site Filter & Dashboard Query Endpoint ─────────────────────
+// SSOT: Calculates site-filtered dashboard metrics directly on the processing engine.
+app.get(['/api/dashboard', '/dashboard'], (req, res) => {
+  try {
+    const jobId = req.query.jobId || 'latest';
+    const site  = req.query.site || 'ALL';
+
+    let job = null;
+    if (jobId === 'latest' || jobId === 'default') {
+      const history = historyService.getHistory();
+      job = history.find((h) => h.status === 'completed') || Object.values(jobs).find((j) => j.status === 'completed');
+    } else {
+      job = jobs[jobId] || historyService.getReportByJobId(jobId);
+    }
+
+    if (!job || !job.dashboardPath || !fs.existsSync(job.dashboardPath)) {
+      return res.status(404).json({ error: 'Dashboard data not found for requested job' });
+    }
+
+    const content = fs.readFileSync(job.dashboardPath, 'utf8');
+    const fullData = JSON.parse(content);
+    const filteredData = filterDashboardBySite(fullData, site);
+
+    res.json({ jobId: job.jobId || jobId, ...filteredData });
+  } catch (err) {
+    console.error('[server] Error in GET /api/dashboard:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ── Download Helpers ─────────────────────────────────────────────────────────
 const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
@@ -596,8 +691,17 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       return res.status(404).json({ error: `${pathKey} file not available on server` });
     }
 
-    console.log(`[server] Serving file download: ${targetPath}`);
-    res.download(targetPath);
+    // SECURITY FIX (FINDING-007): Path traversal guard.
+    // Ensure the resolved file path is strictly within REPORTS_DIR.
+    const resolvedTarget = path.resolve(targetPath);
+    const resolvedReports = path.resolve(REPORTS_DIR);
+    if (!resolvedTarget.startsWith(resolvedReports + path.sep) && resolvedTarget !== resolvedReports) {
+      console.error(`[server] SECURITY: Path traversal attempt blocked. Requested: ${resolvedTarget}`);
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    console.log(`[server] Serving file download: ${resolvedTarget}`);
+    res.download(resolvedTarget);
   } catch (err) {
     console.error('[server] Download error:', err.message);
     res.status(500).json({ error: err.message });
