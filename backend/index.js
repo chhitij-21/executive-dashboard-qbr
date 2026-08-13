@@ -501,19 +501,20 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
     job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
   }
 
-  if (!job) return res.status(404).json({ error: 'Job not found' });
-  if (job.status !== 'completed') return res.status(202).json({ status: job.status, error: job.error });
-
-  let dPath = job.dashboardPath;
+  let dPath = job?.dashboardPath;
   if (!dPath || !fs.existsSync(dPath)) {
-    dPath = path.join(REPORTS_DIR, `job_${job.jobId || reqJobId}`, 'dashboard_data.json');
-  }
-  if (!fs.existsSync(dPath)) {
-    dPath = path.join(REPORTS_DIR, `job_${job.jobId || reqJobId}`, 'dashboard.json');
+    const activeJobId = job?.jobId || reqJobId;
+    const candidates = [
+      path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
+      path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard.json'),
+      path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+      path.resolve('data', 'dashboard_data.json'),
+    ];
+    dPath = candidates.find((p) => fs.existsSync(p));
   }
 
   try {
-    if (!fs.existsSync(dPath)) return res.status(404).json({ error: 'Dashboard JSON not found' });
+    if (!dPath || !fs.existsSync(dPath)) return res.status(404).json({ error: 'Dashboard JSON not found' });
     const content = fs.readFileSync(dPath, 'utf8');
     res.json(JSON.parse(content));
   } catch (e) {
@@ -598,15 +599,26 @@ app.get(['/api/dashboard', '/dashboard'], (req, res) => {
       job = jobs[jobId] || historyService.getReportByJobId(jobId);
     }
 
-    if (!job || !job.dashboardPath || !fs.existsSync(job.dashboardPath)) {
+    let dPath = job?.dashboardPath;
+    if (!dPath || !fs.existsSync(dPath)) {
+      const activeJobId = job?.jobId || jobId;
+      const candidates = [
+        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
+        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+        path.resolve('data', 'dashboard_data.json'),
+      ];
+      dPath = candidates.find((p) => fs.existsSync(p));
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
       return res.status(404).json({ error: 'Dashboard data not found for requested job' });
     }
 
-    const content = fs.readFileSync(job.dashboardPath, 'utf8');
+    const content = fs.readFileSync(dPath, 'utf8');
     const fullData = JSON.parse(content);
     const filteredData = filterDashboardBySite(fullData, site);
 
-    res.json({ jobId: job.jobId || jobId, ...filteredData });
+    res.json({ jobId: job?.jobId || jobId, ...filteredData });
   } catch (err) {
     console.error('[server] Error in GET /api/dashboard:', err.message);
     res.status(500).json({ error: err.message });
@@ -669,21 +681,36 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
     if (!job) return res.status(404).json({ error: 'Report job not found' });
 
-    let targetPath = job[pathKey];
+    let targetPath = job?.[pathKey];
     if (!targetPath || !fs.existsSync(targetPath)) {
-      const activeJobId = job.jobId || reqJobId;
-      targetPath = path.join(REPORTS_DIR, `job_${activeJobId}`, defaultFilename);
+      const activeJobId = job?.jobId || reqJobId;
+      const candidates = [
+        path.join(REPORTS_DIR, `job_${activeJobId}`, defaultFilename),
+        path.resolve('data', 'bundled_default', defaultFilename),
+        path.resolve('data', defaultFilename),
+      ];
+      targetPath = candidates.find((p) => fs.existsSync(p));
     }
 
     // Search directory for matching file extension if targetPath not directly found
-    if (!fs.existsSync(targetPath)) {
-      const activeJobId = job.jobId || reqJobId;
-      const jobDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
-      if (fs.existsSync(jobDir)) {
-        const files = fs.readdirSync(jobDir);
-        const match = files.find(f => f.toLowerCase().endsWith('.pptx') && pathKey === 'pptPath')
-          || files.find(f => f.toLowerCase().endsWith('.md') && pathKey === 'reportPath');
-        if (match) targetPath = path.join(jobDir, match);
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      const activeJobId = job?.jobId || reqJobId;
+      const dirsToSearch = [
+        activeJobId ? path.join(REPORTS_DIR, `job_${activeJobId}`) : null,
+        path.resolve('data', 'bundled_default'),
+        path.resolve('data'),
+      ].filter(Boolean);
+
+      for (const d of dirsToSearch) {
+        if (fs.existsSync(d)) {
+          const files = fs.readdirSync(d);
+          const match = files.find(f => f.toLowerCase().endsWith('.pptx') && pathKey === 'pptPath')
+            || files.find(f => f.toLowerCase().endsWith('.md') && pathKey === 'reportPath');
+          if (match) {
+            targetPath = path.join(d, match);
+            break;
+          }
+        }
       }
     }
 
@@ -692,10 +719,14 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
     }
 
     // SECURITY FIX (FINDING-007): Path traversal guard.
-    // Ensure the resolved file path is strictly within REPORTS_DIR.
+    // Ensure the resolved file path is strictly within REPORTS_DIR or DATA_DIR.
     const resolvedTarget = path.resolve(targetPath);
     const resolvedReports = path.resolve(REPORTS_DIR);
-    if (!resolvedTarget.startsWith(resolvedReports + path.sep) && resolvedTarget !== resolvedReports) {
+    const resolvedData = path.resolve(__dirname, '..', 'data');
+    const isUnderReports = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
+    const isUnderData = resolvedTarget.startsWith(resolvedData + path.sep) || resolvedTarget === resolvedData;
+
+    if (!isUnderReports && !isUnderData) {
       console.error(`[server] SECURITY: Path traversal attempt blocked. Requested: ${resolvedTarget}`);
       return res.status(403).json({ error: 'Access denied.' });
     }

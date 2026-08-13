@@ -30,7 +30,31 @@ function loadHistory() {
   try {
     const raw = fs.readFileSync(METADATA_FILE, 'utf8');
     const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) return [];
+
+    const rootDir = path.resolve(__dirname, '..', '..');
+    return data.map((item) => {
+      const normalize = (p) => {
+        if (!p) return null;
+        if (fs.existsSync(p)) return p;
+        const relRoot = path.resolve(rootDir, p);
+        if (fs.existsSync(relRoot)) return relRoot;
+        const relData = path.resolve(DATA_DIR, path.basename(p));
+        if (fs.existsSync(relData)) return relData;
+        const relBundled = path.resolve(DATA_DIR, 'bundled_default', path.basename(p));
+        if (fs.existsSync(relBundled)) return relBundled;
+        return p;
+      };
+
+      return {
+        ...item,
+        dashboardPath: normalize(item.dashboardPath),
+        pptPath: normalize(item.pptPath),
+        reportPath: normalize(item.reportPath),
+        dataQualityPath: normalize(item.dataQualityPath),
+        processingLogPath: normalize(item.processingLogPath),
+      };
+    });
   } catch (err) {
     console.error('[historyService] Error loading metadata history:', err.message);
     return [];

@@ -1,0 +1,19 @@
+[
+  {
+    "jobId": "master-jfl-q1-fy2026",
+    "clientId": "client-jfl",
+    "clientName": "Jubilant Foodworks Ltd (JFL)",
+    "location": "All Locations",
+    "reportPeriod": "1 July 2026 – 31 July 2026",
+    "uploadTimestamp": "2026-08-13T13:44:14.678Z",
+    "uploadedBy": "System Auto-Engine",
+    "reportVersion": "1.0",
+    "status": "completed",
+    "dashboardPath": "data/bundled_default/dashboard_data.json",
+    "pptPath": "data/bundled_default/JFL_QBR_1786628654513.pptx",
+    "reportPath": "data/bundled_default/validation_report.md",
+    "dataQualityPath": "data/bundled_default/data_quality_report.md",
+    "processingLogPath": "data/bundled_default/processing_log.md",
+    "error": null
+  }
+]
