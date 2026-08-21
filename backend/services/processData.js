@@ -976,17 +976,34 @@ function buildSwitchAnalytics(switches, incidents) {
 
   const activeSlaTarget = switches[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
-  // Per-incident SLA status table for Switch Analytics (Requirement 6)
+  // Per-incident SLA status table for Switch Analytics
   // Uses sla_status pre-computed by computeIncidentEnrichment — frontend must NOT recalculate.
   const incidentSLADetails = switchIncidents.map(inc => ({
-    Device:              inc.DeviceID || 'N/A',
-    Location:           inc.SiteID || inc.Location || 'N/A',
-    IncidentID:         inc.IncidentNumber || inc.IncidentID || 'N/A',
-    display_reference:  inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
+    Device:             inc.DeviceID || 'N/A',
+    Location:          inc.SiteID || inc.Location || 'N/A',
+    IncidentID:        inc.IncidentNumber || inc.IncidentID || 'N/A',
+    display_reference: inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
     resolution_time_hours: inc.resolution_time_hours,
-    sla_target_hours:   inc.sla_target_hours,
-    sla_status:         inc.sla_status || 'N/A',
+    sla_target_hours:  inc.sla_target_hours,
+    sla_status:        inc.sla_status || null,
   }));
+
+  // SLA summary aggregation for Switch incidents (incident-resolution SLA, not uptime SLA)
+  const slaMet      = incidentSLADetails.filter(i => i.sla_status === 'SLA Met').length;
+  const slaBreached = incidentSLADetails.filter(i => i.sla_status === 'SLA Breached').length;
+  const slaUnknown  = incidentSLADetails.filter(i => !i.sla_status).length;
+  const slaSummary  = {
+    total:    switchIncidents.length,
+    met:      slaMet,
+    breached: slaBreached,
+    unknown:  slaUnknown,
+    percentMet: switchIncidents.length > 0
+      ? ((slaMet / switchIncidents.length) * 100).toFixed(1)
+      : '100.0',
+  };
+
+  // RCA breakdown for Switch incidents
+  const rcaBreakdown = classifyRCALocal(switchIncidents);
 
   return {
     available: true,
@@ -1000,8 +1017,10 @@ function buildSwitchAnalytics(switches, incidents) {
     totalSwitchIncidents: switchIncidents.length,
     top10SwitchOutages,
     rackwiseUptime,
-    slaTarget:            activeSlaTarget,  // JFL Switch Uptime SLA target (%)
-    incidentSLADetails,                     // Per-incident Resolution SLA status table
+    slaTarget:        activeSlaTarget,  // JFL Switch Uptime SLA target (%)
+    incidentSLADetails,                 // Per-incident Resolution SLA status table
+    slaSummary,                         // Aggregated SLA Met / Breached counts
+    rcaBreakdown,                       // RCA breakdown for switch incidents
   };
 }
 
@@ -1041,8 +1060,8 @@ function buildAPAnalytics(aps, incidents, allDevices) {
     totalAPIncidentRows:    apIncidents.length,
     uniqueAPsWithIncidents: Object.keys(apIncidentMap).length,
     top10APOutages,
-    rcaBreakdown:           classifyRCALocal(apIncidents),
-    // Per-incident SLA status table for AP Analytics (Requirement 6)
+    rcaBreakdown: classifyRCALocal(apIncidents),
+    // Per-incident SLA status table for AP Analytics
     // Uses sla_status pre-computed by computeIncidentEnrichment — frontend must NOT recalculate.
     incidentSLADetails: apIncidents.map(inc => ({
       Device:             inc.DeviceID || 'N/A',
@@ -1051,8 +1070,22 @@ function buildAPAnalytics(aps, incidents, allDevices) {
       display_reference: inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
       resolution_time_hours: inc.resolution_time_hours,
       sla_target_hours:  inc.sla_target_hours,
-      sla_status:        inc.sla_status || 'N/A',
+      sla_status:        inc.sla_status || null,
     })),
+    // SLA summary aggregation for AP incidents
+    slaSummary: (() => {
+      const details = apIncidents;
+      const met      = details.filter(i => i.sla_status === 'SLA Met').length;
+      const breached = details.filter(i => i.sla_status === 'SLA Breached').length;
+      const unknown  = details.filter(i => !i.sla_status).length;
+      return {
+        total: details.length,
+        met, breached, unknown,
+        percentMet: details.length > 0
+          ? ((met / details.length) * 100).toFixed(1)
+          : '100.0',
+      };
+    })(),
   };
 }
 

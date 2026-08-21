@@ -383,10 +383,12 @@ function MainPortal() {
           </div>
         )}
 
-        {/* ── 3. Switch Analytics ────────────────────────────────────────── */}
+        {/* ── 3. Switch Analytics ─────────────────────────────────────────── */}
         {dashTab === 'switches' && (
           <div className="section-body card pad-md">
             <h3 className="section-title">Switch Analytics</h3>
+
+            {/* Uptime KPIs */}
             <div className="kpi-grid">
               <KpiCard title="Total Switches" value={switchAn.totalSwitches ?? 0} />
               <KpiCard title="Core Switches" value={switchAn.coreSwitches ?? 0} />
@@ -396,11 +398,103 @@ function MainPortal() {
               <KpiCard title="Total Switch Incidents" value={switchAn.switchIncidents ?? switchAn.totalSwitchIncidents ?? 0} />
             </div>
 
+            {/* Incident Resolution SLA Summary */}
+            {switchAn.slaSummary && switchAn.slaSummary.total > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.75rem', color: 'var(--text-primary)', fontWeight: 700 }}>
+                  Incident Resolution SLA Summary
+                  <span style={{ marginLeft: '0.5rem', fontSize: '0.78rem', fontWeight: 400, color: 'var(--text-secondary)' }}>
+                    (target: {switchAn.slaSummary.total > 0 ? (switchAn.incidentSLADetails?.[0]?.sla_target_hours ?? 2) : 2}h per incident)
+                  </span>
+                </h4>
+                <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                  <div className="kpi-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #22c55e' }}>
+                    <span className="kpi-label">SLA Met</span>
+                    <span className="kpi-value" style={{ color: '#16a34a' }}>{switchAn.slaSummary.met}</span>
+                  </div>
+                  <div className="kpi-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #ef4444' }}>
+                    <span className="kpi-label">SLA Breached</span>
+                    <span className="kpi-value" style={{ color: '#dc2626' }}>{switchAn.slaSummary.breached}</span>
+                  </div>
+                  <div className="kpi-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #94a3b8' }}>
+                    <span className="kpi-label">No Timing Data</span>
+                    <span className="kpi-value" style={{ color: 'var(--text-secondary)' }}>{switchAn.slaSummary.unknown}</span>
+                  </div>
+                  <div className="kpi-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #3b82f6' }}>
+                    <span className="kpi-label">% SLA Met</span>
+                    <span className="kpi-value" style={{ color: parseFloat(switchAn.slaSummary.percentMet) >= 80 ? '#16a34a' : '#dc2626' }}>
+                      {switchAn.slaSummary.percentMet}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* RCA Breakdown for Switch Incidents */}
+            {switchAn.rcaBreakdown?.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>RCA Breakdown — Switch Incidents</h4>
+                <DataTable columns={['rca', 'count', 'percentage']} rows={switchAn.rcaBreakdown} />
+              </div>
+            )}
+
+            {/* Per-Incident SLA Status Table */}
+            {switchAn.incidentSLADetails?.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Switch Incident SLA Details</h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table" style={{ width: '100%', tableLayout: 'fixed' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '18%' }}>Reference</th>
+                        <th style={{ width: '16%' }}>Device</th>
+                        <th style={{ width: '14%' }}>Location</th>
+                        <th style={{ width: '14%', textAlign: 'center' }}>Resolution (hrs)</th>
+                        <th style={{ width: '10%', textAlign: 'center' }}>Target (hrs)</th>
+                        <th style={{ width: '12%', textAlign: 'center' }}>SLA Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {switchAn.incidentSLADetails.map((row, i) => {
+                        const ref = row.display_reference || { type: 'Incident ID', value: row.IncidentID };
+                        return (
+                          <tr key={i}>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }}>
+                              <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>{ref.type}</div>
+                              <strong>{ref.value}</strong>
+                            </td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.Device}>{row.Device}</td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.Location}>{row.Location}</td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>
+                              {row.resolution_time_hours !== null && row.resolution_time_hours !== undefined
+                                ? `${row.resolution_time_hours}h`
+                                : <span style={{ color: 'var(--text-secondary)' }}>N/A</span>}
+                            </td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>{row.sla_target_hours ?? 2}h</td>
+                            <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
+                              {row.sla_status ? (
+                                <span style={{
+                                  padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
+                                  background: row.sla_status === 'SLA Met' ? '#dcfce7' : '#fee2e2',
+                                  color:      row.sla_status === 'SLA Met' ? '#15803d' : '#991b1b',
+                                  border: `1px solid ${row.sla_status === 'SLA Met' ? '#86efac' : '#fca5a5'}`,
+                                }}>{row.sla_status}</span>
+                              ) : (
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>N/A</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {switchAn.top10SwitchOutages?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
-                  Top Lowest Uptime Switches
-                </h4>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Top Lowest Uptime Switches</h4>
                 <DataTable
                   columns={['DeviceID', 'Location', 'CoreNonCore', 'uptime', 'incCount']}
                   rows={switchAn.top10SwitchOutages}
@@ -410,9 +504,7 @@ function MainPortal() {
 
             {switchAn.rackwiseUptime?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
-                  Rack-wise Switch Uptime Summary
-                </h4>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Rack-wise Switch Uptime Summary</h4>
                 <DataTable
                   columns={['site', 'rack', 'deviceCount', 'monthlyUptime', 'quarterlyUptime']}
                   rows={switchAn.rackwiseUptime}
@@ -422,35 +514,119 @@ function MainPortal() {
           </div>
         )}
 
-        {/* ── 4. AP Analytics ────────────────────────────────────────────── */}
+        {/* ── 4. AP Analytics ─────────────────────────────────────────────── */}
         {dashTab === 'aps' && (
           <div className="section-body card pad-md">
             <h3 className="section-title">Access Point (AP) Analytics</h3>
+
+            {/* AP KPIs — no uptime per requirement */}
             <div className="kpi-grid">
               <KpiCard title="Total APs" value={apAn.totalAPs ?? 0} icon="📶" />
-              <KpiCard title="AP Average Uptime" value={apAn.apAverageUptime ?? '100.00'} unit="%" icon="⚡" />
               <KpiCard title="Total AP Incidents" value={apAn.apIncidents ?? apAn.totalAPIncidentRows ?? 0} icon="🚨" />
               <KpiCard title="Unique APs with Incidents" value={apAn.uniqueAPsWithIncidents ?? 0} icon="🔍" />
             </div>
 
-            {apAn.top10APOutages?.length > 0 && (
+            {/* Incident Resolution SLA Summary */}
+            {apAn.slaSummary && apAn.slaSummary.total > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
-                  Top AP Outages (Highest Incident Count)
+                <h4 style={{ marginBottom: '0.75rem', color: 'var(--text-primary)', fontWeight: 700 }}>
+                  Incident Resolution SLA Summary
+                  <span style={{ marginLeft: '0.5rem', fontSize: '0.78rem', fontWeight: 400, color: 'var(--text-secondary)' }}>
+                    (target: {apAn.incidentSLADetails?.[0]?.sla_target_hours ?? 2}h per incident)
+                  </span>
                 </h4>
-                <DataTable
-                  columns={['DeviceID', 'Location', 'uptime', 'incCount']}
-                  rows={apAn.top10APOutages}
-                />
+                <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                  <div className="kpi-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #22c55e' }}>
+                    <span className="kpi-label">SLA Met</span>
+                    <span className="kpi-value" style={{ color: '#16a34a' }}>{apAn.slaSummary.met}</span>
+                  </div>
+                  <div className="kpi-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #ef4444' }}>
+                    <span className="kpi-label">SLA Breached</span>
+                    <span className="kpi-value" style={{ color: '#dc2626' }}>{apAn.slaSummary.breached}</span>
+                  </div>
+                  <div className="kpi-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #94a3b8' }}>
+                    <span className="kpi-label">No Timing Data</span>
+                    <span className="kpi-value" style={{ color: 'var(--text-secondary)' }}>{apAn.slaSummary.unknown}</span>
+                  </div>
+                  <div className="kpi-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #3b82f6' }}>
+                    <span className="kpi-label">% SLA Met</span>
+                    <span className="kpi-value" style={{ color: parseFloat(apAn.slaSummary.percentMet) >= 80 ? '#16a34a' : '#dc2626' }}>
+                      {apAn.slaSummary.percentMet}%
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
 
+            {/* RCA Breakdown for AP Incidents */}
             {apAn.rcaBreakdown?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
-                  RCA Breakdown for AP Incidents
-                </h4>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>RCA Breakdown — AP Incidents</h4>
                 <DataTable columns={['rca', 'count', 'percentage']} rows={apAn.rcaBreakdown} />
+              </div>
+            )}
+
+            {/* Per-Incident SLA Status Table */}
+            {apAn.incidentSLADetails?.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>AP Incident SLA Details</h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table" style={{ width: '100%', tableLayout: 'fixed' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '18%' }}>Reference</th>
+                        <th style={{ width: '16%' }}>Device</th>
+                        <th style={{ width: '14%' }}>Location</th>
+                        <th style={{ width: '14%', textAlign: 'center' }}>Resolution (hrs)</th>
+                        <th style={{ width: '10%', textAlign: 'center' }}>Target (hrs)</th>
+                        <th style={{ width: '12%', textAlign: 'center' }}>SLA Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {apAn.incidentSLADetails.map((row, i) => {
+                        const ref = row.display_reference || { type: 'Incident ID', value: row.IncidentID };
+                        return (
+                          <tr key={i}>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }}>
+                              <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>{ref.type}</div>
+                              <strong>{ref.value}</strong>
+                            </td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.Device}>{row.Device}</td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.Location}>{row.Location}</td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>
+                              {row.resolution_time_hours !== null && row.resolution_time_hours !== undefined
+                                ? `${row.resolution_time_hours}h`
+                                : <span style={{ color: 'var(--text-secondary)' }}>N/A</span>}
+                            </td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>{row.sla_target_hours ?? 2}h</td>
+                            <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
+                              {row.sla_status ? (
+                                <span style={{
+                                  padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
+                                  background: row.sla_status === 'SLA Met' ? '#dcfce7' : '#fee2e2',
+                                  color:      row.sla_status === 'SLA Met' ? '#15803d' : '#991b1b',
+                                  border: `1px solid ${row.sla_status === 'SLA Met' ? '#86efac' : '#fca5a5'}`,
+                                }}>{row.sla_status}</span>
+                              ) : (
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>N/A</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {apAn.top10APOutages?.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Top AP Outages (Highest Incident Count)</h4>
+                <DataTable
+                  columns={['DeviceID', 'Location', 'incCount']}
+                  rows={apAn.top10APOutages}
+                />
               </div>
             )}
           </div>
