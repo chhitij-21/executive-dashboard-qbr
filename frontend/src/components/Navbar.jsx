@@ -67,7 +67,6 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
           </select>
         </div>
 
-        </div>
       </div>
 
       {/* Navigation Tabs */}
