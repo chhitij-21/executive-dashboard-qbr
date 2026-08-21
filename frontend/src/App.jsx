@@ -314,7 +314,7 @@ function MainPortal() {
                   Device Uptime Distribution — All Switches (Core &amp; Non-Core)
                 </h3>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                  Purple = Core Switches • Blue = Non-Core Switches • Red = Below SLA Target (99.3%)
+                  Purple = Core Switches • Blue = Non-Core Switches • Red = Below SLA Threshold
                 </p>
                 <Chart
                   type="bar"
@@ -434,7 +434,7 @@ function MainPortal() {
             {switchAn.rcaBreakdown?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>RCA Breakdown — Switch Incidents</h4>
-                <DataTable columns={['rca', 'count', 'percentage']} rows={switchAn.rcaBreakdown} />
+                <DataTable columns={['rca', 'count', 'percentage']} rows={switchAn.rcaBreakdown} noScroll />
               </div>
             )}
 
@@ -562,7 +562,7 @@ function MainPortal() {
             {apAn.rcaBreakdown?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>RCA Breakdown — AP Incidents</h4>
-                <DataTable columns={['rca', 'count', 'percentage']} rows={apAn.rcaBreakdown} />
+                <DataTable columns={['rca', 'count', 'percentage']} rows={apAn.rcaBreakdown} noScroll />
               </div>
             )}
 
@@ -669,26 +669,33 @@ function MainPortal() {
               <KpiCard title="Primary Root Cause" value={rcaAn.topRca ?? 'None'} icon="🔍" />
             </div>
 
-            {/* Requirement 5: Formatted presentation of RCA Category Distribution & Raw RCA Breakdown */}
-            <div className="charts-row">
-              {rcaChartData && (
-                <div className="chart-panel">
-                  <h3 className="chart-panel-title">RCA Category Distribution</h3>
+            {/* RCA Category Doughnut chart — full width */}
+            {rcaChartData && (
+              <div className="chart-panel" style={{ marginBottom: '1.5rem' }}>
+                <h3 className="chart-panel-title">RCA Category Distribution</h3>
+                <div style={{ maxWidth: '420px', margin: '0 auto' }}>
                   <Chart type="doughnut" data={rcaChartData} />
                 </div>
-              )}
-              {rcaAn.standardBreakdown?.length > 0 && (
-                <div className="chart-panel">
-                  <h3 className="chart-panel-title">Standard RCA Category Breakdown</h3>
-                  <DataTable columns={['category', 'count', 'percentage']} rows={rcaAn.standardBreakdown} />
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
+            {/* Standard RCA Category Breakdown — full width, no scroll */}
+            {rcaAn.standardBreakdown?.length > 0 && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Standard RCA Category Breakdown</h4>
+                <div style={{ overflowX: 'hidden' }}>
+                  <DataTable columns={['category', 'count', 'percentage']} rows={rcaAn.standardBreakdown} noScroll />
+                </div>
+              </div>
+            )}
+
+            {/* Raw RCA Breakdown — full width, no scroll */}
             {rcaAn.rawBreakdown?.length > 0 && (
-              <div style={{ marginTop: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Raw RCA Category Breakdown</h4>
-                <DataTable columns={['rca', 'count', 'percentage']} rows={rcaAn.rawBreakdown} />
+              <div>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Raw RCA Breakdown (All Incidents)</h4>
+                <div style={{ overflowX: 'hidden' }}>
+                  <DataTable columns={['rca', 'count', 'percentage']} rows={rcaAn.rawBreakdown} noScroll />
+                </div>
               </div>
             )}
           </div>
@@ -700,7 +707,25 @@ function MainPortal() {
             <h3 className="section-title">SLA Analytics (Active Operational Devices)</h3>
             <div className="kpi-grid">
               <KpiCard title="Overall SLA Compliance" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" icon="📈" />
-              <KpiCard title="SLA Target" value={slaAn.slaTarget ?? 99.3} unit="%" icon="🎯" />
+              {/* Device SLA Status: single clean Met/Breached indicator — no raw % target shown */}
+              <div className="kpi-card" style={{
+                borderLeft: `4px solid ${
+                  parseFloat(slaAn.overallSLAPercent ?? 100) >= parseFloat(slaAn.slaTarget ?? 99.3)
+                    ? '#22c55e' : '#ef4444'
+                }`,
+              }}>
+                <span className="kpi-label">Device SLA Status</span>
+                <span className="kpi-value" style={{
+                  color: parseFloat(slaAn.overallSLAPercent ?? 100) >= parseFloat(slaAn.slaTarget ?? 99.3)
+                    ? '#16a34a' : '#dc2626',
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                }}>
+                  {parseFloat(slaAn.overallSLAPercent ?? 100) >= parseFloat(slaAn.slaTarget ?? 99.3)
+                    ? '✅ SLA Met'
+                    : '❌ SLA Breached'}
+                </span>
+              </div>
               <KpiCard title="Compliant Active Devices" value={slaAn.compliantDevices ?? 0} icon="✅" />
               <KpiCard title="Breaching Active Devices" value={slaAn.breachingDevices ?? 0} icon="❌" />
             </div>
@@ -717,7 +742,7 @@ function MainPortal() {
             {slaAn.deviceSLA?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
-                  Active Operational Devices Below SLA Target (99.3%)
+                  Active Operational Devices Below SLA Threshold
                 </h4>
                 <DataTable columns={['DeviceID', 'Location', 'uptime', 'slaTarget', 'gap']} rows={slaAn.deviceSLA} />
               </div>

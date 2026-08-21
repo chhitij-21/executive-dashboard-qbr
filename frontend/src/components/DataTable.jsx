@@ -18,9 +18,16 @@ const COLUMN_HEADER_MAP = {
   CoreNonCore: 'Switch Type',
   uptime: 'Effective Uptime %',
   incCount: 'Incidents',
+  rca: 'Root Cause',
+  category: 'RCA Category',
+  count: 'Count',
+  percentage: '%',
+  slaTarget: 'SLA Target %',
+  gap: 'Gap %',
+  siteId: 'Site',
 };
 
-export default function DataTable({ columns, rows, title }) {
+export default function DataTable({ columns, rows, title, noScroll = false }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(0);
@@ -56,8 +63,8 @@ export default function DataTable({ columns, rows, title }) {
   return (
     <div className="data-table-container">
       {title && <h4 className="table-title">{title}</h4>}
-      <div className="table-scroll">
-        <table className="data-table">
+      <div className={noScroll ? '' : 'table-scroll'}>
+        <table className={`data-table${noScroll ? ' no-scroll' : ''}`}>
           <thead>
             <tr>
               {columns.map((col) => (

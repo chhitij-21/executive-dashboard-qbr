@@ -411,6 +411,10 @@ body {
 .data-table td.na-cell { color: var(--text-muted); font-style: italic; }
 .data-table td.no-data { text-align: center; color: var(--text-muted); padding: 2rem; }
 
+/* Full-width table variant — used in RCA/SLA panels where scroll must be suppressed */
+.data-table.no-scroll { min-width: unset; }
+
+
 /* ── Pagination ──────────────────────────────────────────────────────────── */
 .pagination {
   display: flex;
