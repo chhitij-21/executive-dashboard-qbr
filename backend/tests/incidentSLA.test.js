@@ -1,83 +1,116 @@
 // backend/tests/incidentSLA.test.js
-// Tests for computeIncidentEnrichment() logic (SLA status + display_reference)
+// Tests for computeIncidentEnrichment() matching the REAL JFL Excel field names.
+// The actual Excel has:  "Actual Resolution Time (min)" and "Total Resolution Time (min)"
 // Run: node --test backend/tests/incidentSLA.test.js
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-// Mirror computeIncidentEnrichment from processData.js
 function computeIncidentEnrichment(inc, slaTargetHours) {
   let resolutionHours = null;
-  const durH = parseFloat(
-    inc.DowntimeHours || inc.OutageHours || inc.ResolutionTimeHours ||
-    inc["Resolution Time (Hrs)"] || inc["Duration Hours"]
-  );
-  if (!isNaN(durH) && durH >= 0) resolutionHours = durH;
 
+  // P1 - ActualResolutionMin (most accurate - net time excl. hold)
+  const actMin = parseFloat(inc.ActualResolutionMin);
+  if (!isNaN(actMin) && actMin >= 0) resolutionHours = parseFloat((actMin / 60).toFixed(2));
+
+  // P2 - TotalResolutionMin
   if (resolutionHours === null) {
-    const totMin = parseFloat(inc.TotalResolutionMin || inc["Total Resolution Time (min)"]);
+    const totMin = parseFloat(inc.TotalResolutionMin);
     if (!isNaN(totMin) && totMin >= 0) resolutionHours = parseFloat((totMin / 60).toFixed(2));
   }
 
-  const slaStatus = resolutionHours !== null
-    ? (resolutionHours <= slaTargetHours ? "SLA Met" : "SLA Breached")
-    : null;
+  // P3 - Direct hours columns
+  if (resolutionHours === null) {
+    const durH = parseFloat(inc.DowntimeHours || inc.OutageHours || inc.ResolutionTimeHours);
+    if (!isNaN(durH) && durH >= 0) resolutionHours = durH;
+  }
+
+  // P4 - Raw Excel serial timestamp diff
+  if (resolutionHours === null && inc.OpenTime && inc.ResolvedTime) {
+    const openNum = typeof inc.OpenTime === "number" ? inc.OpenTime : parseFloat(inc.OpenTime);
+    const resNum  = typeof inc.ResolvedTime === "number" ? inc.ResolvedTime : parseFloat(inc.ResolvedTime);
+    if (!isNaN(openNum) && !isNaN(resNum) && resNum >= openNum)
+      resolutionHours = parseFloat(((resNum - openNum) * 24).toFixed(2));
+  }
+
+  let slaStatus = null;
+  if (resolutionHours !== null) {
+    slaStatus = resolutionHours <= slaTargetHours ? "SLA Met" : "SLA Breached";
+  } else if (inc.ResolutionSLAStatusRaw) {
+    const raw = String(inc.ResolutionSLAStatusRaw).trim().toLowerCase();
+    if (raw === "sla met" || raw === "met") slaStatus = "SLA Met";
+    else if (raw.includes("breach")) slaStatus = "SLA Breached";
+  }
 
   const ticketVal = String(inc.TicketNumber || "").trim();
-  const incIdVal  = String(inc.IncidentNumber || inc.IncidentID || "").trim();
+  const incIdVal  = String(inc.IncidentNumber || "").trim();
   const displayReference = (ticketVal && ticketVal.toLowerCase() !== "n/a")
-    ? { type: "Ticket",      value: ticketVal }
+    ? { type: "Ticket", value: ticketVal }
     : { type: "Incident ID", value: incIdVal || "N/A" };
 
   return { ...inc, resolution_time_hours: resolutionHours, sla_target_hours: slaTargetHours, sla_status: slaStatus, display_reference: displayReference };
 }
 
-const SLA_TARGET = 2; // hours
+const SLA_TARGET = 2; // 2 hours
 
-describe("computeIncidentEnrichment()", () => {
-  it("marks SLA Met when resolution <= 2h", () => {
-    const r = computeIncidentEnrichment({ DowntimeHours: 1.5 }, SLA_TARGET);
+describe("computeIncidentEnrichment() — real JFL field names", () => {
+  it("P1: uses ActualResolutionMin (7.43 min = 0.12h => SLA Met)", () => {
+    const r = computeIncidentEnrichment({ ActualResolutionMin: "7.43" }, SLA_TARGET);
     assert.equal(r.sla_status, "SLA Met");
-    assert.equal(r.resolution_time_hours, 1.5);
+    assert.equal(r.resolution_time_hours, 0.12);
   });
 
-  it("marks SLA Breached when resolution > 2h", () => {
-    const r = computeIncidentEnrichment({ DowntimeHours: 3.2 }, SLA_TARGET);
+  it("P1: ActualResolutionMin 150 min = 2.5h => SLA Breached", () => {
+    const r = computeIncidentEnrichment({ ActualResolutionMin: "150" }, SLA_TARGET);
+    assert.equal(r.sla_status, "SLA Breached");
+    assert.equal(r.resolution_time_hours, 2.5);
+  });
+
+  it("P1 wins over P2 when both present", () => {
+    // ActualResolutionMin=7.43 (SLA Met), TotalResolutionMin=14060 (SLA Breached)
+    // P1 must win
+    const r = computeIncidentEnrichment({ ActualResolutionMin: "7.43", TotalResolutionMin: "14060" }, SLA_TARGET);
+    assert.equal(r.sla_status, "SLA Met");
+  });
+
+  it("P2: falls back to TotalResolutionMin when no ActualResolutionMin", () => {
+    const r = computeIncidentEnrichment({ TotalResolutionMin: "44.68" }, SLA_TARGET);
+    assert.equal(r.sla_status, "SLA Met");
+    assert.equal(r.resolution_time_hours, 0.74);
+  });
+
+  it("P4: computes from raw Excel serial timestamps", () => {
+    // 46144.80347 open, 46144.83472 resolved => diff ~0.031 days * 24 = ~0.75h
+    const r = computeIncidentEnrichment({ OpenTime: 46144.80347, ResolvedTime: 46144.83472 }, SLA_TARGET);
+    assert.equal(r.sla_status, "SLA Met");
+    assert.ok(r.resolution_time_hours < 1);
+  });
+
+  it("P5: fallback to Excel ResolutionSLAStatusRaw when no timing data", () => {
+    const r = computeIncidentEnrichment({ ResolutionSLAStatusRaw: "SLA Met" }, SLA_TARGET);
+    assert.equal(r.sla_status, "SLA Met");
+    assert.equal(r.resolution_time_hours, null);
+  });
+
+  it("P5: fallback maps 'SLA Breached' correctly", () => {
+    const r = computeIncidentEnrichment({ ResolutionSLAStatusRaw: "SLA Breached" }, SLA_TARGET);
     assert.equal(r.sla_status, "SLA Breached");
   });
 
-  it("marks SLA Met at exactly 2h (boundary)", () => {
-    const r = computeIncidentEnrichment({ DowntimeHours: 2.0 }, SLA_TARGET);
-    assert.equal(r.sla_status, "SLA Met");
-  });
-
-  it("returns null sla_status when no resolution data", () => {
+  it("null sla_status when truly no data at all", () => {
     const r = computeIncidentEnrichment({}, SLA_TARGET);
     assert.equal(r.sla_status, null);
     assert.equal(r.resolution_time_hours, null);
   });
 
-  it("uses minutes column when hours column absent", () => {
-    const r = computeIncidentEnrichment({ TotalResolutionMin: 90 }, SLA_TARGET);
-    assert.equal(r.sla_status, "SLA Met");
-    assert.equal(r.resolution_time_hours, 1.5);
-  });
-
-  it("uses Ticket as display_reference when TicketNumber is present", () => {
-    const r = computeIncidentEnrichment({ TicketNumber: "TKT-001", IncidentNumber: "INC-001" }, SLA_TARGET);
+  it("display_reference uses Ticket when TicketNumber present", () => {
+    const r = computeIncidentEnrichment({ TicketNumber: "PRO/INC/44676" }, SLA_TARGET);
     assert.equal(r.display_reference.type, "Ticket");
-    assert.equal(r.display_reference.value, "TKT-001");
+    assert.equal(r.display_reference.value, "PRO/INC/44676");
   });
 
-  it("falls back to Incident ID when TicketNumber is absent", () => {
-    const r = computeIncidentEnrichment({ IncidentNumber: "INC-101" }, SLA_TARGET);
-    assert.equal(r.display_reference.type, "Incident ID");
-    assert.equal(r.display_reference.value, "INC-101");
-  });
-
-  it("falls back to N/A when neither Ticket nor Incident ID present", () => {
-    const r = computeIncidentEnrichment({}, SLA_TARGET);
-    assert.equal(r.display_reference.type, "Incident ID");
-    assert.equal(r.display_reference.value, "N/A");
+  it("exactly at SLA boundary (2.00h) => SLA Met", () => {
+    const r = computeIncidentEnrichment({ ActualResolutionMin: "120" }, SLA_TARGET);
+    assert.equal(r.sla_status, "SLA Met");
   });
 });

@@ -254,18 +254,30 @@ function parseIncidentSheet(rows) {
       Category:       cat,
       Description:    desc,
       IsChangeRequest: isCR,
-      ResolutionSLAStatus: row['Resolution SLA Status'] || '',
-      ResponseSLAStatus:   row['Response SLA Status'] || '',
+      // SLA fields from Excel (used as fallback when we cannot compute resolution time)
+      ResolutionSLAStatusRaw: row['Resolution SLA Status'] || '',
+      ResponseSLAStatus:      row['Response SLA Status'] || '',
+      // Timestamps: keep raw Excel serial numbers so computeIncidentEnrichment can diff them.
+      // formatExcelDate() is only used for DISPLAY columns (CreatedTime).
       CreatedTime:    formatExcelDate(row['Created Time'] || row['Open Time'] || row['OpenTime'] || ''),
-      OpenTime:       formatExcelDate(row['Created Time'] || row['Open Time'] || row['OpenTime'] || ''),
+      OpenTime:       row['Created Time'] || row['Open Time'] || row['OpenTime'] || null,  // raw serial
+      // 'Resolution Time (min)' in this Excel is actually the RESOLVED timestamp serial (not minutes!).
+      // We capture it as ResolvedTime for the timestamp-diff path.
+      ResolvedTime:   row['Resolution Time (min)'] || row['Resolved Time'] || row['Close Time'] || row['ResolvedTime'] || null,
+      // Resolution duration columns (already in minutes — direct use)
+      ActualResolutionMin: row['Actual Resolution Time (min)'] || row['Actual Resolution Time'] || '',
+      TotalResolutionMin:  row['Total Resolution Time (min)'] || row['Total Resolution Time'] || row['Resolution Time (min2)'] || '',
+      HoldTimeMin:         row['Time on Hold (min)'] || row['Time on Hold'] || row['Hold Time'] || '',
+      // Legacy direct-hours columns (some export formats)
+      DowntimeHours:       row['Downtime Hours'] || row['DowntimeHours'] || '',
+      OutageHours:         row['Outage Hours'] || row['OutageHours'] || '',
+      ResolutionTimeHours: row['Resolution Time (Hrs)'] || row['ResolutionTimeHours'] || '',
       ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
       NewSerial:      row['New Serial'] || row['Replacement Serial'] || '',
       AccountName:    row['Account Name'] || row['AccountName'] || row['Customer Name'] || row['Customer'] || '',
       ProactiveUptimePct:  row['Proactive -Uptime%'] || row['Proactive Uptime %'] || row['Average of Proactive -Uptime%'] || '',
       JFLUptimePct:        row['JFL -Uptime %'] || row['JFL Uptime %'] || row['Average of JFL -Uptime %'] || '',
-      ActualResolutionMin: row['Actual Resolution Time (min)'] || row['Actual Resolution Time'] || '',
-      TotalResolutionMin:  row['Total Resolution Time (min)'] || row['Total Resolution Time'] || row['Resolution Time (min)'] || '',
-      HoldTimeMin:         row['Time on Hold (min)'] || row['Time on Hold'] || row['Hold Time'] || '',
+      AgreedResolutionSLAMin: row['Agreed Resolution SLA (min)'] || '',
       __source:       row.__source,
     };
   });

@@ -617,42 +617,67 @@ function validateJFL(devices, incidents, log) {
  */
 function computeIncidentEnrichment(inc, slaTargetHours) {
   // ── Resolution time calculation ──────────────────────────────────────────
+  // Priority order matches the real JFL Excel column structure:
+  //   P1: Actual Resolution Time (min) — net time excl. hold  [MOST ACCURATE]
+  //   P2: Total Resolution Time (min)  — gross wall-clock time
+  //   P3: Direct hours columns         — some export formats
+  //   P4: Open → Resolved timestamp diff (raw Excel serials)
+  //   P5: Excel's own Resolution SLA Status field              [FALLBACK]
   let resolutionHours = null;
 
-  // Priority 1: Pre-calculated column in hours
-  const durH = parseFloat(
-    inc.DowntimeHours || inc.OutageHours || inc.ResolutionTimeHours ||
-    inc['Resolution Time (Hrs)'] || inc['Duration Hours']
-  );
-  if (!isNaN(durH) && durH >= 0) {
-    resolutionHours = durH;
+  // P1 — ActualResolutionMin  ('Actual Resolution Time (min)')
+  // This is the gold-standard field in the JFL SLA Compliance Report.
+  const actMin = parseFloat(inc.ActualResolutionMin);
+  if (!isNaN(actMin) && actMin >= 0) {
+    resolutionHours = parseFloat((actMin / 60).toFixed(2));
   }
 
-  // Priority 2: Pre-calculated column in minutes
+  // P2 — TotalResolutionMin ('Total Resolution Time (min)')
   if (resolutionHours === null) {
-    const totMin = parseFloat(
-      inc.TotalResolutionMin || inc['Total Resolution Time (min)'] || inc['Total Resolution Time']
-    );
+    const totMin = parseFloat(inc.TotalResolutionMin);
     if (!isNaN(totMin) && totMin >= 0) {
       resolutionHours = parseFloat((totMin / 60).toFixed(2));
     }
   }
 
-  // Priority 3: Compute from open/resolved timestamps
-  if (resolutionHours === null && inc.OpenTime && inc.ResolvedTime) {
-    const open = typeof inc.OpenTime === 'number' ? excelDateToJS(inc.OpenTime) : new Date(inc.OpenTime);
-    const res  = typeof inc.ResolvedTime === 'number' ? excelDateToJS(inc.ResolvedTime) : new Date(inc.ResolvedTime);
-    if (!isNaN(open.getTime()) && !isNaN(res.getTime()) && res >= open) {
-      resolutionHours = parseFloat(((res.getTime() - open.getTime()) / (1000 * 3600)).toFixed(2));
+  // P3 — Direct hours columns (legacy / alternate export formats)
+  if (resolutionHours === null) {
+    const durH = parseFloat(
+      inc.DowntimeHours || inc.OutageHours || inc.ResolutionTimeHours ||
+      inc['Resolution Time (Hrs)'] || inc['Duration Hours']
+    );
+    if (!isNaN(durH) && durH >= 0) {
+      resolutionHours = durH;
     }
   }
 
-  // ── SLA status (Incident Resolution SLA — 2h TAT) ────────────────────────
-  const slaStatus = resolutionHours !== null
-    ? (resolutionHours <= slaTargetHours ? 'SLA Met' : 'SLA Breached')
-    : null; // null = not enough data to determine
+  // P4 — Timestamp diff: OpenTime (raw Excel serial) vs ResolvedTime (raw serial)
+  // NOTE: OpenTime and ResolvedTime are stored as raw numeric Excel date serials
+  // in parseIncidentSheet (NOT pre-formatted strings) so this diff works correctly.
+  if (resolutionHours === null && inc.OpenTime && inc.ResolvedTime) {
+    const openNum = typeof inc.OpenTime === 'number' ? inc.OpenTime : parseFloat(inc.OpenTime);
+    const resNum  = typeof inc.ResolvedTime === 'number' ? inc.ResolvedTime : parseFloat(inc.ResolvedTime);
+    if (!isNaN(openNum) && !isNaN(resNum) && resNum >= openNum) {
+      // Excel date serials are fractional days (1 day = 1.0).
+      // Difference in days × 24 = hours.
+      resolutionHours = parseFloat(((resNum - openNum) * 24).toFixed(2));
+    }
+  }
 
-  // ── Display Reference (Req 7): Ticket if available, else Incident ID ─────
+  // ── SLA status (Incident Resolution SLA — 2h TAT target) ─────────────────
+  let slaStatus = null;
+  if (resolutionHours !== null) {
+    slaStatus = resolutionHours <= slaTargetHours ? 'SLA Met' : 'SLA Breached';
+  } else if (inc.ResolutionSLAStatusRaw) {
+    // P5 — Fallback: consume the Excel's pre-computed SLA status column.
+    // Normalise to our standard strings.
+    const raw = String(inc.ResolutionSLAStatusRaw).trim().toLowerCase();
+    if (raw === 'sla met' || raw === 'met') slaStatus = 'SLA Met';
+    else if (raw.includes('breach') || raw === 'sla breached') slaStatus = 'SLA Breached';
+    // If the Excel cell has an unrecognisable value, leave slaStatus = null.
+  }
+
+  // ── Display Reference (Req 7): Ticket if available, else Incident ID ──────
   const ticketVal = String(inc.TicketNumber || inc.Ticket || inc['Ticket #'] || '').trim();
   const incIdVal  = String(inc.IncidentNumber || inc.IncidentID || inc['Incident Number'] || '').trim();
   const displayReference = (ticketVal && ticketVal.toLowerCase() !== 'n/a')
@@ -667,6 +692,7 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
     display_reference:     displayReference,
   };
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Full Analytics Builder
