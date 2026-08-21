@@ -98,14 +98,28 @@ function getHealthLabel(score) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Returns the correct SLA uptime target for the given reporting period.
+ * Returns the correct SLA UPTIME target for the given reporting period.
  * FINDING-010 FIX: Period-aware — monthly uses 99.9%, quarterly uses 99.3%.
+ * NOTE: This is the JFL Switch Uptime SLA — NOT the per-incident resolution SLA.
  * @param {string} [periodMode] - 'monthly' | 'quarterly' | undefined (default: quarterly)
  */
 function getSLATarget(periodMode) {
-  const monthly  = rules.sla?.monthly_uptime_target_percent ?? 99.9;
-  const quarterly = rules.sla?.uptime_target_percent ?? 99.3;
+  const monthly   = rules.sla?.monthly_uptime_target_percent ?? 99.9;
+  const quarterly = rules.sla?.quarterly_uptime_target_percent ?? rules.sla?.uptime_target_percent ?? 99.3;
   return periodMode === 'monthly' ? monthly : quarterly;
+}
+
+/**
+ * Returns the incident resolution SLA target in HOURS.
+ * This is entirely separate from the JFL Switch Uptime SLA.
+ * Source: rules.yaml → sla.resolution_threshold_hours (default: 2)
+ *
+ * Used to compute per-incident SLA status:
+ *   resolution_time_hours <= target → "SLA Met"
+ *   resolution_time_hours >  target → "SLA Breached"
+ */
+function getIncidentSLATargetHours() {
+  return rules.sla?.resolution_threshold_hours ?? 2;
 }
 
 /**
@@ -326,8 +340,9 @@ module.exports = {
   // Health
   calculateHealthScore,
   getHealthLabel,
-  // SLA
-  getSLATarget,
+  // SLA — TWO DISTINCT METRICS:
+  getSLATarget,             // JFL Switch Uptime SLA (% target, period-aware)
+  getIncidentSLATargetHours, // Incident Resolution SLA (hours TAT target)
   applySLAThresholds,
   // Severity
   getDeviceSeverity,

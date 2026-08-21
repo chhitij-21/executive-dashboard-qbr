@@ -106,20 +106,47 @@ function normaliseUptimePct(raw) {
 async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDir, options = {}) {
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
   const log = createLogger(outputDir);
-  const periodMode = options.periodMode || 'monthly';
-  const activeReportingPeriod = options.reportingPeriod || (periodMode === 'monthly' ? '1 July 2026 – 31 July 2026' : 'Q1 FY2026 (7 Apr – 6 Jul 2026)');
 
-  log(`JFL pipeline started (Period: ${activeReportingPeriod}, Mode: ${periodMode})`);
+  // ── Custom date range (Requirement 2 & 3) ──────────────────────────────────
+  // Only custom date ranges are accepted. startDate / endDate are ISO date strings (YYYY-MM-DD).
+  const startDate = options.startDate || null;
+  const endDate   = options.endDate   || null;
+
+  // Build the report period metadata object (Requirement 4)
+  let reportPeriodMeta = null;
+  if (startDate && endDate) {
+    const sdParts = startDate.split('-');  // [YYYY, MM, DD]
+    const edParts = endDate.split('-');
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const sdLabel = `${parseInt(sdParts[2], 10)} ${months[parseInt(sdParts[1], 10) - 1]} ${sdParts[0]}`;
+    const edLabel = `${parseInt(edParts[2], 10)} ${months[parseInt(edParts[1], 10) - 1]} ${edParts[0]}`;
+    reportPeriodMeta = {
+      start_date:    startDate,
+      end_date:      endDate,
+      period_type:   'custom',
+      display_label: `${sdLabel} – ${edLabel}`,
+    };
+  }
+
+  // Legacy period mode kept for backward compatibility with /api/switch-mode (internal only)
+  const periodMode = options.periodMode || 'custom';
+  const activeReportingPeriod = reportPeriodMeta
+    ? reportPeriodMeta.display_label
+    : (options.reportingPeriod || 'Custom Period');
+
+  log(`JFL pipeline started (Period: ${activeReportingPeriod}, startDate: ${startDate}, endDate: ${endDate})`);
 
   const ruleConfigFile = options.ruleConfigFile || (options.clientId ? `rules_${options.clientId}.yaml` : 'rules.yaml');
   ruleEngine.loadRules(ruleConfigFile);
 
-  // Period-aware SLA_TARGET — computed once per pipeline call.
+  // JFL Switch Uptime SLA target (period-aware % target) — distinct from incident resolution SLA
   const SLA_TARGET = ruleEngine.getSLATarget(periodMode);
+  // Incident Resolution SLA target (hours) — distinct from uptime SLA
+  const INCIDENT_SLA_TARGET_HOURS = ruleEngine.getIncidentSLATargetHours();
   const CUSTOMER_NAME    = options.clientName    || 'Jubilant Foodworks Ltd (JFL)';
   const REPORTING_PERIOD = activeReportingPeriod;
 
-  log(`Rules loaded from: ${ruleConfigFile}. SLA Target for this run: ${SLA_TARGET}% (mode: ${periodMode})`);
+  log(`Rules loaded from: ${ruleConfigFile}. Uptime SLA Target: ${SLA_TARGET}% | Incident Resolution SLA: ${INCIDENT_SLA_TARGET_HOURS}h`);
 
   // ── 1 & 2. Parse workbooks with automatic role detection ─────────────────
   let incWb, invWb;
@@ -236,6 +263,40 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   });
   log(`Incidents for target customer (excluding Change Requests): ${incidents.length}`);
 
+  // ── 5b. Date-range filtering (Requirement 2 & 3) ─────────────────────────
+  // Only filter when explicit startDate / endDate are provided.
+  if (startDate && endDate) {
+    const rangeStart = new Date(startDate + 'T00:00:00Z');
+    const rangeEnd   = new Date(endDate   + 'T23:59:59Z');
+
+    incidents = incidents.filter(inc => {
+      const raw = inc.CreatedTime || inc.OpenTime || inc.created_at || inc['Created Date'] || inc['Open Date'];
+      if (!raw) return false;
+      let dt;
+      if (typeof raw === 'number' && raw > 30000 && raw < 100000) {
+        // Excel date serial
+        dt = new Date(Math.round((raw - 25569) * 86400 * 1000));
+      } else {
+        dt = new Date(raw);
+      }
+      if (isNaN(dt.getTime())) return false;
+      return dt >= rangeStart && dt <= rangeEnd;
+    });
+
+    log(`Date-range filter [${startDate} → ${endDate}]: ${incidents.length} incidents within range`);
+
+    // Requirement 3: Reject if zero records fall within the selected range
+    if (incidents.length === 0) {
+      return fail(
+        outputDir,
+        'no_data_in_range',
+        `No incident records found within the selected date range (${startDate} to ${endDate}). ` +
+        `Please verify your date selection or upload a file covering this period.`,
+        log
+      );
+    }
+  }
+
   // Build Serial Number -> Hostname mapping dictionary across inventory & compliance sheets
   const serialToHostMap = buildSerialToHostnameMap(devices, incidents);
 
@@ -337,8 +398,19 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
   });
 
-  // Dynamic available minutes calculation based on actual calendar days
-  function getAvailableMinutesForPeriod(pMode, rPeriod) {
+  // Dynamic available minutes calculation.
+  // When startDate + endDate are provided, compute from the actual date diff (most accurate).
+  // Falls back to period-label-based estimation for legacy mode.
+  function getAvailableMinutesForPeriod(pMode, rPeriod, sdStr, edStr) {
+    if (sdStr && edStr) {
+      const sd = new Date(sdStr + 'T00:00:00Z');
+      const ed = new Date(edStr + 'T23:59:59Z');
+      if (!isNaN(sd.getTime()) && !isNaN(ed.getTime()) && ed >= sd) {
+        const diffMs = ed.getTime() - sd.getTime();
+        const diffMins = Math.ceil(diffMs / 60000);
+        return diffMins > 0 ? diffMins : 44640;
+      }
+    }
     if (pMode === 'quarterly') {
       return 90 * 24 * 60; // 129,600 minutes for 90-day quarter
     }
@@ -347,12 +419,12 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     if (str.includes('feb')) days = 28;
     else if (str.includes('apr') || str.includes('jun') || str.includes('sep') || str.includes('nov')) days = 30;
     else if (str.includes('jan') || str.includes('mar') || str.includes('may') || str.includes('jul') || str.includes('aug') || str.includes('oct') || str.includes('dec') || str.includes('july')) days = 31;
-    
+
     const minutes = days * 24 * 60;
     return (Number.isFinite(minutes) && minutes > 0) ? minutes : 44640;
   }
 
-  const windowMinutes = getAvailableMinutesForPeriod(periodMode, activeReportingPeriod);
+  const windowMinutes = getAvailableMinutesForPeriod(periodMode, activeReportingPeriod, startDate, endDate);
 
   // Aggregate downtime & hold time per device ID from raw incidents
   const incDowntimeMap = {};
@@ -461,9 +533,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   reportLines.push('All required data located and mapped successfully.');
   writeFile(outputDir, 'validation_report.md', reportLines.join('\n'));
 
+  // ── 7b. Enrich every incident with per-incident SLA status and display_reference (Req 6 & 7) ──
+  incidents = incidents.map(inc => computeIncidentEnrichment(inc, INCIDENT_SLA_TARGET_HOURS));
+  log(`Incidents enriched with sla_status and display_reference`);
+
   // ── 8. Build all analytics ────────────────────────────────────────────────
   log('Building analytics sections...');
-  const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME);
+  const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta);
   log('Analytics complete');
 
   // ── 9. Data quality report ────────────────────────────────────────────────
@@ -520,10 +596,83 @@ function validateJFL(devices, incidents, log) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Per-Incident Enrichment (Requirement 6 & 7)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Enrich a single incident with:
+ *   - resolution_time_hours: computed from Excel resolution columns or timestamps
+ *   - sla_target_hours: from rules.yaml → sla.resolution_threshold_hours (never hardcoded)
+ *   - sla_status: "SLA Met" | "SLA Breached"
+ *   - display_reference: { type: "Ticket" | "Incident ID", value: "..." }
+ *
+ * This is the ONLY place where incident-level SLA status is determined.
+ * The frontend must consume sla_status directly — never recalculate it.
+ *
+ * NOTE: This is the Incident Resolution SLA (2-hour TAT target).
+ *       It is entirely separate from the JFL Switch Uptime SLA (99.30%/99.90%).
+ *
+ * @param {Object} inc - single incident row
+ * @param {number} slaTargetHours - from ruleEngine.getIncidentSLATargetHours()
+ */
+function computeIncidentEnrichment(inc, slaTargetHours) {
+  // ── Resolution time calculation ──────────────────────────────────────────
+  let resolutionHours = null;
+
+  // Priority 1: Pre-calculated column in hours
+  const durH = parseFloat(
+    inc.DowntimeHours || inc.OutageHours || inc.ResolutionTimeHours ||
+    inc['Resolution Time (Hrs)'] || inc['Duration Hours']
+  );
+  if (!isNaN(durH) && durH >= 0) {
+    resolutionHours = durH;
+  }
+
+  // Priority 2: Pre-calculated column in minutes
+  if (resolutionHours === null) {
+    const totMin = parseFloat(
+      inc.TotalResolutionMin || inc['Total Resolution Time (min)'] || inc['Total Resolution Time']
+    );
+    if (!isNaN(totMin) && totMin >= 0) {
+      resolutionHours = parseFloat((totMin / 60).toFixed(2));
+    }
+  }
+
+  // Priority 3: Compute from open/resolved timestamps
+  if (resolutionHours === null && inc.OpenTime && inc.ResolvedTime) {
+    const open = typeof inc.OpenTime === 'number' ? excelDateToJS(inc.OpenTime) : new Date(inc.OpenTime);
+    const res  = typeof inc.ResolvedTime === 'number' ? excelDateToJS(inc.ResolvedTime) : new Date(inc.ResolvedTime);
+    if (!isNaN(open.getTime()) && !isNaN(res.getTime()) && res >= open) {
+      resolutionHours = parseFloat(((res.getTime() - open.getTime()) / (1000 * 3600)).toFixed(2));
+    }
+  }
+
+  // ── SLA status (Incident Resolution SLA — 2h TAT) ────────────────────────
+  const slaStatus = resolutionHours !== null
+    ? (resolutionHours <= slaTargetHours ? 'SLA Met' : 'SLA Breached')
+    : null; // null = not enough data to determine
+
+  // ── Display Reference (Req 7): Ticket if available, else Incident ID ─────
+  const ticketVal = String(inc.TicketNumber || inc.Ticket || inc['Ticket #'] || '').trim();
+  const incIdVal  = String(inc.IncidentNumber || inc.IncidentID || inc['Incident Number'] || '').trim();
+  const displayReference = (ticketVal && ticketVal.toLowerCase() !== 'n/a')
+    ? { type: 'Ticket',       value: ticketVal }
+    : { type: 'Incident ID', value: incIdVal || 'N/A' };
+
+  return {
+    ...inc,
+    resolution_time_hours: resolutionHours,
+    sla_target_hours:      slaTargetHours,
+    sla_status:            slaStatus,
+    display_reference:     displayReference,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Full Analytics Builder
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, customerName = 'Jubilant Foodworks Ltd (JFL)') {
+function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, customerName = 'Jubilant Foodworks Ltd (JFL)', reportPeriodMeta = null) {
   const activeDevices = devices.filter(d => !d.__isStock);
   const stockDevices  = devices.filter(d => d.__isStock);
 
@@ -534,7 +683,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
     /^ap$/i.test(d.DeviceType) || /access/i.test(d.DeviceType)
   );
 
-  const coreDevices = activeDevices.filter(d => /core/i.test(d.CoreNonCore || '') && !/non/i.test(d.CoreNonCore || ''));
+  const coreDevices    = activeDevices.filter(d => /core/i.test(d.CoreNonCore || '') && !/non/i.test(d.CoreNonCore || ''));
   const nonCoreDevices = activeDevices.filter(d => /non.?core/i.test(d.CoreNonCore || '') || !/core/i.test(d.CoreNonCore || ''));
 
   log(`Devices — Active: ${activeDevices.length}, Stock (Excluded from SLA): ${stockDevices.length}, Switches: ${switches.length}, APs: ${aps.length}`);
@@ -548,9 +697,16 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
   const slaAn        = buildSLAAnalytics(activeDevices, incidents);
 
   return {
-    customerName:    customerName,
-    reportingPeriod: reportingPeriod,
-    generatedAt:     new Date().toISOString(),
+    customerName,
+    reportingPeriod,
+    // Requirement 4: Always-present report_period object in SSOT output
+    report_period: reportPeriodMeta || {
+      start_date:    null,
+      end_date:      null,
+      period_type:   'custom',
+      display_label: reportingPeriod,
+    },
+    generatedAt:      new Date().toISOString(),
     executiveSummary: execSummary,
     siteSummary,
     switchAnalytics:  switchAn,
@@ -820,6 +976,18 @@ function buildSwitchAnalytics(switches, incidents) {
 
   const activeSlaTarget = switches[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
+  // Per-incident SLA status table for Switch Analytics (Requirement 6)
+  // Uses sla_status pre-computed by computeIncidentEnrichment — frontend must NOT recalculate.
+  const incidentSLADetails = switchIncidents.map(inc => ({
+    Device:              inc.DeviceID || 'N/A',
+    Location:           inc.SiteID || inc.Location || 'N/A',
+    IncidentID:         inc.IncidentNumber || inc.IncidentID || 'N/A',
+    display_reference:  inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
+    resolution_time_hours: inc.resolution_time_hours,
+    sla_target_hours:   inc.sla_target_hours,
+    sla_status:         inc.sla_status || 'N/A',
+  }));
+
   return {
     available: true,
     totalSwitches:        switches.length,
@@ -832,7 +1000,8 @@ function buildSwitchAnalytics(switches, incidents) {
     totalSwitchIncidents: switchIncidents.length,
     top10SwitchOutages,
     rackwiseUptime,
-    slaTarget:            activeSlaTarget,
+    slaTarget:            activeSlaTarget,  // JFL Switch Uptime SLA target (%)
+    incidentSLADetails,                     // Per-incident Resolution SLA status table
   };
 }
 
@@ -869,9 +1038,21 @@ function buildAPAnalytics(aps, incidents, allDevices) {
     totalAPs:               aps.length,
     apAverageUptime:        uptimes.length > 0 ? avg(uptimes).toFixed(2) : '100.00',
     apIncidents:            apIncidents.length,
+    totalAPIncidentRows:    apIncidents.length,
     uniqueAPsWithIncidents: Object.keys(apIncidentMap).length,
     top10APOutages,
     rcaBreakdown:           classifyRCALocal(apIncidents),
+    // Per-incident SLA status table for AP Analytics (Requirement 6)
+    // Uses sla_status pre-computed by computeIncidentEnrichment — frontend must NOT recalculate.
+    incidentSLADetails: apIncidents.map(inc => ({
+      Device:             inc.DeviceID || 'N/A',
+      Location:          inc.SiteID || inc.Location || 'N/A',
+      IncidentID:        inc.IncidentNumber || inc.IncidentID || 'N/A',
+      display_reference: inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
+      resolution_time_hours: inc.resolution_time_hours,
+      sla_target_hours:  inc.sla_target_hours,
+      sla_status:        inc.sla_status || 'N/A',
+    })),
   };
 }
 

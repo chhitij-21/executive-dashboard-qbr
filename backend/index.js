@@ -1,4 +1,4 @@
-// backend/index.js — Executive Dashboard & Multi-Client QBR Web Portal API
+// backend/index.js — Executive Report Dashboard API
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
@@ -94,6 +94,59 @@ function heavyRateLimit(req, res, next) {
     return res.status(429).json({ error: 'Rate limit exceeded for report generation and analysis. Please try again shortly.' });
   }
   next();
+}
+
+/**
+ * validateDateRange — Server-side date validation for report generation requests.
+ * Enforces all four rules from Requirement 2:
+ *   1. Both start_date and end_date are required.
+ *   2. Neither date may be in the future (relative to today UTC).
+ *   3. start_date must be on or before end_date.
+ *   4. Dates must be valid ISO YYYY-MM-DD strings.
+ *
+ * Returns: { valid: true } | { valid: false, errors: string[] }
+ */
+function validateDateRange(startDate, endDate) {
+  const errors = [];
+
+  if (!startDate || typeof startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())) {
+    errors.push('Start date is required and must be in YYYY-MM-DD format (e.g. 2026-01-15).');
+  }
+  if (!endDate || typeof endDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())) {
+    errors.push('End date is required and must be in YYYY-MM-DD format (e.g. 2026-07-31).');
+  }
+
+  if (errors.length > 0) return { valid: false, errors };
+
+  const sd = new Date(startDate.trim() + 'T00:00:00Z');
+  const ed = new Date(endDate.trim()   + 'T23:59:59Z');
+
+  if (isNaN(sd.getTime())) {
+    errors.push(`Invalid start date: "${startDate}". Please provide a valid calendar date.`);
+  }
+  if (isNaN(ed.getTime())) {
+    errors.push(`Invalid end date: "${endDate}". Please provide a valid calendar date.`);
+  }
+
+  if (errors.length > 0) return { valid: false, errors };
+
+  // Rule: No future dates
+  const todayEnd = new Date();
+  todayEnd.setUTCHours(23, 59, 59, 999);
+  if (sd > todayEnd) {
+    errors.push(`Start date "${startDate}" is in the future. Report dates must be on or before today.`);
+  }
+  if (ed > todayEnd) {
+    errors.push(`End date "${endDate}" is in the future. Report dates must be on or before today.`);
+  }
+
+  // Rule: start_date <= end_date
+  if (sd > ed) {
+    errors.push(`Start date "${startDate}" must be on or before end date "${endDate}".`);
+  }
+
+  if (errors.length > 0) return { valid: false, errors };
+  return { valid: true };
 }
 
 // Vercel Serverless Path Normalizer: ONLY active on Vercel deployments.
@@ -318,13 +371,27 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
   const incidentFile = req.files?.incidents?.[0] || req.files?.excel?.[0] || null;
   const inventoryFile = req.files?.inventory?.[0] || null;
 
-  const clientId = req.body.clientId || 'client-jfl';
-  const location = req.body.location || 'All Locations';
-  const periodMode = req.body.periodMode || 'monthly';
-  const reportPeriod = req.body.reportPeriod || req.body.reportingPeriod || (periodMode === 'monthly' ? '1 July 2026 – 31 July 2026' : 'Q1 FY2026 (7 Apr – 6 Jul 2026)');
-  const uploadedBy = req.body.uploadedBy || 'System User';
+  const clientId    = req.body.clientId   || 'client-jfl';
+  const location    = req.body.location   || 'All Locations';
+  const uploadedBy  = req.body.uploadedBy || 'System User';
 
-  const client = clientService.getClientById(clientId);
+  // Requirement 2: Accept start_date / end_date (custom date range only)
+  // Legacy periodMode/reportPeriod are kept as fallback for /api/switch-mode internal backward compat.
+  const startDate   = (req.body.start_date   || '').trim();
+  const endDate     = (req.body.end_date     || '').trim();
+  const periodMode  = req.body.periodMode   || 'custom'; // legacy; not used by UI anymore
+  const reportPeriod = req.body.reportPeriod || req.body.reportingPeriod || '';
+
+  // Server-side date validation (Requirement 2 — enforced independently of frontend)
+  const dateValidation = validateDateRange(startDate, endDate);
+  if (!dateValidation.valid) {
+    return res.status(400).json({
+      error: 'Invalid date range',
+      validationErrors: dateValidation.errors,
+    });
+  }
+
+  const client     = clientService.getClientById(clientId);
   const clientName = client ? client.name : 'Executive Client';
 
   if (!incidentFile) {
@@ -346,13 +413,16 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
   const jobId = uuidv4();
   const outputDir = path.join(REPORTS_DIR, `job_${jobId}`);
 
+  // Human-readable period label for history records
+  const historyPeriodLabel = startDate && endDate ? `${startDate} to ${endDate}` : (reportPeriod || 'Custom Period');
+
   // 2. Record initial metadata history (Status: Processing)
   const initialMeta = historyService.recordReport({
     jobId,
     clientId,
     clientName,
     location,
-    reportPeriod,
+    reportPeriod: historyPeriodLabel,
     uploadedBy,
     status: 'processing',
   });
@@ -371,7 +441,11 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
       clientId,
       clientName,
       ruleConfigFile: client?.ruleConfigFile,
-      reportingPeriod: reportPeriod,
+      // Requirement 2: Pass custom date range to engine (primary)
+      startDate,
+      endDate,
+      // Legacy fields kept for backward compat with internal switch-mode
+      reportingPeriod: reportPeriod || historyPeriodLabel,
       periodMode,
     })
       .then((result) => {
@@ -402,7 +476,7 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
           clientId,
           clientName,
           location,
-          reportPeriod,
+          reportPeriod: historyPeriodLabel,
           uploadedBy,
           status,
           dashboardPath: updatedJob.dashboardPath,

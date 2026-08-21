@@ -358,10 +358,7 @@ export default function SiteInspector({
               <span className="kpi-label">Critical Tickets</span>
               <span className="kpi-value" style={{ color: ticketMetrics.critical > 0 ? '#dc2626' : '#16a34a' }}>{ticketMetrics.critical}</span>
             </div>
-            <div className="kpi-card" style={{ padding: '0.85rem 1rem' }}>
-              <span className="kpi-label">Average MTTR</span>
-              <span className="kpi-value" style={{ fontSize: '1.25rem' }}>{ticketMetrics.avgResTime} hrs</span>
-            </div>
+            {/* MTTR card removed per Requirement 5 — MTTR stays in backend only */}
           </div>
 
           {/* Ticket Search & Filter Toolbar */}
@@ -418,22 +415,27 @@ export default function SiteInspector({
               <table className="data-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '11%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Ticket #</th>
-                    <th style={{ width: '11%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Incident ID</th>
+                    {/* Requirement 7: Single Reference column — Ticket if available, else Incident ID */}
+                    <th style={{ width: '14%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Reference</th>
                     <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device Name</th>
                     <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device Type</th>
                     <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Category</th>
                     <th style={{ width: '8%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Priority</th>
                     <th style={{ width: '8%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Status</th>
                     <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Open Date</th>
-                    <th style={{ width: '6%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">MTTR</th>
+                    {/* Requirement 6: SLA Status column — consumed from SSOT, never recalculated */}
+                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">SLA Status</th>
                     <th style={{ width: '14%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Primary RCA</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedTickets.map((t, i) => {
-                    const ticketNo = t.TicketNumber || t.IncidentNumber || `INC-${i + 1}`;
-                    const incId = t.IncidentNumber || t.TicketNumber || ticketNo;
+                    // Requirement 7: Use display_reference from SSOT — never recalculate in frontend
+                    const ref = t.display_reference || (
+                      (t.TicketNumber && t.TicketNumber !== 'N/A')
+                        ? { type: 'Ticket', value: t.TicketNumber }
+                        : { type: 'Incident ID', value: t.IncidentNumber || t.IncidentID || `INC-${i + 1}` }
+                    );
                     const devId = t.Hostname || t.DeviceID || t.SerialNo || 'N/A';
                     const devType = t.DeviceType || 'Network Device';
                     const cat = t.Category || 'Operational';
@@ -442,8 +444,10 @@ export default function SiteInspector({
                     const isClosed = st.toLowerCase().includes('closed') || st.toLowerCase().includes('resolved');
                     const openRaw = t.CreatedTime || t.OpenTime || 'N/A';
                     const openDate = formatExcelDate(openRaw);
-                    const duration = t.DurationHours ? `${t.DurationHours}h` : '2.4h';
                     const rca = t.RCA || 'Unknown';
+
+                    // Requirement 6: Consume sla_status from SSOT — never recalculate in frontend
+                    const slaStatus = t.sla_status; // 'SLA Met' | 'SLA Breached' | null
 
                     const prioColor =
                       prio.includes('P1') || prio.includes('CRITICAL') || prio.includes('1') ? '#dc2626' :
@@ -452,9 +456,9 @@ export default function SiteInspector({
                     return (
                       <tr key={i}>
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }}>
-                          <strong style={{ color: 'var(--text-primary)' }}>{ticketNo}</strong>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>{ref.type}</div>
+                          <strong style={{ color: 'var(--text-primary)' }}>{ref.value}</strong>
                         </td>
-                        <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }}>{incId}</td>
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={devId}>
                           {devId}
                         </td>
@@ -475,7 +479,21 @@ export default function SiteInspector({
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={openDate}>
                           {openDate}
                         </td>
-                        <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">{duration}</td>
+                        {/* Requirement 6: SLA Status — SSOT output only */}
+                        <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">
+                          {slaStatus ? (
+                            <span style={{
+                              padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
+                              background: slaStatus === 'SLA Met' ? '#dcfce7' : '#fee2e2',
+                              color: slaStatus === 'SLA Met' ? '#15803d' : '#991b1b',
+                              border: `1px solid ${slaStatus === 'SLA Met' ? '#86efac' : '#fca5a5'}`,
+                            }}>
+                              {slaStatus}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>N/A</span>
+                          )}
+                        </td>
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca}>
                           {rca}
                         </td>

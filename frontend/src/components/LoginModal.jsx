@@ -83,7 +83,7 @@ export default function LoginModal({ isOpen, onClose }) {
           </div>
 
           <button type="submit" className="btn-primary full-width">
-            Sign In to Portal
+          Sign In to Dashboard
           </button>
         </form>
 

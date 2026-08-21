@@ -6,8 +6,11 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin } = useAuth();
   const [incidentFile, setIncidentFile] = useState(null);
   const [inventoryFile, setInventoryFile] = useState(null);
-  const [periodMode, setPeriodMode] = useState('monthly'); // 'monthly', 'quarterly', 'custom'
-  const [reportPeriod, setReportPeriod] = useState('1 July 2026 – 31 July 2026');
+  // Requirement 2: Custom date range only — no presets.
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const [startDate, setStartDate] = useState('');
+  const [endDate,   setEndDate]   = useState('');
+  const [dateError, setDateError] = useState(null);
 
   const [status, setStatus] = useState('idle'); // idle, processing, failed, completed
   const [stageText, setStageText] = useState('Uploading Excel Files...');
@@ -81,6 +84,17 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       return;
     }
 
+    // Frontend date validation (Requirement 2) — server validates independently too
+    if (!startDate || !endDate) {
+      setDateError('Both Start Date and End Date are required before generating a report.');
+      return;
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+      setDateError('Start Date must be on or before End Date.');
+      return;
+    }
+    setDateError(null);
+
     setValidationErrors([]);
     setValidationWarnings([]);
     setErrorMsg(null);
@@ -106,9 +120,9 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     if (inventoryFile) form.append('inventory', inventoryFile);
     form.append('clientId', activeClient?.id || 'client-jfl');
     form.append('location', activeLocation || 'All Locations');
-    form.append('periodMode', periodMode);
-    form.append('reportPeriod', reportPeriod);
-    form.append('reportingPeriod', reportPeriod);
+    // Requirement 2: Send start_date / end_date instead of periodMode/reportPeriod
+    form.append('start_date', startDate);
+    form.append('end_date',   endDate);
     form.append('uploadedBy', user?.name || 'System User');
 
     try {
@@ -199,7 +213,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       <div className="card hero-upload-card">
         <div className="card-header">
           <div>
-            <h2 className="card-title">🚀 QBR Report Generation Workflow</h2>
+            <h2 className="card-title">🚀 Report Generation Workflow</h2>
             <p className="card-subtitle">
               Upload client incidents and inventory workbooks. The processing engine will generate executive KPIs and PowerPoint reports without altering raw data.
             </p>
@@ -225,7 +239,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           </div>
           <div className={`step-item ${status === 'completed' ? 'step-done' : ''}`}>
             <span className="step-num">4</span>
-            <span className="step-label">Generate QBR</span>
+            <span className="step-label">Generate Report</span>
           </div>
         </div>
 
@@ -272,34 +286,38 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
             </div>
 
             <div className="context-card">
-              <label>REPORT TIMEFRAME</label>
-              <select
-                value={periodMode}
-                onChange={(e) => {
-                  const mode = e.target.value;
-                  setPeriodMode(mode);
-                  if (mode === 'monthly') setReportPeriod('1 July 2026 – 31 July 2026');
-                  if (mode === 'quarterly') setReportPeriod('Q1 FY2026 (7 Apr – 6 Jul 2026)');
-                }}
-                className="select-field"
-              >
-                <option value="monthly">📅 Monthly Report (1 July – 31 July 2026)</option>
-                <option value="quarterly">📅 Quarterly Report (Q1 FY2026)</option>
-                <option value="custom">📅 Custom Date Range</option>
-              </select>
+              <label>REPORT START DATE</label>
+              {/* Requirement 2: Custom date picker — max=today prevents future dates */}
+              <input
+                type="date"
+                className="input-field"
+                value={startDate}
+                max={today}
+                onChange={(e) => { setStartDate(e.target.value); setDateError(null); }}
+                required
+              />
             </div>
 
             <div className="context-card">
-              <label>REPORT PERIOD LABEL</label>
+              <label>REPORT END DATE</label>
               <input
-                type="text"
-                value={reportPeriod}
-                onChange={(e) => setReportPeriod(e.target.value)}
+                type="date"
                 className="input-field"
-                placeholder="e.g. 1 July 2026 – 31 July 2026"
+                value={endDate}
+                max={today}
+                min={startDate || undefined}
+                onChange={(e) => { setEndDate(e.target.value); setDateError(null); }}
+                required
               />
             </div>
           </div>
+
+          {/* Date Validation Error */}
+          {dateError && (
+            <div className="alert-box alert-error" style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#991b1b' }}>
+              📅 {dateError}
+            </div>
+          )}
 
           {/* Validation Errors Alert Box */}
           {validationErrors.length > 0 && (

@@ -1,4 +1,4 @@
-// frontend/src/App.jsx — Executive Dashboard & Multi-Client QBR Web Portal
+// frontend/src/App.jsx — Executive Report Dashboard
 import React, { useState, useEffect, useMemo } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
@@ -32,35 +32,9 @@ function MainPortal() {
   const [jobId, setJobId] = useState('latest');
   const [status, setStatus] = useState('idle');
   const [dashboardData, setDashboardData] = useState(defaultDashboardData);
-  const [activePeriod, setActivePeriod] = useState('monthly'); // 'monthly', 'quarterly', 'custom'
   const [apiError, setApiError] = useState(null);
 
-  // Dynamic Mode Switcher: Refetches & recalculates backend data when activePeriod changes
-  useEffect(() => {
-    let isSubscribed = true;
-    const loadModeData = async () => {
-      try {
-        setApiError(null);
-        const res = await apiFetch(`${API_BASE_URL}/api/switch-mode?mode=${activePeriod}`);
-        if (res.ok && isSubscribed) {
-          const json = await res.json();
-          setDashboardData(json);
-          if (json.jobId) setJobId(json.jobId);
-          setStatus('completed');
-        } else if (!res.ok && isSubscribed) {
-          setApiError('Unable to switch period mode. Please verify server connection.');
-        }
-      } catch (e) {
-        console.warn('Mode switch fetch error:', e);
-        if (isSubscribed) setApiError('Network connection issue while switching period mode.');
-      }
-    };
-
-    loadModeData();
-    return () => { isSubscribed = false; };
-  }, [activePeriod]);
-
-  // Fetch & poll for dashboard data if jobId, activePeriod, or site selection changes
+  // Fetch & poll for dashboard data if jobId or site selection changes
   useEffect(() => {
     let isSubscribed = true;
 
@@ -73,7 +47,6 @@ function MainPortal() {
         const query = new URLSearchParams({
           jobId: jobId || 'latest',
           site: siteParam,
-          period: activePeriod,
         }).toString();
 
         const res = await apiFetch(`${API_BASE_URL}/api/dashboard?${query}`);
@@ -107,7 +80,7 @@ function MainPortal() {
 
     fetchDashboard();
     return () => { isSubscribed = false; };
-  }, [jobId, activePeriod, selectedSite, activeLocation]);
+  }, [jobId, selectedSite, activeLocation]);
 
   // Use canonical backend dashboard data directly (SSOT)
   const activeDashboardData = dashboardData;
@@ -233,32 +206,26 @@ function MainPortal() {
           </div>
         )}
 
-        {/* Customer header */}
+        {/* Customer header — period label consumed from SSOT report_period.display_label */}
         <div className="section-header card pad-md" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h2 className="section-title">
               {exec.customerName || activeClient?.name || 'Executive Dashboard'}
             </h2>
             <p className="section-meta">
-              Location Context: <strong>{activeLocation}</strong> • Period: <strong>{exec.reportingPeriod || (activePeriod === 'monthly' ? '1 July 2026 – 31 July 2026' : 'Q1 FY2026')}</strong>
+              Location Context: <strong>{activeLocation}</strong> • Period:{' '}
+              <strong>
+                {activeDashboardData?.report_period?.display_label ||
+                 exec.reportingPeriod ||
+                 'Custom Period'}
+              </strong>
             </p>
           </div>
           <div className="download-header-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', padding: '0.4rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>TIMEFRAME MODE:</label>
-              <select
-                value={activePeriod}
-                onChange={(e) => setActivePeriod(e.target.value)}
-                style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', fontWeight: 700, borderRadius: '6px', border: '1px solid #94a3b8', cursor: 'pointer', background: '#f8fafc', color: '#1e293b' }}
-              >
-                <option value="monthly">📅 Monthly (July 2026)</option>
-                <option value="quarterly">📊 Quarterly (Q1 FY2026)</option>
-              </select>
-            </div>
             <div className="status-badge completed">✓ Validated Engine</div>
-            {jobId && (
+            {jobId && jobId !== 'latest' && jobId !== 'default' && (
               <a href={`${API_BASE_URL}/api/ppt/${jobId}`} className="btn-primary" download>
-                Download PPT ({activePeriod === 'monthly' ? 'Monthly' : 'Quarterly'})
+                Download PPT
               </a>
             )}
           </div>
@@ -493,12 +460,12 @@ function MainPortal() {
         {dashTab === 'incidents' && (
           <div className="section-body card pad-md">
             <h3 className="section-title">Incident Analytics</h3>
+            {/* Requirement 5: MTTR KPI card removed from frontend. MTTR is retained in backend for audit only. */}
             <div className="kpi-grid">
               <KpiCard title="Total Incidents" value={incAn.totalIncidents ?? 0} icon="🚨" />
               <KpiCard title="Critical (P1 / Core)" value={incAn.criticalIncidents ?? 0} icon="🔴" />
               <KpiCard title="Major (P2 / Non-Core)" value={incAn.majorIncidents ?? 0} icon="🟠" />
               <KpiCard title="Minor (P3-P4 / AP)" value={incAn.minorIncidents ?? 0} icon="🟡" />
-              <KpiCard title="MTTR (Mean Time to Resolve)" value={`${incAn.mttrHours ?? '2.4'} hrs`} icon="⏱️" />
             </div>
 
             {incidentTrendData.length > 0 && (
@@ -594,8 +561,6 @@ function MainPortal() {
         setActiveTab={setTab}
         onOpenLogin={() => setIsLoginOpen(true)}
         reportSites={reportSites}
-        activePeriod={activePeriod}
-        onPeriodChange={setActivePeriod}
       />
 
       <main className="main-content">

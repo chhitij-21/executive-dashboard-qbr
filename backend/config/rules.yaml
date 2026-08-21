@@ -2,10 +2,20 @@
 # All values are configurable — no hardcoding in application code.
 
 # ── SLA ──────────────────────────────────────────────────────────────────────
+# TWO DISTINCT SLA METRICS — never mix or average these:
+#
+# 1. INCIDENT RESOLUTION SLA (per-incident TAT):
+#    resolution_threshold_hours: If resolution time <= this → "SLA Met", else → "SLA Breached"
+#    Used in: Switch Analytics, AP Analytics, SiteInspector incident table
+#
+# 2. JFL SWITCH UPTIME SLA (device uptime compliance):
+#    quarterly_uptime_target_percent: JFL quarterly uptime target (switch-level)
+#    monthly_uptime_target_percent:   JFL monthly uptime target (switch-level)
+#    Used in: Executive Summary, SLA Analytics, Site Summary uptime columns
 sla:
-  resolution_threshold_hours: 2     # TAT target across all devices
-  quarterly_uptime_target_percent: 99.3 # Quarterly uptime target confirmed by user
-  monthly_uptime_target_percent: 99.9 # Monthly uptime target confirmed by user
+  resolution_threshold_hours: 2        # Incident TAT target (hours) — SLA Met/Breached per ticket
+  quarterly_uptime_target_percent: 99.3 # JFL Switch Uptime SLA — quarterly (99.30%)
+  monthly_uptime_target_percent: 99.9   # JFL Switch Uptime SLA — monthly (99.90%)
 
 # ── Health Score ─────────────────────────────────────────────────────────────
 health_score:
