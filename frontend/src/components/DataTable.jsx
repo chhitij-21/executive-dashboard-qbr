@@ -23,6 +23,7 @@ const COLUMN_HEADER_MAP = {
   count: 'Count',
   percentage: '%',
   periodUptime: 'Monthly Uptime %',
+  status: 'Operating Status',
   slaTarget: 'SLA Target %',
   gap: 'Gap %',
   siteId: 'Site',

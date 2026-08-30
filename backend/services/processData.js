@@ -1132,8 +1132,10 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
 
   const rackMap = {};
   switches.forEach(d => {
-    const rack = d.Rack || 'Default Rack';
-    const site = d.SiteID || d.Location || 'Unknown';
+    const rawSite = d.SiteID || d.Location || 'Unknown';
+    const site = !isGenericLocation(rawSite) ? normalizeSiteName(rawSite) : 'Unknown';
+    const rawRack = String(d.Rack || '').trim();
+    const rack = (rawRack && rawRack.toLowerCase() !== 'n/a' && rawRack.toLowerCase() !== 'unknown') ? rawRack : 'Main Rack';
     const key = `${site}__${rack}`;
     if (!rackMap[key]) rackMap[key] = { site, rack, devices: [] };
     rackMap[key].devices.push(d);
@@ -1154,6 +1156,7 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
       periodUptime: `${avgUptime.toFixed(2)}%`,
       periodLabel: periodLabel,
       periodType: periodType,
+      status: avgUptime >= 100 ? 'Stable Operations (100% Uptime)' : 'Operational',
     };
   }).sort((a, b) => a.site.localeCompare(b.site) || a.rack.localeCompare(b.rack));
 

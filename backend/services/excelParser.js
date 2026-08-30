@@ -108,7 +108,7 @@ function mergeInventorySheets(workbookData, locationSheets) {
 
       const host = String(row['Hostname'] || row['Host Name'] || row['Device Hostname'] || '').trim();
       const devType = String(row['Device Type'] || row['DeviceType'] || '').trim();
-      const rack = String(row['Rack no.'] || row['Rack'] || row['Rack Number'] || '').trim();
+      const rack = String(row['Rack no.'] || row['Rack'] || row['Rack Number'] || row['Rack No'] || row['Rack No.'] || row['RackID'] || '').trim();
       const core = String(row['Core/Non Core'] || row['Core Non Core'] || '').trim();
       const model = String(row['Model'] || '').trim();
 

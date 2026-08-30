@@ -611,9 +611,9 @@ function MainPortal() {
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Rack-wise Switch Uptime Summary</h4>
                 <DataTable
-                  columns={['site', 'rack', 'deviceCount', 'periodUptime']}
+                  columns={['site', 'rack', 'deviceCount', 'periodUptime', 'status']}
                   rows={switchAn.rackwiseUptime}
-                  columnLabels={{ periodUptime: switchAn.periodLabel || 'Monthly Uptime %' }}
+                  columnLabels={{ periodUptime: switchAn.periodLabel || 'Monthly Uptime %', status: 'Operating Status' }}
                 />
               </div>
             )}
