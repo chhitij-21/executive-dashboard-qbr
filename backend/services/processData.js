@@ -1149,11 +1149,15 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
 
   const rackwiseUptime = Object.values(rackMap).map(item => {
     const avgUptime = computeAverageUptime(item.devices);
+    const upStr = `${avgUptime.toFixed(2)}%`;
     return {
       site: item.site,
       rack: item.rack,
       deviceCount: item.devices.length,
-      periodUptime: `${avgUptime.toFixed(2)}%`,
+      periodUptime: upStr,
+      monthlyUptime: upStr,
+      quarterlyUptime: upStr,
+      avgUptime: upStr,
       periodLabel: periodLabel,
       periodType: periodType,
       status: avgUptime >= 100 ? 'Stable Operations (100% Uptime)' : 'Operational',

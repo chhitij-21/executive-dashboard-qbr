@@ -95,7 +95,15 @@ export default function DataTable({ columns, rows, title, noScroll = false, colu
               visible.map((row, i) => (
                 <tr key={i} className={row.__slaBreach ? 'row-breach' : ''}>
                   {columns.map((col) => {
-                    const val = row[col];
+                    let val = row[col];
+                    if (val === null || val === undefined) {
+                      if (col === 'periodUptime') {
+                        val = row.periodUptime ?? row.monthlyUptime ?? row.quarterlyUptime ?? row.avgUptime ?? row.uptime;
+                      } else if (col === 'status') {
+                        const upVal = parseFloat(row.periodUptime || row.monthlyUptime || row.quarterlyUptime || row.avgUptime || row.uptime || 100);
+                        val = isNaN(upVal) || upVal >= 100 ? 'Stable Operations (100% Uptime)' : 'Operational';
+                      }
+                    }
                     const display = val === null || val === undefined ? 'Data Not Available' : String(val);
                     const source = row.__source?.[col] || '';
                     return (
