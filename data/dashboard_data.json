@@ -27,7 +27,7 @@
     "healthScore": "90.02",
     "healthLabel": "Good",
     "slaCompliance": "81.45",
-    "slaTarget": 99.9,
+    "slaTarget": 99.3,
     "totalIncidents": 171,
     "criticalIncidents": 0,
     "majorIncidents": 0,
