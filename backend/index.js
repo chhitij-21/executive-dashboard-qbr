@@ -521,7 +521,7 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
 
   if (reqJobId === 'latest' || reqJobId === 'default') {
     const history = historyService.getHistory();
-    job = history.find((h) => h.status === 'completed') || Object.values(jobs).find((j) => j.status === 'completed');
+    job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).slice().reverse().find((j) => j.status === 'completed');
 
     if (!job) {
       // Process default master dataset if no completed report exists in history
@@ -675,7 +675,7 @@ app.get(['/api/dashboard', '/dashboard'], (req, res) => {
     let job = null;
     if (jobId === 'latest' || jobId === 'default') {
       const history = historyService.getHistory();
-      job = history.find((h) => h.status === 'completed') || Object.values(jobs).find((j) => j.status === 'completed');
+      job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).slice().reverse().find((j) => j.status === 'completed');
     } else {
       job = jobs[jobId] || historyService.getReportByJobId(jobId);
     }
@@ -722,7 +722,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
     if (reqJobId === 'latest' || reqJobId === 'default') {
       const history = historyService.getHistory();
-      job = history.find((h) => h.status === 'completed') || Object.values(jobs).find((j) => j.status === 'completed');
+      job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).slice().reverse().find((j) => j.status === 'completed');
     } else {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
     }
