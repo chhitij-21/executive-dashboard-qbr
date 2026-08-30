@@ -486,6 +486,14 @@ async function buildPresentation(data, outputPath, options = {}) {
   const switchAn    = data.switchAnalytics  || {};
   const apAn        = data.apAnalytics      || {};
 
+  // Resolve canonical reporting period: prefer report_period.display_label (SSOT),
+  // fall back to legacy reportingPeriod string for backward compatibility.
+  const reportPeriodObj = data.report_period || {};
+  const displayPeriod   = reportPeriodObj.display_label
+    || data.reportingPeriod
+    || exec.reportingPeriod
+    || 'User Selected Period';
+
   // FINDING-010 FIX: Resolve SLA_TARGET from the processed data (set by processData.js).
   // This guarantees the PPT uses the same threshold that was used to determine breaches.
   // eslint-disable-next-line no-global-assign
@@ -521,10 +529,10 @@ async function buildPresentation(data, outputPath, options = {}) {
   const rcaBreakdown = buildRCABreakdown(incidents);
 
   // Slide 1: Cover
-  buildCoverSlide(pres, exec);
+  buildCoverSlide(pres, exec, displayPeriod);
 
   // Slide 2: Table of Contents
-  buildTOCSlide(pres, exec);
+  buildTOCSlide(pres, exec, displayPeriod);
 
   // Slide 3: Executive Summary
   buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown);
@@ -639,7 +647,8 @@ function buildRCABreakdown(incidents) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Slide 1: Cover Page ────────────────────────────────────────────────────
-function buildCoverSlide(pres, exec) {
+// displayPeriod: canonical period string from report_period.display_label (SSOT)
+function buildCoverSlide(pres, exec, displayPeriod) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_DARK };
@@ -662,7 +671,9 @@ function buildCoverSlide(pres, exec) {
     rectRadius: 0.1,
   });
 
-  const isMonthly = /july|august|september|october|november|december|january|february|march|april|may|june|month/i.test(exec.reportingPeriod || '');
+  // Report type: determined by the canonical period string
+  const periodForCheck = displayPeriod || exec.reportingPeriod || '';
+  const isMonthly = /july|august|september|october|november|december|january|february|march|april|may|june|month/i.test(periodForCheck);
   const reportTitle = isMonthly ? 'Proactive Monthly Business Review' : 'Proactive Quarterly Business Review';
 
   s.addText(fmt(exec.customerName || 'Jubilant FoodWorks Limited'), {
@@ -680,7 +691,8 @@ function buildCoverSlide(pres, exec) {
     line: { color: C.ACCENT_GOLD, pt: 1.5 },
   });
 
-  s.addText(`Reporting Period: ${fmt(exec.reportingPeriod || 'User Selected Period')}`, {
+  // Use canonical displayPeriod (report_period.display_label from SSOT)
+  s.addText(`Reporting Period: ${fmt(displayPeriod || exec.reportingPeriod || 'User Selected Period')}`, {
     x: 0.95, y: 3.65, w: panelW - 0.5, h: 0.35,
     fontSize: 12, color: 'D0E8FF', fontFace: 'Calibri',
   });
@@ -713,11 +725,11 @@ function buildCoverSlide(pres, exec) {
 }
 
 // ── Slide 2: Table of Contents ─────────────────────────────────────────────
-function buildTOCSlide(pres, exec) {
+function buildTOCSlide(pres, exec, displayPeriod) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
-  addHeader(pres, s, 'TABLE OF CONTENTS', `${exec.customerName || 'JFL'} QBR Report  ·  ${exec.reportingPeriod || 'Q1 FY2026'}`, _slideNum);
+  addHeader(pres, s, 'TABLE OF CONTENTS', `${exec.customerName || 'JFL'} QBR Report  ·  ${displayPeriod || exec.reportingPeriod || 'Q1 FY2026'}`, _slideNum);
 
   const sections = [
     { num: '01', title: 'Executive Summary', desc: 'KPIs, overall health, and AI-generated executive narrative', slide: '3' },
@@ -765,6 +777,7 @@ function buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown)
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
+  // Use SLA_TARGET (resolved from SSOT in buildPresentation) — not hardcoded
   addHeader(pres, s, 'EXECUTIVE SUMMARY', `${exec.customerName || 'JFL'}  ·  ${exec.reportingPeriod || 'Q1 FY2026'}  ·  Quarterly Business Review`, _slideNum);
 
   // 8 KPI cards in 2 rows of 4
@@ -886,11 +899,18 @@ function buildInfrastructureSlide(pres, exec, siteSummary) {
   ];
 
   const rows = validSites.slice(0, 9).map((site, idx) => {
-    const fill = rowFill(idx);
-    const proUp = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
-    const jflUp = site.jflSwitchUptime ? `${site.jflSwitchUptime}` : `${site.switchUptime || '100.00'}`;
-    const swRca = site.primaryRca && !['None', 'Not case received', 'N/A', ''].includes(site.primaryRca) ? site.primaryRca : 'Stable Operations (No Incidents)';
-    const apRca = site.primaryRcaForAPs && !['None', 'Not case received', 'N/A', ''].includes(site.primaryRcaForAPs) ? site.primaryRcaForAPs : 'Stable Operations (No Incidents)';
+    const fill   = rowFill(idx);
+    // Always use the canonical SSOT fields for uptime (proactiveSwitchUptime / jflSwitchUptime)
+    const proUp  = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
+    const jflUp  = site.jflSwitchUptime       ? `${site.jflSwitchUptime}`       : `${site.switchUptime || '100.00'}`;
+    // Use primaryRcaSwitches (canonical) first; fall back to primaryRca for legacy snapshots.
+    // 'Stable Operations (No Incidents)' replaces any empty/None/N/A fallback.
+    const noIncidentStr = 'Stable Operations (No Incidents)';
+    const badVals = ['None', 'Not case received', 'N/A', '', 'Unknown'];
+    const swRcaRaw = site.primaryRcaSwitches || site.primaryRca || '';
+    const apRcaRaw = site.primaryRcaAPs      || site.primaryRcaForAPs || '';
+    const swRca = swRcaRaw && !badVals.includes(swRcaRaw) ? swRcaRaw : noIncidentStr;
+    const apRca = apRcaRaw && !badVals.includes(apRcaRaw) ? apRcaRaw : noIncidentStr;
     const apIncStr = `${site.apIncidents ?? 0} / ${site.uniqueAPsWithIncidents ?? 0}`;
 
     return [
@@ -1246,15 +1266,16 @@ function buildSLASlide(pres, exec, siteSummary, slaAn) {
     th('Incident-Free %', 'center'), th('Health Score', 'center'), th('SLA Status', 'center'),
   ];
   const rows = validSites.slice(0, 8).map((site, idx) => {
-    const fill     = rowFill(idx);
-    const uptime   = parseFloat(site.switchUptime) || 100;
-    const slaOk    = uptime >= SLA_TARGET;
-    const incFree  = parseFloat(site.incidentFreePercent) || 100;
-    const hScore   = parseFloat(site.healthScore) || 100;
+    const fill    = rowFill(idx);
+    // Use jflSwitchUptime (canonical JFL uptime metric) for SLA compliance check
+    const uptime  = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
+    const slaOk   = uptime >= SLA_TARGET;
+    const incFree = parseFloat(site.incidentFreePercent) || 100;
+    const hScore  = parseFloat(site.healthScore) || 100;
     return [
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
       td(fmt(site.deviceCount), fill, { align: 'center' }),
-      td(pct(site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
+      td(pct(site.jflSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
       td(pct(site.incidentFreePercent), fill, { align: 'center', bold: true, color: incFree >= 90 ? C.GREEN : C.AMBER }),
       td(`${hScore.toFixed(1)} (${healthLabel(hScore)})`, fill, { align: 'center', bold: true, color: healthColor(hScore) }),
       td(slaOk ? 'MET' : 'BREACH', fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
@@ -1371,15 +1392,17 @@ function buildSiteRankingSlide(pres, siteSummary, incidents) {
   ];
 
   const rows = validSites.slice(0, 9).map((site, idx) => {
-    const fill   = rowFill(idx);
-    const hScore = parseFloat(site.healthScore) || 100;
-    const risk   = riskLevel(hScore);
+    const fill     = rowFill(idx);
+    const hScore   = parseFloat(site.healthScore) || 100;
+    const risk     = riskLevel(hScore);
     const incCount = incBySite[site.siteId] || 0;
+    // Use jflSwitchUptime (canonical JFL uptime metric) for SLA threshold comparison
+    const siteUptime = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
     return [
       td(medals[idx] || `${idx + 1}`, fill, { align: 'center', bold: true, color: idx < 3 ? C.ACCENT_GOLD : C.TEXT_MUTED }),
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
       td(`${hScore.toFixed(1)} / 100`, fill, { align: 'center', bold: true, color: healthColor(hScore) }),
-      td(pct(site.switchUptime), fill, { align: 'center', color: parseFloat(site.switchUptime) >= SLA_TARGET ? C.GREEN : C.RED }),
+      td(pct(site.jflSwitchUptime || site.switchUptime), fill, { align: 'center', color: siteUptime >= SLA_TARGET ? C.GREEN : C.RED }),
       td(pct(site.incidentFreePercent), fill, { align: 'center', color: parseFloat(site.incidentFreePercent) >= 90 ? C.GREEN : C.AMBER }),
       td(String(incCount), fill, { align: 'center', color: incCount > 50 ? C.RED : incCount > 20 ? C.AMBER : C.TEXT_DARK }),
       td(`${risk.label}  (${healthLabel(hScore)})`, fill, { align: 'center', bold: true, color: risk.color }),
@@ -1489,15 +1512,17 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum) {
     _slideNum
   );
 
+  // Use jflSwitchUptime (canonical SSOT field) for SLA compliance comparisons
+  const siteJflUptime = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
   const kpis = [
-    { label: 'Active Devices', value: fmt(site.deviceCount),            color: C.NAVY  },
-    { label: 'Switches',       value: fmt(site.switchCount),            color: C.BLUE  },
-    { label: 'Access Points',  value: fmt(site.apCount),                color: C.STEEL },
-    { label: 'Switch Uptime',  value: pct(site.switchUptime),           color: parseFloat(site.switchUptime) >= SLA_TARGET ? C.GREEN : C.RED },
-    { label: 'Incident-Free %',value: pct(site.incidentFreePercent),    color: parseFloat(site.incidentFreePercent) >= 90 ? C.GREEN : C.AMBER },
+    { label: 'Active Devices', value: fmt(site.deviceCount),                                         color: C.NAVY  },
+    { label: 'Switches',       value: fmt(site.switchCount),                                          color: C.BLUE  },
+    { label: 'Access Points',  value: fmt(site.apCount),                                              color: C.STEEL },
+    { label: 'JFL Uptime',     value: pct(site.jflSwitchUptime || site.switchUptime),                 color: siteJflUptime >= SLA_TARGET ? C.GREEN : C.RED },
+    { label: 'Incident-Free %',value: pct(site.incidentFreePercent),                                  color: parseFloat(site.incidentFreePercent) >= 90 ? C.GREEN : C.AMBER },
     { label: 'Health Score',   value: `${fmt(site.healthScore)} (${healthLabel(site.healthScore)})`, color: healthColor(site.healthScore) },
-    { label: 'SLA Status',     value: parseFloat(site.switchUptime) >= SLA_TARGET ? 'MET' : 'BREACH', color: parseFloat(site.switchUptime) >= SLA_TARGET ? C.GREEN : C.RED },
-    { label: 'Total Incidents',value: fmt(siteIncs.length),             color: siteIncs.length > 0 ? C.AMBER : C.GREEN },
+    { label: 'SLA Status',     value: siteJflUptime >= SLA_TARGET ? 'MET' : 'BREACH',                 color: siteJflUptime >= SLA_TARGET ? C.GREEN : C.RED },
+    { label: 'Total Incidents',value: fmt(siteIncs.length),                                           color: siteIncs.length > 0 ? C.AMBER : C.GREEN },
   ];
 
   kpis.forEach((k, i) => {
@@ -1527,11 +1552,11 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum) {
     s.addText(r, { x: 6.82, y: 3.98 + i * 0.4, w: 5.88, h: 0.28, fontSize: 8.5, color: '7F1D1D', fontFace: 'Calibri' });
   });
 
-  // AI Site Summary
-  const topRca = site.primaryRca || 'None';
+  // AI Site Summary — use primaryRcaSwitches (SSOT canonical) first
+  const topRca = site.primaryRcaSwitches || site.primaryRca || 'None';
   const aiSummary = [
     `${site.siteId || siteKey} operates ${fmt(site.deviceCount)} active devices (${fmt(site.switchCount)} switches, ${fmt(site.apCount)} APs) in the current reporting period.`,
-    `Switch uptime: ${pct(site.switchUptime)} — ${parseFloat(site.switchUptime) >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
+    `JFL Switch Uptime: ${pct(site.jflSwitchUptime || site.switchUptime)} — ${siteJflUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
     siteIncs.length > 0 ? `${siteIncs.length} incidents recorded; primary root cause: ${topRca}.` : `Zero incidents recorded — full operational SLA compliance maintained.`,
   ];
   addNarrativeBox(s, 5.2, aiSummary, `AI Site Summary — ${site.siteId || siteKey}`);
@@ -1912,7 +1937,7 @@ function buildAppendixCoverSlide(pres, exec) {
 
 // ── Slide 41: Appendix — Complete Device Inventory ───────────────────────
 function buildAppendixDeviceInventorySlide(pres, devices) {
-  const pageSize = 12;
+  const pageSize = 30;
   const totalPages = Math.max(1, Math.ceil(devices.length / pageSize));
   const COL_W = [0.8, 2.8, 2.5, 2.5, 2.0, 1.83];
   const headers = [
@@ -1958,7 +1983,7 @@ function buildAppendixDeviceInventorySlide(pres, devices) {
 // ── Slide 42: Appendix — Complete Switch Inventory ───────────────────────
 function buildAppendixSwitchInventorySlide(pres, devices) {
   const switches = devices.filter(d => !d.__isStock && (/^sw$/i.test(d.DeviceType || '') || /switch/i.test(d.DeviceType || '')));
-  const pageSize = 12;
+  const pageSize = 30;
   const totalPages = Math.max(1, Math.ceil(switches.length / pageSize));
   const COL_W = [0.8, 3.2, 2.5, 2.3, 1.8, 1.83];
   const headers = [
@@ -2006,7 +2031,7 @@ function buildAppendixSwitchInventorySlide(pres, devices) {
 // ── Slide 43: Appendix — Complete AP Inventory ───────────────────────────
 function buildAppendixAPInventorySlide(pres, devices) {
   const aps = devices.filter(d => !d.__isStock && (/^ap$/i.test(d.DeviceType || '') || /access/i.test(d.DeviceType || '')));
-  const pageSize = 12;
+  const pageSize = 30;
   const totalPages = Math.max(1, Math.ceil(aps.length / pageSize));
   const COL_W = [0.8, 3.5, 2.5, 2.5, 3.13];
   const headers = [
@@ -2050,7 +2075,7 @@ function buildAppendixAPInventorySlide(pres, devices) {
 
 // ── Slide 44: Appendix — Raw Incident Records Log ────────────────────────
 function buildAppendixIncidentRecordsSlide(pres, incidents) {
-  const pageSize = 12;
+  const pageSize = 30;
   const totalPages = Math.max(1, Math.ceil(incidents.length / pageSize));
   const COL_W = [1.8, 2.2, 1.8, 1.5, 1.5, 3.63];
   const headers = [
