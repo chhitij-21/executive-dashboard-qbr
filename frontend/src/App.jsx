@@ -1,5 +1,5 @@
 // frontend/src/App.jsx — Executive Report Dashboard
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Component } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import LoginModal from './components/LoginModal';
@@ -19,6 +19,45 @@ import defaultDashboardData from './data/defaultDashboardData.json';
 // FINDING-025 FIX: Import shared utilities instead of duplicating them inline.
 import { normalizeLoc, isGenericLocation } from './utils/siteUtils';
 
+/**
+ * ErrorBoundary — catches React render errors and shows a clean executive error card.
+ * Prevents the entire dashboard from white-screening on a single section's render crash.
+ */
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(err, info) {
+    // Only log in development — suppressed in production builds
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[Dashboard Error]', err, info);
+    }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '10px', margin: '1rem 0' }}>
+          <h3 style={{ color: '#991b1b', fontWeight: 700, marginBottom: '0.5rem' }}>Dashboard Rendering Error</h3>
+          <p style={{ color: '#7f1d1d', fontSize: '0.9rem', marginBottom: '1rem' }}>
+            A component encountered an unexpected error. Please refresh the page or re-upload the report file.
+          </p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ padding: '0.4rem 1rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // FINDING-025: normalizeLoc and isGenericLocation imported from ./utils/siteUtils above.
 // Local duplicates removed.
 
@@ -31,14 +70,19 @@ function MainPortal() {
 
   const [jobId, setJobId] = useState('latest');
   const [status, setStatus] = useState('idle');
-  const [dashboardData, setDashboardData] = useState(defaultDashboardData);
+  const [isLoading, setIsLoading] = useState(false);
+  // Always start with null — never show stale bundled defaultDashboardData.
+  // Data is always loaded fresh from the backend API based on the active jobId.
+  const [dashboardData, setDashboardData] = useState(null);
   const [apiError, setApiError] = useState(null);
 
   // Fetch & poll for dashboard data if jobId or site selection changes
   useEffect(() => {
     let isSubscribed = true;
+    let pollInterval = null;
 
     const fetchDashboard = async () => {
+      setIsLoading(true);
       try {
         const siteParam = (activeLocation && activeLocation !== 'All Locations' && activeLocation !== 'ALL')
           ? activeLocation
@@ -50,9 +94,16 @@ function MainPortal() {
         }).toString();
 
         const res = await apiFetch(`${API_BASE_URL}/api/dashboard?${query}`);
-        if (res.status === 202) return false;
+        if (res.status === 202) {
+          // Still processing — keep polling
+          if (isSubscribed) setStatus('processing');
+          return false;
+        }
         if (!res.ok) {
-          if (isSubscribed) setApiError('Could not retrieve dashboard data from server.');
+          if (isSubscribed) {
+            setApiError('Could not retrieve dashboard data from server.');
+            setStatus('error');
+          }
           return false;
         }
         const json = await res.json();
@@ -69,17 +120,33 @@ function MainPortal() {
           setDashboardData(json);
           setStatus('completed');
           setApiError(null);
+          // Clear poll once we have completed data
+          if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
         }
         return true;
       } catch (e) {
-        console.error('Fetch dashboard error:', e);
         if (isSubscribed) setApiError('Network error connecting to backend API.');
         return false;
+      } finally {
+        if (isSubscribed) setIsLoading(false);
       }
     };
 
-    fetchDashboard();
-    return () => { isSubscribed = false; };
+    fetchDashboard().then((done) => {
+      // If still processing, start polling every 3 seconds until complete
+      if (!done && isSubscribed && status === 'processing') {
+        pollInterval = setInterval(() => {
+          fetchDashboard().then((complete) => {
+            if (complete && pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+          });
+        }, 3000);
+      }
+    });
+
+    return () => {
+      isSubscribed = false;
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [jobId, selectedSite, activeLocation]);
 
   // Use canonical backend dashboard data directly (SSOT)
@@ -150,10 +217,21 @@ function MainPortal() {
 
   // Render full 7-section Executive Dashboard
   const renderDashboard = () => {
+    const renderProcessing = () => (
+      <div style={{ textAlign: 'center', padding: '3rem 2rem' }}>
+        <div className="spinner" style={{ width: 40, height: 40, margin: '0 auto 1.5rem' }} />
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Processing Report</h3>
+        <p style={{ color: 'var(--text-secondary)' }}>Calculating KPIs, SLA metrics, and RCA breakdown. This may take a few moments...</p>
+      </div>
+    );
+
+    if (status === 'processing') return renderProcessing();
+    if (isLoading && !dashboardData) return renderProcessing();
+
     if (!activeDashboardData) {
       return (
         <div className="empty-state card pad-lg" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
-          <span className="empty-state-icon" style={{ fontSize: '3rem', display: 'block', marginBottom: '1rem' }}>📊</span>
+          <span className="empty-state-icon" style={{ fontSize: '3rem', display: 'block', marginBottom: '1rem' }} aria-hidden="true">📊</span>
           <h3 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
             No Dashboard Data Loaded
           </h3>
@@ -163,17 +241,14 @@ function MainPortal() {
               : 'Please upload raw Excel workbooks or select a previous report from history to view executive dashboard analytics.'}
           </p>
           {status === 'processing' ? (
-            <div className="spinner" style={{ width: 32, height: 32, margin: '1rem auto' }} />
+            <div className="spinner" style={{ width: 32, height: 32, margin: '1rem auto' }} aria-label="Loading report" />
           ) : (
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" onClick={() => setTab('upload')}>
-                📁 Upload & Generate Report
+              <button className="btn btn-primary" onClick={() => setTab('upload')} aria-label="Upload and generate a new report">
+                Upload &amp; Generate Report
               </button>
-              <button className="btn btn-secondary" onClick={() => setTab('history')}>
-                📜 Select from History
-              </button>
-              <button className="btn btn-outline" style={{ border: '1px solid #ccc', background: 'transparent' }} onClick={() => setJobId('default')}>
-                ⚡ Load Sample Demo Data
+              <button className="btn btn-secondary" onClick={() => setTab('history')} aria-label="Select from report history">
+                Select from History
               </button>
             </div>
           )}
@@ -194,6 +269,16 @@ function MainPortal() {
         {apiError && (
           <div className="alert-box alert-error" style={{ marginBottom: '1rem', background: '#f8d7da', color: '#721c24', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #f5c6cb', fontWeight: 500 }}>
             <strong>Server Alert:</strong> {apiError}
+          </div>
+        )}
+
+        {/* PART 4: Validation warning banner — rendered only when backend detects data inconsistencies */}
+        {activeDashboardData.validationWarnings && activeDashboardData.validationWarnings.length > 0 && (
+          <div className="alert-box alert-warning" style={{ marginBottom: '1rem', background: '#fffbeb', border: '1px solid #fcd34d', padding: '0.85rem 1.2rem', borderRadius: '8px', color: '#92400e' }}>
+            <strong>Data Validation Warnings:</strong>
+            <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem' }}>
+              {activeDashboardData.validationWarnings.map((w, i) => <li key={i} style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}>{w}</li>)}
+            </ul>
           </div>
         )}
         {/* FINDING-024 FIX: Success banner is now conditional — shown only when actual
@@ -217,6 +302,7 @@ function MainPortal() {
               <strong>
                 {activeDashboardData?.report_period?.display_label ||
                  exec.reportingPeriod ||
+                 activeDashboardData?.reportingPeriod ||
                  'Custom Period'}
               </strong>
             </p>
@@ -271,7 +357,13 @@ function MainPortal() {
             <div className="exec-section-title">Key Performance Indicators</div>
             <div className="kpi-grid">
               <KpiCard title="Customer" value={exec.customerName || activeClient?.name} />
-              <KpiCard title="Reporting Period" value={exec.reportingPeriod} />
+              {/* SSOT: Reporting Period reads from report_period.display_label first, then falls back to exec.reportingPeriod */}
+              <KpiCard title="Reporting Period" value={
+                activeDashboardData?.report_period?.display_label ||
+                exec.reportingPeriod ||
+                activeDashboardData?.reportingPeriod ||
+                'Custom Period'
+              } />
               <KpiCard title="Total Sites" value={exec.totalSites} />
               <KpiCard title="Active Operational Devices" value={exec.totalDevices} />
               <KpiCard title="Stock Inventory Devices" value={exec.totalStockDevices ?? 0} />
@@ -279,8 +371,10 @@ function MainPortal() {
               <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} />
               <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} />
               <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} />
-              <KpiCard title="Primary RCA (All)" value={exec.primaryRca || rcaAn.topRca || 'None'} />
-              <KpiCard title="Primary RCA for APs" value={exec.primaryRcaForAPs || apAn.topApRca || 'None'} />
+              {/* Primary RCA Driver (Switches) — reads from switch-specific field with fallback */}
+              <KpiCard title="Primary RCA Driver (Switches)" value={exec.primaryRcaSwitches || exec.primaryRca || 'Stable Operations (No Incidents)'} />
+              {/* Primary RCA Driver (APs) — reads from AP-specific field with fallback */}
+              <KpiCard title="Primary RCA Driver (APs)" value={exec.primaryRcaAPs || exec.primaryRcaForAPs || 'Stable Operations (No Incidents)'} />
               <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" />
               <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" />
               <KpiCard title="SLA Compliance" value={exec.slaCompliance} unit="%" />
@@ -446,12 +540,13 @@ function MainPortal() {
                   <table className="data-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                     <thead>
                       <tr>
-                        <th style={{ width: '18%' }}>Reference</th>
-                        <th style={{ width: '16%' }}>Device</th>
-                        <th style={{ width: '14%' }}>Location</th>
-                        <th style={{ width: '14%', textAlign: 'center' }}>Resolution (hrs)</th>
-                        <th style={{ width: '10%', textAlign: 'center' }}>Target (hrs)</th>
-                        <th style={{ width: '12%', textAlign: 'center' }}>SLA Status</th>
+                        <th style={{ width: '16%' }}>Reference</th>
+                        <th style={{ width: '15%' }}>Device</th>
+                        <th style={{ width: '12%' }}>Location</th>
+                        <th style={{ width: '11%', textAlign: 'center' }}>Resolution (hrs)</th>
+                        <th style={{ width: '9%', textAlign: 'center' }}>Target (hrs)</th>
+                        <th style={{ width: '11%', textAlign: 'center' }}>SLA Status</th>
+                        <th style={{ width: '26%' }}>Primary RCA</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -468,20 +563,30 @@ function MainPortal() {
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>
                               {row.resolution_time_hours !== null && row.resolution_time_hours !== undefined
                                 ? `${row.resolution_time_hours}h`
-                                : <span style={{ color: 'var(--text-secondary)' }}>N/A</span>}
+                                : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
                             </td>
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>{row.sla_target_hours ?? 2}h</td>
                             <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
                               {row.sla_status ? (
                                 <span style={{
                                   padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
-                                  background: row.sla_status === 'SLA Met' ? '#dcfce7' : '#fee2e2',
-                                  color:      row.sla_status === 'SLA Met' ? '#15803d' : '#991b1b',
-                                  border: `1px solid ${row.sla_status === 'SLA Met' ? '#86efac' : '#fca5a5'}`,
+                                  background:
+                                    row.sla_status === 'SLA Met'     ? '#dcfce7' :
+                                    row.sla_status === 'Open'         ? '#eff6ff' : '#fee2e2',
+                                  color:
+                                    row.sla_status === 'SLA Met'     ? '#15803d' :
+                                    row.sla_status === 'Open'         ? '#1d4ed8' : '#991b1b',
+                                  border: `1px solid ${
+                                    row.sla_status === 'SLA Met'     ? '#86efac' :
+                                    row.sla_status === 'Open'         ? '#bfdbfe' : '#fca5a5'
+                                  }`,
                                 }}>{row.sla_status}</span>
                               ) : (
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>N/A</span>
+                                <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, background: '#f1f5f9', color: 'var(--text-secondary)', border: '1px solid #e2e8f0' }}>No Data</span>
                               )}
+                            </td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.RCA || 'Unknown'}>
+                              {row.RCA || 'Unknown'}
                             </td>
                           </tr>
                         );
@@ -506,8 +611,9 @@ function MainPortal() {
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Rack-wise Switch Uptime Summary</h4>
                 <DataTable
-                  columns={['site', 'rack', 'deviceCount', 'monthlyUptime', 'quarterlyUptime']}
+                  columns={['site', 'rack', 'deviceCount', 'periodUptime']}
                   rows={switchAn.rackwiseUptime}
+                  columnLabels={{ periodUptime: switchAn.periodLabel || 'Monthly Uptime %' }}
                 />
               </div>
             )}
@@ -521,9 +627,9 @@ function MainPortal() {
 
             {/* AP KPIs — no uptime per requirement */}
             <div className="kpi-grid">
-              <KpiCard title="Total APs" value={apAn.totalAPs ?? 0} icon="📶" />
-              <KpiCard title="Total AP Incidents" value={apAn.apIncidents ?? apAn.totalAPIncidentRows ?? 0} icon="🚨" />
-              <KpiCard title="Unique APs with Incidents" value={apAn.uniqueAPsWithIncidents ?? 0} icon="🔍" />
+              <KpiCard title="Total APs" value={apAn.totalAPs ?? 0} />
+              <KpiCard title="Total AP Incidents" value={apAn.apIncidents ?? apAn.totalAPIncidentRows ?? 0} />
+              <KpiCard title="Unique APs with Incidents" value={apAn.uniqueAPsWithIncidents ?? 0} />
             </div>
 
             {/* Incident Resolution SLA Summary */}
@@ -574,12 +680,13 @@ function MainPortal() {
                   <table className="data-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                     <thead>
                       <tr>
-                        <th style={{ width: '18%' }}>Reference</th>
-                        <th style={{ width: '16%' }}>Device</th>
-                        <th style={{ width: '14%' }}>Location</th>
-                        <th style={{ width: '14%', textAlign: 'center' }}>Resolution (hrs)</th>
-                        <th style={{ width: '10%', textAlign: 'center' }}>Target (hrs)</th>
-                        <th style={{ width: '12%', textAlign: 'center' }}>SLA Status</th>
+                        <th style={{ width: '16%' }}>Reference</th>
+                        <th style={{ width: '15%' }}>Device</th>
+                        <th style={{ width: '12%' }}>Location</th>
+                        <th style={{ width: '11%', textAlign: 'center' }}>Resolution (hrs)</th>
+                        <th style={{ width: '9%', textAlign: 'center' }}>Target (hrs)</th>
+                        <th style={{ width: '11%', textAlign: 'center' }}>SLA Status</th>
+                        <th style={{ width: '26%' }}>Primary RCA</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -596,20 +703,30 @@ function MainPortal() {
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>
                               {row.resolution_time_hours !== null && row.resolution_time_hours !== undefined
                                 ? `${row.resolution_time_hours}h`
-                                : <span style={{ color: 'var(--text-secondary)' }}>N/A</span>}
+                                : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
                             </td>
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>{row.sla_target_hours ?? 2}h</td>
                             <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
                               {row.sla_status ? (
                                 <span style={{
                                   padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
-                                  background: row.sla_status === 'SLA Met' ? '#dcfce7' : '#fee2e2',
-                                  color:      row.sla_status === 'SLA Met' ? '#15803d' : '#991b1b',
-                                  border: `1px solid ${row.sla_status === 'SLA Met' ? '#86efac' : '#fca5a5'}`,
+                                  background:
+                                    row.sla_status === 'SLA Met'     ? '#dcfce7' :
+                                    row.sla_status === 'Open'         ? '#eff6ff' : '#fee2e2',
+                                  color:
+                                    row.sla_status === 'SLA Met'     ? '#15803d' :
+                                    row.sla_status === 'Open'         ? '#1d4ed8' : '#991b1b',
+                                  border: `1px solid ${
+                                    row.sla_status === 'SLA Met'     ? '#86efac' :
+                                    row.sla_status === 'Open'         ? '#bfdbfe' : '#fca5a5'
+                                  }`,
                                 }}>{row.sla_status}</span>
                               ) : (
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>N/A</span>
+                                <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, background: '#f1f5f9', color: 'var(--text-secondary)', border: '1px solid #e2e8f0' }}>No Data</span>
                               )}
+                            </td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.RCA || 'Unknown'}>
+                              {row.RCA || 'Unknown'}
                             </td>
                           </tr>
                         );
@@ -638,10 +755,10 @@ function MainPortal() {
             <h3 className="section-title">Incident Analytics</h3>
             {/* Requirement 5: MTTR KPI card removed from frontend. MTTR is retained in backend for audit only. */}
             <div className="kpi-grid">
-              <KpiCard title="Total Incidents" value={incAn.totalIncidents ?? 0} icon="🚨" />
-              <KpiCard title="Critical (P1 / Core)" value={incAn.criticalIncidents ?? 0} icon="🔴" />
-              <KpiCard title="Major (P2 / Non-Core)" value={incAn.majorIncidents ?? 0} icon="🟠" />
-              <KpiCard title="Minor (P3-P4 / AP)" value={incAn.minorIncidents ?? 0} icon="🟡" />
+              <KpiCard title="Total Incidents" value={incAn.totalIncidents ?? 0} />
+              <KpiCard title="Critical (P1 / Core)" value={incAn.criticalIncidents ?? 0} />
+              <KpiCard title="Major (P2 / Non-Core)" value={incAn.majorIncidents ?? 0} />
+              <KpiCard title="Minor (P3-P4 / AP)" value={incAn.minorIncidents ?? 0} />
             </div>
 
             {incidentTrendData.length > 0 && (
@@ -665,8 +782,8 @@ function MainPortal() {
           <div className="section-body card pad-md">
             <h3 className="section-title">Root Cause Analysis (RCA)</h3>
             <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
-              <KpiCard title="Total Analyzed Incidents" value={rcaAn.totalIncidents ?? 0} icon="📋" />
-              <KpiCard title="Primary Root Cause" value={rcaAn.topRca ?? 'None'} icon="🔍" />
+              <KpiCard title="Total Analyzed Incidents" value={rcaAn.totalIncidents ?? 0} />
+              <KpiCard title="Primary Root Cause" value={rcaAn.topRca ?? 'None'} />
             </div>
 
             {/* RCA Category Doughnut chart — full width */}
@@ -683,9 +800,7 @@ function MainPortal() {
             {rcaAn.standardBreakdown?.length > 0 && (
               <div style={{ marginBottom: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Standard RCA Category Breakdown</h4>
-                <div style={{ overflowX: 'hidden' }}>
-                  <DataTable columns={['category', 'count', 'percentage']} rows={rcaAn.standardBreakdown} noScroll />
-                </div>
+                <DataTable columns={['category', 'count', 'percentage']} rows={rcaAn.standardBreakdown} noScroll />
               </div>
             )}
 
@@ -693,9 +808,7 @@ function MainPortal() {
             {rcaAn.rawBreakdown?.length > 0 && (
               <div>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Raw RCA Breakdown (All Incidents)</h4>
-                <div style={{ overflowX: 'hidden' }}>
-                  <DataTable columns={['rca', 'count', 'percentage']} rows={rcaAn.rawBreakdown} noScroll />
-                </div>
+                <DataTable columns={['rca', 'count', 'percentage']} rows={rcaAn.rawBreakdown} noScroll />
               </div>
             )}
           </div>
@@ -706,7 +819,7 @@ function MainPortal() {
           <div className="section-body card pad-md">
             <h3 className="section-title">SLA Analytics (Active Operational Devices)</h3>
             <div className="kpi-grid">
-              <KpiCard title="Overall SLA Compliance" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" icon="📈" />
+              <KpiCard title="Overall SLA Compliance" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" />
               {/* Device SLA Status: single clean Met/Breached indicator — no raw % target shown */}
               <div className="kpi-card" style={{
                 borderLeft: `4px solid ${
@@ -722,12 +835,12 @@ function MainPortal() {
                   fontWeight: 700,
                 }}>
                   {parseFloat(slaAn.overallSLAPercent ?? 100) >= parseFloat(slaAn.slaTarget ?? 99.3)
-                    ? '✅ SLA Met'
-                    : '❌ SLA Breached'}
+                    ? 'SLA Met'
+                    : 'SLA Breached'}
                 </span>
               </div>
-              <KpiCard title="Compliant Active Devices" value={slaAn.compliantDevices ?? 0} icon="✅" />
-              <KpiCard title="Breaching Active Devices" value={slaAn.breachingDevices ?? 0} icon="❌" />
+              <KpiCard title="Compliant Active Devices" value={slaAn.compliantDevices ?? 0} />
+              <KpiCard title="Breaching Active Devices" value={slaAn.breachingDevices ?? 0} />
             </div>
 
             {slaMonthlyData.length > 0 && (
@@ -778,7 +891,17 @@ function MainPortal() {
           />
         )}
 
-        {tab === 'dashboard' && renderDashboard()}
+        {tab === 'dashboard' && (
+          <ErrorBoundary>
+            {isLoading && dashboardData && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem', color: '#1d4ed8' }}>
+                <div className="spinner" style={{ width: 18, height: 18, flexShrink: 0 }} aria-label="Refreshing dashboard" />
+                <span>Refreshing dashboard data...</span>
+              </div>
+            )}
+            {renderDashboard()}
+          </ErrorBoundary>
+        )}
 
         {tab === 'history' && (
           <ReportHistory

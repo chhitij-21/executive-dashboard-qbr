@@ -22,12 +22,13 @@ const COLUMN_HEADER_MAP = {
   category: 'RCA Category',
   count: 'Count',
   percentage: '%',
+  periodUptime: 'Monthly Uptime %',
   slaTarget: 'SLA Target %',
   gap: 'Gap %',
   siteId: 'Site',
 };
 
-export default function DataTable({ columns, rows, title, noScroll = false }) {
+export default function DataTable({ columns, rows, title, noScroll = false, columnLabels = {} }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(0);
@@ -72,9 +73,9 @@ export default function DataTable({ columns, rows, title, noScroll = false }) {
                   key={col}
                   onClick={() => handleSort(col)}
                   className={sortCol === col ? 'sorted' : ''}
-                  title={`Sort by ${COLUMN_HEADER_MAP[col] || col}`}
+                  title={`Sort by ${columnLabels[col] || COLUMN_HEADER_MAP[col] || col}`}
                 >
-                  {COLUMN_HEADER_MAP[col] || col}
+                  {columnLabels[col] || COLUMN_HEADER_MAP[col] || col}
                   <span className="sort-icon">
                     {sortCol === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
                   </span>

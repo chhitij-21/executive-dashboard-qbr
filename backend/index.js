@@ -601,7 +601,10 @@ app.all(['/api/switch-mode', '/switch-mode'], async (req, res) => {
   try {
     const mode = (req.query.mode || req.body?.mode || 'monthly').toLowerCase();
     const periodMode = mode.includes('quarter') ? 'quarterly' : 'monthly';
-    const reportingPeriod = periodMode === 'monthly' ? '1 July 2026 – 31 July 2026' : 'Q1 FY2026 (7 Apr – 6 Jul 2026)';
+    // NOTE: Do NOT hardcode a date label here — use a generic label so it never
+    // overrides the user-selected date range from an upload. The actual reporting
+    // period is always set by the user's start_date / end_date on upload.
+    const reportingPeriod = periodMode === 'monthly' ? 'Monthly Report' : 'Quarterly Report (Q1 FY2026)';
 
     console.log(`[server] Switch period mode request received: ${periodMode}`);
 

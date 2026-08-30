@@ -50,8 +50,10 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
               const isSelected = selectedSite === site.siteId;
               const proUp = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
               const jflUp = site.jflSwitchUptime ? `${site.jflSwitchUptime}` : `${site.switchUptime || '100.00'}`;
-              const swRca = site.primaryRca && !['None', 'Not case received', 'N/A', ''].includes(site.primaryRca) ? site.primaryRca : 'Stable Operations (No Incidents)';
-              const apRca = site.primaryRcaForAPs && !['None', 'Not case received', 'N/A', ''].includes(site.primaryRcaForAPs) ? site.primaryRcaForAPs : 'Stable Operations (No Incidents)';
+              const rawSwRca = site.primaryRcaSwitches || site.primaryRca;
+              const rawApRca = site.primaryRcaAPs || site.primaryRcaForAPs;
+              const swRca = rawSwRca && !['None', 'Not case received', 'N/A', ''].includes(rawSwRca) ? rawSwRca : 'Stable Operations (No Incidents)';
+              const apRca = rawApRca && !['None', 'Not case received', 'N/A', ''].includes(rawApRca) ? rawApRca : 'Stable Operations (No Incidents)';
 
               return (
                 <tr

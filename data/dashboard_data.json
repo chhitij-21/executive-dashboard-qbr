@@ -1,10 +1,10 @@
 {
   "customerName": "Jubilant Foodworks Ltd (JFL)",
-  "reportingPeriod": "1 July 2026 - 31 July 2026",
+  "reportingPeriod": "User Selected Period",
   "generatedAt": "2026-08-13T13:44:14.512Z",
   "executiveSummary": {
     "customerName": "Jubilant Foodworks Ltd (JFL)",
-    "reportingPeriod": "1 July 2026 - 31 July 2026",
+    "reportingPeriod": "User Selected Period",
     "totalSites": 8,
     "totalDevices": 372,
     "totalStockDevices": 73,
@@ -12,6 +12,8 @@
     "totalAPs": 224,
     "apIncidents": 140,
     "uniqueAPsWithIncidents": 62,
+    "primaryRcaSwitches": "Device Power Issues",
+    "primaryRcaAPs": "Device Power Issues",
     "primaryRca": "Device Power Issues",
     "primaryRcaForAPs": "Device Power Issues",
     "overallUptime": "98.24",
@@ -375,6 +377,8 @@
       "incidentCount": 28,
       "healthScore": "92.33",
       "healthLabel": "Good",
+      "primaryRcaSwitches": "Device Power Issues",
+      "primaryRcaAPs": "Device Power Issues",
       "primaryRca": "Device Power Issues",
       "primaryRcaForAPs": "Device Power Issues"
     },
@@ -466,6 +470,8 @@
       "incidentCount": 2,
       "healthScore": "83.29",
       "healthLabel": "Fair",
+      "primaryRcaSwitches": "Device Power Issues",
+      "primaryRcaAPs": "Device Power Issues",
       "primaryRca": "Device Power Issues",
       "primaryRcaForAPs": "Device Power Issues"
     },
@@ -487,6 +493,8 @@
       "incidentCount": 5,
       "healthScore": "85.79",
       "healthLabel": "Good",
+      "primaryRcaSwitches": "Device Power Issues",
+      "primaryRcaAPs": "Device Power Issues",
       "primaryRca": "Device Power Issues",
       "primaryRcaForAPs": "Device Power Issues"
     },

@@ -304,7 +304,8 @@ export default function SiteInspector({
         <KpiCard title="Access Points (APs)" value={currentSiteData.apCount} />
         <KpiCard title="Incident Free %" value={currentSiteData.incidentFreePercent ?? '100.00'} unit="%" />
         <KpiCard title="Health Score" value={currentSiteData.healthScore ? `${currentSiteData.healthScore} (${currentSiteData.healthLabel})` : '100.0 (Excellent)'} />
-        <KpiCard title="Primary RCA (All)" value={currentSiteData.primaryRca ?? 'None'} />
+        <KpiCard title="Primary RCA (Switches)" value={currentSiteData.primaryRcaSwitches || currentSiteData.primaryRca || 'Stable Operations (No Incidents)'} />
+        <KpiCard title="Primary RCA (APs)" value={currentSiteData.primaryRcaAPs || currentSiteData.primaryRcaForAPs || 'Stable Operations (No Incidents)'} />
       </div>
 
       {/* Sub-Tab Navigation Bar */}
@@ -416,16 +417,14 @@ export default function SiteInspector({
                 <thead>
                   <tr>
                     {/* Requirement 7: Single Reference column — Ticket if available, else Incident ID */}
-                    <th style={{ width: '14%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Reference</th>
-                    <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device Name</th>
-                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device Type</th>
-                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Category</th>
-                    <th style={{ width: '8%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Priority</th>
-                    <th style={{ width: '8%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Status</th>
-                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Open Date</th>
+                    <th style={{ width: '18%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Reference</th>
+                    <th style={{ width: '16%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device Name</th>
+                    <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Device Type</th>
+                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Priority</th>
+                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">Status</th>
                     {/* Requirement 6: SLA Status column — consumed from SSOT, never recalculated */}
-                    <th style={{ width: '10%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">SLA Status</th>
-                    <th style={{ width: '14%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Primary RCA</th>
+                    <th style={{ width: '12%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">SLA Status</th>
+                    <th style={{ width: '22%', padding: '0.45rem 0.5rem', fontSize: '0.78rem' }}>Primary RCA</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -463,9 +462,6 @@ export default function SiteInspector({
                           {devId}
                         </td>
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }}>{devType}</td>
-                        <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={cat}>
-                          {cat}
-                        </td>
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">
                           <span style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: `${prioColor}15`, color: prioColor, border: `1px solid ${prioColor}30` }}>
                             {prio}
@@ -476,22 +472,28 @@ export default function SiteInspector({
                             {isClosed ? 'Closed' : 'Open'}
                           </span>
                         </td>
-                        <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={openDate}>
-                          {openDate}
-                        </td>
                         {/* Requirement 6: SLA Status — SSOT output only */}
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem' }} className="cell-center">
                           {slaStatus ? (
                             <span style={{
                               padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
-                              background: slaStatus === 'SLA Met' ? '#dcfce7' : '#fee2e2',
-                              color: slaStatus === 'SLA Met' ? '#15803d' : '#991b1b',
-                              border: `1px solid ${slaStatus === 'SLA Met' ? '#86efac' : '#fca5a5'}`,
+                              background:
+                                slaStatus === 'SLA Met'     ? '#dcfce7' :
+                                slaStatus === 'Open'         ? '#eff6ff' : '#fee2e2',
+                              color:
+                                slaStatus === 'SLA Met'     ? '#15803d' :
+                                slaStatus === 'Open'         ? '#1d4ed8' : '#991b1b',
+                              border: `1px solid ${
+                                slaStatus === 'SLA Met'     ? '#86efac' :
+                                slaStatus === 'Open'         ? '#bfdbfe' : '#fca5a5'
+                              }`,
                             }}>
                               {slaStatus}
                             </span>
+                          ) : isClosed ? (
+                            <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, background: '#f1f5f9', color: 'var(--text-secondary)', border: '1px solid #e2e8f0' }}>No Data</span>
                           ) : (
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>N/A</span>
+                            <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>Open</span>
                           )}
                         </td>
                         <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rca}>

@@ -1,0 +1,14 @@
+===== backend/*.py =====
+
+===== backend/api/*.py =====
+
+===== plugins/jfl/rules.yaml =====
+
+===== frontend/src/components/*Analytics.jsx =====
+
+===== frontend/src/components/SiteSummary.jsx =====
+
+===== frontend/src/components/RCABreakdown.jsx =====
+
+===== frontend/src/components/SLAStatusCard.jsx =====
+

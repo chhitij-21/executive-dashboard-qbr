@@ -190,25 +190,33 @@ function formatExcelDate(val) {
 
 /**
  * Parse and normalise the main incident sheet.
- * Maps unique ticket number to BOTH TicketNumber AND IncidentNumber.
+ * Ticket Number and Incident Number are kept as separate fields so that
+ * display_reference can choose: show Ticket if present, else show Incident ID.
  */
 function parseIncidentSheet(rows) {
   return rows.map((row, idx) => {
+    // Ticket Number — Ticket-specific columns ONLY.
+    // Do NOT fall back to Incident Number columns here — separation is intentional.
     const ticketNo = String(
-      row['Ticket Number'] ||
-      row['TicketNumber'] ||
-      row['Ticket No'] ||
-      row['TicketNo'] ||
-      row['Incident Number'] ||
-      row['IncidentNumber'] ||
-      row['Incident No'] ||
-      row['IncidentNo'] ||
-      row['Incident ID'] ||
-      row['IncidentID'] ||
-      row['Number'] ||
-      row['ID'] ||
-      row['Ticket #'] ||
-      row['Incident #'] ||
+      row['Ticket Number'] ??
+      row['TicketNumber'] ??
+      row['Ticket No'] ??
+      row['TicketNo'] ??
+      row['Ticket #'] ??
+      ''
+    ).trim();
+
+    // Incident Number — Incident-specific columns with auto-generate fallback.
+    const incidentId = String(
+      row['Incident Number'] ??
+      row['IncidentNumber'] ??
+      row['Incident No'] ??
+      row['IncidentNo'] ??
+      row['Incident ID'] ??
+      row['IncidentID'] ??
+      row['Number'] ??
+      row['ID'] ??
+      row['Incident #'] ??
       `INC-${1000 + idx}`
     ).trim();
 
@@ -232,14 +240,14 @@ function parseIncidentSheet(rows) {
 
     const cat = String(row['Category'] || row['Ticket Category'] || row['Type'] || row['Ticket Type'] || row['Class'] || '').trim();
     const desc = String(row['Description'] || row['Short Description'] || row['Subject'] || row['Summary'] || '').trim();
-    const rcaStr = String(row['RCA'] || row['RCA 2'] || row['Root Cause'] || row['RCA Category'] || '').trim();
+    const rcaStr = String(row['RCA 2'] || row['RCA'] || row['Root Cause'] || row['RCA Category'] || '').trim();
 
     const isCR = /change|change\s*request|^cr$|normal\s*change|standard\s*change|emergency\s*change/i.test(cat) ||
                  /change|change\s*request|^cr$/i.test(rcaStr) ||
                  /change\s*request|change\s*management/i.test(desc);
 
     return {
-      IncidentNumber: ticketNo,
+      IncidentNumber: incidentId,
       TicketNumber:   ticketNo,
       DeviceID:       devId,
       SerialNo:       devId,
@@ -261,17 +269,58 @@ function parseIncidentSheet(rows) {
       // formatExcelDate() is only used for DISPLAY columns (CreatedTime).
       CreatedTime:    formatExcelDate(row['Created Time'] || row['Open Time'] || row['OpenTime'] || ''),
       OpenTime:       row['Created Time'] || row['Open Time'] || row['OpenTime'] || null,  // raw serial
-      // 'Resolution Time (min)' in this Excel is actually the RESOLVED timestamp serial (not minutes!).
-      // We capture it as ResolvedTime for the timestamp-diff path.
-      ResolvedTime:   row['Resolution Time (min)'] || row['Resolved Time'] || row['Close Time'] || row['ResolvedTime'] || null,
-      // Resolution duration columns (already in minutes — direct use)
-      ActualResolutionMin: row['Actual Resolution Time (min)'] || row['Actual Resolution Time'] || '',
-      TotalResolutionMin:  row['Total Resolution Time (min)'] || row['Total Resolution Time'] || row['Resolution Time (min2)'] || '',
-      HoldTimeMin:         row['Time on Hold (min)'] || row['Time on Hold'] || row['Hold Time'] || '',
+      // ResolvedTime: only true close/resolved timestamp columns (Excel date serial > 30000).
+      // 'Resolution Time (min)' is a duration column (minutes), NOT a timestamp — handled separately below.
+      ResolvedTime:   row['Resolved Time'] || row['Close Time'] || row['ResolvedTime'] || null,
+      // Resolution duration columns (already in minutes — direct use).
+      // IMPORTANT: Use ?? (nullish coalescing) NOT || so that 0 minutes is NOT treated as missing.
+      // || would convert 0 to '' which makes parseFloat return NaN, causing all SLA statuses to be null.
+      ActualResolutionMin: (
+        row['Total Proactive Downtime (Mins)- Actual resolution mint'] ??
+        row['Total Proactive Downtime (Mins)- Actual resolution mint '] ??
+        row['Actual Resolution Time (min)'] ??
+        row['Actual Resolution Time (min) '] ?? // trailing-space variant
+        row['ActualResolutionMin'] ??
+        row['Actual Resolution Time(min)'] ??
+        row['Actual Resolution Time'] ??
+        ''
+      ),
+      TotalResolutionMin: (
+        row['Total Resolution Time (min)'] ??
+        row['Total Resolution Time (min) '] ?? // trailing-space variant
+        row['Total Resolution Time(min)'] ??
+        row['Total Resolution Time'] ??
+        ''
+      ),
+      // 'Resolution Time (min)' raw — kept separately for the P4b disambiguation path.
+      // Also uses ?? to preserve 0-minute values.
+      ResolutionTimeMinRaw: (
+        row['Resolution Time (min)'] ??
+        row['Resolution Time (min) '] ??
+        row['Resolution Time(min)'] ??
+        row['Resolution Time (min2)'] ??
+        ''
+      ),
+      // Hold time — also nullish coalescing to preserve 0.
+      // JFL EXCEL PRIMARY: 'Total JFL Downtime (Mins)HOLD Minute' is the JFL-specific column
+      // containing on-hold duration. Multiple spelling variants are handled for robustness.
+      // Generic ServiceNow columns ('Time on Hold (min)' etc.) serve as fallbacks for other clients.
+      HoldTimeMin: (
+        row['Total JFL Downtime (Mins)HOLD Minute'] ??
+        row['Total JFL Downtime (Mins) HOLD Minute'] ??
+        row['Total JFL Downtime (Mins)HOLD Minutes'] ??
+        row['Total JFL Downtime (Mins) HOLD Minutes'] ??
+        row['Time on Hold (min)'] ??
+        row['Time on Hold (Minutes)'] ??
+        row['Time on Hold'] ??
+        row['Hold Time (min)'] ??
+        row['Hold Time'] ??
+        ''
+      ),
       // Legacy direct-hours columns (some export formats)
-      DowntimeHours:       row['Downtime Hours'] || row['DowntimeHours'] || '',
-      OutageHours:         row['Outage Hours'] || row['OutageHours'] || '',
-      ResolutionTimeHours: row['Resolution Time (Hrs)'] || row['ResolutionTimeHours'] || '',
+      DowntimeHours:       row['Downtime Hours'] ?? row['DowntimeHours'] ?? '',
+      OutageHours:         row['Outage Hours']   ?? row['OutageHours']   ?? '',
+      ResolutionTimeHours: row['Resolution Time (Hrs)'] ?? row['ResolutionTimeHours'] ?? '',
       ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
       NewSerial:      row['New Serial'] || row['Replacement Serial'] || '',
       AccountName:    row['Account Name'] || row['AccountName'] || row['Customer Name'] || row['Customer'] || '',

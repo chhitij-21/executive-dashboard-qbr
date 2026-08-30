@@ -412,7 +412,19 @@ body {
 .data-table td.no-data { text-align: center; color: var(--text-muted); padding: 2rem; }
 
 /* Full-width table variant — used in RCA/SLA panels where scroll must be suppressed */
-.data-table.no-scroll { min-width: unset; }
+.data-table.no-scroll {
+  min-width: unset;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.data-table.no-scroll th,
+.data-table.no-scroll td {
+  word-break: break-word;
+  white-space: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
 
 
 /* ── Pagination ──────────────────────────────────────────────────────────── */
@@ -1702,6 +1714,84 @@ body {
     text-align: center;
   }
 }
+
+
+/* ── Spinner Animation ──────────────────────────────────────────────────────── */
+/* Used in App.jsx loading states. border-top creates the spinning arc. */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  border: 3px solid rgba(37, 99, 235, 0.15);
+  border-top: 3px solid var(--accent-blue, #2563eb);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Accessibility: Keyboard Navigation Focus Styles ────────────────────────── */
+/* WCAG 2.1 AA — 3:1 contrast ratio for focus indicators. */
+/* :focus-visible shows ring only for keyboard nav (not mouse clicks). */
+:focus-visible {
+  outline: 2px solid var(--accent-blue, #2563eb);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Remove outline for mouse users (already have visual hover states) */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Ensure interactive elements always have a visible focus ring */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-blue, #2563eb);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+/* ── Skip to Content Link (Screen Reader Accessibility) ────────────────────── */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--accent-blue, #2563eb);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  z-index: 9999;
+  border-radius: 0 0 4px 0;
+  text-decoration: none;
+  transition: top 0.2s;
+}
+.skip-to-content:focus {
+  top: 0;
+}
+
+/* ── High-Contrast Badge Overrides ─────────────────────────────────────────── */
+/* Ensure SLA/status badges meet WCAG AA 4.5:1 contrast on white backgrounds */
+.status-badge.sla-met {
+  background: #dcfce7;
+  color: #14532d;
+  border: 1px solid #86efac;
+}
+.status-badge.sla-breached {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border: 1px solid #fca5a5;
+}
+.status-badge.sla-open {
+  background: #eff6ff;
+  color: #1e3a8a;
+  border: 1px solid #bfdbfe;
+}
+
 
 
 

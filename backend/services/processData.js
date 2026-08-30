@@ -37,8 +37,13 @@ function isStockDevice(d) {
  * Requirement 2: Hardware replacement swap rule.
  * If a device is replaced mid-period by a stock device (e.g. Switch 1 replaced by Switch Z),
  * merge both devices into a single combined operational SLA entry (Switch 1 + Switch Z).
+ *
+ * @param {Array} devices - All device records
+ * @param {Array} incidents - All incident records
+ * @param {Function} log - Logger
+ * @param {number} slaTarget - Uptime SLA target percentage (passed in to avoid scope issues)
  */
-function applyHardwareReplacementSwaps(devices, incidents, log) {
+function applyHardwareReplacementSwaps(devices, incidents, log, slaTarget) {
   const replacementPairs = [];
 
   incidents.forEach(inc => {
@@ -72,7 +77,7 @@ function applyHardwareReplacementSwaps(devices, incidents, log) {
         __replacedOldSerial: pair?.oldSerial,
         __effectiveUptime: combinedUptime,
         __combinedSLASlot: `${pair?.oldSerial} + ${d.DeviceID} (Replaced)`,
-        __slaBreach: combinedUptime < SLA_TARGET,
+        __slaBreach: combinedUptime < slaTarget,
       };
     }
     return d;
@@ -97,6 +102,77 @@ function normaliseUptimePct(raw) {
   if (n === null) return null;
   if (n > 0 && n <= 1) return Math.max(0, Math.min(100, parseFloat((n * 100).toFixed(2))));
   return Math.max(0, Math.min(100, parseFloat(n.toFixed(2))));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PART 4: Strict Data Validation Engine
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Validates analytics consistency after buildAllAnalytics completes.
+ * Checks:
+ *   1. Switch RCA breakdown counts sum to total switch incidents
+ *   2. AP RCA breakdown counts sum to total AP incidents
+ *   3. Switch SLA status counts (Met + Breached + Open) equal total
+ *   4. AP SLA status counts equal total
+ *   5. RCA percentage sums ≈ 100%
+ *
+ * Returns an array of warning strings (empty = all checks passed).
+ */
+function validateAnalytics(qbrData) {
+  const warnings = [];
+  const sw = qbrData.switchAnalytics || {};
+  const ap = qbrData.apAnalytics || {};
+
+  // 1. RCA breakdown sums for Switches
+  if (sw.rcaBreakdown && sw.switchIncidents !== undefined) {
+    const sum = sw.rcaBreakdown.reduce((s, r) => s + (r.count || 0), 0);
+    if (sum !== sw.switchIncidents) {
+      warnings.push(`Switch RCA breakdown sum (${sum}) does not match total switch incidents (${sw.switchIncidents})`);
+    }
+  }
+
+  // 2. RCA breakdown sums for APs
+  if (ap.rcaBreakdown && ap.apIncidents !== undefined) {
+    const sum = ap.rcaBreakdown.reduce((s, r) => s + (r.count || 0), 0);
+    if (sum !== ap.apIncidents) {
+      warnings.push(`AP RCA breakdown sum (${sum}) does not match total AP incidents (${ap.apIncidents})`);
+    }
+  }
+
+  // 3. SLA status counts for Switches
+  if (sw.slaSummary) {
+    const { met = 0, breached = 0, open = 0, unknown = 0, total = 0 } = sw.slaSummary;
+    const counted = met + breached + open + unknown;
+    if (counted !== total) {
+      warnings.push(`Switch SLA status counts (Met:${met} + Breached:${breached} + Open:${open} + Unknown:${unknown} = ${counted}) do not match total (${total})`);
+    }
+  }
+
+  // 4. SLA status counts for APs
+  if (ap.slaSummary) {
+    const { met = 0, breached = 0, open = 0, unknown = 0, total = 0 } = ap.slaSummary;
+    const counted = met + breached + open + unknown;
+    if (counted !== total) {
+      warnings.push(`AP SLA status counts (Met:${met} + Breached:${breached} + Open:${open} + Unknown:${unknown} = ${counted}) do not match total (${total})`);
+    }
+  }
+
+  // 5. RCA percentage sums (optional — tolerance ±0.1%)
+  const checkPercentages = (breakdown, label) => {
+    if (!breakdown || !breakdown.length) return;
+    const totalPct = breakdown.reduce((sum, r) => {
+      const p = parseFloat(String(r.percentage || '0').replace('%', ''));
+      return sum + (isNaN(p) ? 0 : p);
+    }, 0);
+    if (Math.abs(totalPct - 100) > 0.5) {
+      warnings.push(`${label} RCA percentages sum to ${totalPct.toFixed(1)}% (expected ~100%)`);
+    }
+  };
+  checkPercentages(sw.rcaBreakdown, 'Switch');
+  checkPercentages(ap.rcaBreakdown, 'AP');
+
+  return warnings;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,7 +210,27 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     ? reportPeriodMeta.display_label
     : (options.reportingPeriod || 'Custom Period');
 
-  log(`JFL pipeline started (Period: ${activeReportingPeriod}, startDate: ${startDate}, endDate: ${endDate})`);
+  function determinePeriodType(sd, ed) {
+      if (!sd || !ed) return 'monthly';
+      const start = new Date(sd + 'T00:00:00Z');
+      const end = new Date(ed + 'T23:59:59Z');
+      const diffDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 35) return 'monthly';
+      if (diffDays <= 100) return 'quarterly';
+      if (diffDays <= 190) return 'half_yearly';
+      return 'yearly';
+  }
+  const periodType = determinePeriodType(startDate, endDate);
+  const periodLabelMap = {
+      monthly: 'Monthly Uptime %',
+      quarterly: 'Quarterly Uptime %',
+      half_yearly: 'Half‑Yearly Uptime %',
+      yearly: 'Yearly Uptime %'
+  };
+  const periodLabel = periodLabelMap[periodType] || 'Monthly Uptime %';
+  const periodOptions = { periodType, periodLabel, startDate, endDate };
+
+  log(`JFL pipeline started (Period: ${activeReportingPeriod}, periodType: ${periodType}, startDate: ${startDate}, endDate: ${endDate})`);
 
   const ruleConfigFile = options.ruleConfigFile || (options.clientId ? `rules_${options.clientId}.yaml` : 'rules.yaml');
   ruleEngine.loadRules(ruleConfigFile);
@@ -433,7 +529,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     if (!devId) return;
     const actMin  = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
     const totMin  = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
-    const holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || Math.max(0, totMin - actMin));
+    const holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || Math.max(0, totMin - actMin));
 
     if (!incDowntimeMap[devId]) incDowntimeMap[devId] = { holdTime: 0, actualResTime: 0, totalResTime: 0 };
     if (holdMin > 0) incDowntimeMap[devId].holdTime += holdMin;
@@ -490,7 +586,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   });
 
   // Apply hardware replacement swaps (Switch A + Switch Z combined SLA rule)
-  devices = applyHardwareReplacementSwaps(devices, incidents, log);
+  // Pass SLA_TARGET explicitly to avoid closure/scope issues
+  devices = applyHardwareReplacementSwaps(devices, incidents, log, SLA_TARGET);
 
   log(`Devices enriched with uptime. Stock devices: ${devices.filter(d=>d.__isStock).length}. Breaching SLA: ${devices.filter(d=>d.__slaBreach).length}`);
 
@@ -539,8 +636,17 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── 8. Build all analytics ────────────────────────────────────────────────
   log('Building analytics sections...');
-  const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta);
+  const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta, periodOptions);
   log('Analytics complete');
+
+  // ── 8b. PART 4: Strict data validation ── attach any warnings to SSOT output ──
+  const validationWarnings = validateAnalytics(qbrData);
+  if (validationWarnings.length > 0) {
+    qbrData.validationWarnings = validationWarnings;
+    log(`Data validation warnings (${validationWarnings.length}): ${validationWarnings.join(' | ')}`);
+  } else {
+    log('Data validation passed — all RCA breakdown sums and SLA status counts are consistent.');
+  }
 
   // ── 9. Data quality report ────────────────────────────────────────────────
   writeDataQualityReport(outputDir, devices, incidents, allLocMap, log);
@@ -617,57 +723,95 @@ function validateJFL(devices, incidents, log) {
  */
 function computeIncidentEnrichment(inc, slaTargetHours) {
   // ── Resolution time calculation ──────────────────────────────────────────
-  // Priority order matches the real JFL Excel column structure:
-  //   P1: Actual Resolution Time (min) — net time excl. hold  [MOST ACCURATE]
-  //   P2: Total Resolution Time (min)  — gross wall-clock time
-  //   P3: Direct hours columns         — some export formats
-  //   P4: Open → Resolved timestamp diff (raw Excel serials)
-  //   P5: Excel's own Resolution SLA Status field              [FALLBACK]
+  // JFL SLA POLICY: net_resolution_hours = active working time only (hold excluded).
+  //
+  // Priority order (highest fidelity source wins):
+  //   P1:  ActualResolutionMin              → actMin / 60
+  //        (already net — ServiceNow excludes hold before writing this column)
+  //   P2:  TotalResolutionMin + HoldTimeMin → (totMin - holdMin) / 60  [net via deduction]
+  //   P3:  TotalResolutionMin only          → totMin / 60              [gross fallback]
+  //   P4:  Timestamp diff (OpenTime → ResolvedTime) − HoldTimeMin      [gross elapsed]
+  //   P4b: ResolutionTimeMinRaw (< 30000)  → (rawMin - holdMin) / 60  [gross duration]
+  //   P5:  Excel ResolutionSLAStatusRaw     → string fallback, no time computed
   let resolutionHours = null;
 
-  // P1 — ActualResolutionMin  ('Actual Resolution Time (min)')
-  // This is the gold-standard field in the JFL SLA Compliance Report.
+  // Hold time in minutes — ?? preserves 0 (valid hold value, not treated as missing)
+  const holdMinRaw = inc.HoldTimeMin ?? '';
+  const holdMin    = parseFloat(holdMinRaw);
+  const netHoldMin = (!isNaN(holdMin) && holdMin >= 0) ? holdMin : 0;
+  const hasHold    = !isNaN(holdMin) && holdMin >= 0;
+
+  // ── P1: Actual Resolution Time (min) — primary, already net ─────────────
+  // Do NOT subtract hold here; this column is pre-deducted by ServiceNow.
   const actMin = parseFloat(inc.ActualResolutionMin);
   if (!isNaN(actMin) && actMin >= 0) {
     resolutionHours = parseFloat((actMin / 60).toFixed(2));
-  }
-
-  // P2 — TotalResolutionMin ('Total Resolution Time (min)')
-  if (resolutionHours === null) {
+  } else {
+    // ── P2 / P3: Total Resolution Time (min) ──────────────────────────────
     const totMin = parseFloat(inc.TotalResolutionMin);
     if (!isNaN(totMin) && totMin >= 0) {
-      resolutionHours = parseFloat((totMin / 60).toFixed(2));
+      if (hasHold) {
+        // P2: Both total and hold are valid — compute net working time
+        const netMin = Math.max(0, totMin - netHoldMin);
+        resolutionHours = parseFloat((netMin / 60).toFixed(2));
+      } else {
+        // P3: Hold time absent — use total as gross fallback
+        resolutionHours = parseFloat((totMin / 60).toFixed(2));
+      }
     }
   }
 
-  // P3 — Direct hours columns (legacy / alternate export formats)
+  // ── P4: Timestamp diff (OpenTime → ResolvedTime) ─────────────────────────
+  // Gross wall-clock elapsed time → subtract hold to get net working time.
+  if (resolutionHours === null && inc.OpenTime && inc.ResolvedTime) {
+    const openNum = typeof inc.OpenTime === 'number' ? inc.OpenTime : parseFloat(inc.OpenTime);
+    const resNum  = typeof inc.ResolvedTime === 'number' ? inc.ResolvedTime : parseFloat(inc.ResolvedTime);
+    if (!isNaN(openNum) && !isNaN(resNum) && resNum >= openNum) {
+      // Excel serials are fractional days → × 1440 = total minutes elapsed (gross)
+      const grossMin = (resNum - openNum) * 24 * 60;
+      const netMin   = Math.max(0, grossMin - netHoldMin);
+      resolutionHours = parseFloat((netMin / 60).toFixed(2));
+    }
+  }
+
+  // ── P4b: ResolutionTimeMinRaw disambiguation ──────────────────────────────
+  // 'Resolution Time (min)' may be a duration (< 30000 mins) rather than a date serial.
+  if (resolutionHours === null && inc.ResolutionTimeMinRaw !== undefined && inc.ResolutionTimeMinRaw !== '') {
+    const rawVal = parseFloat(inc.ResolutionTimeMinRaw);
+    if (!isNaN(rawVal) && rawVal >= 0 && rawVal < 30000) {
+      const netMin = Math.max(0, rawVal - netHoldMin);
+      resolutionHours = parseFloat((netMin / 60).toFixed(2));
+    }
+  }
+
+  // ── P3-legacy: Direct hours columns (alternate export formats) ─────────────
+  // Only reached when all minute-based sources are absent.
   if (resolutionHours === null) {
     const durH = parseFloat(
       inc.DowntimeHours || inc.OutageHours || inc.ResolutionTimeHours ||
       inc['Resolution Time (Hrs)'] || inc['Duration Hours']
     );
     if (!isNaN(durH) && durH >= 0) {
-      resolutionHours = durH;
+      resolutionHours = parseFloat(durH.toFixed(2));
     }
   }
 
-  // P4 — Timestamp diff: OpenTime (raw Excel serial) vs ResolvedTime (raw serial)
-  // NOTE: OpenTime and ResolvedTime are stored as raw numeric Excel date serials
-  // in parseIncidentSheet (NOT pre-formatted strings) so this diff works correctly.
-  if (resolutionHours === null && inc.OpenTime && inc.ResolvedTime) {
-    const openNum = typeof inc.OpenTime === 'number' ? inc.OpenTime : parseFloat(inc.OpenTime);
-    const resNum  = typeof inc.ResolvedTime === 'number' ? inc.ResolvedTime : parseFloat(inc.ResolvedTime);
-    if (!isNaN(openNum) && !isNaN(resNum) && resNum >= openNum) {
-      // Excel date serials are fractional days (1 day = 1.0).
-      // Difference in days × 24 = hours.
-      resolutionHours = parseFloat(((resNum - openNum) * 24).toFixed(2));
-    }
-  }
-
-  // ── SLA status (Incident Resolution SLA — 2h TAT target) ─────────────────
+  // ── SLA status ────────────────────────────────────────────────────────────
   let slaStatus = null;
+  const rawStatus = String(inc.Status || '').trim().toLowerCase();
+  const isOpenIncident = !rawStatus ||
+    rawStatus === 'open' ||
+    rawStatus === 'pending' ||
+    rawStatus === 'in progress' ||
+    rawStatus === 'assigned' ||
+    rawStatus === 'work in progress' ||
+    rawStatus === 'wip';
+
   if (resolutionHours !== null) {
     slaStatus = resolutionHours <= slaTargetHours ? 'SLA Met' : 'SLA Breached';
+  } else if (isOpenIncident) {
+    // Incident has not been resolved yet — mark as Open rather than leaving null
+    slaStatus = 'Open';
   } else if (inc.ResolutionSLAStatusRaw) {
     // P5 — Fallback: consume the Excel's pre-computed SLA status column.
     // Normalise to our standard strings.
@@ -698,7 +842,7 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
 // Full Analytics Builder
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, customerName = 'Jubilant Foodworks Ltd (JFL)', reportPeriodMeta = null) {
+function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, customerName = 'Jubilant Foodworks Ltd (JFL)', reportPeriodMeta = null, periodOptions = {}) {
   const activeDevices = devices.filter(d => !d.__isStock);
   const stockDevices  = devices.filter(d => d.__isStock);
 
@@ -716,7 +860,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
 
   const execSummary  = buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName);
   const siteSummary  = buildSiteSummary(devices, switches, aps, incidents, reportingPeriod);
-  const switchAn     = buildSwitchAnalytics(switches, incidents);
+  const switchAn     = buildSwitchAnalytics(switches, incidents, periodOptions);
   const apAn         = buildAPAnalytics(aps, incidents, activeDevices);
   const incAn        = buildIncidentAnalytics(incidents, activeDevices);
   const rcaAn        = buildRCAAnalytics(incidents);
@@ -766,11 +910,16 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const rcaBrk = classifyRCALocal(incidents);
   const primaryRca = rcaBrk.length > 0 ? rcaBrk[0].rca : 'None';
 
+  const switchIds = new Set(switches.map(d => d.DeviceID));
+  const switchIncidents = incidents.filter(i => switchIds.has(i.DeviceID) || /^sw$/i.test(i.DeviceType) || /switch/i.test(i.DeviceType));
+  const swRcaBrk = classifyRCALocal(switchIncidents);
+  const primaryRcaSwitches = swRcaBrk.length > 0 && swRcaBrk[0].rca !== 'Unknown' ? swRcaBrk[0].rca : 'Stable Operations (No Incidents)';
+
   const apIds = new Set(aps.map(d => d.DeviceID));
-  const apIncidents = incidents.filter(i => apIds.has(i.DeviceID));
+  const apIncidents = incidents.filter(i => apIds.has(i.DeviceID) || /^ap$/i.test(i.DeviceType) || /access/i.test(i.DeviceType));
   const uniqueAPsWithIncidents = new Set(apIncidents.map(i => i.DeviceID)).size;
   const apRcaBrk = classifyRCALocal(apIncidents);
-  const primaryRcaForAPs = apRcaBrk.length > 0 ? apRcaBrk[0].rca : 'None';
+  const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
   const activeSlaTarget = activeDevices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
@@ -784,8 +933,10 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
     totalAPs:           aps.length,
     apIncidents:        apIncidents.length,
     uniqueAPsWithIncidents,
-    primaryRca,
-    primaryRcaForAPs,
+    primaryRcaSwitches,
+    primaryRcaAPs,
+    primaryRca:         primaryRcaSwitches,
+    primaryRcaForAPs:   primaryRcaAPs,
     overallUptime,
     incidentFreePercent:incidentFreePct,
     healthScore,
@@ -901,15 +1052,25 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
     const incFreePct    = s.activeDevices.length > 0 ? (incFreeCount / s.activeDevices.length) * 100 : 100;
     const healthScore   = ruleEngine.calculateHealthScore(siteAvgUptime, incFreePct);
 
-    // Primary RCA for switches
+    // Primary RCA for switches ONLY
     const swRcaBrk = classifyRCALocal(swIncidentsAtSite);
-    const topSwRcas = swRcaBrk.filter(r => r.isTop).map(r => r.rca);
-    const primaryRca = topSwRcas.length > 0 ? topSwRcas.join(' / ') : 'Stable Operations (No Incidents)';
+    const topSwRcas = swRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
+    const primaryRcaSwitches = topSwRcas.length > 0 ? topSwRcas.join(' / ') : 'Stable Operations (No Incidents)';
 
-    // Primary RCA specifically for AP incidents at this site
+    // Primary RCA specifically for AP incidents ONLY
     const apRcaBrk = classifyRCALocal(apIncidentsAtSite);
-    const topApRcas = apRcaBrk.filter(r => r.isTop).map(r => r.rca);
-    const primaryRcaForAPs = topApRcas.length > 0 ? topApRcas.join(' / ') : 'Stable Operations (No Incidents)';
+    const topApRcas = apRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
+    const primaryRcaAPs = topApRcas.length > 0 ? topApRcas.join(' / ') : 'Stable Operations (No Incidents)';
+    const primaryRcaForAPs = primaryRcaAPs;
+
+    // Overall Primary RCA for site (all incidents at site)
+    const allRcaBrk = classifyRCALocal(s.incidents);
+    const topAllRcas = allRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
+    const primaryRca = topSwRcas.length > 0
+      ? topSwRcas.join(' / ')
+      : (topAllRcas.length > 0
+          ? topAllRcas.join(' / ')
+          : (s.incidents.length > 0 ? 'Unknown' : 'Stable Operations (No Incidents)'));
 
     const finalProUp = proactiveSwitchUptime;
     const finalJflUp = jflSwitchUptime;
@@ -944,16 +1105,20 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
       incidentCount:          s.incidents.length,
       healthScore:            finalHlth,
       healthLabel:            ruleEngine.getHealthLabel(finalHlth),
-      primaryRca:             finalSwRca,
-      primaryRcaForAPs:       finalApRca,
+      primaryRcaSwitches:     primaryRcaSwitches,
+      primaryRcaAPs:          primaryRcaAPs,
+      primaryRca:             primaryRcaSwitches,
+      primaryRcaForAPs:       primaryRcaAPs,
     };
   }).sort((a, b) => a.siteId.localeCompare(b.siteId));
 }
 
 // ── Switch Analytics ───────────────────────────────────────────────────────
 
-function buildSwitchAnalytics(switches, incidents) {
+function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
   if (switches.length === 0) return { available: false };
+
+  const { periodLabel = 'Monthly Uptime %', periodType = 'monthly' } = periodOptions;
 
   const coreSwitches = switches.filter(d => /core/i.test(d.CoreNonCore || '') && !/non/i.test(d.CoreNonCore || ''));
   const nonCoreSwitches = switches.filter(d => /non/i.test(d.CoreNonCore || '') || !/core/i.test(d.CoreNonCore || ''));
@@ -970,21 +1135,25 @@ function buildSwitchAnalytics(switches, incidents) {
     const rack = d.Rack || 'Default Rack';
     const site = d.SiteID || d.Location || 'Unknown';
     const key = `${site}__${rack}`;
-    if (!rackMap[key]) rackMap[key] = { site, rack, mUptimes: [], qUptimes: [] };
-    rackMap[key].mUptimes.push(d.__monthlyUptime ?? d.__effectiveUptime ?? 100);
-    rackMap[key].qUptimes.push(d.__quarterlyUptime ?? d.__effectiveUptime ?? 100);
+    if (!rackMap[key]) rackMap[key] = { site, rack, devices: [] };
+    rackMap[key].devices.push(d);
   });
 
+  const computeAverageUptime = (devs) => {
+    if (!devs || devs.length === 0) return 100;
+    const uptimes = devs.map(d => d.__effectiveUptime ?? d.jflUptime ?? 100);
+    return uptimes.reduce((a, b) => a + b, 0) / uptimes.length;
+  };
+
   const rackwiseUptime = Object.values(rackMap).map(item => {
-    const mAvg = avg(item.mUptimes).toFixed(2);
-    const qAvg = avg(item.qUptimes).toFixed(2);
+    const avgUptime = computeAverageUptime(item.devices);
     return {
       site: item.site,
       rack: item.rack,
-      deviceCount: item.qUptimes.length,
-      monthlyUptime: `${mAvg}%`,
-      quarterlyUptime: `${qAvg}%`,
-      avgUptime: `${qAvg}%`,
+      deviceCount: item.devices.length,
+      periodUptime: `${avgUptime.toFixed(2)}%`,
+      periodLabel: periodLabel,
+      periodType: periodType,
     };
   }).sort((a, b) => a.site.localeCompare(b.site) || a.rack.localeCompare(b.rack));
 
@@ -1012,16 +1181,20 @@ function buildSwitchAnalytics(switches, incidents) {
     resolution_time_hours: inc.resolution_time_hours,
     sla_target_hours:  inc.sla_target_hours,
     sla_status:        inc.sla_status || null,
+    RCA:               inc.RCA || inc['RCA 2'] || 'Unknown',  // PART 1: Primary RCA driver for this incident
   }));
 
   // SLA summary aggregation for Switch incidents (incident-resolution SLA, not uptime SLA)
+  // 'Open' = unresolved (no close date); 'No Timing Data' = closed but timing unavailable.
   const slaMet      = incidentSLADetails.filter(i => i.sla_status === 'SLA Met').length;
   const slaBreached = incidentSLADetails.filter(i => i.sla_status === 'SLA Breached').length;
-  const slaUnknown  = incidentSLADetails.filter(i => !i.sla_status).length;
+  const slaOpen     = incidentSLADetails.filter(i => i.sla_status === 'Open').length;
+  const slaUnknown  = incidentSLADetails.filter(i => !i.sla_status && i.sla_status !== 'Open').length;
   const slaSummary  = {
     total:    switchIncidents.length,
     met:      slaMet,
     breached: slaBreached,
+    open:     slaOpen,
     unknown:  slaUnknown,
     percentMet: switchIncidents.length > 0
       ? ((slaMet / switchIncidents.length) * 100).toFixed(1)
@@ -1043,6 +1216,8 @@ function buildSwitchAnalytics(switches, incidents) {
     totalSwitchIncidents: switchIncidents.length,
     top10SwitchOutages,
     rackwiseUptime,
+    periodLabel,
+    periodType,
     slaTarget:        activeSlaTarget,  // JFL Switch Uptime SLA target (%)
     incidentSLADetails,                 // Per-incident Resolution SLA status table
     slaSummary,                         // Aggregated SLA Met / Breached counts
@@ -1097,16 +1272,19 @@ function buildAPAnalytics(aps, incidents, allDevices) {
       resolution_time_hours: inc.resolution_time_hours,
       sla_target_hours:  inc.sla_target_hours,
       sla_status:        inc.sla_status || null,
+      RCA:               inc.RCA || inc['RCA 2'] || 'Unknown',  // PART 1: Primary RCA driver for this incident
     })),
     // SLA summary aggregation for AP incidents
+    // 'Open' status = no resolution time yet; counted under 'No Timing Data'.
     slaSummary: (() => {
       const details = apIncidents;
       const met      = details.filter(i => i.sla_status === 'SLA Met').length;
       const breached = details.filter(i => i.sla_status === 'SLA Breached').length;
-      const unknown  = details.filter(i => !i.sla_status).length;
+      const open     = details.filter(i => i.sla_status === 'Open').length;
+      const unknown  = details.filter(i => !i.sla_status && i.sla_status !== 'Open').length;
       return {
         total: details.length,
-        met, breached, unknown,
+        met, breached, open, unknown,
         percentMet: details.length > 0
           ? ((met / details.length) * 100).toFixed(1)
           : '100.0',
@@ -1282,20 +1460,23 @@ function excelDateToJS(serial) {
 const splitBySeverity = ruleEngine.splitBySeverity.bind(ruleEngine);
 
 function classifyRCALocal(incidentRows) {
-  if (!incidentRows||!incidentRows.length) return [];
+  if (!incidentRows || !incidentRows.length) return [];
   const counts = {};
   incidentRows.forEach(inc => {
-    const rca = inc.RCA || 'Unknown';
-    counts[rca] = (counts[rca]||0) + 1;
+    const rca = (inc.RCA && inc.RCA !== 'Unknown') ? inc.RCA : (inc['RCA 2'] || inc['Root Cause'] || inc.RCA || 'Unknown');
+    counts[rca] = (counts[rca] || 0) + 1;
   });
-  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  if (Object.keys(counts).length > 1 && counts['Unknown']) {
+    delete counts['Unknown'];
+  }
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const topCount = sorted[0]?.[1] ?? 0;
-  const tiedCount = sorted.filter(([,c])=>c===topCount).length;
-  return sorted.map(([rca,count]) => ({
+  const tiedCount = sorted.filter(([, c]) => c === topCount).length;
+  return sorted.map(([rca, count]) => ({
     rca, count,
-    percentage: ((count/incidentRows.length)*100).toFixed(1)+'%',
-    isTop: count===topCount,
-    tied:  tiedCount>1&&count===topCount,
+    percentage: ((count / incidentRows.length) * 100).toFixed(1) + '%',
+    isTop: count === topCount,
+    tied:  tiedCount > 1 && count === topCount,
   }));
 }
 
@@ -1325,6 +1506,11 @@ function createLogger(outputDir) {
  * Server-side Site Filter Engine (SSOT for filtered site metrics).
  * Filters canonical raw devices and incidents for the requested site and
  * re-runs full analytics so site-specific metrics are calculated on the backend.
+ *
+ * IMPORTANT FIX NOTES:
+ * 1. Device type matching uses same regex as buildAllAnalytics (not strict === 'switch').
+ * 2. Incidents missing sla_status (e.g. from older dashboard_data.json) are re-enriched.
+ * 3. slaTarget passed through to avoid undefined reference.
  */
 function filterDashboardBySite(data, siteFilter) {
   if (!data || !siteFilter || siteFilter === 'ALL' || siteFilter === 'All Locations') {
@@ -1347,20 +1533,40 @@ function filterDashboardBySite(data, siteFilter) {
     return normalizeSiteName(rawSite).toLowerCase() === normTarget;
   });
 
+  // Re-enrich any incidents that are missing sla_status (handles older dashboard_data.json files
+  // generated before computeIncidentEnrichment was applied). This is safe to call repeatedly
+  // because computeIncidentEnrichment is idempotent — it spreads the existing incident object
+  // and only overwrites the 4 enriched fields.
+  const slaTargetH = ruleEngine.getIncidentSLATargetHours();
+  const enrichedIncidents = filteredIncidents.map((inc) =>
+    (inc.sla_status !== undefined && inc.sla_status !== null)
+      ? inc
+      : computeIncidentEnrichment(inc, slaTargetH)
+  );
+
   const activeDevices = filteredDevices.filter((d) => !d.__isStock);
   const stockDevices  = filteredDevices.filter((d) => d.__isStock);
-  const switches      = activeDevices.filter((d) => String(d.DeviceType || '').toLowerCase() === 'switch' || String(d.DeviceType || '').toLowerCase() === 'sw');
-  const aps           = activeDevices.filter((d) => /ap|access.?point|wireless/i.test(String(d.DeviceType || '')));
+
+  // FIX: Use the same device-type regex as buildAllAnalytics for consistency.
+  // Old code used strict === 'switch' which excluded 'SW', 'Switch', etc.
+  const switches = activeDevices.filter((d) => {
+    const t = String(d.DeviceType || '').toLowerCase();
+    return /^sw$/i.test(t) || t.includes('switch') || (!t.includes('ap') && !t.includes('access'));
+  });
+  const aps = activeDevices.filter((d) => /ap|access.?point|wireless/i.test(String(d.DeviceType || '')));
 
   const reportingPeriod = data.reportingPeriod || 'Q1 FY2026';
   const customerName = data.customerName || data.executiveSummary?.customerName || 'Jubilant Foodworks Ltd (JFL)';
-  const execSummary  = buildExecutiveSummary(activeDevices, switches, aps, filteredIncidents, stockDevices, reportingPeriod, customerName);
-  const siteSummary  = (data.siteSummary || []).filter((s) => normalizeSiteName(s.siteId).toLowerCase() === normTarget);
-  const switchAn     = buildSwitchAnalytics(switches, filteredIncidents);
-  const apAn         = buildAPAnalytics(aps, filteredIncidents, activeDevices);
-  const incAn        = buildIncidentAnalytics(filteredIncidents, activeDevices);
-  const rcaAn        = buildRCAAnalytics(filteredIncidents);
-  const slaAn        = buildSLAAnalytics(activeDevices, filteredIncidents);
+  const execSummary  = buildExecutiveSummary(activeDevices, switches, aps, enrichedIncidents, stockDevices, reportingPeriod, customerName);
+  const periodOptions = {
+    periodLabel: data.switchAnalytics?.periodLabel || 'Monthly Uptime %',
+    periodType:  data.switchAnalytics?.periodType  || 'monthly',
+  };
+  const switchAn     = buildSwitchAnalytics(switches, enrichedIncidents, periodOptions);
+  const apAn         = buildAPAnalytics(aps, enrichedIncidents, activeDevices);
+  const incAn        = buildIncidentAnalytics(enrichedIncidents, activeDevices);
+  const rcaAn        = buildRCAAnalytics(enrichedIncidents);
+  const slaAn        = buildSLAAnalytics(activeDevices, enrichedIncidents);
 
   return {
     ...data,
@@ -1373,7 +1579,7 @@ function filterDashboardBySite(data, siteFilter) {
     rcaAnalytics:     rcaAn,
     slaAnalytics:     slaAn,
     devices:          filteredDevices,
-    incidents:        filteredIncidents,
+    incidents:        enrichedIncidents,
   };
 }
 

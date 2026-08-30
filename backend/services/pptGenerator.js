@@ -680,7 +680,7 @@ function buildCoverSlide(pres, exec) {
     line: { color: C.ACCENT_GOLD, pt: 1.5 },
   });
 
-  s.addText(`Reporting Period: ${fmt(exec.reportingPeriod || '1 July 2026 – 31 July 2026')}`, {
+  s.addText(`Reporting Period: ${fmt(exec.reportingPeriod || 'User Selected Period')}`, {
     x: 0.95, y: 3.65, w: panelW - 0.5, h: 0.35,
     fontSize: 12, color: 'D0E8FF', fontFace: 'Calibri',
   });
@@ -910,7 +910,7 @@ function buildInfrastructureSlide(pres, exec, siteSummary) {
     border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
   });
 
-  const periodStr = exec.reportingPeriod || '1 July 2026 – 31 July 2026';
+  const periodStr = exec.reportingPeriod || 'User Selected Period';
   s.addText(`This review consolidates SLA performance, rack and switch uptime, and access-point incident RCA for all eight monitored JFL sites for the period ${periodStr}.`, {
     x: 0.45, y: 6.6, w: 12.43, h: 0.4,
     fontSize: 9, italic: true, color: C.TEXT_MUTED, fontFace: 'Calibri',
