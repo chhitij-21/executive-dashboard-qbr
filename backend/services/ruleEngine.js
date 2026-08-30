@@ -104,7 +104,7 @@ function getHealthLabel(score) {
  * @param {string} [periodMode] - 'monthly' | 'quarterly' | undefined (default: quarterly)
  */
 function getSLATarget(periodMode) {
-  const monthly   = rules.sla?.monthly_uptime_target_percent ?? 99.9;
+  const monthly   = rules.sla?.monthly_uptime_target_percent ?? 99.3;
   const quarterly = rules.sla?.quarterly_uptime_target_percent ?? rules.sla?.uptime_target_percent ?? 99.3;
   return periodMode === 'monthly' ? monthly : quarterly;
 }

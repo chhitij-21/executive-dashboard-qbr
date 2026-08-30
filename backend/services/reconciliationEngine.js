@@ -62,8 +62,8 @@ function reconcileDashboardAndPPT(qbrData, pptData, outputDir = null) {
   qSites.forEach((qSite, idx) => {
     const pSite = pptSites.find(s => s.siteId === qSite.siteId) || {};
     recordCheck(`site_${qSite.siteId}_deviceCount`, 'Slide 5', qSite.deviceCount, pSite.deviceCount, `siteSummary[${qSite.siteId}].deviceCount`);
-    recordCheck(`site_${qSite.siteId}_activeDeviceCount`, 'Slide 5', qSite.activeDeviceCount, pSite.activeDeviceCount, `siteSummary[${qSite.siteId}].activeDeviceCount`);
-    recordCheck(`site_${qSite.siteId}_stockCount`, 'Slide 5', qSite.stockCount, pSite.stockCount, `siteSummary[${qSite.siteId}].stockCount`);
+    recordCheck(`site_${qSite.siteId}_activeDeviceCount`, 'Slide 5', qSite.activeDeviceCount ?? qSite.deviceCount, pSite.activeDeviceCount, `siteSummary[${qSite.siteId}].activeDeviceCount`);
+    recordCheck(`site_${qSite.siteId}_stockCount`, 'Slide 5', qSite.stockCount ?? 0, pSite.stockCount, `siteSummary[${qSite.siteId}].stockCount`);
     recordCheck(`site_${qSite.siteId}_proactiveSwitchUptime`, 'Slide 5', qSite.proactiveSwitchUptime, pSite.proactiveSwitchUptime, `siteSummary[${qSite.siteId}].proactiveSwitchUptime`);
     recordCheck(`site_${qSite.siteId}_jflSwitchUptime`, 'Slide 5', qSite.jflSwitchUptime, pSite.jflSwitchUptime, `siteSummary[${qSite.siteId}].jflSwitchUptime`);
     recordCheck(`site_${qSite.siteId}_incidentCount`, 'Slide 5', qSite.incidentCount, pSite.incidentCount, `siteSummary[${qSite.siteId}].incidentCount`);

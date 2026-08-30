@@ -32,7 +32,7 @@ test('Reconciliation Engine - Canonical Data Mapping & Reconciliation PASS', () 
       healthScore: '81.92',
       healthLabel: 'Fair',
       slaCompliance: '70.24',
-      slaTarget: 99.9,
+      slaTarget: 99.3,
       totalIncidents: 423,
       criticalIncidents: 0,
       majorIncidents: 0,
