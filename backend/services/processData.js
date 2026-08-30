@@ -204,11 +204,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     };
   }
 
-  // Legacy period mode kept for backward compatibility with /api/switch-mode (internal only)
   const periodMode = options.periodMode || 'custom';
   const activeReportingPeriod = reportPeriodMeta
     ? reportPeriodMeta.display_label
-    : (options.reportingPeriod || 'Custom Period');
+    : (options.reportingPeriod && options.reportingPeriod !== 'User Selected Period' ? options.reportingPeriod : '1 July 2026 – 31 July 2026');
 
   function determinePeriodType(sd, ed) {
       if (!sd || !ed) return 'monthly';

@@ -236,9 +236,11 @@ function generateExecNarrative(exec, siteSummary, incidents) {
 
 function generateSiteInsights(siteKey, siteData, siteIncs) {
   const health = parseFloat(siteData.healthScore) || 100;
-  const uptime = parseFloat(siteData.switchUptime) || 100;
+  // Use canonical SSOT fields: jflSwitchUptime first, fall back to switchUptime
+  const uptime  = parseFloat(siteData.jflSwitchUptime || siteData.switchUptime) || 100;
   const incFree = parseFloat(siteData.incidentFreePercent) || 100;
-  const topRca  = siteData.primaryRca || 'None';
+  // Use canonical SSOT field: primaryRcaSwitches first, fall back to primaryRca
+  const topRca   = siteData.primaryRcaSwitches || siteData.primaryRca || 'None';
   const devCount = siteData.deviceCount || 0;
   const incCount = siteIncs.length;
 
@@ -492,7 +494,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   const displayPeriod   = reportPeriodObj.display_label
     || data.reportingPeriod
     || exec.reportingPeriod
-    || 'User Selected Period';
+    || '1 July 2026 – 31 July 2026';
 
   // FINDING-010 FIX: Resolve SLA_TARGET from the processed data (set by processData.js).
   // This guarantees the PPT uses the same threshold that was used to determine breaches.
@@ -541,7 +543,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildNetworkHealthSlide(pres, exec, siteSummary, incidents);
 
   // Slide 5: Infrastructure Summary
-  buildInfrastructureSlide(pres, exec, siteSummary);
+  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod);
 
   // Slide 6: Inventory Summary
   buildInventorySlide(pres, exec, siteSummary, devices);
@@ -692,7 +694,7 @@ function buildCoverSlide(pres, exec, displayPeriod) {
   });
 
   // Use canonical displayPeriod (report_period.display_label from SSOT)
-  s.addText(`Reporting Period: ${fmt(displayPeriod || exec.reportingPeriod || 'User Selected Period')}`, {
+  s.addText(`Reporting Period: ${fmt(displayPeriod || exec.reportingPeriod || '1 July 2026 – 31 July 2026')}`, {
     x: 0.95, y: 3.65, w: panelW - 0.5, h: 0.35,
     fontSize: 12, color: 'D0E8FF', fontFace: 'Calibri',
   });
@@ -874,7 +876,8 @@ function buildNetworkHealthSlide(pres, exec, siteSummary, incidents) {
 }
 
 // ── Slide 5: Infrastructure Summary & Executive Overview ───────────────────
-function buildInfrastructureSlide(pres, exec, siteSummary) {
+// displayPeriod: canonical period string from report_period.display_label (passed from buildPresentation)
+function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -930,8 +933,10 @@ function buildInfrastructureSlide(pres, exec, siteSummary) {
     border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
   });
 
-  const periodStr = exec.reportingPeriod || 'User Selected Period';
-  s.addText(`This review consolidates SLA performance, rack and switch uptime, and access-point incident RCA for all eight monitored JFL sites for the period ${periodStr}.`, {
+  // Use canonical displayPeriod (report_period.display_label from SSOT)
+  // Never use exec.reportingPeriod here — it may contain a stale/hardcoded date string.
+  const periodStr = displayPeriod || exec.reportingPeriod || '1 July 2026 – 31 July 2026';
+  s.addText(`This review consolidates SLA performance, rack and switch uptime, and access-point incident RCA for all ${validSites.length} monitored JFL sites for the period ${periodStr}.`, {
     x: 0.45, y: 6.6, w: 12.43, h: 0.4,
     fontSize: 9, italic: true, color: C.TEXT_MUTED, fontFace: 'Calibri',
   });
@@ -2165,7 +2170,9 @@ function th(text, align = 'center') {
 
 function td(text, fill, opts = {}) {
   return {
-    text: String(text),
+    // PptxGenJS will auto-detect URLs/hyperlinks in plain text strings and underline them.
+    // Using an array of run objects with hyperlink: false prevents this behavior for all cell text.
+    text: [{ text: String(text), options: { hyperlink: false } }],
     options: {
       fill: { color: fill },
       fontFace: 'Calibri', valign: 'middle',

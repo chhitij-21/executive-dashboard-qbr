@@ -1,10 +1,16 @@
 {
   "customerName": "Jubilant Foodworks Ltd (JFL)",
-  "reportingPeriod": "User Selected Period",
+  "reportingPeriod": "1 July 2026 – 31 July 2026",
+  "report_period": {
+    "start_date": "2026-07-01",
+    "end_date": "2026-07-31",
+    "period_type": "custom",
+    "display_label": "1 July 2026 – 31 July 2026"
+  },
   "generatedAt": "2026-08-13T13:44:14.512Z",
   "executiveSummary": {
     "customerName": "Jubilant Foodworks Ltd (JFL)",
-    "reportingPeriod": "User Selected Period",
+    "reportingPeriod": "1 July 2026 – 31 July 2026",
     "totalSites": 8,
     "totalDevices": 372,
     "totalStockDevices": 73,

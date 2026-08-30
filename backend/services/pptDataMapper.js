@@ -23,7 +23,7 @@ function mapSnapshotToPPTData(qbrData) {
   const displayPeriod   = reportPeriodObj.display_label
     || qbrData.reportingPeriod
     || exec.reportingPeriod
-    || 'User Selected Period';
+    || '1 July 2026 – 31 July 2026';
 
   // ── SLA target: exclusively from SSOT (processData.js → ruleEngine) ─────────
   // NEVER override with a hardcoded fallback here. If exec.slaTarget is absent,

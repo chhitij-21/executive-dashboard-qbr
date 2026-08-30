@@ -9,6 +9,10 @@ const fs = require('fs');
 const os = require('os');
 
 const { processJFLWorkbooks, filterDashboardBySite } = require('./services/processData');
+// generatePPT is imported here so the download helper can regenerate a fresh PPT
+// from the job's own dashboard_data.json whenever the pre-generated file is missing.
+// This is the SSOT guarantee: the PPT always reflects the exact same data as the dashboard.
+const { generatePPT } = require('./services/pptGenerator');
 
 const clientService = require('./services/clientService');
 const historyService = require('./services/historyService');
@@ -704,6 +708,13 @@ app.get(['/api/dashboard', '/dashboard'], (req, res) => {
 
 
 // ── Download Helpers ─────────────────────────────────────────────────────────
+//
+// SSOT GUARANTEE: The PPT served on download must ALWAYS match the dashboard.
+// Strategy:
+//   1. Try the job's pre-generated pptPath first (fast path).
+//   2. If not found, regenerate from the job's own dashboard_data.json (correct data).
+//   3. NEVER fall back to data/bundled_default PPT files — those contain stale demo data.
+//
 const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
   try {
     const reqJobId = req.params.jobId;
@@ -716,7 +727,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
     }
 
-    // Auto-generate default dataset if job doesn't exist yet
+    // Auto-generate default dataset if no job exists at all
     if (!job) {
       const incPath = fs.existsSync(path.resolve('jfl incidents.xlsx'))
         ? path.resolve('jfl incidents.xlsx')
@@ -758,6 +769,72 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
     if (!job) return res.status(404).json({ error: 'Report job not found' });
 
+    // ── PPT: try pre-generated file, then regenerate from SSOT if missing ────
+    if (pathKey === 'pptPath') {
+      let targetPath = job?.pptPath;
+
+      // Check if the pre-generated file exists AND is not inside bundled_default
+      // (bundled_default PPTs contain stale demo data — never serve them for real jobs)
+      const isBundledFallback = targetPath && targetPath.includes('bundled_default');
+      const preGenExists = targetPath && !isBundledFallback && fs.existsSync(targetPath);
+
+      if (!preGenExists) {
+        // Regenerate from the job's own dashboard_data.json (SSOT guarantee)
+        const activeJobId = job?.jobId || reqJobId;
+        const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
+        const dashCandidates = [
+          job?.dashboardPath,
+          path.join(jobOutputDir, 'dashboard_data.json'),
+        ].filter(Boolean);
+
+        const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
+
+        if (dashPath) {
+          try {
+            console.log(`[server] Regenerating PPT from dashboard SSOT: ${dashPath}`);
+            if (!fs.existsSync(jobOutputDir)) fs.mkdirSync(jobOutputDir, { recursive: true });
+            const freshPptPath = path.join(jobOutputDir, `JFL_QBR_${Date.now()}.pptx`);
+            const qbrData = JSON.parse(fs.readFileSync(dashPath, 'utf8'));
+            await generatePPT(qbrData, null, freshPptPath);
+
+            // Update job record so future downloads are fast-path
+            job.pptPath = freshPptPath;
+            jobs[activeJobId] = { ...jobs[activeJobId], pptPath: freshPptPath };
+            historyService.recordReport({
+              ...job,
+              jobId: activeJobId,
+              status: 'completed',
+              pptPath: freshPptPath,
+            });
+
+            console.log(`[server] PPT regenerated: ${freshPptPath}`);
+            targetPath = freshPptPath;
+          } catch (genErr) {
+            console.error('[server] PPT regeneration failed:', genErr.message);
+            return res.status(500).json({ error: `PPT regeneration failed: ${genErr.message}` });
+          }
+        } else {
+          return res.status(404).json({ error: 'PPT file and dashboard data not found for this job. Please re-upload your files.' });
+        }
+      }
+
+      // Security path traversal guard
+      const resolvedTarget = path.resolve(targetPath);
+      const resolvedReports = path.resolve(REPORTS_DIR);
+      const resolvedData    = path.resolve(__dirname, '..', 'data');
+      const isUnderReports  = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
+      const isUnderData     = resolvedTarget.startsWith(resolvedData    + path.sep) || resolvedTarget === resolvedData;
+
+      if (!isUnderReports && !isUnderData) {
+        console.error(`[server] SECURITY: Path traversal attempt blocked. Requested: ${resolvedTarget}`);
+        return res.status(403).json({ error: 'Access denied.' });
+      }
+
+      console.log(`[server] Serving PPT download: ${resolvedTarget}`);
+      return res.download(resolvedTarget);
+    }
+
+    // ── Non-PPT files: existing logic (reports, logs, etc.) ──────────────────
     let targetPath = job?.[pathKey];
     if (!targetPath || !fs.existsSync(targetPath)) {
       const activeJobId = job?.jobId || reqJobId;
@@ -781,8 +858,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       for (const d of dirsToSearch) {
         if (fs.existsSync(d)) {
           const files = fs.readdirSync(d);
-          const match = files.find(f => f.toLowerCase().endsWith('.pptx') && pathKey === 'pptPath')
-            || files.find(f => f.toLowerCase().endsWith('.md') && pathKey === 'reportPath');
+          const match = files.find(f => f.toLowerCase().endsWith('.md') && pathKey === 'reportPath');
           if (match) {
             targetPath = path.join(d, match);
             break;
@@ -796,7 +872,6 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
     }
 
     // SECURITY FIX (FINDING-007): Path traversal guard.
-    // Ensure the resolved file path is strictly within REPORTS_DIR or DATA_DIR.
     const resolvedTarget = path.resolve(targetPath);
     const resolvedReports = path.resolve(REPORTS_DIR);
     const resolvedData = path.resolve(__dirname, '..', 'data');
