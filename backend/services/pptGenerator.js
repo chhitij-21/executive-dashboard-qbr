@@ -60,36 +60,38 @@ const TARGET_SITES = [
   'Noida',
 ];
 
-// Corporate colour palette — Navy / Steel Blue / White / Accent
+// Corporate colour palette — McKinsey / Bain Executive Standard Palette
 const C = {
-  NAVY:         '0B2440',
-  NAVY_LIGHT:   '1C3B60',
-  NAVY_MID:     '14325A',
-  BLUE:         '1E5FA8',
-  BLUE_ACCENT:  '2979D4',
-  BLUE_LIGHT:   'EBF3FA',
-  STEEL:        '3A6EA8',
-  BG_DARK:      '0B2440',
-  BG_LIGHT:     'FFFFFF',
-  BG_SECTION:   'F5F7FA',
-  CARD_BG:      'F0F4F9',
-  CARD_BORDER:  'D1DCE8',
-  TEXT_DARK:    '0F1C2E',
-  TEXT_MID:     '2C3E50',
-  TEXT_MUTED:   '5B6B7C',
+  NAVY:         '1E293B', // Slate-800 (Softer dark tone)
+  NAVY_LIGHT:   '334155',
+  NAVY_MID:     '1E293B',
+  BLUE:         '2563EB', // Blue-600 (Primary accent & table header)
+  BLUE_ACCENT:  '3B82F6',
+  BLUE_LIGHT:   'EFF6FF',
+  STEEL:        '475569',
+  BG_DARK:      '1E293B',
+  BG_LIGHT:     'F8FAFC', // Slate-50 Off-White background
+  BG_SECTION:   'F1F5F9',
+  CARD_BG:      'F1F5F9', // Slate-100 alternate row stripe
+  CARD_BORDER:  'CBD5E1',
+  TEXT_DARK:    '0F172A',
+  TEXT_MID:     '334155',
+  TEXT_MUTED:   '64748B',
   TEXT_LIGHT:   'FFFFFF',
   GREEN:        '16A34A',
-  GREEN_LIGHT:  'D1FAE5',
+  GREEN_LIGHT:  'DCFCE7',
   RED:          'DC2626',
   RED_LIGHT:    'FEE2E2',
   AMBER:        'D97706',
   AMBER_LIGHT:  'FEF3C7',
   TEAL:         '0D9488',
   PURPLE:       '7C3AED',
-  DIVIDER:      'DDE6F0',
-  HEADER_FILL:  '0B2440',
+  DIVIDER:      'E2E8F0',
+  HEADER_FILL:  '1E293B',
+  TABLE_HEADER_FILL: '2563EB',
   FOOTER_LINE:  'CBD5E1',
   ACCENT_GOLD:  'F59E0B',
+  FONT_PRIMARY: 'Segoe UI',
 };
 
 // Paths resolved relative to this file
@@ -376,15 +378,15 @@ function addHeader(pres, slide, title, subtitle, slideNumber) {
   });
 
   slide.addText(title, {
-    x: 0.35, y: 0.08, w: 9.5, h: 0.42,
-    fontSize: 15, bold: true, color: C.TEXT_LIGHT,
-    fontFace: 'Calibri', charSpacing: 0.5,
+    x: 0.35, y: 0.06, w: 9.5, h: 0.44,
+    fontSize: 28, bold: true, color: C.TEXT_LIGHT,
+    fontFace: C.FONT_PRIMARY, charSpacing: 0.5,
   });
 
   slide.addText(subtitle, {
     x: 0.35, y: 0.52, w: 9.5, h: 0.28,
-    fontSize: 9.5, color: 'A8C4DC',
-    fontFace: 'Calibri',
+    fontSize: 14, color: 'A8C4DC',
+    fontFace: C.FONT_PRIMARY,
   });
 
   // Logo top-right
@@ -401,17 +403,17 @@ function addHeader(pres, slide, title, subtitle, slideNumber) {
   });
   slide.addText('CONFIDENTIAL — Proactive Data Systems Pvt. Ltd.', {
     x: 0.35, y: 7.15, w: 7.5, h: 0.22,
-    fontSize: 7.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
+    fontSize: 8.5, color: C.TEXT_MUTED, fontFace: C.FONT_PRIMARY,
   });
   if (slideNumber) {
     slide.addText(`Slide ${slideNumber}`, {
       x: 10.0, y: 7.15, w: 2.98, h: 0.22,
-      fontSize: 7.5, color: C.TEXT_MUTED, align: 'right', fontFace: 'Calibri',
+      fontSize: 8.5, color: C.TEXT_MUTED, align: 'right', fontFace: C.FONT_PRIMARY,
     });
   }
   slide.addText(new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short' }), {
     x: 7.85, y: 7.15, w: 2.0, h: 0.22,
-    fontSize: 7.5, color: C.TEXT_MUTED, align: 'center', fontFace: 'Calibri',
+    fontSize: 8.5, color: C.TEXT_MUTED, align: 'center', fontFace: C.FONT_PRIMARY,
   });
 }
 
@@ -1538,23 +1540,23 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum) {
 
   const { highlights, risks } = generateSiteInsights(siteKey, site, siteIncs);
 
-  // Highlights
+  // Highlights (Left 45% column)
   addSectionDivider(s, 3.55, 'Key Highlights');
   highlights.slice(0, 3).forEach((h, i) => {
-    s.addShape('roundRect', { x: 0.45, y: 3.95 + i * 0.4, w: 5.9, h: 0.34, fill: { color: C.GREEN_LIGHT }, line: { color: C.GREEN, pt: 0.5 }, rectRadius: 0.04 });
-    s.addShape('rect', { x: 0.45, y: 3.95 + i * 0.4, w: 0.07, h: 0.34, fill: { color: C.GREEN } });
-    s.addText(h, { x: 0.62, y: 3.98 + i * 0.4, w: 5.65, h: 0.28, fontSize: 8.5, color: '14532D', fontFace: 'Calibri' });
+    s.addShape('roundRect', { x: 0.45, y: 3.95 + i * 0.44, w: 5.6, h: 0.38, fill: { color: C.GREEN_LIGHT }, line: { color: C.GREEN, pt: 0.5 }, rectRadius: 0.05 });
+    s.addShape('rect', { x: 0.45, y: 3.95 + i * 0.44, w: 0.08, h: 0.38, fill: { color: C.GREEN } });
+    s.addText(h, { x: 0.65, y: 3.98 + i * 0.44, w: 5.3, h: 0.32, fontSize: 10, color: '14532D', fontFace: C.FONT_PRIMARY, margin: [5, 5, 5, 5] });
   });
 
-  // Risks
+  // Risks (Right 55% column)
   addSectionDivider(s, 3.55, '');
-  s.addShape('rect', { x: 6.65, y: 3.55, w: 6.13, h: 0.32, fill: { color: C.RED } });
-  s.addText('KEY RISKS', { x: 6.75, y: 3.59, w: 5.9, h: 0.24, fontSize: 9, bold: true, color: C.TEXT_LIGHT, fontFace: 'Calibri', charSpacing: 1.2 });
+  s.addShape('rect', { x: 6.35, y: 3.55, w: 6.53, h: 0.32, fill: { color: C.RED } });
+  s.addText('KEY RISKS', { x: 6.45, y: 3.59, w: 6.3, h: 0.24, fontSize: 18, bold: true, color: C.TEXT_LIGHT, fontFace: C.FONT_PRIMARY, charSpacing: 1.2 });
 
   risks.slice(0, 3).forEach((r, i) => {
-    s.addShape('roundRect', { x: 6.65, y: 3.95 + i * 0.4, w: 6.13, h: 0.34, fill: { color: C.RED_LIGHT }, line: { color: C.RED, pt: 0.5 }, rectRadius: 0.04 });
-    s.addShape('rect', { x: 6.65, y: 3.95 + i * 0.4, w: 0.07, h: 0.34, fill: { color: C.RED } });
-    s.addText(r, { x: 6.82, y: 3.98 + i * 0.4, w: 5.88, h: 0.28, fontSize: 8.5, color: '7F1D1D', fontFace: 'Calibri' });
+    s.addShape('roundRect', { x: 6.35, y: 3.95 + i * 0.44, w: 6.53, h: 0.38, fill: { color: C.RED_LIGHT }, line: { color: C.RED, pt: 0.5 }, rectRadius: 0.05 });
+    s.addShape('rect', { x: 6.35, y: 3.95 + i * 0.44, w: 0.08, h: 0.38, fill: { color: C.RED } });
+    s.addText(r, { x: 6.55, y: 3.98 + i * 0.44, w: 6.25, h: 0.32, fontSize: 10, color: '7F1D1D', fontFace: C.FONT_PRIMARY, margin: [5, 5, 5, 5] });
   });
 
   // AI Site Summary — use primaryRcaSwitches (SSOT canonical) first
@@ -2160,10 +2162,10 @@ function th(text, align = 'center') {
     text,
     options: {
       bold: true, color: C.TEXT_LIGHT,
-      fill: { color: C.HEADER_FILL },
+      fill: { color: C.TABLE_HEADER_FILL || C.HEADER_FILL },
       align, valign: 'middle',
-      fontFace: 'Calibri', fontSize: 9,
-      margin: [5, 4, 5, 4],
+      fontFace: C.FONT_PRIMARY, fontSize: 12,
+      margin: [6, 6, 6, 6],
     },
   };
 }
@@ -2175,9 +2177,9 @@ function td(text, fill, opts = {}) {
     text: [{ text: String(text), options: { hyperlink: false } }],
     options: {
       fill: { color: fill },
-      fontFace: 'Calibri', valign: 'middle',
-      fontSize: 8.5,
-      margin: [4, 4, 4, 4],
+      fontFace: C.FONT_PRIMARY, valign: 'middle',
+      fontSize: 12,
+      margin: [6, 6, 6, 6],
       ...opts,
     },
   };
