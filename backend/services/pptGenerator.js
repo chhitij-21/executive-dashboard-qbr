@@ -922,17 +922,17 @@ function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod) {
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
       td(fmt(site.deviceCount), fill, { align: 'center', color: C.TEXT_DARK }),
       td(proUp, fill, { align: 'center', bold: true, color: C.BLUE }),
-      td(jflUp, fill, { align: 'center', bold: true, color: C.GREEN }),
-      td(swRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(jflUp, fill, { align: 'center', bold: true, color: parseFloat(jflUp) >= SLA_TARGET ? C.GREEN : C.RED }),
+      td(swRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 }),
       td(apIncStr, fill, { align: 'center', color: C.AMBER, bold: true }),
-      td(apRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(apRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 }),
     ];
   });
 
   s.addTable([headers, ...rows], {
     x: 0.45, y: 1.35, w: W_TOTAL,
-    colW: COL_W, fontSize: 9, rowH: 0.52,
-    border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+    colW: COL_W, fontSize: 12, rowH: 0.52,
+    border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
 
   // Use canonical displayPeriod (report_period.display_label from SSOT)
@@ -1053,23 +1053,24 @@ function buildIncidentOverviewSlide(pres, incidents, siteSummary, exec) {
     valGridLine: { style: 'solid', color: C.DIVIDER },
   });
 
-  // Priority breakdown table (right side)
-  addSectionDivider(s, 2.22 + 3.59, 'Incidents by Priority');
-  const prioCounts = {};
-  incidents.forEach(i => {
-    const p = (i.Priority || 'Unknown').trim();
-    prioCounts[p] = (prioCounts[p] || 0) + 1;
-  });
-  const prioEntries = Object.entries(prioCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  // Priority breakdown Donut Chart (right side)
+  addSectionDivider(s, 2.22, 'Incidents by Priority Breakdown');
 
-  prioEntries.forEach(([prio, count], idx) => {
-    const pctVal = ((count / Math.max(1, totalInc)) * 100).toFixed(1);
-    const barW   = (count / Math.max(1, totalInc)) * 4.5;
-    const y = 6.22 + idx * 0.32;
-    s.addText(prio.substring(0, 20), { x: 8.1, y, w: 2.2, h: 0.28, fontSize: 9, color: C.TEXT_DARK, fontFace: 'Calibri' });
-    s.addShape('rect', { x: 10.35, y: y + 0.04, w: 4.5, h: 0.2, fill: { color: C.DIVIDER } });
-    s.addShape('rect', { x: 10.35, y: y + 0.04, w: Math.max(0.05, barW), h: 0.2, fill: { color: C.AMBER } });
-    s.addText(`${pctVal}%`, { x: 12.9, y, w: 0.7, h: 0.28, fontSize: 8.5, bold: true, color: C.AMBER, align: 'right', fontFace: 'Calibri' });
+  const p1Count = incidents.filter(i => /p1|critical/i.test(i.Priority || '')).length;
+  const p2Count = incidents.filter(i => /p2|major/i.test(i.Priority || '')).length;
+  const otherCount = Math.max(0, totalInc - (p1Count + p2Count));
+
+  s.addChart('doughnut', [
+    { name: 'Priority Distribution', labels: ['P1 Critical', 'P2 Major', 'P3/P4 Standard'], values: [p1Count || 0.001, p2Count || 0.001, otherCount || 1] }
+  ], {
+    x: 8.2, y: 2.6, w: 4.6, h: 3.4,
+    chartColors: [C.RED, C.AMBER, C.BLUE_ACCENT],
+    holeSize: 60,
+    showLegend: true,
+    legendPos: 'b',
+    dataLabelFontSize: 10,
+    dataLabelColor: C.TEXT_DARK,
+    showValue: true,
   });
 
   const maxSite  = Object.entries(incBySite).sort((a, b) => b[1] - a[1])[0];
@@ -1244,12 +1245,22 @@ function buildSLASlide(pres, exec, siteSummary, slaAn) {
   const slaComp = parseFloat(exec.slaCompliance) || 100;
   const slaColor = slaComp >= 99.5 ? C.GREEN : slaComp >= 99.0 ? C.AMBER : C.RED;
 
-  // Large SLA gauge simulation
+  // Executive SLA Doughnut Gauge Chart
   s.addShape('roundRect', { x: 0.45, y: 1.05, w: 3.2, h: 2.9, fill: { color: C.CARD_BG }, line: { color: slaColor, pt: 2 }, rectRadius: 0.12 });
-  s.addText('SLA COMPLIANCE', { x: 0.55, y: 1.2, w: 3.0, h: 0.3, fontSize: 9, bold: true, color: C.TEXT_MUTED, align: 'center', fontFace: 'Calibri', charSpacing: 1 });
-  s.addText(`${slaComp.toFixed(2)}%`, { x: 0.55, y: 1.6, w: 3.0, h: 0.85, fontSize: 38, bold: true, color: slaColor, align: 'center', fontFace: 'Calibri' });
-  s.addText(`Target: ${SLA_TARGET}%`, { x: 0.55, y: 2.5, w: 3.0, h: 0.3, fontSize: 10, color: C.TEXT_MUTED, align: 'center', fontFace: 'Calibri' });
-  s.addText(slaComp >= SLA_TARGET ? 'SLA MET' : 'SLA BREACH', { x: 0.55, y: 2.85, w: 3.0, h: 0.3, fontSize: 11, bold: true, color: slaColor, align: 'center', fontFace: 'Calibri', charSpacing: 1 });
+  
+  const marginPct = Math.max(0.01, 100 - slaComp);
+  s.addChart('doughnut', [
+    { name: 'SLA Gauge', labels: ['SLA Achieved', 'Margin'], values: [slaComp, marginPct] }
+  ], {
+    x: 0.55, y: 1.1, w: 3.0, h: 2.3,
+    chartColors: [slaColor, C.DIVIDER],
+    holeSize: 70,
+    showLegend: false,
+    showValue: false,
+  });
+
+  s.addText(`${slaComp.toFixed(2)}%`, { x: 0.55, y: 1.85, w: 3.0, h: 0.5, fontSize: 24, bold: true, color: slaColor, align: 'center', fontFace: C.FONT_PRIMARY });
+  s.addText(slaComp >= SLA_TARGET ? '✓ SLA MET' : '🚨 SLA BREACH', { x: 0.55, y: 2.6, w: 3.0, h: 0.3, fontSize: 11, bold: true, color: slaColor, align: 'center', fontFace: C.FONT_PRIMARY, charSpacing: 1 });
 
   // SLA metrics row
   const slaKpis = [
@@ -1259,7 +1270,7 @@ function buildSLASlide(pres, exec, siteSummary, slaAn) {
   ];
   slaKpis.forEach((k, i) => addKpiCard(s, 3.85 + i * 3.1, 1.05, 2.95, 1.35, k.label, k.value, k.color));
 
-  // Per-site SLA table
+  // Per-site SLA table with visual status badges
   addSectionDivider(s, 2.55, 'Site-wise SLA Compliance Overview');
 
   const validSites = siteSummary.filter(st => {
@@ -1274,24 +1285,24 @@ function buildSLASlide(pres, exec, siteSummary, slaAn) {
   ];
   const rows = validSites.slice(0, 8).map((site, idx) => {
     const fill    = rowFill(idx);
-    // Use jflSwitchUptime (canonical JFL uptime metric) for SLA compliance check
     const uptime  = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
     const slaOk   = uptime >= SLA_TARGET;
     const incFree = parseFloat(site.incidentFreePercent) || 100;
     const hScore  = parseFloat(site.healthScore) || 100;
+    const statusPill = slaOk ? '✓ MET' : '🚨 BREACH';
     return [
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
       td(fmt(site.deviceCount), fill, { align: 'center' }),
       td(pct(site.jflSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
       td(pct(site.incidentFreePercent), fill, { align: 'center', bold: true, color: incFree >= 90 ? C.GREEN : C.AMBER }),
       td(`${hScore.toFixed(1)} (${healthLabel(hScore)})`, fill, { align: 'center', bold: true, color: healthColor(hScore) }),
-      td(slaOk ? 'MET' : 'BREACH', fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
+      td(statusPill, fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
     ];
   });
 
   s.addTable([headers, ...rows], {
     x: 0.45, y: 2.95, w: 12.43, colW: COL_W,
-    fontSize: 9.5, rowH: 0.42, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+    fontSize: 12, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
 
   const narrative = [
@@ -1390,8 +1401,8 @@ function buildSiteRankingSlide(pres, siteSummary, incidents) {
     incBySite[site] = (incBySite[site] || 0) + 1;
   });
 
-  const medals = ['1st', '2nd', '3rd'];
-  const COL_W = [0.65, 2.2, 1.7, 1.7, 1.7, 2.2, 2.28];
+  const medals = ['🥇 1st', '🥈 2nd', '🥉 3rd'];
+  const COL_W = [0.85, 2.2, 1.6, 1.6, 1.6, 1.9, 2.68];
   const headers = [
     th('Rank', 'center'), th('Site', 'left'), th('Health Score', 'center'),
     th('Switch Uptime', 'center'), th('Incident-Free %', 'center'),
@@ -1403,22 +1414,23 @@ function buildSiteRankingSlide(pres, siteSummary, incidents) {
     const hScore   = parseFloat(site.healthScore) || 100;
     const risk     = riskLevel(hScore);
     const incCount = incBySite[site.siteId] || 0;
-    // Use jflSwitchUptime (canonical JFL uptime metric) for SLA threshold comparison
     const siteUptime = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
+    const statusText = idx === 0 ? '🟢 TOP PERFORMER' : (risk.label === 'HIGH' ? '🚨 CRITICAL' : `${risk.label} (${healthLabel(hScore)})`);
+
     return [
-      td(medals[idx] || `${idx + 1}`, fill, { align: 'center', bold: true, color: idx < 3 ? C.ACCENT_GOLD : C.TEXT_MUTED }),
+      td(medals[idx] || `#${idx + 1}`, fill, { align: 'center', bold: true, color: idx < 3 ? C.ACCENT_GOLD : C.TEXT_MUTED }),
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
       td(`${hScore.toFixed(1)} / 100`, fill, { align: 'center', bold: true, color: healthColor(hScore) }),
       td(pct(site.jflSwitchUptime || site.switchUptime), fill, { align: 'center', color: siteUptime >= SLA_TARGET ? C.GREEN : C.RED }),
       td(pct(site.incidentFreePercent), fill, { align: 'center', color: parseFloat(site.incidentFreePercent) >= 90 ? C.GREEN : C.AMBER }),
       td(String(incCount), fill, { align: 'center', color: incCount > 50 ? C.RED : incCount > 20 ? C.AMBER : C.TEXT_DARK }),
-      td(`${risk.label}  (${healthLabel(hScore)})`, fill, { align: 'center', bold: true, color: risk.color }),
+      td(statusText, fill, { align: 'center', bold: true, color: risk.color }),
     ];
   });
 
   s.addTable([headers, ...rows], {
     x: 0.45, y: 1.1, w: 12.43, colW: COL_W,
-    fontSize: 9.5, rowH: 0.5, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+    fontSize: 12, rowH: 0.5, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
 
   const best  = validSites[0];
