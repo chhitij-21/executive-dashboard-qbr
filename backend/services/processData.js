@@ -184,16 +184,25 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const log = createLogger(outputDir);
 
   // ── Custom date range (Requirement 2 & 3) ──────────────────────────────────
-  // Only custom date ranges are accepted. startDate / endDate are ISO date strings (YYYY-MM-DD).
-  const startDate = options.startDate || null;
-  const endDate   = options.endDate   || null;
+  let startDate = options.startDate || options.start_date || null;
+  let endDate   = options.endDate   || options.end_date   || null;
+
+  // If startDate / endDate not passed directly, but reportingPeriod is in format 'YYYY-MM-DD to YYYY-MM-DD'
+  if (!startDate && options.reportingPeriod && typeof options.reportingPeriod === 'string' && options.reportingPeriod.includes(' to ')) {
+    const parts = options.reportingPeriod.split(' to ');
+    if (parts.length === 2 && /^\d{4}-\d{2}-\d{2}$/.test(parts[0].trim()) && /^\d{4}-\d{2}-\d{2}$/.test(parts[1].trim())) {
+      startDate = parts[0].trim();
+      endDate   = parts[1].trim();
+    }
+  }
 
   // Build the report period metadata object (Requirement 4)
   let reportPeriodMeta = null;
-  if (startDate && endDate) {
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  if (startDate && endDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
     const sdParts = startDate.split('-');  // [YYYY, MM, DD]
     const edParts = endDate.split('-');
-    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     const sdLabel = `${parseInt(sdParts[2], 10)} ${months[parseInt(sdParts[1], 10) - 1]} ${sdParts[0]}`;
     const edLabel = `${parseInt(edParts[2], 10)} ${months[parseInt(edParts[1], 10) - 1]} ${edParts[0]}`;
     reportPeriodMeta = {
@@ -202,12 +211,19 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       period_type:   'custom',
       display_label: `${sdLabel} – ${edLabel}`,
     };
+  } else if (options.reportingPeriod && options.reportingPeriod !== 'User Selected Period' && options.reportingPeriod !== 'Custom Period') {
+    reportPeriodMeta = {
+      start_date:    startDate,
+      end_date:      endDate,
+      period_type:   'custom',
+      display_label: options.reportingPeriod,
+    };
   }
 
   const periodMode = options.periodMode || 'custom';
   const activeReportingPeriod = reportPeriodMeta
     ? reportPeriodMeta.display_label
-    : (options.reportingPeriod && options.reportingPeriod !== 'User Selected Period' ? options.reportingPeriod : '1 July 2026 – 31 July 2026');
+    : (options.reportingPeriod || 'User Selected Period');
 
   function determinePeriodType(sd, ed) {
       if (!sd || !ed) return 'monthly';
@@ -389,6 +405,35 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
         `Please verify your date selection or upload a file covering this period.`,
         log
       );
+    }
+  }
+
+  // If reportPeriodMeta is still not constructed, extract min/max dates from incidents
+  if (!reportPeriodMeta && incidents.length > 0) {
+    const dates = incidents.map(inc => {
+      const raw = inc.CreatedTime || inc.OpenTime || inc.created_at || inc['Created Date'] || inc['Open Date'];
+      if (!raw) return null;
+      if (typeof raw === 'number' && raw > 30000 && raw < 100000) {
+        return new Date(Math.round((raw - 25569) * 86400 * 1000));
+      }
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? null : d;
+    }).filter(Boolean);
+
+    if (dates.length > 0) {
+      const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+      const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+      const sdLabel = `${minDate.getUTCDate()} ${months[minDate.getUTCMonth()]} ${minDate.getUTCFullYear()}`;
+      const edLabel = `${maxDate.getUTCDate()} ${months[maxDate.getUTCMonth()]} ${maxDate.getUTCFullYear()}`;
+      const sdISO = minDate.toISOString().slice(0, 10);
+      const edISO = maxDate.toISOString().slice(0, 10);
+      reportPeriodMeta = {
+        start_date: sdISO,
+        end_date: edISO,
+        period_type: 'custom',
+        display_label: `${sdLabel} – ${edLabel}`,
+      };
+      log(`Auto-derived reporting period from incident timestamps: ${reportPeriodMeta.display_label}`);
     }
   }
 
@@ -865,15 +910,17 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
   const rcaAn        = buildRCAAnalytics(incidents);
   const slaAn        = buildSLAAnalytics(activeDevices, incidents);
 
+  const activeLabel = reportPeriodMeta?.display_label || reportingPeriod;
+
   return {
     customerName,
-    reportingPeriod,
+    reportingPeriod: activeLabel,
     // Requirement 4: Always-present report_period object in SSOT output
     report_period: reportPeriodMeta || {
       start_date:    null,
       end_date:      null,
       period_type:   'custom',
-      display_label: reportingPeriod,
+      display_label: activeLabel,
     },
     generatedAt:      new Date().toISOString(),
     executiveSummary: execSummary,
@@ -924,7 +971,7 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
 
   return {
     customerName:       customerName || 'Jubilant Foodworks Ltd (JFL)',
-    reportingPeriod:    reportingPeriod || 'Q1 FY2026',
+    reportingPeriod:    reportingPeriod || 'User Selected Period',
     totalSites:         sites.size,
     totalDevices:       total,
     totalStockDevices:  stockDevices.length,

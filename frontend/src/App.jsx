@@ -303,7 +303,7 @@ function MainPortal() {
                 {activeDashboardData?.report_period?.display_label ||
                  exec.reportingPeriod ||
                  activeDashboardData?.reportingPeriod ||
-                 'Custom Period'}
+                 'User Selected Period'}
               </strong>
             </p>
           </div>
@@ -362,7 +362,7 @@ function MainPortal() {
                 activeDashboardData?.report_period?.display_label ||
                 exec.reportingPeriod ||
                 activeDashboardData?.reportingPeriod ||
-                'Custom Period'
+                'User Selected Period'
               } />
               <KpiCard title="Total Sites" value={exec.totalSites} />
               <KpiCard title="Active Operational Devices" value={exec.totalDevices} />

@@ -13,14 +13,16 @@
 
 ---
 
-## 2. Date Range & Custom Period Rules
-- **Custom Date Range Only (No Presets)**:
-  - The frontend `FileUploader.jsx` presents custom `start_date` and `end_date` inputs only (no preset dropdowns).
+## 2. Date Range & Custom Period Rules (STRICT UNCHANGEABLE RULE)
+- **100% Dynamic Custom Date Range Only (NO HARDCODED STATIC DATES)**:
+  - The date range displayed on the Web Dashboard header, the "REPORTING PERIOD" KPI card, and all PowerPoint slides MUST read dynamically from the user's selected `start_date` and `end_date` (`report_period.display_label`).
+  - Hardcoding static date strings (such as `"13 April 2026 – 13 May 2026"` or `"1 July 2026 – 31 July 2026"`) as fixed values is STRICTLY FORBIDDEN under any condition.
+  - Frontend `FileUploader.jsx` presents custom `start_date` and `end_date` inputs only (no preset dropdowns).
   - Max attribute is bound to today's date (`max={today}`) to prevent future dates.
   - Validation requires `start_date <= end_date` and both fields required.
 - **Human-Readable Period Labels**:
-  - Date ranges are formatted into clean calendar strings (e.g. `1 May 2026 – 1 June 2026`).
-  - Raw placeholder text strings like `"User Selected Period"` must NEVER appear on the web dashboard or PPT slides.
+  - Date ranges are formatted into clean calendar strings (e.g. `1 May 2026 – 1 June 2026`, `13 April 2026 – 13 May 2026`).
+  - Raw placeholder text strings like `"User Selected Period"` must NEVER appear on the final rendered web dashboard or PPT slides when valid dates exist.
 
 ---
 

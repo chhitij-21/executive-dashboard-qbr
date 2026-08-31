@@ -680,13 +680,17 @@ app.get(['/api/dashboard', '/dashboard'], (req, res) => {
       job = jobs[jobId] || historyService.getReportByJobId(jobId);
     }
 
+    if (job && job.status === 'processing') {
+      return res.status(202).json({ status: 'processing', message: 'Report is generating...' });
+    }
+
     let dPath = job?.dashboardPath;
     if (!dPath || !fs.existsSync(dPath)) {
       const activeJobId = job?.jobId || jobId;
       const candidates = [
         path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
         path.resolve('data', 'dashboard_data.json'),
+        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
       ];
       dPath = candidates.find((p) => fs.existsSync(p));
     }
