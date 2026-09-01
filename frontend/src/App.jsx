@@ -540,13 +540,14 @@ function MainPortal() {
                   <table className="data-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                     <thead>
                       <tr>
-                        <th style={{ width: '16%' }}>Reference</th>
-                        <th style={{ width: '15%' }}>Device</th>
-                        <th style={{ width: '12%' }}>Location</th>
-                        <th style={{ width: '11%', textAlign: 'center' }}>Resolution (hrs)</th>
-                        <th style={{ width: '9%', textAlign: 'center' }}>Target (hrs)</th>
-                        <th style={{ width: '11%', textAlign: 'center' }}>SLA Status</th>
-                        <th style={{ width: '26%' }}>Primary RCA</th>
+                        <th style={{ width: '14%' }}>Reference</th>
+                        <th style={{ width: '14%' }}>Device</th>
+                        <th style={{ width: '14%' }}>Serial Number</th>
+                        <th style={{ width: '11%' }}>Location</th>
+                        <th style={{ width: '10%', textAlign: 'center' }}>Resolution (hrs)</th>
+                        <th style={{ width: '8%', textAlign: 'center' }}>Target (hrs)</th>
+                        <th style={{ width: '10%', textAlign: 'center' }}>SLA Status</th>
+                        <th style={{ width: '19%' }}>Primary RCA</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -559,6 +560,7 @@ function MainPortal() {
                               <strong>{ref.value}</strong>
                             </td>
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.Device}>{row.Device}</td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--accent-blue, #2563eb)' }} title={row.SerialNo}>{row.SerialNo || 'N/A'}</td>
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.Location}>{row.Location}</td>
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>
                               {row.resolution_time_hours !== null && row.resolution_time_hours !== undefined
@@ -601,7 +603,7 @@ function MainPortal() {
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Top Lowest Uptime Switches</h4>
                 <DataTable
-                  columns={['DeviceID', 'Location', 'CoreNonCore', 'uptime', 'incCount']}
+                  columns={['DeviceID', 'SerialNo', 'Location', 'CoreNonCore', 'uptime', 'incCount']}
                   rows={switchAn.top10SwitchOutages}
                 />
               </div>
@@ -611,9 +613,9 @@ function MainPortal() {
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Rack-wise Switch Uptime Summary</h4>
                 <DataTable
-                  columns={['site', 'rack', 'deviceCount', 'periodUptime', 'status']}
+                  columns={['site', 'rack', 'SerialNo', 'deviceCount', 'periodUptime', 'status']}
                   rows={switchAn.rackwiseUptime}
-                  columnLabels={{ periodUptime: switchAn.periodLabel || 'Monthly Uptime %', status: 'Operating Status' }}
+                  columnLabels={{ SerialNo: 'Serial Number(s)', periodUptime: switchAn.periodLabel || 'Monthly Uptime %', status: 'Operating Status' }}
                 />
               </div>
             )}
@@ -680,13 +682,14 @@ function MainPortal() {
                   <table className="data-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                     <thead>
                       <tr>
-                        <th style={{ width: '16%' }}>Reference</th>
-                        <th style={{ width: '15%' }}>Device</th>
-                        <th style={{ width: '12%' }}>Location</th>
-                        <th style={{ width: '11%', textAlign: 'center' }}>Resolution (hrs)</th>
-                        <th style={{ width: '9%', textAlign: 'center' }}>Target (hrs)</th>
-                        <th style={{ width: '11%', textAlign: 'center' }}>SLA Status</th>
-                        <th style={{ width: '26%' }}>Primary RCA</th>
+                        <th style={{ width: '14%' }}>Reference</th>
+                        <th style={{ width: '14%' }}>Device</th>
+                        <th style={{ width: '14%' }}>Serial Number</th>
+                        <th style={{ width: '11%' }}>Location</th>
+                        <th style={{ width: '10%', textAlign: 'center' }}>Resolution (hrs)</th>
+                        <th style={{ width: '8%', textAlign: 'center' }}>Target (hrs)</th>
+                        <th style={{ width: '10%', textAlign: 'center' }}>SLA Status</th>
+                        <th style={{ width: '19%' }}>Primary RCA</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -699,6 +702,7 @@ function MainPortal() {
                               <strong>{ref.value}</strong>
                             </td>
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.Device}>{row.Device}</td>
+                            <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--accent-blue, #2563eb)' }} title={row.SerialNo}>{row.SerialNo || 'N/A'}</td>
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.Location}>{row.Location}</td>
                             <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.78rem', textAlign: 'center' }}>
                               {row.resolution_time_hours !== null && row.resolution_time_hours !== undefined
@@ -741,7 +745,7 @@ function MainPortal() {
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Top AP Outages (Highest Incident Count)</h4>
                 <DataTable
-                  columns={['DeviceID', 'Location', 'incCount']}
+                  columns={['DeviceID', 'SerialNo', 'Location', 'incCount']}
                   rows={apAn.top10APOutages}
                 />
               </div>
@@ -772,6 +776,13 @@ function MainPortal() {
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Site-wise Incident Breakdown</h4>
                 <DataTable columns={['siteId', 'count']} rows={incAn.siteWiseIncidents} />
+              </div>
+            )}
+
+            {incAn.deviceWiseIncidents?.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Top Incident Frequency Devices</h4>
+                <DataTable columns={['DeviceID', 'SerialNo', 'count']} rows={incAn.deviceWiseIncidents} />
               </div>
             )}
           </div>

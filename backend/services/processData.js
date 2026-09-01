@@ -1222,10 +1222,13 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
   const rackwiseUptime = Object.values(rackMap).map(item => {
     const avgUptime = computeAverageUptime(item.devices);
     const upStr = `${avgUptime.toFixed(2)}%`;
+    const serialList = item.devices.map(d => d.SerialNo || d.DeviceID).filter(Boolean).join(', ');
     return {
       site: item.site,
       rack: item.rack,
       deviceCount: item.devices.length,
+      SerialNo: serialList || 'N/A',
+      serialNumbers: serialList || 'N/A',
       periodUptime: upStr,
       monthlyUptime: upStr,
       quarterlyUptime: upStr,
