@@ -25,26 +25,51 @@ function loadWorkbook(filePath) {
 }
 
 /**
+ * Helper to extract a column value from a row using multiple alias candidate names.
+ * Supports exact match, case-insensitive match, and normalized key match (no spaces/underscores/dots).
+ */
+function getColVal(row, candidates) {
+  if (!row || typeof row !== 'object') return '';
+  const keys = Object.keys(row);
+  for (const candidate of candidates) {
+    if (row[candidate] !== undefined && row[candidate] !== null && String(row[candidate]).trim() !== '') {
+      return row[candidate];
+    }
+    const normCand = candidate.toLowerCase().replace(/[\s_\.#-]/g, '');
+    const foundKey = keys.find(k => k.toLowerCase().replace(/[\s_\.#-]/g, '') === normCand);
+    if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null && String(row[foundKey]).trim() !== '') {
+      return row[foundKey];
+    }
+  }
+  return '';
+}
+
+/**
  * JFL-specific sheet detection for the two-file setup.
  */
 function detectSheets(workbookData) {
   const sheets = workbookData.__sheetNames || [];
 
-  const incidentSheet = sheets.find((s) => s.trim() === 'Raw')
+  const matchedIncidentSheet = sheets.find((s) => s.trim() === 'Raw')
     || sheets.find((s) => s.trim() === 'JFL')
     || sheets.find((s) => s.trim().toLowerCase() === 'raw')
     || sheets.find((s) => s.trim().toLowerCase().includes('incident'))
-    || sheets.find((s) => s.trim().toLowerCase().includes('jfl'))
-    || (sheets.length > 0 ? sheets[0] : null);
+    || sheets.find((s) => s.trim().toLowerCase().includes('compliance'))
+    || sheets.find((s) => s.trim().toLowerCase().includes('sla'))
+    || sheets.find((s) => s.trim().toLowerCase().includes('jfl'));
+
+  const incidentSheet = matchedIncidentSheet || (sheets.length > 0 ? sheets[0] : null);
 
   const uptimeSheet = sheets.find((s) => s.trim().toLowerCase().startsWith('all location'))
     || sheets.find((s) => s.trim().toLowerCase().includes('uptime'))
     || null;
 
+  // Location sheets: if explicit matchedIncidentSheet exists, exclude it.
+  // Otherwise, all non-summary/non-uptime sheets in the workbook are location inventory sheets.
   const locationSheets = sheets.filter((s) => {
     const lower = s.trim().toLowerCase();
+    if (matchedIncidentSheet && s === matchedIncidentSheet) return false;
     return (
-      s !== incidentSheet &&
       !lower.startsWith('all location') &&
       !lower.includes('uptime') &&
       !lower.startsWith('rca') &&
@@ -55,7 +80,7 @@ function detectSheets(workbookData) {
   return {
     incidentSheet,
     uptimeSheet,
-    locationSheets,
+    locationSheets: locationSheets.length > 0 ? locationSheets : sheets,
     allSheets: sheets,
   };
 }
@@ -70,7 +95,7 @@ function normalizeSiteName(site) {
   if (/guwahati|gau/i.test(lower)) return 'Guwahati';
   if (/hyd|hyderabad/i.test(lower)) return 'Hyderabad';
   if (/mohali|moh/i.test(lower)) return 'Mohali';
-  if (/mumbai|mumd|mumbai_dc/i.test(lower)) return 'Mumbai';
+  if (/mumbai|mumd|mumbai_dc|mumbai-dc/i.test(lower)) return 'Mumbai-DC';
   if (/nagpur|nag/i.test(lower)) return 'Nagpur';
   if (/noida/i.test(lower)) return 'Noida';
 
@@ -81,12 +106,8 @@ function isGenericLocation(loc) {
   if (!loc) return true;
   const str = String(loc).trim().toLowerCase();
   if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
-  if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
-  if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('july') || str.includes('august') || str.includes('september') || str.includes('report') || str.includes('compliance')) return true;
-
-  const norm = normalizeSiteName(str);
-  const validSites = ['Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Nagpur', 'Noida'];
-  if (!validSites.includes(norm)) return true;
+  if (/^raw$/i.test(str) || /^sheet\d*$/i.test(str) || /^sla$/i.test(str) || /^jfl$/i.test(str) || /^incident$/i.test(str)) return true;
+  if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
 
   return false;
 }
@@ -100,17 +121,23 @@ function mergeInventorySheets(workbookData, locationSheets) {
   locationSheets.forEach((sheet) => {
     const rows = workbookData[sheet] || [];
     rows.forEach((row, idx) => {
-      const serial = String(row['Serial No.'] || row['Serial No'] || row['SerialNo'] || row['Device Serial'] || row['DeviceID'] || '').trim();
+      const serial = String(
+        getColVal(row, [
+          'Serial No.', 'Serial No', 'SerialNo', 'Serial Number', 'SerialNumber', 'Serial_No', 'Serial_Number',
+          'Device Serial', 'Device Serial Number', 'Device Serial No', 'Device_Serial', 'DeviceID', 'Device ID',
+          'Serial', 'Serial #', 'Asset Tag', 'Asset Serial', 'Service Tag', 'MAC Address', 'Host', 'Hostname'
+        ])
+      ).trim();
       if (!serial) return;
 
-      const rawLoc = row['Location'] || sheet;
-      const normLoc = normalizeSiteName(rawLoc);
+      const rawLoc = getColVal(row, ['Location', 'Site', 'Site Name', 'SiteID', 'Site ID', 'Location Name', 'City', 'Branch', 'Store', 'Facility']);
+      const normLoc = rawLoc ? normalizeSiteName(rawLoc) : (isGenericLocation(sheet) ? 'Unknown' : normalizeSiteName(sheet));
 
-      const host = String(row['Hostname'] || row['Host Name'] || row['Device Hostname'] || '').trim();
-      const devType = String(row['Device Type'] || row['DeviceType'] || '').trim();
-      const rack = String(row['Rack no.'] || row['Rack'] || row['Rack Number'] || row['Rack No'] || row['Rack No.'] || row['RackID'] || '').trim();
-      const core = String(row['Core/Non Core'] || row['Core Non Core'] || '').trim();
-      const model = String(row['Model'] || '').trim();
+      const host = String(getColVal(row, ['Hostname', 'Host Name', 'Device Hostname', 'Host', 'Device Host', 'Device Name', 'Node Name', 'Name'])).trim();
+      const devType = String(getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Device_Type', 'Category', 'Hardware Type', 'Model Type'])).trim();
+      const rack = String(getColVal(row, ['Rack no.', 'Rack', 'Rack Number', 'Rack No', 'Rack No.', 'RackID', 'Rack ID'])).trim();
+      const core = String(getColVal(row, ['Core/Non Core', 'Core Non Core', 'Core_Non_Core', 'Core / Non Core', 'Core Status'])).trim();
+      const model = String(getColVal(row, ['Model', 'Model Name', 'Device Model', 'Hardware Model'])).trim();
 
       if (!deviceMap[serial]) {
         deviceMap[serial] = {
@@ -123,8 +150,8 @@ function mergeInventorySheets(workbookData, locationSheets) {
           Rack:       rack,
           CoreNonCore:core,
           Model:      model,
-          NetworkName:row['Network Name'] || '',
-          ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
+          NetworkName:getColVal(row, ['Network Name', 'NetworkName', 'Network']) || '',
+          ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Old Serial', 'Replaced Device', 'Replaced Serial No']) || '',
           __source:   row.__source || { file: 'inventory', sheet, row: idx + 2 },
         };
       } else {
@@ -195,52 +222,46 @@ function formatExcelDate(val) {
  */
 function parseIncidentSheet(rows) {
   return rows.map((row, idx) => {
-    // Ticket Number — Ticket-specific columns ONLY.
-    // Do NOT fall back to Incident Number columns here — separation is intentional.
     const ticketNo = String(
-      row['Ticket Number'] ??
-      row['TicketNumber'] ??
-      row['Ticket No'] ??
-      row['TicketNo'] ??
-      row['Ticket #'] ??
-      ''
+      getColVal(row, [
+        'Ticket Number', 'TicketNumber', 'Ticket No', 'TicketNo', 'Ticket #', 'Ticket', 'Ticket ID', 'TicketID', 'Ticket_Number', 'Case Number', 'Case ID', 'Ref No', 'Reference'
+      ])
     ).trim();
 
-    // Incident Number — Incident-specific columns with auto-generate fallback.
     const incidentId = String(
-      row['Incident Number'] ??
-      row['IncidentNumber'] ??
-      row['Incident No'] ??
-      row['IncidentNo'] ??
-      row['Incident ID'] ??
-      row['IncidentID'] ??
-      row['Number'] ??
-      row['ID'] ??
-      row['Incident #'] ??
-      `INC-${1000 + idx}`
+      getColVal(row, [
+        'Incident Number', 'IncidentNumber', 'Incident No', 'IncidentNo', 'Incident ID', 'IncidentID',
+        'Number', 'ID', 'Incident #', 'Incident', 'Incident_Number', 'Incident_ID'
+      ]) || `INC-${1000 + idx}`
     ).trim();
 
     const devId = String(
-      row['Device Serial'] ||
-      row['Serial/Subscription'] ||
-      row['Device Serial No'] ||
-      row['Device Serial Number'] ||
-      row['Serial No'] ||
-      row['Serial No.'] ||
-      row['DeviceID'] ||
-      ''
+      getColVal(row, [
+        'Device Serial', 'Serial/Subscription', 'Device Serial No', 'Device Serial Number', 'Serial No', 'Serial No.',
+        'DeviceID', 'Device ID', 'Serial', 'Serial Number', 'SerialNumber', 'Serial_No', 'Serial_Number',
+        'Device_Serial', 'Device Serial #', 'Asset Tag', 'Host', 'Hostname', 'Device Name', 'Device'
+      ])
     ).trim();
 
-    let rawLoc = row['Location'] || row['Site'] || row['SiteID'] || row['Site Name'] || row['Device Name'] || '';
-    if (rawLoc.toLowerCase().includes('raw') || rawLoc.toLowerCase().includes('sheet') || rawLoc.toLowerCase().includes('sla_compliance')) {
+    let rawLoc = getColVal(row, ['Location', 'Site', 'SiteID', 'Site ID', 'Site Name', 'Location Name', 'City', 'Branch', 'Store', 'Facility', 'Device Name']);
+    if (rawLoc && (rawLoc.toLowerCase().includes('raw') || rawLoc.toLowerCase().includes('sheet') || rawLoc.toLowerCase().includes('sla_compliance'))) {
       rawLoc = '';
     }
     const normLoc = normalizeSiteName(rawLoc);
 
+    const cat = String(getColVal(row, ['Category', 'Ticket Category', 'Type', 'Ticket Type', 'Class', 'Category Name'])).trim();
+    const desc = String(getColVal(row, ['Description', 'Short Description', 'Subject', 'Summary', 'Title', 'Incident Description'])).trim();
+    const rcaStr = String(getColVal(row, ['RCA 2', 'RCA', 'Root Cause', 'RCA Category', 'Root Cause Analysis', 'RCA Reason', 'Primary RCA'])).trim();
 
-    const cat = String(row['Category'] || row['Ticket Category'] || row['Type'] || row['Ticket Type'] || row['Class'] || '').trim();
-    const desc = String(row['Description'] || row['Short Description'] || row['Subject'] || row['Summary'] || '').trim();
-    const rcaStr = String(row['RCA 2'] || row['RCA'] || row['Root Cause'] || row['RCA Category'] || '').trim();
+    const openTimeRaw = getColVal(row, [
+      'Created Time', 'Open Time', 'OpenTime', 'Created Date', 'Open Date', 'Opened Date', 'Opened', 'Created',
+      'Incident Date', 'Date', 'Start Time', 'Start Date', 'Creation Date', 'Creation Time', 'Logged Date', 'Submit Date'
+    ]);
+
+    const resolvedTimeRaw = getColVal(row, [
+      'Resolved Time', 'Close Time', 'ResolvedTime', 'Resolved Date', 'Close Date', 'Closed Date', 'Closed Time',
+      'Resolved', 'Closed', 'Finish Time', 'Completion Date', 'End Time'
+    ]);
 
     const isCR = /change|change\s*request|^cr$|normal\s*change|standard\s*change|emergency\s*change/i.test(cat) ||
                  /change|change\s*request|^cr$/i.test(rcaStr) ||
@@ -251,82 +272,68 @@ function parseIncidentSheet(rows) {
       TicketNumber:   ticketNo,
       DeviceID:       devId,
       SerialNo:       devId,
-      Hostname:       row['Hostname'] || row['Device Name'] || row['Host Name'] || row['Device Hostname'] || row['Subject'] || '',
+      Hostname:       getColVal(row, ['Hostname', 'Device Name', 'Host Name', 'Device Hostname', 'Host', 'Subject']) || '',
       Location:       normLoc,
       SiteID:         normLoc,
-      DeviceType:     row['Device Type'] || row['DeviceType'] || '',
-      Rack:           row['Rack Number'] || row['Rack'] || '',
-      Priority:       row['Priority'] || row['Severity'] || '',
+      DeviceType:     getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Hardware Type']) || '',
+      Rack:           getColVal(row, ['Rack Number', 'Rack', 'Rack No', 'Rack ID']) || '',
+      Priority:       getColVal(row, ['Priority', 'Severity', 'Priority Level']) || '',
       RCA:            rcaStr || 'Unknown',
-      Status:         row['Status'] || row['Ticket Status'] || 'Closed',
+      Status:         getColVal(row, ['Status', 'Ticket Status', 'State', 'Incident Status']) || 'Closed',
       Category:       cat,
       Description:    desc,
       IsChangeRequest: isCR,
-      // SLA fields from Excel (used as fallback when we cannot compute resolution time)
-      ResolutionSLAStatusRaw: row['Resolution SLA Status'] || '',
-      ResponseSLAStatus:      row['Response SLA Status'] || '',
-      // Timestamps: keep raw Excel serial numbers so computeIncidentEnrichment can diff them.
-      // formatExcelDate() is only used for DISPLAY columns (CreatedTime).
-      CreatedTime:    formatExcelDate(row['Created Time'] || row['Open Time'] || row['OpenTime'] || ''),
-      OpenTime:       row['Created Time'] || row['Open Time'] || row['OpenTime'] || null,  // raw serial
-      // ResolvedTime: only true close/resolved timestamp columns (Excel date serial > 30000).
-      // 'Resolution Time (min)' is a duration column (minutes), NOT a timestamp — handled separately below.
-      ResolvedTime:   row['Resolved Time'] || row['Close Time'] || row['ResolvedTime'] || null,
-      // Resolution duration columns (already in minutes — direct use).
-      // IMPORTANT: Use ?? (nullish coalescing) NOT || so that 0 minutes is NOT treated as missing.
-      // || would convert 0 to '' which makes parseFloat return NaN, causing all SLA statuses to be null.
-      ActualResolutionMin: (
-        row['Total Proactive Downtime (Mins)- Actual resolution mint'] ??
-        row['Total Proactive Downtime (Mins)- Actual resolution mint '] ??
-        row['Actual Resolution Time (min)'] ??
-        row['Actual Resolution Time (min) '] ?? // trailing-space variant
-        row['ActualResolutionMin'] ??
-        row['Actual Resolution Time(min)'] ??
-        row['Actual Resolution Time'] ??
-        ''
-      ),
-      TotalResolutionMin: (
-        row['Total Resolution Time (min)'] ??
-        row['Total Resolution Time (min) '] ?? // trailing-space variant
-        row['Total Resolution Time(min)'] ??
-        row['Total Resolution Time'] ??
-        ''
-      ),
-      // 'Resolution Time (min)' raw — kept separately for the P4b disambiguation path.
-      // Also uses ?? to preserve 0-minute values.
-      ResolutionTimeMinRaw: (
-        row['Resolution Time (min)'] ??
-        row['Resolution Time (min) '] ??
-        row['Resolution Time(min)'] ??
-        row['Resolution Time (min2)'] ??
-        ''
-      ),
-      // Hold time — also nullish coalescing to preserve 0.
-      // JFL EXCEL PRIMARY: 'Total JFL Downtime (Mins)HOLD Minute' is the JFL-specific column
-      // containing on-hold duration. Multiple spelling variants are handled for robustness.
-      // Generic ServiceNow columns ('Time on Hold (min)' etc.) serve as fallbacks for other clients.
-      HoldTimeMin: (
-        row['Total JFL Downtime (Mins)HOLD Minute'] ??
-        row['Total JFL Downtime (Mins) HOLD Minute'] ??
-        row['Total JFL Downtime (Mins)HOLD Minutes'] ??
-        row['Total JFL Downtime (Mins) HOLD Minutes'] ??
-        row['Time on Hold (min)'] ??
-        row['Time on Hold (Minutes)'] ??
-        row['Time on Hold'] ??
-        row['Hold Time (min)'] ??
-        row['Hold Time'] ??
-        ''
-      ),
-      // Legacy direct-hours columns (some export formats)
-      DowntimeHours:       row['Downtime Hours'] ?? row['DowntimeHours'] ?? '',
-      OutageHours:         row['Outage Hours']   ?? row['OutageHours']   ?? '',
-      ResolutionTimeHours: row['Resolution Time (Hrs)'] ?? row['ResolutionTimeHours'] ?? '',
-      ReplacedSerial: row['Replaced Serial'] || row['Old Serial'] || row['Replaced Device'] || '',
-      NewSerial:      row['New Serial'] || row['Replacement Serial'] || '',
-      AccountName:    row['Account Name'] || row['AccountName'] || row['Customer Name'] || row['Customer'] || '',
-      ProactiveUptimePct:  row['Proactive -Uptime%'] || row['Proactive Uptime %'] || row['Average of Proactive -Uptime%'] || '',
-      JFLUptimePct:        row['JFL -Uptime %'] || row['JFL Uptime %'] || row['Average of JFL -Uptime %'] || '',
-      AgreedResolutionSLAMin: row['Agreed Resolution SLA (min)'] || '',
+      ResolutionSLAStatusRaw: getColVal(row, ['Resolution SLA Status', 'Resolution SLA', 'SLA Status']) || '',
+      ResponseSLAStatus:      getColVal(row, ['Response SLA Status', 'Response SLA']) || '',
+      CreatedTime:    formatExcelDate(openTimeRaw),
+      OpenTime:       openTimeRaw || null,
+      ResolvedTime:   resolvedTimeRaw || null,
+      ActualResolutionMin: getColVal(row, [
+        'Total Proactive Downtime (Mins)- Actual resolution mint',
+        'Total Proactive Downtime (Mins)- Actual resolution mint ',
+        'Actual Resolution Time (min)',
+        'Actual Resolution Time (min) ',
+        'ActualResolutionMin',
+        'Actual Resolution Time(min)',
+        'Actual Resolution Time',
+        'Actual Resolution (min)'
+      ]),
+      TotalResolutionMin: getColVal(row, [
+        'Total Resolution Time (min)',
+        'Total Resolution Time (min) ',
+        'Total Resolution Time(min)',
+        'Total Resolution Time',
+        'Resolution Time (min)',
+        'Resolution Time(min)'
+      ]),
+      ResolutionTimeMinRaw: getColVal(row, [
+        'Resolution Time (min)',
+        'Resolution Time (min) ',
+        'Resolution Time(min)',
+        'Resolution Time (min2)',
+        'Duration (min)'
+      ]),
+      HoldTimeMin: getColVal(row, [
+        'Total JFL Downtime (Mins)HOLD Minute',
+        'Total JFL Downtime (Mins) HOLD Minute',
+        'Total JFL Downtime (Mins)HOLD Minutes',
+        'Total JFL Downtime (Mins) HOLD Minutes',
+        'Time on Hold (min)',
+        'Time on Hold (Minutes)',
+        'Time on Hold',
+        'Hold Time (min)',
+        'Hold Time',
+        'On Hold Duration (min)'
+      ]),
+      DowntimeHours:       getColVal(row, ['Downtime Hours', 'DowntimeHours', 'Outage Hours']),
+      OutageHours:         getColVal(row, ['Outage Hours', 'OutageHours']),
+      ResolutionTimeHours: getColVal(row, ['Resolution Time (Hrs)', 'ResolutionTimeHours', 'Duration Hours']),
+      ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Old Serial', 'Replaced Device', 'Replaced Serial No']),
+      NewSerial:      getColVal(row, ['New Serial', 'Replacement Serial', 'New Serial No']),
+      AccountName:    getColVal(row, ['Account Name', 'AccountName', 'Customer Name', 'Customer', 'Account']),
+      ProactiveUptimePct:  getColVal(row, ['Proactive -Uptime%', 'Proactive Uptime %', 'Average of Proactive -Uptime%']),
+      JFLUptimePct:        getColVal(row, ['JFL -Uptime %', 'JFL Uptime %', 'Average of JFL -Uptime %']),
+      AgreedResolutionSLAMin: getColVal(row, ['Agreed Resolution SLA (min)', 'Agreed SLA (min)']),
       __source:       row.__source,
     };
   });
@@ -397,7 +404,50 @@ function analyzeWorkbookSchema(filePath) {
     };
   });
 
-  // Data schema detection
+  // Schema classification: determine whether workbook is an Inventory file or Incident file
+  const firstSheetCols = sheetsInfo[0]?.columns || [];
+  const isInventoryFile = firstSheetCols.some((c) => /serial|model|hostname|rack|core/i.test(c)) &&
+    !firstSheetCols.some((c) => /ticket|resolution|downtime|sla/i.test(c));
+
+  if (isInventoryFile) {
+    const devices = mergeInventorySheets(wb, detected.locationSheets);
+    const totalDevices = devices.length;
+    const apCount = devices.filter((d) => /ap|access/i.test(d.DeviceType || '')).length;
+    const swCount = devices.filter((d) => /sw|switch/i.test(d.DeviceType || '')).length;
+    const coreCount = devices.filter((d) => /core/i.test(d.CoreNonCore || '') && !/non/i.test(d.CoreNonCore || '')).length;
+    const siteNames = [...new Set(devices.map((d) => d.Location).filter(Boolean))];
+
+    return {
+      fileName,
+      fileSizeMB: `${fileSizeMB} MB`,
+      fileType: 'Inventory Workbook',
+      analyzedAt: new Date().toISOString(),
+      totalSheets: wb.__sheetNames.length,
+      sheetNames: wb.__sheetNames,
+      detectedRoles: {
+        locationSheets: detected.locationSheets,
+      },
+      sheetsInfo,
+      metricsSummary: {
+        totalDevicesCount: totalDevices,
+        accessPointsCount: apCount,
+        switchesCount: swCount,
+        coreDevicesCount: coreCount,
+        locationsDetectedCount: siteNames.length,
+        detectedLocations: siteNames,
+      },
+      columnMappings: [
+        { field: 'Device Serial Number', mappedColumn: firstSheetCols.find((c) => /serial/i.test(c)) || 'N/A' },
+        { field: 'Faulty / Replaced Serial', mappedColumn: firstSheetCols.find((c) => /faulty|replaced/i.test(c)) || 'N/A' },
+        { field: 'Location / Site', mappedColumn: firstSheetCols.find((c) => /location|site|city/i.test(c)) || 'N/A' },
+        { field: 'Device Type', mappedColumn: firstSheetCols.find((c) => /type|category/i.test(c)) || 'N/A' },
+        { field: 'Rack Number', mappedColumn: firstSheetCols.find((c) => /rack/i.test(c)) || 'N/A' },
+        { field: 'Core / Non-Core', mappedColumn: firstSheetCols.find((c) => /core/i.test(c)) || 'N/A' },
+      ],
+    };
+  }
+
+  // Incident file schema analysis
   const primarySheetName = detected.incidentSheet || wb.__sheetNames[0];
   const primaryRows = wb[primarySheetName] || [];
   const parsedIncidents = parseIncidentSheet(primaryRows);
@@ -421,6 +471,7 @@ function analyzeWorkbookSchema(filePath) {
   return {
     fileName,
     fileSizeMB: `${fileSizeMB} MB`,
+    fileType: 'Incident / SLA Compliance Workbook',
     analyzedAt: new Date().toISOString(),
     totalSheets: wb.__sheetNames.length,
     sheetNames: wb.__sheetNames,

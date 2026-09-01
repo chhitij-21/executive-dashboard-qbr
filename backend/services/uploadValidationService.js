@@ -72,7 +72,10 @@ function validateUpload(incidentInput, inventoryInput) {
 
   // Column verification
   const firstRow = mainRows[0];
-  const requiredCandidates = ['DeviceID', 'Device ID', 'Serial No.', 'Serial No', 'Location', 'Incident Number'];
+  const requiredCandidates = [
+    'DeviceID', 'Device ID', 'Serial No.', 'Serial No', 'Location', 'Incident Number',
+    'Serial', 'Ticket', 'Number', 'ID', 'Site', 'Hostname', 'Host', 'Asset', 'Tag', 'Ref'
+  ];
   const hasIdentifierCol = Object.keys(firstRow).some((k) =>
     requiredCandidates.some((c) => k.toLowerCase().includes(c.toLowerCase()))
   );

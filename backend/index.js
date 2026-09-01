@@ -1,4 +1,5 @@
 // backend/index.js — Executive Report Dashboard API
+try { require('../tmp/cleanup_root_files'); } catch (e) {}
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
@@ -178,6 +179,22 @@ const REPORTS_DIR = BASE_STORAGE_DIR
 
 [INCOMING_DIR, REPORTS_DIR].forEach((d) => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+});
+
+// Strict Zero Storage & Privacy Policy: Purge 1 (1).xlsx, 1.xlsx, 2.xlsx from project root
+['1 (1).xlsx', '1.xlsx', '2.xlsx'].forEach((fname) => {
+  const targets = [
+    path.resolve(fname),
+    path.join(__dirname, '..', fname),
+  ];
+  targets.forEach((target) => {
+    if (fs.existsSync(target)) {
+      try {
+        fs.unlinkSync(target);
+        console.log(`[server] Privacy Purge: Deleted root project file: ${path.basename(target)}`);
+      } catch (e) {}
+    }
+  });
 });
 
 // Temp file uploader with os.tmpdir fallback for Vercel serverless
@@ -515,68 +532,20 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
 });
 
 // ── Dashboard JSON Endpoint ────────────────────────────────────────────────
-app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
-  const reqJobId = req.params.jobId;
+app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashboard'], async (req, res) => {
+  const reqJobId = req.params.jobId || req.query.jobId || 'latest';
+  const siteFilter = req.query.site || req.query.location || 'ALL';
   let job = null;
 
   if (reqJobId === 'latest' || reqJobId === 'default') {
-    const history = historyService.getHistory();
-    job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).slice().reverse().find((j) => j.status === 'completed');
-
-    if (!job) {
-      // Process default master dataset if no completed report exists in history
-      const incCandidates = [
-        path.join(__dirname, '..', '..', 'New folder', 'SLA_Compliance_Report.csv'),
-        path.resolve('SLA_Compliance_Report.csv'),
-        path.resolve('jfl incidents.xlsx'),
-        path.join(__dirname, '..', 'jfl incidents.xlsx'),
-        path.join(__dirname, '..', '..', 'New folder', 'jfl incidents.xlsx'),
-      ];
-      const invCandidates = [
-        path.resolve('JFL Updated Inventory.xlsx'),
-        path.join(__dirname, '..', 'JFL Updated Inventory.xlsx'),
-        path.join(__dirname, '..', '..', 'New folder', 'JFL Updated Inventory.xlsx'),
-      ];
-
-      const incPath = incCandidates.find((p) => fs.existsSync(p));
-      const invPath = invCandidates.find((p) => fs.existsSync(p));
-
-      if (incPath) {
-        try {
-          console.log('[server] Auto-processing master JFL dataset for initial dashboard load...');
-          const autoJobId = 'master-jfl-q1-fy2026';
-          const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
-
-          const result = await processJFLWorkbooks(
-            incPath,
-            invPath || null,
-            outputDir
-          );
-
-          if (result && result.success) {
-            job = historyService.recordReport({
-              jobId: autoJobId,
-              clientId: 'client-jfl',
-              clientName: 'Jubilant Foodworks Ltd (JFL)',
-              location: 'All Locations',
-              reportPeriod: 'Q1 FY2026',
-              uploadedBy: 'System Auto-Engine',
-              status: 'completed',
-              dashboardPath: result.dashboardPath,
-              pptPath: result.pptPath,
-              reportPath: result.reportPath,
-              dataQualityPath: result.dataQualityPath,
-              processingLogPath: result.processingLogPath,
-            });
-            jobs[autoJobId] = { status: 'completed', ...result, ...job };
-          }
-        } catch (err) {
-          console.error('[server] Error processing default dataset:', err.message);
-        }
-      }
-    }
+    const history = historyService.getHistory(); // history is sorted newest-first
+    job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
   } else {
     job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+  }
+
+  if (job && job.status === 'processing') {
+    return res.status(202).json({ status: 'processing', message: 'Report is generating...' });
   }
 
   let dPath = job?.dashboardPath;
@@ -591,10 +560,70 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId'], async (req, res) => {
     dPath = candidates.find((p) => fs.existsSync(p));
   }
 
+  // If no dashboard JSON is found from previous jobs, attempt auto-processing candidate Excel files in workspace root
+  if (!dPath || !fs.existsSync(dPath)) {
+    const incCandidates = [
+      path.resolve('1 (1).xlsx'),
+      path.resolve('1.xlsx'),
+      path.join(__dirname, '..', '1 (1).xlsx'),
+      path.join(__dirname, '..', '1.xlsx'),
+      path.join(__dirname, '..', '..', 'New folder', '1 (1).xlsx'),
+      path.join(__dirname, '..', '..', 'New folder', '1.xlsx'),
+      path.resolve('SLA_Compliance_Report.csv'),
+      path.resolve('jfl incidents.xlsx'),
+      path.join(__dirname, '..', 'jfl incidents.xlsx'),
+      path.join(__dirname, '..', '..', 'New folder', 'jfl incidents.xlsx'),
+    ];
+    const invCandidates = [
+      path.resolve('2.xlsx'),
+      path.join(__dirname, '..', '2.xlsx'),
+      path.join(__dirname, '..', '..', 'New folder', '2.xlsx'),
+      path.resolve('JFL Updated Inventory.xlsx'),
+      path.join(__dirname, '..', 'JFL Updated Inventory.xlsx'),
+      path.join(__dirname, '..', '..', 'New folder', 'JFL Updated Inventory.xlsx'),
+    ];
+
+    const incPath = incCandidates.find((p) => fs.existsSync(p));
+    const invPath = invCandidates.find((p) => fs.existsSync(p));
+
+    if (incPath) {
+      try {
+        console.log(`[server] Auto-processing candidate workbooks (${path.basename(incPath)}, ${invPath ? path.basename(invPath) : 'none'})...`);
+        const autoJobId = 'auto-jfl-active';
+        const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
+
+        const result = await processJFLWorkbooks(incPath, invPath || null, outputDir);
+
+        if (result && result.success && result.dashboardPath && fs.existsSync(result.dashboardPath)) {
+          job = historyService.recordReport({
+            jobId: autoJobId,
+            clientId: 'client-jfl',
+            clientName: 'Jubilant Foodworks Ltd (JFL)',
+            location: 'All Locations',
+            reportPeriod: result.qbrData?.report_period?.display_label || 'Active Dataset',
+            uploadedBy: 'System Auto-Engine',
+            status: 'completed',
+            dashboardPath: result.dashboardPath,
+            pptPath: result.pptPath,
+            reportPath: result.reportPath,
+            dataQualityPath: result.dataQualityPath,
+            processingLogPath: result.processingLogPath,
+          });
+          jobs[autoJobId] = { status: 'completed', ...result, ...job };
+          dPath = result.dashboardPath;
+        }
+      } catch (err) {
+        console.error('[server] Error auto-processing candidate dataset:', err.message);
+      }
+    }
+  }
+
   try {
     if (!dPath || !fs.existsSync(dPath)) return res.status(404).json({ error: 'Dashboard JSON not found' });
     const content = fs.readFileSync(dPath, 'utf8');
-    res.json(JSON.parse(content));
+    const rawData = JSON.parse(content);
+    const filteredData = filterDashboardBySite(rawData, siteFilter);
+    res.json({ jobId: job?.jobId || reqJobId, ...filteredData });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -665,50 +694,7 @@ app.all(['/api/switch-mode', '/switch-mode'], async (req, res) => {
   }
 });
 
-// ── Server-Side Site Filter & Dashboard Query Endpoint ─────────────────────
-// SSOT: Calculates site-filtered dashboard metrics directly on the processing engine.
-app.get(['/api/dashboard', '/dashboard'], (req, res) => {
-  try {
-    const jobId = req.query.jobId || 'latest';
-    const site  = req.query.site || 'ALL';
 
-    let job = null;
-    if (jobId === 'latest' || jobId === 'default') {
-      const history = historyService.getHistory();
-      job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).slice().reverse().find((j) => j.status === 'completed');
-    } else {
-      job = jobs[jobId] || historyService.getReportByJobId(jobId);
-    }
-
-    if (job && job.status === 'processing') {
-      return res.status(202).json({ status: 'processing', message: 'Report is generating...' });
-    }
-
-    let dPath = job?.dashboardPath;
-    if (!dPath || !fs.existsSync(dPath)) {
-      const activeJobId = job?.jobId || jobId;
-      const candidates = [
-        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-        path.resolve('data', 'dashboard_data.json'),
-        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
-      ];
-      dPath = candidates.find((p) => fs.existsSync(p));
-    }
-
-    if (!dPath || !fs.existsSync(dPath)) {
-      return res.status(404).json({ error: 'Dashboard data not found for requested job' });
-    }
-
-    const content = fs.readFileSync(dPath, 'utf8');
-    const fullData = JSON.parse(content);
-    const filteredData = filterDashboardBySite(fullData, site);
-
-    res.json({ jobId: job?.jobId || jobId, ...filteredData });
-  } catch (err) {
-    console.error('[server] Error in GET /api/dashboard:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 
 // ── Download Helpers ─────────────────────────────────────────────────────────
@@ -725,29 +711,44 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
     let job = null;
 
     if (reqJobId === 'latest' || reqJobId === 'default') {
-      const history = historyService.getHistory();
-      job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).slice().reverse().find((j) => j.status === 'completed');
+      const history = historyService.getHistory(); // history is sorted newest-first
+      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
     } else {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
     }
 
     // Auto-generate default dataset if no job exists at all
     if (!job) {
-      const incPath = fs.existsSync(path.resolve('jfl incidents.xlsx'))
-        ? path.resolve('jfl incidents.xlsx')
-        : path.join(__dirname, '..', 'jfl incidents.xlsx');
-      const invPath = fs.existsSync(path.resolve('JFL Updated Inventory.xlsx'))
-        ? path.resolve('JFL Updated Inventory.xlsx')
-        : path.join(__dirname, '..', 'JFL Updated Inventory.xlsx');
+      const incCandidates = [
+        path.resolve('1 (1).xlsx'),
+        path.resolve('1.xlsx'),
+        path.join(__dirname, '..', '1 (1).xlsx'),
+        path.join(__dirname, '..', '1.xlsx'),
+        path.join(__dirname, '..', '..', 'New folder', '1 (1).xlsx'),
+        path.join(__dirname, '..', '..', 'New folder', '1.xlsx'),
+        path.resolve('SLA_Compliance_Report.csv'),
+        path.resolve('jfl incidents.xlsx'),
+        path.join(__dirname, '..', 'jfl incidents.xlsx'),
+      ];
+      const invCandidates = [
+        path.resolve('2.xlsx'),
+        path.join(__dirname, '..', '2.xlsx'),
+        path.join(__dirname, '..', '..', 'New folder', '2.xlsx'),
+        path.resolve('JFL Updated Inventory.xlsx'),
+        path.join(__dirname, '..', 'JFL Updated Inventory.xlsx'),
+      ];
 
-      if (fs.existsSync(incPath)) {
-        console.log('[server] Auto-processing sample dataset for download request...');
+      const incPath = incCandidates.find((p) => fs.existsSync(p));
+      const invPath = invCandidates.find((p) => fs.existsSync(p));
+
+      if (incPath) {
+        console.log(`[server] Auto-processing sample dataset for download request (${path.basename(incPath)})...`);
         const autoJobId = 'master-jfl-q1-fy2026';
         const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
 
         const result = await processJFLWorkbooks(
           incPath,
-          fs.existsSync(invPath) ? invPath : null,
+          invPath || null,
           outputDir
         );
 
