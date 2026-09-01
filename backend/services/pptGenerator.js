@@ -379,13 +379,13 @@ function addHeader(pres, slide, title, subtitle, slideNumber) {
 
   slide.addText(title, {
     x: 0.35, y: 0.06, w: 9.5, h: 0.44,
-    fontSize: 28, bold: true, color: C.TEXT_LIGHT,
-    fontFace: C.FONT_PRIMARY, charSpacing: 0.5,
+    fontSize: 26, bold: true, color: C.TEXT_LIGHT,
+    fontFace: C.FONT_PRIMARY,
   });
 
   slide.addText(subtitle, {
     x: 0.35, y: 0.52, w: 9.5, h: 0.28,
-    fontSize: 14, color: 'A8C4DC',
+    fontSize: 13, color: 'A8C4DC',
     fontFace: C.FONT_PRIMARY,
   });
 
@@ -427,11 +427,11 @@ function addKpiCard(slide, x, y, w, h, label, value, color, bgColor) {
   slide.addText(String(value), {
     x: x + 0.05, y: y + 0.12, w: w - 0.1, h: h * 0.55,
     fontSize: h > 1.1 ? 20 : 16, bold: true,
-    color: color || C.BLUE, align: 'center', fontFace: 'Calibri',
+    color: color || C.BLUE, align: 'center', fontFace: C.FONT_PRIMARY,
   });
   slide.addText(label, {
     x: x + 0.05, y: y + h * 0.62, w: w - 0.1, h: h * 0.32,
-    fontSize: 8.5, color: C.TEXT_MUTED, align: 'center', fontFace: 'Calibri',
+    fontSize: 8.5, color: C.TEXT_MUTED, align: 'center', fontFace: C.FONT_PRIMARY,
     wrap: true,
   });
 }
@@ -444,12 +444,13 @@ function addSectionDivider(slide, y, label) {
   slide.addText(label.toUpperCase(), {
     x: 0.55, y: y + 0.04, w: 12.0, h: 0.24,
     fontSize: 9, bold: true, color: C.TEXT_LIGHT,
-    fontFace: 'Calibri', charSpacing: 1.2,
+    fontFace: C.FONT_PRIMARY,
   });
 }
 
 function addNarrativeBox(slide, y, bullets, title) {
-  const boxH = 0.22 * bullets.length + 0.52;
+  const maxBullets = bullets.slice(0, 3);
+  const boxH = Math.min(1.2, 0.22 * maxBullets.length + 0.45);
   slide.addShape('roundRect', {
     x: 0.35, y, w: 12.63, h: boxH,
     fill: { color: C.BLUE_LIGHT },
@@ -462,12 +463,12 @@ function addNarrativeBox(slide, y, bullets, title) {
   });
   slide.addText(title || 'AI Executive Insight', {
     x: 0.55, y: y + 0.06, w: 12.0, h: 0.28,
-    fontSize: 9, bold: true, color: C.NAVY, fontFace: 'Calibri',
+    fontSize: 9, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY,
   });
-  bullets.forEach((b, i) => {
+  maxBullets.forEach((b, i) => {
     slide.addText(`• ${b}`, {
       x: 0.55, y: y + 0.36 + i * 0.22, w: 12.0, h: 0.22,
-      fontSize: 8.5, color: C.TEXT_MID, fontFace: 'Calibri', wrap: true,
+      fontSize: 8.5, color: C.TEXT_MID, fontFace: C.FONT_PRIMARY, wrap: true,
     });
   });
 }
@@ -571,57 +572,28 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Slide 13: Risk Assessment
   buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown);
 
-  // Dynamic Report Generation based on site operational health (Master Prompt Standard)
+  // Per-site 3-slide suite for ALL sites (Overview, Operations, Tickets & RCA)
   TARGET_SITES.forEach((siteKey, siteIdx) => {
     const siteData = findSite(siteSummary, siteKey);
     const siteSws  = siteSwsMap[siteKey]  || [];
     const siteIncs = siteIncsMap[siteKey] || [];
     const siteAps  = siteApsMap[siteKey]  || [];
-    const hScore   = parseFloat(siteData?.healthScore || 100);
 
-    if (options.dynamicSiteSlides !== false) {
-      if (hScore >= 95 || siteIncs.length === 0) {
-        // Healthy Site (Score >= 95): 1 concise slide
-        buildHealthySiteSlide(pres, siteKey, siteData, siteSws, siteAps, siteIdx + 1);
-      } else if (hScore >= 85) {
-        // Medium Risk Site (85 <= Score < 95): 2 slides
-        buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
-        buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
-      } else if (hScore >= 70) {
-        // High Risk Site (70 <= Score < 85): 3 slides
-        buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
-        buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
-        buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
-      } else {
-        // Critical Site (Score < 70): 4 slides
-        buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
-        buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
-        buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
-        buildCriticalSiteDeepDiveSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
-      }
-    } else {
-      // Fixed 3-slide mode per site
-      buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
-      buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
-      buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
-    }
+    buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
+    buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
+    buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
   });
 
-  // Slide 38: AI Recommendations
+  // AI Recommendations
   buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakdown);
 
-  // Slide 39: Action Plan
+  // Action Plan
   buildActionPlanSlide(pres, exec, siteSummary, incidents);
 
-  // Appendix Section (Slides 40-44)
-  buildAppendixCoverSlide(pres, exec);
-  buildAppendixDeviceInventorySlide(pres, devices);
-  buildAppendixSwitchInventorySlide(pres, devices);
-  buildAppendixRackwiseUptimeSlide(pres, switchAn.rackwiseUptime || switchAn.expandedRackwiseUptime || []);
-  buildAppendixAPInventorySlide(pres, devices);
-  buildAppendixIncidentRecordsSlide(pres, incidents);
+  // Appendix Section (Single Data Reference Notice Slide — Rule 1)
+  buildAppendixNoticeSlide(pres, exec);
 
-  // Slide 45: Thank You
+  // Thank You Slide
   buildThankYouSlide(pres, exec);
 
   await pres.writeFile({ fileName: outputPath });
@@ -1558,28 +1530,29 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum) {
   highlights.slice(0, 3).forEach((h, i) => {
     s.addShape('roundRect', { x: 0.45, y: 3.95 + i * 0.44, w: 5.6, h: 0.38, fill: { color: C.GREEN_LIGHT }, line: { color: C.GREEN, pt: 0.5 }, rectRadius: 0.05 });
     s.addShape('rect', { x: 0.45, y: 3.95 + i * 0.44, w: 0.08, h: 0.38, fill: { color: C.GREEN } });
-    s.addText(h, { x: 0.65, y: 3.98 + i * 0.44, w: 5.3, h: 0.32, fontSize: 10, color: '14532D', fontFace: C.FONT_PRIMARY, margin: [5, 5, 5, 5] });
+    s.addText(h, { x: 0.65, y: 3.98 + i * 0.44, w: 5.3, h: 0.32, fontSize: 9.5, color: '14532D', fontFace: C.FONT_PRIMARY, margin: [5, 5, 5, 5] });
   });
 
   // Risks (Right 55% column)
   addSectionDivider(s, 3.55, '');
   s.addShape('rect', { x: 6.35, y: 3.55, w: 6.53, h: 0.32, fill: { color: C.RED } });
-  s.addText('KEY RISKS', { x: 6.45, y: 3.59, w: 6.3, h: 0.24, fontSize: 18, bold: true, color: C.TEXT_LIGHT, fontFace: C.FONT_PRIMARY, charSpacing: 1.2 });
+  s.addText('KEY RISKS', { x: 6.45, y: 3.59, w: 6.3, h: 0.24, fontSize: 9, bold: true, color: C.TEXT_LIGHT, fontFace: C.FONT_PRIMARY });
 
   risks.slice(0, 3).forEach((r, i) => {
     s.addShape('roundRect', { x: 6.35, y: 3.95 + i * 0.44, w: 6.53, h: 0.38, fill: { color: C.RED_LIGHT }, line: { color: C.RED, pt: 0.5 }, rectRadius: 0.05 });
     s.addShape('rect', { x: 6.35, y: 3.95 + i * 0.44, w: 0.08, h: 0.38, fill: { color: C.RED } });
-    s.addText(r, { x: 6.55, y: 3.98 + i * 0.44, w: 6.25, h: 0.32, fontSize: 10, color: '7F1D1D', fontFace: C.FONT_PRIMARY, margin: [5, 5, 5, 5] });
+    s.addText(r, { x: 6.55, y: 3.98 + i * 0.44, w: 6.25, h: 0.32, fontSize: 9.5, color: '7F1D1D', fontFace: C.FONT_PRIMARY, margin: [5, 5, 5, 5] });
   });
 
-  // AI Site Summary — use primaryRcaSwitches (SSOT canonical) first
-  const topRca = site.primaryRcaSwitches || site.primaryRca || 'None';
+  // AI Site Summary — explicitly display primaryRca fields
+  const topRcaSw = site.primaryRcaSwitches || site.primaryRca || 'Stable Operations (No Incidents)';
+  const topRcaAp = site.primaryRcaAPs || 'Stable Operations (No Incidents)';
   const aiSummary = [
-    `${site.siteId || siteKey} operates ${fmt(site.deviceCount)} active devices (${fmt(site.switchCount)} switches, ${fmt(site.apCount)} APs) in the current reporting period.`,
+    `${site.siteId || siteKey} operates ${fmt(site.deviceCount)} active devices (${fmt(site.switchCount)} switches, ${fmt(site.apCount)} APs).`,
     `JFL Switch Uptime: ${pct(site.jflSwitchUptime || site.switchUptime)} — ${siteJflUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
-    siteIncs.length > 0 ? `${siteIncs.length} incidents recorded; primary root cause: ${topRca}.` : `Zero incidents recorded — full operational SLA compliance maintained.`,
+    `Primary RCA Drivers: Switches [${topRcaSw}] | APs [${topRcaAp}].`,
   ];
-  addNarrativeBox(s, 5.2, aiSummary, `AI Site Summary — ${site.siteId || siteKey}`);
+  addNarrativeBox(s, 5.4, aiSummary, `AI Site Summary — ${site.siteId || siteKey}`);
 }
 
 function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAps, siteNum) {
@@ -1588,7 +1561,7 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s,
     `${site.siteId || siteKey}  —  OPERATIONAL ANALYTICS`,
-    `Site Review ${siteNum} of 8  ·  Switch Uptime, AP Distribution & Incident Analysis`,
+    `Site Review ${siteNum} of 8  ·  Expanded Switch Uptime Summary & RCA Drivers`,
     _slideNum
   );
 
@@ -1603,54 +1576,70 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   ];
   kpis.forEach((k, i) => addKpiCard(s, 0.45 + i * 3.22, 1.05, 3.05, 1.0, k.label, k.value, k.color));
 
-  // Switch uptime table (top 12)
-  addSectionDivider(s, 2.18, 'Switch Uptime Report (Top 12)');
-  const SW_COL_W = [0.8, 3.3, 2.8, 1.6, 2.45, 1.48];
-  const swHeaders = [
-    th('#', 'center'), th('Hostname', 'left'), th('Serial No.', 'left'),
-    th('Rack', 'center'), th('Uptime %', 'center'), th('Status', 'center'),
+  // Expanded Rack-wise Switch Uptime Summary Table
+  addSectionDivider(s, 2.18, 'Expanded Rack-wise Switch Uptime Summary');
+
+  // Sort/Group siteSws by rack
+  const rackMap = {};
+  siteSws.forEach(sw => {
+    const rack = String(sw.Rack || 'Main Rack').trim();
+    if (!rackMap[rack]) rackMap[rack] = [];
+    rackMap[rack].push(sw);
+  });
+
+  const sortedRacks = Object.keys(rackMap).sort();
+  const expandedRows = [];
+  let currentRackNum = 1;
+
+  sortedRacks.forEach((rack) => {
+    const swList = rackMap[rack];
+    swList.forEach((sw, devIdx) => {
+      const rawUp = sw.__effectiveUptime !== undefined ? sw.__effectiveUptime : (sw.jflUptime ?? 100);
+      const upNum = parseFloat(rawUp);
+      const is100 = upNum >= 100;
+      const isFirstInRack = devIdx === 0;
+
+      expandedRows.push([
+        td(isFirstInRack ? String(currentRackNum) : '', rowFill(expandedRows.length), { align: 'center', bold: true, color: C.TEXT_MUTED, fontSize: 9, margin: [5, 5, 5, 5] }),
+        td(rack, rowFill(expandedRows.length), { color: C.TEXT_DARK, fontSize: 9, margin: [5, 5, 5, 5] }),
+        td(sw.SerialNo || sw.DeviceID || 'N/A', rowFill(expandedRows.length), { color: C.BLUE, fontSize: 8.5, bold: true, wrap: true, margin: [5, 5, 5, 5] }),
+        td(`${upNum.toFixed(2)}%`, rowFill(expandedRows.length), { align: 'center', bold: true, color: uptimeColor(upNum), fontSize: 9, margin: [5, 5, 5, 5] }),
+        td(is100 ? 'Stable Operations (100% Uptime)' : 'Operational', rowFill(expandedRows.length), { align: 'center', bold: true, color: is100 ? C.GREEN : C.AMBER, fontSize: 8.5, margin: [5, 5, 5, 5] }),
+      ]);
+    });
+    currentRackNum++;
+  });
+
+  const headers = [
+    th('S.No.', 'center'), th('RACK NUMBER', 'left'), th('SERIAL NUMBER(S)', 'left'),
+    th('MONTHLY UPTIME %', 'center'), th('OPERATING STATUS', 'center'),
   ];
-  const swRows = siteSws.slice(0, 12).map((sw, rIdx) => {
-    const rawUp  = sw.__effectiveUptime !== undefined ? sw.__effectiveUptime : 100;
-    const upStr  = `${parseFloat(rawUp).toFixed(2)}%`;
-    const fill   = rowFill(rIdx);
-    const slaOk  = parseFloat(rawUp) >= SLA_TARGET;
-    return [
-      td(String(rIdx + 1), fill, { align: 'center', color: C.TEXT_MUTED }),
-      td(sw.Hostname || sw.DeviceID || 'N/A', fill, { bold: true, color: C.TEXT_DARK }),
-      td(sw.DeviceID || sw.SerialNo || 'N/A', fill, { color: C.TEXT_MUTED, fontSize: 9 }),
-      td(sw.Rack || 'N/A', fill, { align: 'center', color: C.TEXT_DARK }),
-      td(upStr, fill, { bold: true, color: uptimeColor(rawUp), align: 'center' }),
-      td(slaOk ? 'OK' : 'BREACH', fill, { bold: true, align: 'center', color: slaOk ? C.GREEN : C.RED }),
-    ];
-  });
+
+  const COL_W = [0.9, 2.6, 3.4, 2.2, 3.33];
+
   const fallbackSw = [[
-    td('—', 'FFFFFF', { align: 'center' }), td('No switches registered', 'FFFFFF', {}),
-    td('N/A', 'FFFFFF', {}), td('N/A', 'FFFFFF', { align: 'center' }),
-    td('100.00%', 'FFFFFF', { align: 'center', color: C.GREEN }), td('OK', 'FFFFFF', { align: 'center', color: C.GREEN }),
+    td('1', 'FFFFFF', { align: 'center', margin: [5, 5, 5, 5] }),
+    td('Main Rack', 'FFFFFF', { margin: [5, 5, 5, 5] }),
+    td('N/A', 'FFFFFF', { margin: [5, 5, 5, 5] }),
+    td('100.00%', 'FFFFFF', { align: 'center', color: C.GREEN, margin: [5, 5, 5, 5] }),
+    td('Stable Operations (100% Uptime)', 'FFFFFF', { align: 'center', color: C.GREEN, margin: [5, 5, 5, 5] }),
   ]];
-  s.addTable([swHeaders, ...(swRows.length > 0 ? swRows : fallbackSw)], {
-    x: 0.45, y: 2.58, w: 12.43, colW: SW_COL_W,
-    fontSize: 9, rowH: 0.36, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+
+  s.addTable([headers, ...(expandedRows.length > 0 ? expandedRows.slice(0, 7) : fallbackSw)], {
+    x: 0.45, y: 2.58, w: 12.43, colW: COL_W,
+    fontSize: 9, rowH: 0.55, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
 
-  // RCA breakdown at bottom
-  const rcaCounts = {};
-  siteIncs.forEach(i => { const r = i.RCA || 'Unknown'; rcaCounts[r] = (rcaCounts[r] || 0) + 1; });
-  const siteRcas = Object.entries(rcaCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  // Primary RCA Drivers at bottom
+  const topRcaSw = site.primaryRcaSwitches || site.primaryRca || 'Stable Operations (No Incidents)';
+  const topRcaAp = site.primaryRcaAPs || 'Stable Operations (No Incidents)';
 
-  addSectionDivider(s, 6.8, 'Site RCA Distribution');
-  siteRcas.forEach((rca, i) => {
-    const pctVal = siteIncs.length > 0 ? ((rca[1] / siteIncs.length) * 100).toFixed(1) : '0';
-    const barW   = (rca[1] / Math.max(1, siteIncs.length)) * 4.5;
-    const y = 7.15;
-    if (i < 4) {
-      s.addText(`${rca[0].substring(0, 18)}: ${rca[1]} (${pctVal}%)`, {
-        x: 0.45 + i * 3.22, y: 7.16, w: 3.05, h: 0.22,
-        fontSize: 8, color: C.TEXT_DARK, fontFace: 'Calibri',
-      });
-    }
-  });
+  addSectionDivider(s, 6.55, 'Primary Root Cause Drivers');
+  s.addShape('roundRect', { x: 0.45, y: 6.9, w: 6.0, h: 0.28, fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 0.5 }, rectRadius: 0.04 });
+  s.addText(`Primary RCA (Switches): ${topRcaSw}`, { x: 0.55, y: 6.94, w: 5.8, h: 0.2, fontSize: 8.5, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY });
+
+  s.addShape('roundRect', { x: 6.88, y: 6.9, w: 6.0, h: 0.28, fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 0.5 }, rectRadius: 0.04 });
+  s.addText(`Primary RCA (APs): ${topRcaAp}`, { x: 6.98, y: 6.94, w: 5.8, h: 0.2, fontSize: 8.5, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY });
 }
 
 function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteNum) {
@@ -1659,7 +1648,7 @@ function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteN
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s,
     `${site.siteId || siteKey}  —  INCIDENT & TICKET REVIEW`,
-    `Site Review ${siteNum} of 8  ·  Top 10 Tickets, RCA Summary & Recommended Actions`,
+    `Site Review ${siteNum} of 8  ·  Top Tickets, RCA Breakdown & Recommended Actions`,
     _slideNum
   );
 
@@ -1668,7 +1657,6 @@ function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteN
   const closedTkts = totalTkts - openTkts;
   const p1Tkts     = siteIncs.filter(i => /p1|critical/i.test(i.Priority || '')).length;
 
-  // KPI row
   const kpis = [
     { label: 'Total Tickets',  value: fmt(totalTkts),  color: C.NAVY  },
     { label: 'Open',           value: fmt(openTkts),   color: openTkts > 0 ? C.AMBER : C.GREEN },
@@ -1678,19 +1666,35 @@ function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteN
   kpis.forEach((k, i) => addKpiCard(s, 0.45 + i * 3.22, 1.05, 3.05, 1.0, k.label, k.value, k.color));
 
   if (totalTkts === 0) {
+    addSectionDivider(s, 2.18, `Incident & RCA Review — ${site.siteId || siteKey}`);
     s.addShape('roundRect', {
-      x: 0.45, y: 2.2, w: 12.43, h: 1.2,
-      fill: { color: C.GREEN_LIGHT }, line: { color: C.GREEN, pt: 1.5 }, rectRadius: 0.1,
+      x: 0.45, y: 2.65, w: 12.43, h: 1.4,
+      fill: { color: C.GREEN_LIGHT }, line: { color: C.GREEN, pt: 1.5 }, rectRadius: 0.08,
     });
-    s.addText('ZERO INCIDENTS RECORDED', { x: 0.55, y: 2.35, w: 12.23, h: 0.5, fontSize: 20, bold: true, color: C.GREEN, align: 'center', fontFace: 'Calibri' });
-    s.addText(`${site.siteId || siteKey} achieved 100% SLA compliance with no incidents during this reporting period.`, {
-      x: 0.55, y: 2.88, w: 12.23, h: 0.4, fontSize: 11, color: '14532D', align: 'center', fontFace: 'Calibri',
+    s.addText('ZERO INCIDENTS RECORDED', { x: 0.55, y: 2.8, w: 12.23, h: 0.4, fontSize: 18, bold: true, color: C.GREEN, align: 'center', fontFace: C.FONT_PRIMARY });
+    s.addText(`${site.siteId || siteKey} achieved 100% operational SLA compliance with zero incident tickets recorded during this reporting period.`, {
+      x: 0.55, y: 3.25, w: 12.23, h: 0.35, fontSize: 10.5, color: '14532D', align: 'center', fontFace: C.FONT_PRIMARY,
     });
+
+    addSectionDivider(s, 4.3, 'Primary Root Cause Driver');
+    s.addShape('roundRect', {
+      x: 0.45, y: 4.75, w: 12.43, h: 0.8,
+      fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 1 }, rectRadius: 0.06,
+    });
+    s.addText('Primary RCA Status: Stable Operations (No Incidents)', {
+      x: 0.65, y: 4.95, w: 12.0, h: 0.4, fontSize: 11, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY,
+    });
+
+    const aiSummary = [
+      `Zero incident tickets recorded for ${site.siteId || siteKey} in this reporting period.`,
+      `Infrastructure health remains optimal. Continuous proactive monitoring is active.`,
+    ];
+    addNarrativeBox(s, 5.8, aiSummary, `Operational Insight — ${site.siteId || siteKey}`);
     return;
   }
 
   // Top 10 tickets table
-  addSectionDivider(s, 2.18, `Top 10 Incident Tickets — ${site.siteId || siteKey}`);
+  addSectionDivider(s, 2.18, `Top Incident Tickets — ${site.siteId || siteKey}`);
 
   const sortedTickets = [...siteIncs].sort((a, b) => {
     const pa = String(a.Priority || 'Z').toLowerCase();
@@ -1698,7 +1702,7 @@ function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteN
     if (pa.includes('p1') || pa.includes('critical')) return -1;
     if (pb.includes('p1') || pb.includes('critical')) return 1;
     return 0;
-  }).slice(0, 10);
+  }).slice(0, 8);
 
   const COL_W = [1.8, 2.8, 1.6, 1.2, 1.2, 3.83];
   const headers = [
@@ -1723,19 +1727,19 @@ function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteN
 
   s.addTable([headers, ...rows], {
     x: 0.45, y: 2.58, w: 12.43, colW: COL_W,
-    fontSize: 9, rowH: 0.36, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+    fontSize: 9, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
 
   // Recommended actions
   const siteRecs = generateRCARecommendations(buildRCABreakdown(siteIncs));
-  addSectionDivider(s, 6.3, 'Recommended Actions');
+  addSectionDivider(s, 6.45, 'Recommended Actions');
   siteRecs.slice(0, 2).forEach((rec, i) => {
-    const y = 6.68 + i * 0.34;
+    const y = 6.82 + i * 0.32;
     const pColor = rec.priority === 'High' ? C.RED : rec.priority === 'Medium' ? C.AMBER : C.GREEN;
     s.addShape('roundRect', { x: 0.45, y, w: 12.43, h: 0.28, fill: { color: rowFill(i) }, line: { color: C.CARD_BORDER, pt: 0.5 }, rectRadius: 0.04 });
     s.addShape('rect', { x: 0.45, y, w: 0.65, h: 0.28, fill: { color: pColor } });
-    s.addText(rec.priority, { x: 0.45, y: y + 0.04, w: 0.65, h: 0.2, fontSize: 7.5, bold: true, color: 'FFFFFF', align: 'center', fontFace: 'Calibri' });
-    s.addText(`${rec.action}  [Timeline: ${rec.timeline}]`, { x: 1.2, y: y + 0.04, w: 11.6, h: 0.2, fontSize: 8.5, color: C.TEXT_DARK, fontFace: 'Calibri' });
+    s.addText(rec.priority, { x: 0.45, y: y + 0.04, w: 0.65, h: 0.2, fontSize: 7.5, bold: true, color: 'FFFFFF', align: 'center', fontFace: C.FONT_PRIMARY });
+    s.addText(`${rec.action}  [Timeline: ${rec.timeline}]`, { x: 1.2, y: y + 0.04, w: 11.6, h: 0.2, fontSize: 8.5, color: C.TEXT_DARK, fontFace: C.FONT_PRIMARY });
   });
 }
 
@@ -1953,6 +1957,37 @@ function buildAppendixCoverSlide(pres, exec) {
     x: 0.75, y: 4.1, w: 11.83, h: 0.4,
     fontSize: 12, color: 'B0BEC5', fontFace: 'Calibri',
   });
+// ── Appendix: Master Data Reference Notice (Rule 1) ─────────────────────────
+function buildAppendixNoticeSlide(pres, exec) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'APPENDIX — MASTER DATA REFERENCE', 'Information Governance & Accompanying Audit Logs', _slideNum);
+
+  s.addShape('roundRect', {
+    x: 1.5, y: 2.0, w: 10.33, h: 3.5,
+    fill: { color: C.CARD_BG },
+    line: { color: C.CARD_BORDER, pt: 1.5 },
+    rectRadius: 0.1,
+  });
+
+  s.addShape('rect', {
+    x: 1.5, y: 2.0, w: 10.33, h: 0.6,
+    fill: { color: C.NAVY },
+  });
+
+  s.addText('EXECUTIVE DATA NOTICE', {
+    x: 1.8, y: 2.12, w: 9.7, h: 0.35,
+    fontSize: 16, bold: true, color: C.TEXT_LIGHT, fontFace: C.FONT_PRIMARY,
+  });
+
+  s.addText(
+    'Detailed raw device logs, switch inventories, AP breakdowns, and full incident history tables are available in the accompanying Excel/CSV data files.\n\nThis QBR PPT presentation contains only executive summaries, site-by-site reviews, and strategic action plans to maintain high executive readability.',
+    {
+      x: 1.8, y: 2.85, w: 9.7, h: 2.3,
+      fontSize: 13, color: C.TEXT_DARK, fontFace: C.FONT_PRIMARY, wrap: true, lineSpacing: 22,
+    }
+  );
 }
 
 // ── Slide 41: Appendix — Complete Device Inventory ───────────────────────
@@ -2207,19 +2242,19 @@ function buildThankYouSlide(pres, exec) {
     s.addImage({ path: LOGO_PATH, x: 5.16, y: 1.2, w: 3.0, h: 0.95 });
   }
 
-  s.addText('Thank You', { x: 0.5, y: 2.4, w: 12.33, h: 1.0, fontSize: 44, bold: true, color: C.TEXT_LIGHT, align: 'center', fontFace: 'Calibri' });
-  s.addText('Proactive Data Systems   ·   www.proactive.co.in', { x: 0.5, y: 3.55, w: 12.33, h: 0.45, fontSize: 14, color: '82B1FF', align: 'center', fontFace: 'Calibri' });
+  s.addText('Thank You', { x: 0.5, y: 2.4, w: 12.33, h: 1.0, fontSize: 44, bold: true, color: C.TEXT_LIGHT, align: 'center', fontFace: C.FONT_PRIMARY });
+  s.addText('Proactive Data Systems   ·   www.proactive.co.in', { x: 0.5, y: 3.55, w: 12.33, h: 0.45, fontSize: 14, color: '82B1FF', align: 'center', fontFace: C.FONT_PRIMARY });
 
   s.addShape('line', { x: 3.5, y: 4.25, w: 6.33, h: 0, line: { color: C.ACCENT_GOLD, pt: 1.5 } });
 
-  s.addText(`Reporting Period: ${exec.reportingPeriod || 'Q1 FY2026'}`, { x: 0.5, y: 4.5, w: 12.33, h: 0.32, fontSize: 11, color: '90A4AE', align: 'center', fontFace: 'Calibri' });
-  s.addText(`Customer: ${exec.customerName || 'Jubilant FoodWorks Limited'}`, { x: 0.5, y: 4.88, w: 12.33, h: 0.32, fontSize: 11, color: '78909C', align: 'center', fontFace: 'Calibri' });
-  s.addText(`Generated: ${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}`, { x: 0.5, y: 5.26, w: 12.33, h: 0.28, fontSize: 10, color: '607D8B', align: 'center', fontFace: 'Calibri' });
-  s.addText('CONFIDENTIAL — This document is intended for authorized recipients only.', { x: 0.5, y: 6.6, w: 12.33, h: 0.28, fontSize: 9, color: '455A64', align: 'center', fontFace: 'Calibri' });
+  s.addText(`Reporting Period: ${exec.reportingPeriod || 'Q1 FY2026'}`, { x: 0.5, y: 4.5, w: 12.33, h: 0.32, fontSize: 11, color: '90A4AE', align: 'center', fontFace: C.FONT_PRIMARY });
+  s.addText(`Customer: ${exec.customerName || 'Jubilant FoodWorks Limited'}`, { x: 0.5, y: 4.88, w: 12.33, h: 0.32, fontSize: 11, color: '78909C', align: 'center', fontFace: C.FONT_PRIMARY });
+  s.addText(`Generated: ${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}`, { x: 0.5, y: 5.26, w: 12.33, h: 0.28, fontSize: 10, color: '607D8B', align: 'center', fontFace: C.FONT_PRIMARY });
+  s.addText('CONFIDENTIAL — This document is intended for authorized recipients only.', { x: 0.5, y: 6.6, w: 12.33, h: 0.28, fontSize: 9, color: '455A64', align: 'center', fontFace: C.FONT_PRIMARY });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Table Cell Helpers (preserved from original)
+// Table Cell Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 function th(text, align = 'center') {
@@ -2229,8 +2264,8 @@ function th(text, align = 'center') {
       bold: true, color: C.TEXT_LIGHT,
       fill: { color: C.TABLE_HEADER_FILL || C.HEADER_FILL },
       align, valign: 'middle',
-      fontFace: C.FONT_PRIMARY, fontSize: 12,
-      margin: [6, 6, 6, 6],
+      fontFace: C.FONT_PRIMARY, fontSize: 9.5,
+      margin: [5, 5, 5, 5],
     },
   };
 }
@@ -2243,8 +2278,8 @@ function td(text, fill, opts = {}) {
     options: {
       fill: { color: fill },
       fontFace: C.FONT_PRIMARY, valign: 'middle',
-      fontSize: 12,
-      margin: [6, 6, 6, 6],
+      fontSize: 9,
+      margin: [5, 5, 5, 5],
       ...opts,
     },
   };
