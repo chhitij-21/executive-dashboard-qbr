@@ -619,6 +619,35 @@ function MainPortal() {
                 />
               </div>
             )}
+
+            {switchAn.expandedRackwiseUptime?.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Expanded Rack-wise Switch Uptime Summary</h4>
+                <DataTable
+                  columns={['displaySNo', 'site', 'rack', 'serialNumber', 'switchCount', 'monthlyUptime', 'operatingStatus']}
+                  rows={switchAn.expandedRackwiseUptime.map((r, i, arr) => {
+                    const isFirstInRack = i === 0 || r.rack !== arr[i - 1].rack || r.site !== arr[i - 1].site;
+                    let rackIndex = 1;
+                    if (isFirstInRack) {
+                      rackIndex = (arr.slice(0, i).filter((item, idx) => idx === 0 || item.rack !== arr[idx - 1].rack || item.site !== arr[idx - 1].site).length) + 1;
+                    }
+                    return {
+                      ...r,
+                      displaySNo: isFirstInRack ? String(r.rackIndex || rackIndex) : '',
+                    };
+                  })}
+                  columnLabels={{
+                    displaySNo: 'S.No.',
+                    site: 'SITE NAME',
+                    rack: 'RACK NUMBER',
+                    serialNumber: 'SERIAL NUMBER(S)',
+                    switchCount: 'SWITCH COUNT',
+                    monthlyUptime: 'MONTHLY UPTIME %',
+                    operatingStatus: 'OPERATING STATUS',
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
 

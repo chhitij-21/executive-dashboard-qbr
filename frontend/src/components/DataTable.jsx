@@ -5,10 +5,15 @@ import React, { useState } from 'react';
  * Each cell shows its source as a tooltip (from row.__source).
  */
 const COLUMN_HEADER_MAP = {
+  displaySNo: 'S.No.',
+  sNo: 'S.No.',
   site: 'Site Name',
   rack: 'Rack Number',
+  serialNumber: 'SERIAL NUMBER(S)',
+  switchCount: 'SWITCH COUNT',
   deviceCount: 'Switch Count',
   monthlyUptime: 'Monthly Uptime %',
+  operatingStatus: 'OPERATING STATUS',
   quarterlyUptime: 'Quarterly Uptime %',
   avgUptime: 'Average Uptime %',
   minUptime: 'Min Uptime %',

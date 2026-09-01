@@ -1104,15 +1104,14 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
 
       return (
         devType === 'ap' || devType.includes('access') ||
-        /ap/i.test(host) ||
+        /ap/i.test(host) || /ap/i.test(devId) ||
         (devId && apSerialsAndHosts.has(devId)) ||
         (serial && apSerialsAndHosts.has(serial)) ||
-        (host && apSerialsAndHosts.has(host)) ||
-        devId.startsWith('q2') || devId.startsWith('q5') || devId.startsWith('q3')
+        (host && apSerialsAndHosts.has(host))
       );
     });
 
-    const uniqueAPsWithIncidents = new Set(apIncidentsAtSite.map(i => i.DeviceID || i.SerialNo).filter(Boolean)).size;
+    const uniqueAPsWithIncidents = new Set(apIncidentsAtSite.map(i => i.DeviceID || i.SerialNo || i.Hostname).filter(Boolean)).size;
 
     const swIncidentsAtSite = s.incidents.filter(i => !apIncidentsAtSite.includes(i));
 
@@ -1239,6 +1238,32 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
     };
   }).sort((a, b) => a.site.localeCompare(b.site) || a.rack.localeCompare(b.rack));
 
+  // Expanded Rack-wise Switch Uptime Summary (individual switch per row grouped by rack)
+  const sortedRackItems = Object.values(rackMap).sort((a, b) => a.site.localeCompare(b.site) || a.rack.localeCompare(b.rack));
+  const expandedRackwiseUptime = [];
+  sortedRackItems.forEach((item, rackIdx) => {
+    const rackNumber = rackIdx + 1; // 1-based index per rack
+    const switchCount = item.devices.length;
+    item.devices.forEach((dev, devIdx) => {
+      const upVal = dev.__effectiveUptime ?? dev.jflUptime ?? 100;
+      const upStr = `${parseFloat(upVal).toFixed(2)}%`;
+      const isFirst = devIdx === 0;
+      expandedRackwiseUptime.push({
+        sNo: isFirst ? rackNumber : '',
+        displaySNo: isFirst ? String(rackNumber) : '',
+        site: item.site,
+        rack: item.rack,
+        serialNumber: dev.SerialNo || dev.DeviceID || 'N/A',
+        DeviceID: dev.DeviceID || 'N/A',
+        switchCount: switchCount,
+        monthlyUptime: upStr,
+        operatingStatus: parseFloat(upVal) >= 100 ? 'Stable Operations (100% Uptime)' : 'Operational',
+        isFirstInRack: isFirst,
+        rackIndex: rackNumber,
+      });
+    });
+  });
+
   const top10SwitchOutages = [...switches]
     .sort((a, b) => a.__effectiveUptime - b.__effectiveUptime)
     .slice(0, 10)
@@ -1300,6 +1325,7 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
     totalSwitchIncidents: switchIncidents.length,
     top10SwitchOutages,
     rackwiseUptime,
+    expandedRackwiseUptime,
     periodLabel,
     periodType,
     slaTarget:        activeSlaTarget,  // JFL Switch Uptime SLA target (%)
@@ -1314,12 +1340,30 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
 function buildAPAnalytics(aps, incidents, allDevices) {
   if (aps.length === 0) return { available: false };
 
-  const apIds = new Set(aps.map(d => d.DeviceID));
-  const apIncidents = incidents.filter(i => apIds.has(i.DeviceID));
+  const apKeys = new Set([
+    ...aps.map(d => String(d.DeviceID || '').toLowerCase()),
+    ...aps.map(d => String(d.SerialNo || '').toLowerCase()),
+    ...aps.map(d => String(d.Hostname || '').toLowerCase()),
+  ].filter(Boolean));
+
+  const apIncidents = incidents.filter(i => {
+    const devId = String(i.DeviceID || '').toLowerCase();
+    const serial = String(i.SerialNo || '').toLowerCase();
+    const host = String(i.Hostname || '').toLowerCase();
+    const devType = String(i.DeviceType || '').toLowerCase();
+    return (
+      devType === 'ap' || devType.includes('access') ||
+      /ap/i.test(host) || /ap/i.test(devId) ||
+      (devId && apKeys.has(devId)) ||
+      (serial && apKeys.has(serial)) ||
+      (host && apKeys.has(host))
+    );
+  });
 
   const apIncidentMap = {};
   apIncidents.forEach(inc => {
-    apIncidentMap[inc.DeviceID] = (apIncidentMap[inc.DeviceID] || 0) + 1;
+    const key = inc.DeviceID || inc.SerialNo || inc.Hostname || 'Unknown';
+    apIncidentMap[key] = (apIncidentMap[key] || 0) + 1;
   });
 
   const uptimes = aps.map(d => d.__effectiveUptime ?? 100);
