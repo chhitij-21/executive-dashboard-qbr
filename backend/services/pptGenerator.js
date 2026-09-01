@@ -617,6 +617,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildAppendixCoverSlide(pres, exec);
   buildAppendixDeviceInventorySlide(pres, devices);
   buildAppendixSwitchInventorySlide(pres, devices);
+  buildAppendixRackwiseUptimeSlide(pres, switchAn.rackwiseUptime || switchAn.expandedRackwiseUptime || []);
   buildAppendixAPInventorySlide(pres, devices);
   buildAppendixIncidentRecordsSlide(pres, incidents);
 
@@ -2043,6 +2044,56 @@ function buildAppendixSwitchInventorySlide(pres, devices) {
     });
 
     s.addText(`Showing items ${page * pageSize + 1}–${Math.min((page + 1) * pageSize, switches.length)} of ${switches.length} total active switches monitored across all 8 sites.`, {
+      x: 0.45, y: 6.75, w: 12.43, h: 0.3,
+      fontSize: 8.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
+    });
+  }
+}
+
+// ── Appendix: Rack-wise Switch Uptime Summary ──────────────────────────────
+function buildAppendixRackwiseUptimeSlide(pres, rackwiseItems) {
+  if (!rackwiseItems || rackwiseItems.length === 0) return;
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(rackwiseItems.length / pageSize));
+  const COL_W = [0.6, 2.0, 2.0, 3.5, 1.2, 1.4, 1.73];
+  const headers = [
+    th('#', 'center'), th('Site Name', 'left'), th('Rack Number', 'left'),
+    th('Serial Number(s)', 'left'), th('Switch Count', 'center'),
+    th('Monthly Uptime %', 'center'), th('Operating Status', 'center'),
+  ];
+
+  for (let page = 0; page < Math.min(totalPages, 10); page++) {
+    _slideNum++;
+    const s = pres.addSlide();
+    s.background = { color: C.BG_LIGHT };
+    const pageSubtitle = totalPages > 1
+      ? `Site & Rack Switch Density, Serial Mappings & Monthly Uptime (Page ${page + 1} of ${totalPages})`
+      : 'Site & Rack Switch Density, Serial Mappings & Monthly Uptime';
+    addHeader(pres, s, 'APPENDIX — RACK-WISE SWITCH UPTIME SUMMARY', pageSubtitle, _slideNum);
+
+    const chunk = rackwiseItems.slice(page * pageSize, (page + 1) * pageSize);
+    const rows = chunk.map((item, idx) => {
+      const globalIdx = page * pageSize + idx + 1;
+      const fill = rowFill(idx);
+      const uptimeVal = parseFloat(item.periodUptime || item.monthlyUptime || item.avgUptime || '100');
+      const isStable = uptimeVal >= SLA_TARGET;
+      return [
+        td(String(globalIdx), fill, { align: 'center', color: C.TEXT_MUTED }),
+        td(item.site || item.SiteID || 'N/A', fill, { bold: true, color: C.TEXT_DARK, fontSize: 8 }),
+        td(item.rack || item.Rack || 'N/A', fill, { color: C.TEXT_MID, fontSize: 8 }),
+        td(item.SerialNo || item.serialNumbers || item.serialNumber || 'N/A', fill, { color: C.BLUE, fontSize: 7.5 }),
+        td(String(item.deviceCount || item.switchCount || 1), fill, { align: 'center', color: C.TEXT_DARK, fontSize: 8 }),
+        td(`${uptimeVal.toFixed(2)}%`, fill, { align: 'center', bold: true, color: uptimeColor(uptimeVal), fontSize: 8 }),
+        td(item.status || item.operatingStatus || (isStable ? 'Stable Operations (100% Uptime)' : 'Operational'), fill, { align: 'center', bold: true, color: isStable ? C.GREEN : C.AMBER, fontSize: 7.5 }),
+      ];
+    });
+
+    s.addTable([headers, ...rows], {
+      x: 0.45, y: 1.1, w: 12.43, colW: COL_W,
+      fontSize: 8.5, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+    });
+
+    s.addText(`Showing items ${page * pageSize + 1}–${Math.min((page + 1) * pageSize, rackwiseItems.length)} of ${rackwiseItems.length} rack switch summary records across all monitored sites.`, {
       x: 0.45, y: 6.75, w: 12.43, h: 0.3,
       fontSize: 8.5, color: C.TEXT_MUTED, fontFace: 'Calibri',
     });

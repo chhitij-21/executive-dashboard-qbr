@@ -247,26 +247,14 @@ function classifyRCA(incidentRows, useStandardCategories = false) {
  * Categories with 0 incidents are still included (with count=0).
  */
 function buildStandardRCABreakdown(incidentRows) {
-  const standardCategories = rules.rca_standard_categories || [
-    'Device Power Issues', 'ISP Issues', 'Client Side Issues',
-    'Hardware Failure', 'Configuration Issues', 'Unknown',
-  ];
-
   const rawBreakdown = classifyRCA(incidentRows, true);
-  const countMap = {};
-  rawBreakdown.forEach((r) => {
-    countMap[r.rca] = (countMap[r.rca] || 0) + r.count;
-  });
-
   const total = incidentRows.length;
-  return standardCategories.map((cat) => {
-    const count = countMap[cat] || 0;
-    return {
-      category: cat,
-      count,
-      percentage: total > 0 ? ((count / total) * 100).toFixed(1) + '%' : '0.0%',
-    };
-  });
+  return rawBreakdown.map((r) => ({
+    category: r.rca,
+    rca: r.rca,
+    count: r.count,
+    percentage: total > 0 ? ((r.count / total) * 100).toFixed(1) + '%' : '0.0%',
+  }));
 }
 
 function detectRCAColumn(rows) {
