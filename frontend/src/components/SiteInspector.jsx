@@ -555,7 +555,7 @@ export default function SiteInspector({
           </div>
           {siteIncidents.length > 0 && (
             <DataTable
-              columns={['IncidentNumber', 'DeviceID', 'Location', 'Priority', 'RCA', 'Status']}
+              columns={['IncidentNumber', 'DeviceID', 'SerialNo', 'Location', 'Priority', 'RCA', 'Status']}
               rows={siteIncidents}
             />
           )}
@@ -567,7 +567,7 @@ export default function SiteInspector({
         <div>
           <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>Registered Production Active Devices ({siteActiveDevices.length})</h4>
           <DataTable
-            columns={['DeviceID', 'DeviceType', 'Location', 'Rack', 'JFL Uptime %']}
+            columns={['DeviceID', 'SerialNo', 'DeviceType', 'Location', 'Rack', 'JFL Uptime %']}
             rows={siteActiveDevices}
           />
         </div>
@@ -578,7 +578,7 @@ export default function SiteInspector({
         <div>
           <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>Stock Inventory Devices at {siteId} ({siteStockDevices.length}) — Excluded from SLA Penalties</h4>
           <DataTable
-            columns={['DeviceID', 'DeviceType', 'Location', 'Status']}
+            columns={['DeviceID', 'SerialNo', 'DeviceType', 'Location', 'Status']}
             rows={siteStockDevices}
           />
         </div>

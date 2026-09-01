@@ -19,6 +19,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [currentJobId, setCurrentJobId] = useState(null);
   const [aiAuditResult, setAiAuditResult] = useState(null);
+  const [inventoryAuditResult, setInventoryAuditResult] = useState(null);
   const [isAuditing, setIsAuditing] = useState(false);
 
   const incidentRef = useRef(null);
@@ -42,7 +43,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
           setAiAuditResult(audit);
         }
       } catch (err) {
-        console.warn('Background AI Excel Audit failed silently:', err);
+        console.warn('Background AI Excel Audit for Incidents failed silently:', err);
       } finally {
         setIsAuditing(false);
       }
@@ -50,6 +51,30 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
     runAiAudit();
   }, [incidentFile]);
+
+  // Automated background AI Excel Audit & Schema Pre-Validation whenever inventoryFile changes
+  useEffect(() => {
+    if (!inventoryFile) {
+      setInventoryAuditResult(null);
+      return;
+    }
+
+    const runInventoryAiAudit = async () => {
+      try {
+        const formData = new FormData();
+        formData.append('file', inventoryFile);
+        const res = await apiFetch(`${API_BASE_URL}/api/analyze-excel`, { method: 'POST', body: formData });
+        if (res.ok) {
+          const audit = await res.json();
+          setInventoryAuditResult(audit);
+        }
+      } catch (err) {
+        console.warn('Background AI Excel Audit for Inventory failed silently:', err);
+      }
+    };
+
+    runInventoryAiAudit();
+  }, [inventoryFile]);
 
   const handleIncidentSelect = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -349,10 +374,10 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
             <div className="alert-box" style={{ marginBottom: '1rem', padding: '1rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', color: '#166534' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <h4 style={{ margin: 0, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  🤖 AI Pre-Validation Audit: Passed
+                  🤖 AI Incidents Schema Audit: Passed
                 </h4>
                 <span style={{ fontSize: '0.75rem', background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.6rem', borderRadius: '12px', fontWeight: 'bold' }}>
-                  0 Discrepancies • 0 Duplicate Conflicts
+                  Incidents File Verified
                 </span>
               </div>
               <div style={{ fontSize: '0.85rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem' }}>
@@ -360,6 +385,26 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
                 <div><strong>Detected Sheet Role:</strong> {aiAuditResult.detectedRoles?.incidentSheet ?? 'Raw'}</div>
                 <div><strong>Parsed Incidents:</strong> {aiAuditResult.metricsSummary?.parsedIncidentsCount ?? 'N/A'}</div>
                 <div><strong>Primary RCA Driver:</strong> {aiAuditResult.metricsSummary?.topRcaBreakdown?.[0]?.rca ?? 'N/A'}</div>
+              </div>
+            </div>
+          )}
+
+          {inventoryAuditResult && (
+            <div className="alert-box" style={{ marginBottom: '1rem', padding: '1rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', color: '#166534' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h4 style={{ margin: 0, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  🤖 AI Inventory Schema Audit: Passed
+                </h4>
+                <span style={{ fontSize: '0.75rem', background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.6rem', borderRadius: '12px', fontWeight: 'bold' }}>
+                  Inventory File Verified
+                </span>
+              </div>
+              <div style={{ fontSize: '0.85rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem' }}>
+                <div><strong>Total Devices:</strong> {inventoryAuditResult.metricsSummary?.totalDevicesCount ?? 'N/A'}</div>
+                <div><strong>Access Points (APs):</strong> {inventoryAuditResult.metricsSummary?.accessPointsCount ?? 'N/A'}</div>
+                <div><strong>Switches (SWs):</strong> {inventoryAuditResult.metricsSummary?.switchesCount ?? 'N/A'}</div>
+                <div><strong>Core Devices:</strong> {inventoryAuditResult.metricsSummary?.coreDevicesCount ?? 'N/A'}</div>
+                <div><strong>Locations Mapped:</strong> {inventoryAuditResult.metricsSummary?.locationsDetectedCount ?? 'N/A'} ({inventoryAuditResult.metricsSummary?.detectedLocations?.join(', ') || 'None'})</div>
               </div>
             </div>
           )}

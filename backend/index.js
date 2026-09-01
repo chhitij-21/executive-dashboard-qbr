@@ -1,5 +1,4 @@
 // backend/index.js — Executive Report Dashboard API
-try { require('../tmp/cleanup_root_files'); } catch (e) {}
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');

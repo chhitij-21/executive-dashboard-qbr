@@ -857,7 +857,7 @@ function MainPortal() {
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
                   Active Operational Devices Below SLA Threshold
                 </h4>
-                <DataTable columns={['DeviceID', 'Location', 'uptime', 'slaTarget', 'gap']} rows={slaAn.deviceSLA} />
+                <DataTable columns={['DeviceID', 'SerialNo', 'Location', 'uptime', 'slaTarget', 'gap']} rows={slaAn.deviceSLA} />
               </div>
             )}
           </div>

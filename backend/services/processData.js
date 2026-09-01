@@ -1160,6 +1160,7 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
       stockCount:             s.stockDevices.length,
       stockDevices:           s.stockDevices.map(d => ({
         DeviceID: d.DeviceID,
+        SerialNo: d.SerialNo || d.DeviceID,
         DeviceType: d.DeviceType || 'N/A',
         Location: d.SiteID || d.Location,
         Status: 'Stock Inventory'
@@ -1240,6 +1241,7 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
     .slice(0, 10)
     .map((d) => ({
       DeviceID: d.__combinedSLASlot || d.DeviceID,
+      SerialNo: d.SerialNo || d.DeviceID,
       Location: d.SiteID || d.Location || 'N/A',
       CoreNonCore: d.CoreNonCore || (/core/i.test(d.CoreNonCore || '') ? 'Core' : 'Non-Core'),
       uptime: d.__effectiveUptime,
@@ -1253,6 +1255,7 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
   // Uses sla_status pre-computed by computeIncidentEnrichment — frontend must NOT recalculate.
   const incidentSLADetails = switchIncidents.map(inc => ({
     Device:             inc.DeviceID || 'N/A',
+    SerialNo:           inc.SerialNo || inc.DeviceID || 'N/A',
     Location:          inc.SiteID || inc.Location || 'N/A',
     IncidentID:        inc.IncidentNumber || inc.IncidentID || 'N/A',
     display_reference: inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
@@ -1323,6 +1326,7 @@ function buildAPAnalytics(aps, incidents, allDevices) {
       const d = aps.find(a => a.DeviceID === DeviceID) || {};
       return {
         DeviceID,
+        SerialNo: d.SerialNo || DeviceID,
         Location: d.SiteID || d.Location || 'N/A',
         uptime: d.__effectiveUptime ?? 100,
         incCount,
@@ -1344,6 +1348,7 @@ function buildAPAnalytics(aps, incidents, allDevices) {
     // Uses sla_status pre-computed by computeIncidentEnrichment — frontend must NOT recalculate.
     incidentSLADetails: apIncidents.map(inc => ({
       Device:             inc.DeviceID || 'N/A',
+      SerialNo:           inc.SerialNo || inc.DeviceID || 'N/A',
       Location:          inc.SiteID || inc.Location || 'N/A',
       IncidentID:        inc.IncidentNumber || inc.IncidentID || 'N/A',
       display_reference: inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
@@ -1426,7 +1431,14 @@ function buildIncidentAnalytics(incidents, devices) {
 
   const devMap = {};
   incidents.forEach(i => { const d = i.DeviceID||'Unknown'; devMap[d]=(devMap[d]||0)+1; });
-  const deviceWiseIncidents = Object.entries(devMap).map(([DeviceID,count])=>({DeviceID,count})).sort((a,b)=>b.count-a.count).slice(0,20);
+  const deviceWiseIncidents = Object.entries(devMap).map(([DeviceID,count])=> {
+    const matchInc = incidents.find(i => i.DeviceID === DeviceID);
+    return {
+      DeviceID,
+      SerialNo: matchInc?.SerialNo || DeviceID,
+      count,
+    };
+  }).sort((a,b)=>b.count-a.count).slice(0,20);
 
   return {
     totalIncidents:     incidents.length,
@@ -1479,6 +1491,7 @@ function buildSLAAnalytics(devices, incidents) {
 
   const deviceSLA = devices.filter(d=>d.__slaBreach).map(d => ({
     DeviceID: d.__combinedSLASlot || d.DeviceID,
+    SerialNo: d.SerialNo || d.DeviceID,
     Hostname: d.Hostname || '',
     Location: d.SiteID || d.Location || 'N/A',
     uptime: d.__effectiveUptime,

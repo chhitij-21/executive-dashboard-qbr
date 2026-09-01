@@ -1958,9 +1958,9 @@ function buildAppendixCoverSlide(pres, exec) {
 function buildAppendixDeviceInventorySlide(pres, devices) {
   const pageSize = 30;
   const totalPages = Math.max(1, Math.ceil(devices.length / pageSize));
-  const COL_W = [0.8, 2.8, 2.5, 2.5, 2.0, 1.83];
+  const COL_W = [0.6, 2.5, 2.3, 2.0, 2.2, 1.4, 1.43];
   const headers = [
-    th('#', 'center'), th('Device ID / Serial', 'left'), th('Device Type', 'left'),
+    th('#', 'center'), th('Device Name', 'left'), th('Serial Number', 'left'), th('Device Type', 'left'),
     th('Location / Site', 'left'), th('Rack', 'center'), th('Status', 'center'),
   ];
 
@@ -1979,17 +1979,18 @@ function buildAppendixDeviceInventorySlide(pres, devices) {
       const fill = rowFill(idx);
       return [
         td(String(globalIdx), fill, { align: 'center', color: C.TEXT_MUTED }),
-        td(d.DeviceID || d.SerialNo || 'N/A', fill, { bold: true, color: C.TEXT_DARK, fontSize: 8.5 }),
-        td(d.DeviceType || 'Network Device', fill, { color: C.TEXT_MID, fontSize: 8.5 }),
-        td(d.SiteID || d.Location || 'N/A', fill, { color: C.TEXT_DARK, fontSize: 8.5 }),
-        td(d.Rack || 'N/A', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8.5 }),
-        td(d.__isStock ? 'Stock Inventory' : 'Active Production', fill, { align: 'center', bold: true, color: d.__isStock ? C.AMBER : C.GREEN, fontSize: 8.5 }),
+        td(d.Hostname || d.DeviceID || 'N/A', fill, { bold: true, color: C.TEXT_DARK, fontSize: 8 }),
+        td(d.SerialNo || 'N/A', fill, { color: C.BLUE, fontSize: 8 }),
+        td(d.DeviceType || 'Network Device', fill, { color: C.TEXT_MID, fontSize: 8 }),
+        td(d.SiteID || d.Location || 'N/A', fill, { color: C.TEXT_DARK, fontSize: 8 }),
+        td(d.Rack || 'N/A', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8 }),
+        td(d.__isStock ? 'Stock Inventory' : 'Active Production', fill, { align: 'center', bold: true, color: d.__isStock ? C.AMBER : C.GREEN, fontSize: 8 }),
       ];
     });
 
     s.addTable([headers, ...rows], {
       x: 0.45, y: 1.1, w: 12.43, colW: COL_W,
-      fontSize: 9, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+      fontSize: 8.5, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
     });
 
     s.addText(`Showing items ${page * pageSize + 1}–${Math.min((page + 1) * pageSize, devices.length)} of ${devices.length} total monitored devices across all sites.`, {
@@ -2004,9 +2005,9 @@ function buildAppendixSwitchInventorySlide(pres, devices) {
   const switches = devices.filter(d => !d.__isStock && (/^sw$/i.test(d.DeviceType || '') || /switch/i.test(d.DeviceType || '')));
   const pageSize = 30;
   const totalPages = Math.max(1, Math.ceil(switches.length / pageSize));
-  const COL_W = [0.8, 3.2, 2.5, 2.3, 1.8, 1.83];
+  const COL_W = [0.6, 2.6, 2.4, 2.2, 1.8, 1.4, 1.43];
   const headers = [
-    th('#', 'center'), th('Hostname / Device ID', 'left'), th('Location', 'left'),
+    th('#', 'center'), th('Device Hostname', 'left'), th('Serial Number', 'left'), th('Location', 'left'),
     th('Rack', 'center'), th('Uptime %', 'center'), th('SLA Status', 'center'),
   ];
 
@@ -2027,17 +2028,18 @@ function buildAppendixSwitchInventorySlide(pres, devices) {
       const slaOk = parseFloat(rawUp) >= SLA_TARGET;
       return [
         td(String(globalIdx), fill, { align: 'center', color: C.TEXT_MUTED }),
-        td(sw.Hostname || sw.DeviceID || 'N/A', fill, { bold: true, color: C.TEXT_DARK, fontSize: 8.5 }),
-        td(sw.SiteID || sw.Location || 'N/A', fill, { color: C.TEXT_DARK, fontSize: 8.5 }),
-        td(sw.Rack || 'N/A', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8.5 }),
-        td(`${parseFloat(rawUp).toFixed(2)}%`, fill, { align: 'center', bold: true, color: uptimeColor(rawUp), fontSize: 8.5 }),
-        td(slaOk ? 'MET' : 'BREACH', fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED, fontSize: 8.5 }),
+        td(sw.Hostname || sw.DeviceID || 'N/A', fill, { bold: true, color: C.TEXT_DARK, fontSize: 8 }),
+        td(sw.SerialNo || 'N/A', fill, { color: C.BLUE, fontSize: 8 }),
+        td(sw.SiteID || sw.Location || 'N/A', fill, { color: C.TEXT_DARK, fontSize: 8 }),
+        td(sw.Rack || 'N/A', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8 }),
+        td(`${parseFloat(rawUp).toFixed(2)}%`, fill, { align: 'center', bold: true, color: uptimeColor(rawUp), fontSize: 8 }),
+        td(slaOk ? 'MET' : 'BREACH', fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED, fontSize: 8 }),
       ];
     });
 
     s.addTable([headers, ...rows], {
       x: 0.45, y: 1.1, w: 12.43, colW: COL_W,
-      fontSize: 9, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+      fontSize: 8.5, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
     });
 
     s.addText(`Showing items ${page * pageSize + 1}–${Math.min((page + 1) * pageSize, switches.length)} of ${switches.length} total active switches monitored across all 8 sites.`, {

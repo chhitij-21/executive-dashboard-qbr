@@ -14,6 +14,8 @@ const COLUMN_HEADER_MAP = {
   minUptime: 'Min Uptime %',
   maxUptime: 'Max Uptime %',
   DeviceID: 'Device / Hostname',
+  SerialNo: 'Serial Number',
+  ReplacedSerial: 'Faulty / Replaced Serial',
   Location: 'Site Location',
   CoreNonCore: 'Switch Type',
   uptime: 'Effective Uptime %',
