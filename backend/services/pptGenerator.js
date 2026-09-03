@@ -1959,6 +1959,8 @@ function buildAppendixCoverSlide(pres, exec) {
     x: 0.75, y: 4.1, w: 11.83, h: 0.4,
     fontSize: 12, color: 'B0BEC5', fontFace: 'Calibri',
   });
+}
+
 // ── Appendix: Master Data Reference Notice (Rule 1) ─────────────────────────
 function buildAppendixNoticeSlide(pres, exec) {
   _slideNum++;
