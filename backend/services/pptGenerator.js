@@ -590,6 +590,9 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Action Plan
   buildActionPlanSlide(pres, exec, siteSummary, incidents);
 
+  // Slide 37: Other Activity
+  buildOtherActivitySlide(pres, incidents, displayPeriod);
+
   // Appendix Section (Single Data Reference Notice Slide — Rule 1)
   buildAppendixNoticeSlide(pres, exec);
 
@@ -1251,24 +1254,23 @@ function buildSLASlide(pres, exec, siteSummary, slaAn) {
     return !['unknown', 'raw', 'sheet1', 'jfl'].includes(n) && !n.includes('sla_compliance');
   });
 
-  const COL_W = [2.3, 1.7, 1.9, 1.9, 2.6, 2.03];
+  const COL_W = [2.2, 1.3, 2.1, 2.1, 1.8, 1.83];
   const headers = [
-    th('Site', 'left'), th('Devices', 'center'), th('Switch Uptime', 'center'),
-    th('Incident-Free %', 'center'), th('Health Score', 'center'), th('SLA Status', 'center'),
+    th('Site', 'left'), th('Devices', 'center'), th('Proactive Switch Uptime', 'center'),
+    th('JFL Switch Uptime', 'center'), th('Incident-Free %', 'center'), th('SLA Status', 'center'),
   ];
   const rows = validSites.slice(0, 8).map((site, idx) => {
     const fill    = rowFill(idx);
-    const uptime  = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
-    const slaOk   = uptime >= SLA_TARGET;
+    const jflVal  = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
+    const slaOk   = jflVal >= SLA_TARGET;
     const incFree = parseFloat(site.incidentFreePercent) || 100;
-    const hScore  = parseFloat(site.healthScore) || 100;
     const statusPill = slaOk ? '✓ MET' : '🚨 BREACH';
     return [
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
       td(fmt(site.deviceCount), fill, { align: 'center' }),
+      td(pct(site.proactiveSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: C.BLUE }),
       td(pct(site.jflSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
       td(pct(site.incidentFreePercent), fill, { align: 'center', bold: true, color: incFree >= 90 ? C.GREEN : C.AMBER }),
-      td(`${hScore.toFixed(1)} (${healthLabel(hScore)})`, fill, { align: 'center', bold: true, color: healthColor(hScore) }),
       td(statusPill, fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
     ];
   });
@@ -1549,7 +1551,7 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum) {
   const topRcaAp = site.primaryRcaAPs || 'Stable Operations (No Incidents)';
   const aiSummary = [
     `${site.siteId || siteKey} operates ${fmt(site.deviceCount)} active devices (${fmt(site.switchCount)} switches, ${fmt(site.apCount)} APs).`,
-    `JFL Switch Uptime: ${pct(site.jflSwitchUptime || site.switchUptime)} — ${siteJflUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
+    `JFL Switch Uptime: ${pct(site.jflSwitchUptime || site.switchUptime)} | Proactive Switch Uptime: ${pct(site.proactiveSwitchUptime || site.switchUptime)} — ${siteJflUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
     `Primary RCA Drivers: Switches [${topRcaSw}] | APs [${topRcaAp}].`,
   ];
   addNarrativeBox(s, 5.4, aiSummary, `AI Site Summary — ${site.siteId || siteKey}`);
@@ -2227,7 +2229,59 @@ function buildAppendixIncidentRecordsSlide(pres, incidents) {
   }
 }
 
-// ── Slide 40: Thank You ───────────────────────────────────────────────────
+// ── Slide 37: Other Activity ───────────────────────────────────────────────
+function buildOtherActivitySlide(pres, incidents, displayPeriod) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'OVERVIEW', 'Other Activity', _slideNum);
+
+  const nonSwApIncidents = (Array.isArray(incidents) ? incidents : []).filter(i => {
+    const devType = String(i.DeviceType || i['Device Type'] || '').toLowerCase();
+    const subCat  = String(i.SubCategory || i['Sub Category'] || i.Subject || '').toLowerCase();
+    return !(/^sw$|switch/i.test(devType) || /^ap$|access point/i.test(devType)) ||
+           /change request|request fulfillment|ise|wlc|router|asset scan/i.test(subCat);
+  });
+
+  const COL_W = [2.6, 1.4, 1.4, 1.4, 1.0, 1.6, 1.0, 2.03];
+  const headers = [
+    th('Subject', 'left'), th('Sub Category', 'left'), th('Device Name', 'left'),
+    th('Device Serial', 'left'), th('Device Type', 'center'), th('Hostname', 'left'),
+    th('Status', 'center'), th('RCA', 'left'),
+  ];
+
+  const displayList = nonSwApIncidents.length > 0 ? nonSwApIncidents : (Array.isArray(incidents) ? incidents.slice(0, 15) : []);
+
+  const rows = displayList.slice(0, 15).map((t, idx) => {
+    const fill = rowFill(idx);
+    const sub = String(t.Subject || t.Description || 'Operational Activity').substring(0, 45);
+    const subCat = String(t.SubCategory || t['Sub Category'] || 'Change Request').substring(0, 20);
+    const devName = String(t.Location || t.SiteID || 'JFL Site').substring(0, 16);
+    const serial = String(t.SerialNo || t.DeviceID || 'N/A').substring(0, 18);
+    const dType = String(t.DeviceType || 'SW').substring(0, 10);
+    const host = String(t.Hostname || t.DeviceID || 'N/A').substring(0, 20);
+    const status = String(t.Status || 'Closed');
+    const rca = String(t.RCA || 'New Configuration').substring(0, 25);
+
+    return [
+      td(sub, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left', wrap: true }),
+      td(subCat, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left' }),
+      td(devName, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left' }),
+      td(serial, fill, { color: C.BLUE, fontSize: 8, align: 'left' }),
+      td(dType, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'center' }),
+      td(host, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left' }),
+      td(status, fill, { color: /closed/i.test(status) ? C.GREEN : C.AMBER, fontSize: 8, align: 'center', bold: true }),
+      td(rca, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left' }),
+    ];
+  });
+
+  s.addTable([headers, ...rows], {
+    x: 0.45, y: 1.2, w: 12.43, colW: COL_W,
+    fontSize: 8, rowH: 0.36, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.5 }, fontFace: C.FONT_PRIMARY,
+  });
+}
+
+// ── Slide 38: Thank You ───────────────────────────────────────────────────
 function buildThankYouSlide(pres, exec) {
   _slideNum++;
   const s = pres.addSlide();

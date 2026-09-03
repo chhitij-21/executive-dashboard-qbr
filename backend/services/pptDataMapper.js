@@ -179,6 +179,14 @@ function mapSnapshotToPPTData(qbrData) {
       tickets:      Array.isArray(qbrData.incidents) ? qbrData.incidents : [],
     },
 
+    // ── Other Activity Slide (Non-Switch / Non-AP Incidents) ─────────────────
+    otherActivityIncidents: (Array.isArray(qbrData.incidents) ? qbrData.incidents : []).filter(i => {
+      const devType = String(i.DeviceType || i['Device Type'] || '').toLowerCase();
+      const subCat  = String(i.SubCategory || i['Sub Category'] || i.Subject || '').toLowerCase();
+      return !(/^sw$|switch/i.test(devType) || /^ap$|access point/i.test(devType)) ||
+             /change request|request fulfillment|ise|wlc|router|asset scan/i.test(subCat);
+    }),
+
     // ── Slide 12: Recommendations ────────────────────────────────────────────
     slide12_Recommendations: {
       recommendations: qbrData.recommendations || [
