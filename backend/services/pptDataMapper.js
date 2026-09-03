@@ -179,12 +179,12 @@ function mapSnapshotToPPTData(qbrData) {
       tickets:      Array.isArray(qbrData.incidents) ? qbrData.incidents : [],
     },
 
-    // ── Other Activity Slide (Non-Switch / Non-AP Incidents) ─────────────────
     otherActivityIncidents: (Array.isArray(qbrData.incidents) ? qbrData.incidents : []).filter(i => {
       const devType = String(i.DeviceType || i['Device Type'] || '').toLowerCase();
-      const subCat  = String(i.SubCategory || i['Sub Category'] || i.Subject || '').toLowerCase();
-      return !(/^sw$|switch/i.test(devType) || /^ap$|access point/i.test(devType)) ||
-             /change request|request fulfillment|ise|wlc|router|asset scan/i.test(subCat);
+      const cat     = String(i.Category || i.SubCategory || i['Sub Category'] || i.Subject || i.Description || '').toLowerCase();
+      const isCR    = i.IsChangeRequest || /change request|request fulfillment|ise|wlc|router|asset scan|whitelist|mac address|maintenance|credentials|license/i.test(cat);
+      const isNonSwAp = !(/^sw$|switch/i.test(devType) || /^ap$|access point/i.test(devType));
+      return isCR || isNonSwAp;
     }),
 
     // ── Slide 12: Recommendations ────────────────────────────────────────────

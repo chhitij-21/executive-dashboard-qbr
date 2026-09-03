@@ -424,13 +424,19 @@ function addKpiCard(slide, x, y, w, h, label, value, color, bgColor) {
     line: { color: C.CARD_BORDER, pt: 1 },
     rectRadius: 0.08,
   });
-  slide.addText(String(value), {
-    x: x + 0.05, y: y + 0.12, w: w - 0.1, h: h * 0.55,
-    fontSize: h > 1.1 ? 20 : 16, bold: true,
+
+  const valStr = String(value ?? '');
+  const valFontSize = valStr.length > 25 ? 10.5 : valStr.length > 18 ? 12 : (h > 1.1 ? 20 : 16);
+
+  slide.addText(valStr, {
+    x: x + 0.05, y: y + 0.08, w: w - 0.1, h: h * 0.48,
+    fontSize: valFontSize, bold: true,
     color: color || C.BLUE, align: 'center', fontFace: C.FONT_PRIMARY,
+    wrap: true,
   });
+
   slide.addText(label, {
-    x: x + 0.05, y: y + h * 0.62, w: w - 0.1, h: h * 0.32,
+    x: x + 0.05, y: y + h * 0.56, w: w - 0.1, h: h * 0.38,
     fontSize: 8.5, color: C.TEXT_MUTED, align: 'center', fontFace: C.FONT_PRIMARY,
     wrap: true,
   });
@@ -2233,54 +2239,62 @@ function buildAppendixIncidentRecordsSlide(pres, incidents) {
 
 // ── Slide 37: Other Activity ───────────────────────────────────────────────
 function buildOtherActivitySlide(pres, incidents, displayPeriod) {
-  _slideNum++;
-  const s = pres.addSlide();
-  s.background = { color: C.BG_LIGHT };
-  addHeader(pres, s, 'OVERVIEW', 'Other Activity', _slideNum);
-
   const nonSwApIncidents = (Array.isArray(incidents) ? incidents : []).filter(i => {
     const devType = String(i.DeviceType || i['Device Type'] || '').toLowerCase();
-    const subCat  = String(i.SubCategory || i['Sub Category'] || i.Subject || '').toLowerCase();
-    return !(/^sw$|switch/i.test(devType) || /^ap$|access point/i.test(devType)) ||
-           /change request|request fulfillment|ise|wlc|router|asset scan/i.test(subCat);
+    const cat     = String(i.Category || i.SubCategory || i['Sub Category'] || i.Subject || i.Description || '').toLowerCase();
+    const isCR    = i.IsChangeRequest || /change request|request fulfillment|ise|wlc|router|asset scan|whitelist|mac address|maintenance|credentials|license/i.test(cat);
+    const isNonSwAp = !(/^sw$|switch/i.test(devType) || /^ap$|access point/i.test(devType));
+    return isCR || isNonSwAp;
   });
 
-  const COL_W = [2.6, 1.4, 1.4, 1.4, 1.0, 1.6, 1.0, 2.03];
+  const displayList = nonSwApIncidents.length > 0 ? nonSwApIncidents : (Array.isArray(incidents) ? incidents.slice(0, 15) : []);
+  const pageSize = 12;
+  const totalPages = Math.max(1, Math.ceil(displayList.length / pageSize));
+  const COL_W = [2.8, 1.4, 1.4, 1.4, 1.0, 1.5, 1.0, 1.93];
   const headers = [
     th('Subject', 'left'), th('Sub Category', 'left'), th('Device Name', 'left'),
     th('Device Serial', 'left'), th('Device Type', 'center'), th('Hostname', 'left'),
     th('Status', 'center'), th('RCA', 'left'),
   ];
 
-  const displayList = nonSwApIncidents.length > 0 ? nonSwApIncidents : (Array.isArray(incidents) ? incidents.slice(0, 15) : []);
+  for (let page = 0; page < totalPages; page++) {
+    _slideNum++;
+    const s = pres.addSlide();
+    s.background = { color: C.BG_LIGHT };
+    const subtitle = totalPages > 1
+      ? `Other Activity — Change Requests, Maintenance & Non-Hardware Tickets (Page ${page + 1} of ${totalPages})`
+      : 'Other Activity — Change Requests, Maintenance & Non-Hardware Tickets';
+    addHeader(pres, s, 'OVERVIEW', subtitle, _slideNum);
 
-  const rows = displayList.slice(0, 15).map((t, idx) => {
-    const fill = rowFill(idx);
-    const sub = String(t.Subject || t.Description || 'Operational Activity').substring(0, 45);
-    const subCat = String(t.SubCategory || t['Sub Category'] || 'Change Request').substring(0, 20);
-    const devName = String(t.Location || t.SiteID || 'JFL Site').substring(0, 16);
-    const serial = String(t.SerialNo || t.DeviceID || 'N/A').substring(0, 18);
-    const dType = String(t.DeviceType || 'SW').substring(0, 10);
-    const host = String(t.Hostname || t.DeviceID || 'N/A').substring(0, 20);
-    const status = String(t.Status || 'Closed');
-    const rca = String(t.RCA || 'New Configuration').substring(0, 25);
+    const chunk = displayList.slice(page * pageSize, (page + 1) * pageSize);
+    const rows = chunk.map((t, idx) => {
+      const fill = rowFill(idx);
+      const sub = String(t.Subject || t.Description || 'Operational Activity').substring(0, 50);
+      const subCat = String(t.SubCategory || t['Sub Category'] || t.Category || 'Change Request').substring(0, 22);
+      const devName = String(t.Location || t.SiteID || 'JFL Site').substring(0, 18);
+      const serial = String(t.SerialNo || t.DeviceID || 'N/A').substring(0, 18);
+      const dType = String(t.DeviceType || 'SW').substring(0, 10);
+      const host = String(t.Hostname || t.DeviceID || 'N/A').substring(0, 20);
+      const status = String(t.Status || 'Closed');
+      const rca = String(t.RCA || 'New Configuration').substring(0, 28);
 
-    return [
-      td(sub, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left', wrap: true }),
-      td(subCat, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left' }),
-      td(devName, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left' }),
-      td(serial, fill, { color: C.BLUE, fontSize: 8, align: 'left' }),
-      td(dType, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'center' }),
-      td(host, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left' }),
-      td(status, fill, { color: /closed/i.test(status) ? C.GREEN : C.AMBER, fontSize: 8, align: 'center', bold: true }),
-      td(rca, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left' }),
-    ];
-  });
+      return [
+        td(sub, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left', wrap: true, margin: [3, 4, 3, 4] }),
+        td(subCat, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left', margin: [3, 4, 3, 4] }),
+        td(devName, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left', margin: [3, 4, 3, 4] }),
+        td(serial, fill, { color: C.BLUE, fontSize: 8, align: 'left', margin: [3, 4, 3, 4] }),
+        td(dType, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'center', margin: [3, 4, 3, 4] }),
+        td(host, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left', margin: [3, 4, 3, 4] }),
+        td(status, fill, { color: /closed/i.test(status) ? C.GREEN : C.AMBER, fontSize: 8, align: 'center', bold: true, margin: [3, 4, 3, 4] }),
+        td(rca, fill, { color: C.TEXT_DARK, fontSize: 8, align: 'left', margin: [3, 4, 3, 4] }),
+      ];
+    });
 
-  s.addTable([headers, ...rows], {
-    x: 0.45, y: 1.2, w: 12.43, colW: COL_W,
-    fontSize: 8, rowH: 0.36, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.5 }, fontFace: C.FONT_PRIMARY,
-  });
+    s.addTable([headers, ...rows], {
+      x: 0.45, y: 1.15, w: 12.43, colW: COL_W,
+      fontSize: 8, rowH: 0.46, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.5 }, fontFace: C.FONT_PRIMARY,
+    });
+  }
 }
 
 // ── Slide 38: Thank You ───────────────────────────────────────────────────
