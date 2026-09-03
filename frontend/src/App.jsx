@@ -606,6 +606,9 @@ function MainPortal() {
                   columns={['DeviceID', 'SerialNo', 'Location', 'CoreNonCore', 'uptime', 'incCount']}
                   rows={switchAn.top10SwitchOutages}
                 />
+              </div>
+            )}
+
             {switchAn.expandedRackwiseUptime?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Expanded Rack-wise Switch Uptime Summary</h4>
@@ -628,7 +631,7 @@ function MainPortal() {
                     rack: 'RACK NUMBER',
                     serialNumber: 'SERIAL NUMBER(S)',
                     switchCount: 'SWITCH COUNT',
-                    monthlyUptime: 'MONTHLY UPTIME %',
+                    monthlyUptime: 'Proactive MONTHLY UPTIME %',
                     operatingStatus: 'OPERATING STATUS',
                   }}
                 />
