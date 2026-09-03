@@ -596,9 +596,43 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   incidents.forEach((inc) => {
     const devId = inc.DeviceID;
     if (!devId) return;
-    const actMin  = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
-    const totMin  = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
-    const holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || Math.max(0, totMin - actMin));
+
+    let actMin  = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
+    let totMin  = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
+    let holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || Math.max(0, totMin - actMin));
+
+    const rawStatus = String(inc.Status || '').trim().toLowerCase();
+    const isOpenOrOnHold = !rawStatus || /open|pending|on hold|hold|wip|in progress|assigned/i.test(rawStatus);
+
+    // RULE: For Open / On Hold tickets during the reporting period,
+    // if holdMin / totMin is absent or zero, calculate the hold time elapsed
+    // from OpenTime up to the end of the reporting period (endDate 23:59:59 PM).
+    if (isOpenOrOnHold && (holdMin <= 0 && totMin <= 0)) {
+      const openTimeRaw = inc.OpenTime || inc.CreatedTime || inc.created_at || inc['Open Date'];
+      if (openTimeRaw) {
+        let openDt = new Date(openTimeRaw);
+        if (isNaN(openDt.getTime()) && typeof openTimeRaw === 'number') {
+          openDt = new Date(Math.round((openTimeRaw - 25569) * 86400 * 1000));
+        }
+
+        if (!isNaN(openDt.getTime())) {
+          // Resolve period cutoff (end of reporting period at 23:59:59 PM)
+          let periodEndDt = endDate ? new Date(endDate + 'T23:59:59Z') : new Date();
+          if (isNaN(periodEndDt.getTime())) periodEndDt = new Date();
+
+          let periodStartDt = startDate ? new Date(startDate + 'T00:00:00Z') : null;
+
+          const effectiveStart = (periodStartDt && openDt < periodStartDt) ? periodStartDt : openDt;
+          const effectiveEnd = periodEndDt;
+
+          if (effectiveEnd > effectiveStart) {
+            const elapsedMins = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / 60000);
+            holdMin = Math.max(0, elapsedMins);
+            totMin = Math.max(0, elapsedMins);
+          }
+        }
+      }
+    }
 
     if (!incDowntimeMap[devId]) incDowntimeMap[devId] = { holdTime: 0, actualResTime: 0, totalResTime: 0 };
     if (holdMin > 0) incDowntimeMap[devId].holdTime += holdMin;
@@ -871,6 +905,7 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
   const isOpenIncident = !rawStatus ||
     rawStatus === 'open' ||
     rawStatus === 'pending' ||
+    rawStatus.includes('hold') ||
     rawStatus === 'in progress' ||
     rawStatus === 'assigned' ||
     rawStatus === 'work in progress' ||

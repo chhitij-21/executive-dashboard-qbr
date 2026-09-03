@@ -773,54 +773,47 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
     if (!job) return res.status(404).json({ error: 'Report job not found' });
 
-    // ── PPT: try pre-generated file, then regenerate from SSOT if missing ────
+    // ── PPT: Always generate fresh PPT on-the-fly from dashboard_data.json (SSOT guarantee) ────
     if (pathKey === 'pptPath') {
-      let targetPath = job?.pptPath;
+      const activeJobId = job?.jobId || reqJobId;
+      const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
+      const dashCandidates = [
+        job?.dashboardPath,
+        path.join(jobOutputDir, 'dashboard_data.json'),
+        path.resolve('data', 'dashboard_data.json'),
+        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+      ].filter(Boolean);
 
-      // Check if the pre-generated file exists AND is not inside bundled_default
-      // (bundled_default PPTs contain stale demo data — never serve them for real jobs)
-      const isBundledFallback = targetPath && targetPath.includes('bundled_default');
-      const preGenExists = targetPath && !isBundledFallback && fs.existsSync(targetPath);
+      const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
 
-      if (!preGenExists) {
-        // Regenerate from the job's own dashboard_data.json (SSOT guarantee)
-        const activeJobId = job?.jobId || reqJobId;
-        const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
-        const dashCandidates = [
-          job?.dashboardPath,
-          path.join(jobOutputDir, 'dashboard_data.json'),
-        ].filter(Boolean);
+      if (dashPath) {
+        try {
+          console.log(`[server] Regenerating fresh PPT on-the-fly from SSOT: ${dashPath}`);
+          if (!fs.existsSync(jobOutputDir)) fs.mkdirSync(jobOutputDir, { recursive: true });
+          const freshPptPath = path.join(jobOutputDir, `JFL_QBR_${Date.now()}.pptx`);
+          const qbrData = JSON.parse(fs.readFileSync(dashPath, 'utf8'));
+          await generatePPT(qbrData, null, freshPptPath);
 
-        const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
+          // Update job record with fresh PPT path
+          job.pptPath = freshPptPath;
+          jobs[activeJobId] = { ...jobs[activeJobId], pptPath: freshPptPath };
+          historyService.recordReport({
+            ...job,
+            jobId: activeJobId,
+            status: 'completed',
+            pptPath: freshPptPath,
+          });
 
-        if (dashPath) {
-          try {
-            console.log(`[server] Regenerating PPT from dashboard SSOT: ${dashPath}`);
-            if (!fs.existsSync(jobOutputDir)) fs.mkdirSync(jobOutputDir, { recursive: true });
-            const freshPptPath = path.join(jobOutputDir, `JFL_QBR_${Date.now()}.pptx`);
-            const qbrData = JSON.parse(fs.readFileSync(dashPath, 'utf8'));
-            await generatePPT(qbrData, null, freshPptPath);
-
-            // Update job record so future downloads are fast-path
-            job.pptPath = freshPptPath;
-            jobs[activeJobId] = { ...jobs[activeJobId], pptPath: freshPptPath };
-            historyService.recordReport({
-              ...job,
-              jobId: activeJobId,
-              status: 'completed',
-              pptPath: freshPptPath,
-            });
-
-            console.log(`[server] PPT regenerated: ${freshPptPath}`);
-            targetPath = freshPptPath;
-          } catch (genErr) {
-            console.error('[server] PPT regeneration failed:', genErr.message);
-            return res.status(500).json({ error: `PPT regeneration failed: ${genErr.message}` });
-          }
-        } else {
-          return res.status(404).json({ error: 'PPT file and dashboard data not found for this job. Please re-upload your files.' });
+          console.log(`[server] Fresh PPT generated & served: ${freshPptPath}`);
+          targetPath = freshPptPath;
+        } catch (genErr) {
+          console.error('[server] On-the-fly PPT generation failed:', genErr.message);
+          return res.status(500).json({ error: `PPT generation failed: ${genErr.message}` });
         }
+      } else {
+        return res.status(404).json({ error: 'Dashboard data not found for PPT generation. Please re-upload your files.' });
       }
+    }
 
       // Security path traversal guard
       const resolvedTarget = path.resolve(targetPath);
