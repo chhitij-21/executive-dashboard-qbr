@@ -1214,7 +1214,7 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
 
   const computeAverageUptime = (devs) => {
     if (!devs || devs.length === 0) return 100;
-    const uptimes = devs.map(d => d.__effectiveUptime ?? d.jflUptime ?? 100);
+    const uptimes = devs.map(d => d.__proactiveUptime ?? d.proactiveUptime ?? 100);
     return uptimes.reduce((a, b) => a + b, 0) / uptimes.length;
   };
 
@@ -1245,7 +1245,7 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
     const rackNumber = rackIdx + 1; // 1-based index per rack
     const switchCount = item.devices.length;
     item.devices.forEach((dev, devIdx) => {
-      const upVal = dev.__effectiveUptime ?? dev.jflUptime ?? 100;
+      const upVal = dev.__proactiveUptime ?? dev.proactiveUptime ?? 100;
       const upStr = `${parseFloat(upVal).toFixed(2)}%`;
       const isFirst = devIdx === 0;
       expandedRackwiseUptime.push({

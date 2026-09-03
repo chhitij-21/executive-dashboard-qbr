@@ -606,20 +606,6 @@ function MainPortal() {
                   columns={['DeviceID', 'SerialNo', 'Location', 'CoreNonCore', 'uptime', 'incCount']}
                   rows={switchAn.top10SwitchOutages}
                 />
-              </div>
-            )}
-
-            {switchAn.rackwiseUptime?.length > 0 && (
-              <div style={{ marginTop: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Rack-wise Switch Uptime Summary</h4>
-                <DataTable
-                  columns={['site', 'rack', 'SerialNo', 'deviceCount', 'periodUptime', 'status']}
-                  rows={switchAn.rackwiseUptime}
-                  columnLabels={{ SerialNo: 'Serial Number(s)', periodUptime: switchAn.periodLabel || 'Monthly Uptime %', status: 'Operating Status' }}
-                />
-              </div>
-            )}
-
             {switchAn.expandedRackwiseUptime?.length > 0 && (
               <div style={{ marginTop: '1.5rem' }}>
                 <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Expanded Rack-wise Switch Uptime Summary</h4>
@@ -637,7 +623,7 @@ function MainPortal() {
                     };
                   })}
                   columnLabels={{
-                    displaySNo: 'S.No.',
+                    displaySNo: 'S.NO.',
                     site: 'SITE NAME',
                     rack: 'RACK NUMBER',
                     serialNumber: 'SERIAL NUMBER(S)',

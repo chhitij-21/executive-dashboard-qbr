@@ -1596,7 +1596,7 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   sortedRacks.forEach((rack) => {
     const swList = rackMap[rack];
     swList.forEach((sw, devIdx) => {
-      const rawUp = sw.__effectiveUptime !== undefined ? sw.__effectiveUptime : (sw.jflUptime ?? 100);
+      const rawUp = sw.__proactiveUptime !== undefined ? sw.__proactiveUptime : (sw.proactiveUptime ?? 100);
       const upNum = parseFloat(rawUp);
       const is100 = upNum >= 100;
       const isFirstInRack = devIdx === 0;
