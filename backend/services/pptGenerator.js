@@ -542,17 +542,14 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Slide 1: Cover
   buildCoverSlide(pres, exec, displayPeriod);
 
-  // Slide 2: Table of Contents
-  buildTOCSlide(pres, exec, displayPeriod);
+  // Slide 2: Executive Summary Table — All Sites (Reference PDF Structure)
+  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod);
 
-  // Slide 3: Executive Summary
+  // Slide 3: Executive Summary Overview
   buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown);
 
   // Slide 4: Overall Network Health
   buildNetworkHealthSlide(pres, exec, siteSummary, incidents);
-
-  // Slide 5: Infrastructure Summary
-  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod);
 
   // Slide 6: Inventory Summary
   buildInventorySlide(pres, exec, siteSummary, devices);
@@ -828,34 +825,36 @@ function buildNetworkHealthSlide(pres, exec, siteSummary, incidents) {
   s.addText(healthNum.toFixed(1), { x: 0.55, y: 1.85, w: 3.3, h: 0.85, fontSize: 46, bold: true, color: hColor, align: 'center', fontFace: 'Calibri' });
   s.addText(hLabel.toUpperCase(), { x: 0.55, y: 2.72, w: 3.3, h: 0.4, fontSize: 14, bold: true, color: hColor, align: 'center', fontFace: 'Calibri', charSpacing: 2 });
 
-  // Per-site health bars
+  // KPI strip on the right side of the Overall Health Score box (2x2 grid)
+  const kpis = [
+    { label: 'Switch Uptime',   value: pct(exec.overallUptime),       color: C.GREEN },
+    { label: 'Incident-Free %', value: pct(exec.incidentFreePercent), color: C.GREEN },
+    { label: 'SLA Compliance',  value: pct(exec.slaCompliance),       color: parseFloat(exec.slaCompliance) >= 99 ? C.GREEN : C.RED },
+    { label: 'Total Incidents', value: fmt(exec.totalIncidents || incidents.length), color: C.AMBER },
+  ];
+  kpis.forEach((k, i) => {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    addKpiCard(s, 4.35 + col * 4.33, 1.05 + row * 1.45, 4.15, 1.32, k.label, k.value, k.color);
+  });
+
+  // Per-site health bars (bottom section)
   const validSites = siteSummary.filter(s => {
     const n = String(s.siteId || '').toLowerCase();
     return !['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report'].includes(n) && !n.includes('sla_compliance');
   });
 
-  addSectionDivider(s, 4.0, 'Site Health Scores');
+  addSectionDivider(s, 4.1, 'Site Health Scores');
   validSites.slice(0, 8).forEach((site, i) => {
     const score = parseFloat(site.healthScore) || 100;
     const barW  = (score / 100) * 8.5;
-    const y     = 4.42 + i * 0.34;
+    const y     = 4.48 + i * 0.32;
     const col   = healthColor(score);
     s.addText(String(site.siteId).substring(0, 16), { x: 0.45, y, w: 2.5, h: 0.28, fontSize: 9, color: C.TEXT_DARK, fontFace: 'Calibri' });
     s.addShape('rect', { x: 3.05, y: y + 0.04, w: 8.5, h: 0.2, fill: { color: C.DIVIDER } });
     s.addShape('rect', { x: 3.05, y: y + 0.04, w: Math.max(0.1, barW), h: 0.2, fill: { color: col } });
     s.addText(`${score.toFixed(1)}`, { x: 11.65, y, w: 0.8, h: 0.28, fontSize: 8.5, bold: true, color: col, align: 'right', fontFace: 'Calibri' });
     s.addText(healthLabel(score), { x: 12.5, y, w: 0.8, h: 0.28, fontSize: 8.5, color: col, align: 'right', fontFace: 'Calibri' });
-  });
-
-  // KPI strip
-  const kpis = [
-    { label: 'Switch Uptime',    value: pct(exec.overallUptime),         color: C.GREEN },
-    { label: 'Incident-Free %',  value: pct(exec.incidentFreePercent),   color: C.GREEN },
-    { label: 'SLA Compliance',   value: pct(exec.slaCompliance),         color: parseFloat(exec.slaCompliance) >= 99 ? C.GREEN : C.RED },
-    { label: 'Total Incidents',  value: fmt(exec.totalIncidents || incidents.length), color: C.AMBER },
-  ];
-  kpis.forEach((k, i) => {
-    addKpiCard(s, 0.45 + i * 3.25, 1.05 + 3.0, 3.0, 0.9, k.label, k.value, k.color);
   });
 }
 
@@ -1093,8 +1092,15 @@ function buildRCASlide(pres, rcaBreakdown, incidents, exec) {
     valGridLine: { style: 'solid', color: C.DIVIDER },
   });
 
-  // RCA detail table (right)
-  addSectionDivider(s, 1.05, 'RCA Frequency Table');
+  // RCA detail table header (right-aligned, no full-width overlay)
+  s.addShape('rect', {
+    x: 8.4, y: 1.05, w: 4.88, h: 0.32,
+    fill: { color: C.NAVY_MID },
+  });
+  s.addText('RCA FREQUENCY TABLE', {
+    x: 8.5, y: 1.09, w: 4.6, h: 0.24,
+    fontSize: 9, bold: true, color: C.TEXT_LIGHT, fontFace: C.FONT_PRIMARY,
+  });
   const COL_W = [3.1, 1.0, 0.85];
   const headers = [th('Root Cause', 'left'), th('Count', 'center'), th('%', 'center')];
   const rows = top8.map((rca, idx) => {
@@ -1469,8 +1475,8 @@ function buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown) {
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
       td(`${hScore.toFixed(1)} / 100`, fill, { align: 'center', bold: true, color: healthColor(hScore) }),
       td(risk.label, fill, { align: 'center', bold: true, color: risk.color }),
-      td(String(siteTopRca).substring(0, 22), fill, { color: C.TEXT_MUTED, fontSize: 9 }),
-      td(rec.substring(0, 72), fill, { color: C.TEXT_DARK, fontSize: 8.5 }),
+      td(String(siteTopRca), fill, { color: C.TEXT_MUTED, fontSize: 8.5, wrap: true }),
+      td(rec, fill, { color: C.TEXT_DARK, fontSize: 8.5, wrap: true }),
     ];
   });
 
@@ -1634,20 +1640,20 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   ]];
 
   s.addTable([headers, ...(expandedRows.length > 0 ? expandedRows.slice(0, 7) : fallbackSw)], {
-    x: 0.45, y: 2.58, w: 12.43, colW: COL_W,
-    fontSize: 9, rowH: 0.55, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
+    x: 0.45, y: 2.50, w: 12.43, colW: COL_W,
+    fontSize: 8.5, rowH: 0.42, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
 
   // Primary RCA Drivers at bottom
   const topRcaSw = site.primaryRcaSwitches || site.primaryRca || 'Stable Operations (No Incidents)';
   const topRcaAp = site.primaryRcaAPs || 'Stable Operations (No Incidents)';
 
-  addSectionDivider(s, 6.55, 'Primary Root Cause Drivers');
-  s.addShape('roundRect', { x: 0.45, y: 6.9, w: 6.0, h: 0.28, fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 0.5 }, rectRadius: 0.04 });
-  s.addText(`Primary RCA (Switches): ${topRcaSw}`, { x: 0.55, y: 6.94, w: 5.8, h: 0.2, fontSize: 8.5, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY });
+  addSectionDivider(s, 6.0, 'Primary Root Cause Drivers');
+  s.addShape('roundRect', { x: 0.45, y: 6.40, w: 6.0, h: 0.38, fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 0.5 }, rectRadius: 0.04 });
+  s.addText(`Primary RCA (Switches): ${topRcaSw}`, { x: 0.55, y: 6.46, w: 5.8, h: 0.26, fontSize: 8.5, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY, wrap: true });
 
-  s.addShape('roundRect', { x: 6.88, y: 6.9, w: 6.0, h: 0.28, fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 0.5 }, rectRadius: 0.04 });
-  s.addText(`Primary RCA (APs): ${topRcaAp}`, { x: 6.98, y: 6.94, w: 5.8, h: 0.2, fontSize: 8.5, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY });
+  s.addShape('roundRect', { x: 6.88, y: 6.40, w: 6.0, h: 0.38, fill: { color: C.CARD_BG }, line: { color: C.CARD_BORDER, pt: 0.5 }, rectRadius: 0.04 });
+  s.addText(`Primary RCA (APs): ${topRcaAp}`, { x: 6.98, y: 6.46, w: 5.8, h: 0.26, fontSize: 8.5, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY, wrap: true });
 }
 
 function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteNum) {
@@ -1862,7 +1868,7 @@ function buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakd
     s.addShape('roundRect', { x: 0.45, y, w: 12.43, h: 0.42, fill: { color: C.RED_LIGHT }, line: { color: C.RED, pt: 0.75 }, rectRadius: 0.05 });
     s.addShape('rect', { x: 0.45, y, w: 0.6, h: 0.42, fill: { color: C.RED } });
     s.addText('HIGH', { x: 0.45, y: y + 0.1, w: 0.6, h: 0.22, fontSize: 7, bold: true, color: 'FFFFFF', align: 'center', fontFace: 'Calibri' });
-    s.addText(r.action.substring(0, 100), { x: 1.15, y: y + 0.08, w: 11.6, h: 0.28, fontSize: 8.5, color: '7F1D1D', fontFace: 'Calibri' });
+    s.addText(r.action, { x: 1.15, y: y + 0.06, w: 11.6, h: 0.32, fontSize: 8.5, color: '7F1D1D', fontFace: 'Calibri', wrap: true });
   });
 
   addSectionDivider(s, 3.0, 'Medium Priority — Action Required (30-60 Days)');
@@ -1876,7 +1882,7 @@ function buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakd
     s.addShape('roundRect', { x: 0.45, y, w: 12.43, h: 0.38, fill: { color: C.AMBER_LIGHT }, line: { color: C.AMBER, pt: 0.75 }, rectRadius: 0.05 });
     s.addShape('rect', { x: 0.45, y, w: 0.65, h: 0.38, fill: { color: C.AMBER } });
     s.addText('MED', { x: 0.45, y: y + 0.08, w: 0.65, h: 0.22, fontSize: 7, bold: true, color: 'FFFFFF', align: 'center', fontFace: 'Calibri' });
-    s.addText((r.action || '').substring(0, 105), { x: 1.2, y: y + 0.06, w: 11.6, h: 0.28, fontSize: 8.5, color: '92400E', fontFace: 'Calibri' });
+    s.addText(r.action || '', { x: 1.2, y: y + 0.05, w: 11.6, h: 0.30, fontSize: 8.5, color: '92400E', fontFace: 'Calibri', wrap: true });
   });
 
   addSectionDivider(s, 4.75, 'Low Priority — Standard Practice (60-90 Days)');
@@ -1890,7 +1896,7 @@ function buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakd
     s.addShape('roundRect', { x: 0.45, y, w: 12.43, h: 0.34, fill: { color: C.BLUE_LIGHT }, line: { color: C.BLUE, pt: 0.5 }, rectRadius: 0.04 });
     s.addShape('rect', { x: 0.45, y, w: 0.6, h: 0.34, fill: { color: C.BLUE } });
     s.addText('LOW', { x: 0.45, y: y + 0.06, w: 0.6, h: 0.22, fontSize: 7, bold: true, color: 'FFFFFF', align: 'center', fontFace: 'Calibri' });
-    s.addText(r.action.substring(0, 105), { x: 1.15, y: y + 0.05, w: 11.6, h: 0.24, fontSize: 8.5, color: C.TEXT_MID, fontFace: 'Calibri' });
+    s.addText(r.action, { x: 1.15, y: y + 0.04, w: 11.6, h: 0.28, fontSize: 8.5, color: C.TEXT_MID, fontFace: 'Calibri', wrap: true });
   });
 }
 
@@ -1903,7 +1909,7 @@ function buildActionPlanSlide(pres, exec, siteSummary, incidents) {
 
   const actions = generateActionPlan(exec, siteSummary, incidents);
 
-  const COL_W = [1.2, 3.8, 2.2, 1.5, 1.6, 2.13];
+  const COL_W = [1.1, 4.3, 2.0, 1.4, 1.5, 2.13];
   const headers = [
     th('Priority', 'center'), th('Action', 'left'), th('Owner', 'center'),
     th('Timeline', 'center'), th('Impact', 'center'), th('Status', 'center'),
@@ -1918,11 +1924,11 @@ function buildActionPlanSlide(pres, exec, siteSummary, incidents) {
     const stColor   = a.status === 'Open' ? C.RED : a.status === 'In Progress' ? C.AMBER : a.status === 'Active' ? C.GREEN : C.TEAL;
     return [
       td(a.priority, fill, { align: 'center', bold: true, color: prioColor }),
-      td((a.action || '').substring(0, 55), fill, { color: C.TEXT_DARK, fontSize: 9 }),
-      td(a.owner || 'Network Ops', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 9 }),
-      td(a.timeline || 'TBD', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 9 }),
-      td(impacts[a.priority] || 'Medium', fill, { align: 'center', bold: true, color: prioColor, fontSize: 9 }),
-      td(a.status || 'Open', fill, { align: 'center', bold: true, color: stColor, fontSize: 9 }),
+      td(a.action || '', fill, { color: C.TEXT_DARK, fontSize: 8.5, wrap: true }),
+      td(a.owner || 'Network Ops', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8.5 }),
+      td(a.timeline || 'TBD', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8.5 }),
+      td(impacts[a.priority] || 'Medium', fill, { align: 'center', bold: true, color: prioColor, fontSize: 8.5 }),
+      td(a.status || 'Open', fill, { align: 'center', bold: true, color: stColor, fontSize: 8.5 }),
     ];
   });
 
