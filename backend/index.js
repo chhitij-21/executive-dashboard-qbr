@@ -813,7 +813,6 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       } else {
         return res.status(404).json({ error: 'Dashboard data not found for PPT generation. Please re-upload your files.' });
       }
-    }
 
       // Security path traversal guard
       const resolvedTarget = path.resolve(targetPath);
