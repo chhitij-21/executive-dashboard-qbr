@@ -103,6 +103,45 @@ function parseNumeric(v) {
   return isNaN(n) ? null : n;
 }
 
+function parseAnyDate(raw) {
+  if (raw === null || raw === undefined || raw === '' || raw === 'N/A') return null;
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+
+  if (typeof raw === 'number') {
+    if (raw > 30000 && raw < 100000) {
+      const d = new Date(Math.round((raw - 25569) * 86400 * 1000));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+  }
+
+  const str = String(raw).trim();
+  if (!str || str.toLowerCase() === 'n/a') return null;
+
+  let d = new Date(str);
+  if (!isNaN(d.getTime())) return d;
+
+  const dmYMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (dmYMatch) {
+    const day = parseInt(dmYMatch[1], 10);
+    const month = parseInt(dmYMatch[2], 10) - 1;
+    const year = parseInt(dmYMatch[3], 10);
+    const hrs = parseInt(dmYMatch[4] || '0', 10);
+    const mins = parseInt(dmYMatch[5] || '0', 10);
+    const secs = parseInt(dmYMatch[6] || '0', 10);
+    d = new Date(Date.UTC(year, month, day, hrs, mins, secs));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  const num = Number(str);
+  if (!isNaN(num) && num > 30000 && num < 100000) {
+    d = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  return null;
+}
+
 // Normalise a raw uptime value from Excel.
 // Excel pivot tables store percentages as decimals (e.g. 0.9987 = 99.87%).
 // Multiply by 100 when the parsed value is in the 0–1 range.
@@ -396,14 +435,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const inRangeIncidents = incidents.filter(inc => {
       const raw = inc.CreatedTime || inc.OpenTime || inc.created_at || inc['Created Date'] || inc['Open Date'];
       if (!raw || raw === 'N/A') return false;
-      let dt;
-      if (typeof raw === 'number' && raw > 30000 && raw < 100000) {
-        // Excel date serial
-        dt = new Date(Math.round((raw - 25569) * 86400 * 1000));
-      } else {
-        dt = new Date(raw);
-      }
-      if (isNaN(dt.getTime())) return false;
+      const dt = parseAnyDate(raw);
+      if (!dt) return false;
       return dt >= rangeStart && dt <= rangeEnd;
     });
 
@@ -420,12 +453,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   if (!reportPeriodMeta && incidents.length > 0) {
     const dates = incidents.map(inc => {
       const raw = inc.CreatedTime || inc.OpenTime || inc.created_at || inc['Created Date'] || inc['Open Date'];
-      if (!raw) return null;
-      if (typeof raw === 'number' && raw > 30000 && raw < 100000) {
-        return new Date(Math.round((raw - 25569) * 86400 * 1000));
-      }
-      const d = new Date(raw);
-      return isNaN(d.getTime()) ? null : d;
+      return parseAnyDate(raw);
     }).filter(Boolean);
 
     if (dates.length > 0) {
@@ -435,6 +463,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       const edLabel = `${maxDate.getUTCDate()} ${months[maxDate.getUTCMonth()]} ${maxDate.getUTCFullYear()}`;
       const sdISO = minDate.toISOString().slice(0, 10);
       const edISO = maxDate.toISOString().slice(0, 10);
+      startDate = sdISO;
+      endDate   = edISO;
       reportPeriodMeta = {
         start_date: sdISO,
         end_date: edISO,
@@ -602,7 +632,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     let holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || Math.max(0, totMin - actMin));
 
     const rawStatus = String(inc.Status || '').trim().toLowerCase();
-    const isOpenOrOnHold = !rawStatus || /open|pending|on hold|hold|wip|in progress|assigned/i.test(rawStatus);
+    const isOpenOrOnHold = !rawStatus || /open|pending|on[\s-]?hold|hold|wip|in[\s-]?progress|assigned/i.test(rawStatus);
 
     // RULE: For Open / On Hold tickets during the reporting period,
     // if holdMin / totMin is absent or zero, calculate the hold time elapsed
@@ -610,12 +640,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     if (isOpenOrOnHold && (holdMin <= 0 && totMin <= 0)) {
       const openTimeRaw = inc.OpenTime || inc.CreatedTime || inc.created_at || inc['Open Date'];
       if (openTimeRaw) {
-        let openDt = new Date(openTimeRaw);
-        if (isNaN(openDt.getTime()) && typeof openTimeRaw === 'number') {
-          openDt = new Date(Math.round((openTimeRaw - 25569) * 86400 * 1000));
-        }
-
-        if (!isNaN(openDt.getTime())) {
+        let openDt = parseAnyDate(openTimeRaw);
+        if (openDt) {
           // Resolve period cutoff (end of reporting period at 23:59:59 PM)
           let periodEndDt = endDate ? new Date(endDate + 'T23:59:59Z') : new Date();
           if (isNaN(periodEndDt.getTime())) periodEndDt = new Date();
@@ -650,15 +676,15 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     let jflUptime = upData?.jflUptime ?? null;
     let proactiveUptime = upData?.proactiveUptime ?? null;
 
-    if (jflUptime === null || isNaN(jflUptime)) {
-      // JFL Switch Uptime % Formula (AGENTS.md Rule 2 & Step 4): ((Total Available Minutes - Time on Hold) / Total Available Minutes) * 100
+    if (jflUptime === null || isNaN(jflUptime) || holdMins > 0) {
+      // JFL Switch Uptime % Formula (AGENTS.md Rule 3 & SSOT): ((Total Available Minutes - Time on Hold) / Total Available Minutes) * 100
       const safeHold = Math.max(0, holdMins);
       const jflVal = ((windowMinutes - Math.min(windowMinutes, safeHold)) / windowMinutes) * 100;
       jflUptime = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
     }
 
-    if (proactiveUptime === null || isNaN(proactiveUptime)) {
-      // Proactive Switch Uptime % Formula (AGENTS.md Rule 2 & Step 4):
+    if (proactiveUptime === null || isNaN(proactiveUptime) || actResMins > 0 || (holdMins > 0 && actResMins === 0)) {
+      // Proactive Switch Uptime % Formula (AGENTS.md Rule 3 & SSOT):
       // ((Total Available Minutes - Actual Resolution Time) / Total Available Minutes) * 100
       // Fall back to holdMins (Time on Hold) when Actual Resolution Time is absent,
       // so that devices with incidents are never incorrectly shown at 100%.
