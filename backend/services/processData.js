@@ -635,9 +635,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const isOpenOrOnHold = !rawStatus || /open|pending|on[\s-]?hold|hold|wip|in[\s-]?progress|assigned/i.test(rawStatus);
 
     // RULE: For Open / On Hold tickets during the reporting period,
-    // if holdMin / totMin is absent or zero, calculate the hold time elapsed
-    // from OpenTime up to the end of the reporting period (endDate 23:59:59 PM).
-    if (isOpenOrOnHold && (holdMin <= 0 && totMin <= 0)) {
+    // calculate the hold time elapsed from max(OpenTime, Period Start) up to the end of the reporting period (endDate 23:59:59 PM).
+    if (isOpenOrOnHold) {
       const openTimeRaw = inc.OpenTime || inc.CreatedTime || inc.created_at || inc['Open Date'];
       if (openTimeRaw) {
         let openDt = parseAnyDate(openTimeRaw);
@@ -653,8 +652,12 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
           if (effectiveEnd > effectiveStart) {
             const elapsedMins = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / 60000);
-            holdMin = Math.max(0, elapsedMins);
-            totMin = Math.max(0, elapsedMins);
+            if (holdMin <= 0 || holdMin > elapsedMins) {
+              holdMin = Math.max(0, elapsedMins);
+            }
+            if (totMin <= 0 || totMin > elapsedMins) {
+              totMin = Math.max(0, elapsedMins);
+            }
           }
         }
       }
