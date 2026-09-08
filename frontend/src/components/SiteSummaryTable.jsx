@@ -48,12 +48,32 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
           <tbody>
             {filteredSites.map((site, i) => {
               const isSelected = selectedSite === site.siteId;
-              const proUp = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
-              const jflUp = site.jflSwitchUptime ? `${site.jflSwitchUptime}` : `${site.switchUptime || '100.00'}`;
+              const formatPct = (val) => {
+                if (val === undefined || val === null) return '100';
+                const str = String(val).replace('%', '').trim();
+                const n = parseFloat(str);
+                return isNaN(n) ? '100' : (n === 100 ? '100' : n.toFixed(2));
+              };
+
+              const proUp = formatPct(site.proactiveSwitchUptime);
+              const jflUp = formatPct(site.jflSwitchUptime);
               const rawSwRca = site.primaryRcaSwitches || site.primaryRca;
               const rawApRca = site.primaryRcaAPs || site.primaryRcaForAPs;
-              const swRca = rawSwRca && !['None', 'Not case received', 'N/A', ''].includes(rawSwRca) ? rawSwRca : 'Stable Operations (No Incidents)';
-              const apRca = rawApRca && !['None', 'Not case received', 'N/A', ''].includes(rawApRca) ? rawApRca : 'Stable Operations (No Incidents)';
+              
+              const hasSwInc = site.incidentCount > 0 || (site.switches && site.switches.some(d => d.__effectiveUptime < 100));
+              const hasApInc = (site.apIncidents ?? 0) > 0;
+
+              const swRca = rawSwRca && !['None', 'Not case received', 'N/A', ''].includes(rawSwRca) 
+                ? rawSwRca 
+                : (site.incidentCount === 0 ? '' : 'Stable operations (No Incidents)');
+
+              const apRca = rawApRca && !['None', 'Not case received', 'N/A', ''].includes(rawApRca) 
+                ? rawApRca 
+                : (site.incidentCount === 0 ? '' : 'Stable operations (No Incidents)');
+
+              const apIncDisplay = (site.apIncidents === 0 && site.uniqueAPsWithIncidents === 0 && site.incidentCount === 0)
+                ? '0'
+                : `${site.apIncidents ?? 0}/${site.uniqueAPsWithIncidents ?? 0}`;
 
               return (
                 <tr
@@ -80,7 +100,7 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
                     {swRca}
                   </td>
                   <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
-                    <strong>{site.apIncidents ?? 0} / {site.uniqueAPsWithIncidents ?? 0}</strong>
+                    <strong>{apIncDisplay}</strong>
                   </td>
                   <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }} title={apRca}>
                     {apRca}

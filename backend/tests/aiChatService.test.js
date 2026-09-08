@@ -51,4 +51,10 @@ test('aiChatService - processChatQuery returns native SSOT answers for formulas 
   // Test SLA Question
   const resSLA = await processChatQuery('What is the SLA target?', dummyQbrData);
   assert.ok(resSLA.answer.includes('99.3%'), 'Answer should mention 99.3% SLA Target');
+
+  // Test Combined Site + Uptime Query
+  const resCombined = await processChatQuery('how jfl uptime is 97.11% for greater noida', dummyQbrData);
+  assert.ok(resCombined.answer.includes('Greater Noida'), 'Combined answer should reference site Greater Noida');
+  assert.ok(resCombined.answer.includes('JFL Uptime'), 'Combined answer should explain JFL Uptime calculation');
 });
+

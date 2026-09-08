@@ -396,7 +396,7 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
     const reqJobId = jobId || 'latest';
     if (reqJobId === 'latest' || reqJobId === 'default') {
       const history = historyService.getHistory();
-      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+      job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
     } else {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
     }

@@ -1,6 +1,6 @@
 // backend/services/aiChatService.js
 // Multi-Provider Executive QBR AI Assistant Service:
-// Supports OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet, DeepSeek V3/R1, Google Gemini 1.5/2.0,
+// Supports Groq Free LLM (Llama 3.3 70B / DeepSeek R1), OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet, DeepSeek V3/R1, Google Gemini 1.5/2.0,
 // and Built-in Native SSOT Empirical Engine.
 
 const ruleEngine = require('./ruleEngine');
@@ -9,85 +9,98 @@ const ruleEngine = require('./ruleEngine');
  * Main AI answer generator with multi-provider failover.
  */
 async function processChatQuery(prompt, qbrData, options = {}) {
-  if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+  try {
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+      return {
+        answer: 'Please provide a valid question about the dashboard metrics, calculations, or system rules.',
+        type: 'error'
+      };
+    }
+
+    const query = prompt.trim();
+    const systemContext = buildSystemContext(qbrData);
+
+    // Preferred provider override from env or options: 'groq' | 'openai' | 'anthropic' | 'deepseek' | 'gemini'
+    const preferredProvider = (options.provider || process.env.AI_PROVIDER || '').toLowerCase();
+
+    // 1. Groq Free API (Llama 3.3 70B / DeepSeek R1 Distill) - Fast & Free
+    const groqKey = process.env.GROQ_API_KEY;
+    if ((preferredProvider === 'groq' || (!preferredProvider && groqKey)) && groqKey) {
+      try {
+        const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+        const ans = await queryGroq(query, systemContext, groqKey, model);
+        if (ans) return { answer: ans, type: 'llm_groq', model: `Groq (${model})` };
+      } catch (e) {
+        console.warn(`[aiChatService] Groq API note: ${e.message}`);
+      }
+    }
+
+    // 2. OpenAI GPT-4o / GPT-4o-mini
+    const openAiKey = process.env.OPENAI_API_KEY;
+    if ((preferredProvider === 'openai' || (!preferredProvider && openAiKey)) && openAiKey) {
+      try {
+        const model = process.env.OPENAI_MODEL || 'gpt-4o';
+        const ans = await queryOpenAI(query, systemContext, openAiKey, model);
+        if (ans) return { answer: ans, type: 'llm_openai', model: `OpenAI ${model}` };
+      } catch (e) {
+        console.warn(`[aiChatService] OpenAI API note: ${e.message}`);
+      }
+    }
+
+    // 3. Anthropic Claude 3.5 Sonnet
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if ((preferredProvider === 'anthropic' || (!preferredProvider && anthropicKey)) && anthropicKey) {
+      try {
+        const model = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+        const ans = await queryAnthropic(query, systemContext, anthropicKey, model);
+        if (ans) return { answer: ans, type: 'llm_anthropic', model: 'Claude 3.5 Sonnet' };
+      } catch (e) {
+        console.warn(`[aiChatService] Anthropic API note: ${e.message}`);
+      }
+    }
+
+    // 4. DeepSeek V3 / R1
+    const deepseekKey = process.env.DEEPSEEK_API_KEY;
+    if ((preferredProvider === 'deepseek' || (!preferredProvider && deepseekKey)) && deepseekKey) {
+      try {
+        const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+        const ans = await queryDeepSeek(query, systemContext, deepseekKey, model);
+        if (ans) return { answer: ans, type: 'llm_deepseek', model: `DeepSeek (${model})` };
+      } catch (e) {
+        console.warn(`[aiChatService] DeepSeek API note: ${e.message}`);
+      }
+    }
+
+    // 5. Google Gemini (Gemini 1.5 Pro / Flash / 2.0)
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (geminiKey) {
+      try {
+        const model = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
+        const ans = await queryGeminiAPI(query, systemContext, geminiKey, model);
+        if (ans) return { answer: ans, type: 'llm_gemini', model: `Google ${model}` };
+      } catch (e) {
+        console.warn(`[aiChatService] Gemini API note: ${e.message}`);
+      }
+    }
+
+    // 6. Built-in Native SSOT Empirical Knowledge Engine (Always-available deterministic fallback)
+    const nativeAnswer = generateNativeSSOTAnswer(query, qbrData);
     return {
-      answer: 'Please provide a valid question about the dashboard metrics, calculations, or system rules.',
-      type: 'error'
+      answer: nativeAnswer.text,
+      type: 'native_ssot',
+      topic: nativeAnswer.topic,
+      model: 'Native SSOT Engine'
+    };
+  } catch (err) {
+    console.error(`[aiChatService] Fallback handling prompt error: ${err.message}`);
+    const nativeAnswer = generateNativeSSOTAnswer(prompt, qbrData);
+    return {
+      answer: nativeAnswer.text,
+      type: 'native_ssot',
+      topic: nativeAnswer.topic,
+      model: 'Native SSOT Engine'
     };
   }
-
-  const query = prompt.trim();
-  const systemContext = buildSystemContext(qbrData);
-
-  // Preferred provider override from env or options: 'openai' | 'anthropic' | 'deepseek' | 'gemini'
-  const preferredProvider = (options.provider || process.env.AI_PROVIDER || '').toLowerCase();
-
-  // 1. OpenAI GPT-4o / GPT-4o-mini
-  const openAiKey = process.env.OPENAI_API_KEY;
-  if ((preferredProvider === 'openai' || (!preferredProvider && openAiKey)) && openAiKey) {
-    try {
-      const model = process.env.OPENAI_MODEL || 'gpt-4o';
-      const ans = await queryOpenAI(query, systemContext, openAiKey, model);
-      if (ans) return { answer: ans, type: 'llm_openai', model: `OpenAI ${model}` };
-    } catch (e) {
-      console.warn(`[aiChatService] OpenAI API note: ${e.message}`);
-    }
-  }
-
-  // 2. Anthropic Claude 3.5 Sonnet
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if ((preferredProvider === 'anthropic' || (!preferredProvider && anthropicKey)) && anthropicKey) {
-    try {
-      const model = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
-      const ans = await queryAnthropic(query, systemContext, anthropicKey, model);
-      if (ans) return { answer: ans, type: 'llm_anthropic', model: 'Claude 3.5 Sonnet' };
-    } catch (e) {
-      console.warn(`[aiChatService] Anthropic API note: ${e.message}`);
-    }
-  }
-
-  // 3. DeepSeek V3 / R1
-  const deepseekKey = process.env.DEEPSEEK_API_KEY;
-  if ((preferredProvider === 'deepseek' || (!preferredProvider && deepseekKey)) && deepseekKey) {
-    try {
-      const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
-      const ans = await queryDeepSeek(query, systemContext, deepseekKey, model);
-      if (ans) return { answer: ans, type: 'llm_deepseek', model: `DeepSeek (${model})` };
-    } catch (e) {
-      console.warn(`[aiChatService] DeepSeek API note: ${e.message}`);
-    }
-  // 3b. Groq Free API (Llama 3.3 70B / DeepSeek R1 Distill) - 100% Free
-  const groqKey = process.env.GROQ_API_KEY;
-  if ((preferredProvider === 'groq' || (!preferredProvider && groqKey)) && groqKey) {
-    try {
-      const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-      const ans = await queryGroq(query, systemContext, groqKey, model);
-      if (ans) return { answer: ans, type: 'llm_groq', model: `Groq (${model})` };
-    } catch (e) {
-      console.warn(`[aiChatService] Groq API note: ${e.message}`);
-    }
-  }
-
-  // 4. Google Gemini (Gemini 1.5 Pro / Flash / 2.0)
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (geminiKey) {
-    try {
-      const model = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
-      const ans = await queryGeminiAPI(query, systemContext, geminiKey, model);
-      if (ans) return { answer: ans, type: 'llm_gemini', model: `Google ${model}` };
-    } catch (e) {
-      console.warn(`[aiChatService] Gemini API note: ${e.message}`);
-    }
-  }
-
-  // 5. Native SSOT Empirical Knowledge & Calculation Engine (Always available fallback)
-  const nativeAnswer = generateNativeSSOTAnswer(query, qbrData);
-  return {
-    answer: nativeAnswer.text,
-    type: 'native_ssot',
-    topic: nativeAnswer.topic,
-    model: 'Native SSOT Engine'
-  };
 }
 
 /**
@@ -246,7 +259,7 @@ function buildSystemContext(qbrData) {
   const exec = qbrData.executiveSummary || {};
   const reportPeriod = qbrData.report_period?.display_label || qbrData.reportingPeriod || 'N/A';
   const siteList = (qbrData.siteSummary || []).map(s =>
-    `- ${s.siteId}: ${s.deviceCount} devices, JFL Uptime: ${s.jflSwitchUptime}%, Proactive Uptime: ${s.proactiveSwitchUptime}%, Primary Switch RCA: "${s.primaryRcaSwitches}", AP Incidents: ${s.apIncidents}, Primary AP RCA: "${s.primaryRcaAPs}"`
+    `- ${s.siteId || 'Unknown Site'}: ${s.deviceCount || 0} devices, JFL Uptime: ${s.jflSwitchUptime || '100.00'}%, Proactive Uptime: ${s.proactiveSwitchUptime || '100.00'}%, Primary Switch RCA: "${s.primaryRcaSwitches || 'Stable Operations'}", AP Incidents: ${s.apIncidents || 0}, Primary AP RCA: "${s.primaryRcaAPs || 'Stable Operations'}"`
   ).join('\n');
 
   return `
@@ -255,14 +268,14 @@ REPORTING PERIOD: ${reportPeriod}
 SLA TARGET: ${exec.slaTarget || 99.3}%
 
 EXECUTIVE METRICS:
-- Total Devices: ${exec.totalDevices} (${exec.totalSites} Sites, ${exec.totalSwitches} Switches, ${exec.totalAPs} APs)
-- Overall JFL Switch Uptime: ${exec.jflSwitchUptime || exec.overallUptime}%
-- Overall Proactive Switch Uptime: ${exec.proactiveSwitchUptime}%
-- Infrastructure Health Score: ${exec.healthScore}/100 (${exec.healthLabel || 'Optimal'})
-- Incident-Free Devices: ${exec.incidentFreePercent}%
-- SLA Compliance: ${exec.slaCompliance}%
-- Primary RCA (Switches): ${exec.primaryRcaSwitches}
-- Primary RCA (APs): ${exec.primaryRcaAPs}
+- Total Devices: ${exec.totalDevices || 0} (${exec.totalSites || 0} Sites, ${exec.totalSwitches || 0} Switches, ${exec.totalAPs || 0} APs)
+- Overall JFL Switch Uptime: ${exec.jflSwitchUptime || exec.overallUptime || '100.00'}%
+- Overall Proactive Switch Uptime: ${exec.proactiveSwitchUptime || '100.00'}%
+- Infrastructure Health Score: ${exec.healthScore || 100}/100 (${exec.healthLabel || 'Optimal'})
+- Incident-Free Devices: ${exec.incidentFreePercent || '100.00'}%
+- SLA Compliance: ${exec.slaCompliance || '100.00'}%
+- Primary RCA (Switches): ${exec.primaryRcaSwitches || 'Stable Operations'}
+- Primary RCA (APs): ${exec.primaryRcaAPs || 'Stable Operations'}
 
 SITES SUMMARY:
 ${siteList}
@@ -281,14 +294,41 @@ FORMULA RULES:
  * Built-in Native SSOT Empirical Knowledge & Calculation Engine.
  */
 function generateNativeSSOTAnswer(prompt, qbrData) {
-  const lower = prompt.toLowerCase();
+  const lower = (prompt || '').toLowerCase();
   const exec = qbrData?.executiveSummary || {};
-  const sites = qbrData?.siteSummary || [];
-  const devices = qbrData?.devices || [];
-  const incidents = qbrData?.incidents || [];
+  const sites = Array.isArray(qbrData?.siteSummary) ? qbrData.siteSummary : [];
+  const devices = Array.isArray(qbrData?.devices) ? qbrData.devices : [];
+  const incidents = Array.isArray(qbrData?.incidents) ? qbrData.incidents : [];
   const period = qbrData?.report_period?.display_label || qbrData?.reportingPeriod || 'Selected Period';
 
-  // Topic 1: JFL Uptime % Formula & Calculation
+  // Topic 1: Specific Site Lookup (Check site first so site-specific queries match correctly)
+  const matchedSite = sites.find(s => s && s.siteId && typeof s.siteId === 'string' && lower.includes(s.siteId.toLowerCase()));
+  if (matchedSite) {
+    let siteText = `### 📍 Site Intelligence: ${matchedSite.siteId}
+
+- **Total Devices**: **${matchedSite.deviceCount || 0}** (${matchedSite.switchCount || 0} Switches, ${matchedSite.apCount || 0} APs)
+- **JFL Switch Uptime %**: **${matchedSite.jflSwitchUptime || '100.00'}%**
+- **Proactive Switch Uptime %**: **${matchedSite.proactiveSwitchUptime || '100.00'}%**
+- **Primary RCA Driver (Switches)**: **${matchedSite.primaryRcaSwitches || 'Stable Operations (No Incidents)'}**
+- **AP Incidents**: **${matchedSite.apIncidents || 0}** incident(s) across **${matchedSite.uniqueAPsWithIncidents || 0}** unique AP(s)
+- **Primary RCA Driver (APs)**: **${matchedSite.primaryRcaAPs || 'Stable Operations (No Incidents)'}**
+- **Health Score**: **${matchedSite.healthScore || 100}/100** (${matchedSite.healthLabel || 'Optimal Operations'})`;
+
+    // If query also asks about uptime formula/how it's calculated
+    if (lower.includes('jfl uptime') || lower.includes('formula') || lower.includes('how') || lower.includes('calculate')) {
+      siteText += `\n\n**Calculation Explanation for ${matchedSite.siteId}**:
+- **JFL Switch Uptime (${matchedSite.jflSwitchUptime}%)** is computed by deducting total elapsed hold minutes from the total available minutes for devices at ${matchedSite.siteId}.
+- **Formula**: $$\\text{JFL Uptime \\%} = \\max\\left(0, \\min\\left(100, \\frac{\\text{Total Available Minutes} - \\text{Time on Hold (Minutes)}}{\\text{Total Available Minutes}} \\times 100\\right)\\right)$$
+- Any on-hold tickets for ${matchedSite.siteId} are calculated up to the period end cutoff date (\`endDate + T23:59:59Z\`).`;
+    }
+
+    return {
+      topic: 'site_detail',
+      text: siteText
+    };
+  }
+
+  // Topic 2: JFL Uptime % Formula & Calculation
   if (lower.includes('jfl uptime') || lower.includes('jfl switch uptime') || lower.includes('time on hold') || lower.includes('hold time')) {
     return {
       topic: 'jfl_uptime_formula',
@@ -304,7 +344,7 @@ $$\\text{JFL Uptime \\%} = \\max\\left(0, \\min\\left(100, \\frac{\\text{Total A
     };
   }
 
-  // Topic 2: Proactive Uptime % Formula & Calculation
+  // Topic 3: Proactive Uptime % Formula & Calculation
   if (lower.includes('proactive uptime') || lower.includes('proactive switch uptime') || lower.includes('actual resolution')) {
     return {
       topic: 'proactive_uptime_formula',
@@ -320,7 +360,7 @@ $$\\text{Proactive Uptime \\%} = \\max\\left(0, \\min\\left(100, \\frac{\\text{T
     };
   }
 
-  // Topic 3: Health Score Calculation
+  // Topic 4: Health Score Calculation
   if (lower.includes('health score') || lower.includes('health label') || lower.includes('health calculation')) {
     return {
       topic: 'health_score_formula',
@@ -336,10 +376,10 @@ $$\\text{Health Score} = \\text{Math.round}\\left(0.7 \\times \\text{Overall Upt
     };
   }
 
-  // Topic 4: SLA Target & Compliance
+  // Topic 5: SLA Target & Compliance
   if (lower.includes('sla') || lower.includes('breach') || lower.includes('compliance') || lower.includes('target')) {
-    const breachingDevices = devices.filter(d => !d.__isStock && d.__slaBreach);
-    const breachingSites = sites.filter(s => parseFloat(s.jflSwitchUptime) < (exec.slaTarget || 99.3));
+    const breachingDevices = devices.filter(d => d && !d.__isStock && d.__slaBreach);
+    const breachingSites = sites.filter(s => s && parseFloat(s.jflSwitchUptime) < (exec.slaTarget || 99.3));
 
     let siteDetails = breachingSites.length > 0
       ? breachingSites.map(s => `- **${s.siteId}**: JFL Uptime ${s.jflSwitchUptime}% (Primary RCA: ${s.primaryRcaSwitches})`).join('\n')
@@ -359,31 +399,14 @@ ${siteDetails}`
     };
   }
 
-  // Topic 5: Specific Site Lookup
-  const matchedSite = sites.find(s => lower.includes(s.siteId.toLowerCase()));
-  if (matchedSite) {
-    return {
-      topic: 'site_detail',
-      text: `### 📍 Site Intelligence: ${matchedSite.siteId}
-
-- **Total Devices**: **${matchedSite.deviceCount}** (${matchedSite.switchCount} Switches, ${matchedSite.apCount} APs)
-- **JFL Switch Uptime %**: **${matchedSite.jflSwitchUptime}%**
-- **Proactive Switch Uptime %**: **${matchedSite.proactiveSwitchUptime}%**
-- **Primary RCA Driver (Switches)**: **${matchedSite.primaryRcaSwitches || 'Stable Operations'}**
-- **AP Incidents**: **${matchedSite.apIncidents}** incident(s) across **${matchedSite.uniqueAPsWithIncidents}** unique AP(s)
-- **Primary RCA Driver (APs)**: **${matchedSite.primaryRcaAPs || 'Stable Operations'}**
-- **Health Score**: **${matchedSite.healthScore}/100** (${matchedSite.healthLabel})`
-    };
-  }
-
   // Topic 6: RCA Breakdown & Primary Drivers
   if (lower.includes('rca') || lower.includes('root cause') || lower.includes('reason') || lower.includes('driver')) {
     return {
       topic: 'rca_drivers',
       text: `### 🔍 Root Cause Analysis (RCA) Primary Drivers
 
-- **Primary RCA Driver (Switches)**: **${exec.primaryRcaSwitches || 'Stable Operations'}**
-- **Primary RCA Driver (APs)**: **${exec.primaryRcaAPs || 'Stable Operations'}**
+- **Primary RCA Driver (Switches)**: **${exec.primaryRcaSwitches || 'Stable Operations (No Incidents)'}**
+- **Primary RCA Driver (APs)**: **${exec.primaryRcaAPs || 'Stable Operations (No Incidents)'}**
 
 **Rule**: Primary RCA drivers are calculated by selecting the highest incident count category per site/device type. When 0 incidents occur, the engine displays **Stable Operations (No Incidents)**.`
     };
@@ -399,7 +422,7 @@ ${siteDetails}`
 - **Reporting Period**: **${period}**
 - **Total Operational Infrastructure**: **${exec.totalDevices || 0}** Devices across **${exec.totalSites || 0}** Sites (${exec.totalSwitches || 0} Switches, ${exec.totalAPs || 0} APs)
 - **Overall JFL Switch Uptime**: **${exec.jflSwitchUptime || exec.overallUptime || '100.00'}%** (Target: **${exec.slaTarget || 99.3}%**)
-- **Infrastructure Health Score**: **${exec.healthScore || 100}/100** (${exec.healthLabel || 'Optimal'})
+- **Infrastructure Health Score**: **${exec.healthScore || 100}/100** (${exec.healthLabel || 'Optimal Operations'})
 
 **I can answer any question about**:
 1. **Formulas & Calculations**: *"Explain JFL Uptime formula"*, *"How is Proactive Uptime computed?"*, *"Explain Health Score"*.
@@ -410,3 +433,4 @@ ${siteDetails}`
 }
 
 module.exports = { processChatQuery };
+
