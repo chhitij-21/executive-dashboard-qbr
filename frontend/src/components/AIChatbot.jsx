@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { API_BASE_URL } from '../config/apiConfig';
+import { API_BASE_URL } from '../config/api';
 
 export function AIChatbot({ jobId }) {
   const [isOpen, setIsOpen] = useState(false);
