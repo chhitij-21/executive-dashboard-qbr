@@ -394,9 +394,9 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
     // Resolve target job dataset
     let job = null;
     const reqJobId = jobId || 'latest';
-    if (reqJobId === 'latest' || reqJobId === 'default') {
+    if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
       const history = historyService.getHistory();
-      job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
     } else {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
     }
@@ -576,11 +576,11 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
 
 // ── Dashboard JSON Endpoint ────────────────────────────────────────────────
 app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashboard'], async (req, res) => {
-  const reqJobId = req.params.jobId || req.query.jobId || 'latest';
+  const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
   const siteFilter = req.query.site || req.query.location || 'ALL';
   let job = null;
 
-  if (reqJobId === 'latest' || reqJobId === 'default') {
+  if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
     const history = historyService.getHistory(); // history is sorted newest-first
     job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
   } else {
@@ -750,10 +750,10 @@ app.all(['/api/switch-mode', '/switch-mode'], async (req, res) => {
 //
 const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
   try {
-    const reqJobId = req.params.jobId;
+    const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
     let job = null;
 
-    if (reqJobId === 'latest' || reqJobId === 'default') {
+    if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
       const history = historyService.getHistory(); // history is sorted newest-first
       job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
     } else {

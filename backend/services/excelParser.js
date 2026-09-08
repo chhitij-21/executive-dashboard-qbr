@@ -331,8 +331,8 @@ function parseIncidentSheet(rows) {
       ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Old Serial', 'Replaced Device', 'Replaced Serial No']),
       NewSerial:      getColVal(row, ['New Serial', 'Replacement Serial', 'New Serial No']),
       AccountName:    getColVal(row, ['Account Name', 'AccountName', 'Customer Name', 'Customer', 'Account']),
-      ProactiveUptimePct:  getColVal(row, ['Proactive -Uptime%', 'Proactive Uptime %', 'Average of Proactive -Uptime%']),
-      JFLUptimePct:        getColVal(row, ['JFL -Uptime %', 'JFL Uptime %', 'Average of JFL -Uptime %']),
+      ProactiveUptimePct:  getColVal(row, ['Proactive -Uptime%', 'Proactive Uptime %', 'Proactive Uptime', 'Proactive-Uptime%', 'Average of Proactive -Uptime%']),
+      JFLUptimePct:        getColVal(row, ['JFL -Uptime %', 'JFL Uptime %', 'JFL Uptime', 'JFL-Uptime %', 'Average of JFL -Uptime %']),
       AgreedResolutionSLAMin: getColVal(row, ['Agreed Resolution SLA (min)', 'Agreed SLA (min)']),
       __source:       row.__source,
     };

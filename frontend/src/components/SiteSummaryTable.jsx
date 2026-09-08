@@ -65,15 +65,13 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
 
               const swRca = rawSwRca && !['None', 'Not case received', 'N/A', ''].includes(rawSwRca) 
                 ? rawSwRca 
-                : (site.incidentCount === 0 ? '' : 'Stable operations (No Incidents)');
+                : 'Stable Operations (No Incidents)';
 
               const apRca = rawApRca && !['None', 'Not case received', 'N/A', ''].includes(rawApRca) 
                 ? rawApRca 
-                : (site.incidentCount === 0 ? '' : 'Stable operations (No Incidents)');
+                : 'Stable Operations (No Incidents)';
 
-              const apIncDisplay = (site.apIncidents === 0 && site.uniqueAPsWithIncidents === 0 && site.incidentCount === 0)
-                ? '0'
-                : `${site.apIncidents ?? 0}/${site.uniqueAPsWithIncidents ?? 0}`;
+              const apIncDisplay = `${site.apIncidents ?? 0}/${site.uniqueAPsWithIncidents ?? 0}`;
 
               return (
                 <tr

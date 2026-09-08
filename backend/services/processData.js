@@ -593,21 +593,37 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const allLocMap = {};
 
   allLocationRows.forEach((row) => {
-    const serial = String(row['Serial No.'] || row['Serial No'] || '').trim();
+    const serial = String(row['Serial No.'] || row['Serial No'] || row['Device ID'] || row['DeviceID'] || row['Hostname'] || '').trim();
     if (!serial) return;
     const entry = {
-      jflUptime:      normaliseUptimePct(row['Average of JFL -Uptime %']),
-      proactiveUptime:normaliseUptimePct(row['Average of Proactive -Uptime%']),
+      jflUptime:      normaliseUptimePct(row['Average of JFL -Uptime %'] || row['JFL -Uptime %'] || row['JFL Uptime %'] || row['JFL Uptime']),
+      proactiveUptime:normaliseUptimePct(row['Average of Proactive -Uptime%'] || row['Proactive -Uptime%'] || row['Proactive Uptime %'] || row['Proactive Uptime']),
       location:       row['Location'] || '',
       deviceType:     row['Device Type'] || '',
     };
-    // Index by serial number (primary key from the sheet)
     allLocMap[serial] = entry;
-    // Also index by hostname if the serialToHostMap already resolved it,
-    // so the lookup at line 344 works after devices are remapped to hostnames.
     const mappedHost = serialToHostMap[serial];
     if (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown') {
       allLocMap[mappedHost] = entry;
+    }
+  });
+
+  // Also populate allLocMap from parsed incident rows (which may contain per-device/incident uptimes)
+  incidents.forEach((inc) => {
+    const keys = [inc.DeviceID, inc.SerialNo, inc.Hostname].filter(Boolean);
+    const jflVal = normaliseUptimePct(inc.JFLUptimePct || inc['JFL -Uptime %'] || inc['JFL Uptime %'] || inc['JFL Uptime']);
+    const proVal = normaliseUptimePct(inc.ProactiveUptimePct || inc['Proactive -Uptime%'] || inc['Proactive Uptime %'] || inc['Proactive Uptime']);
+
+    if (jflVal !== null || proVal !== null) {
+      keys.forEach((k) => {
+        if (!allLocMap[k]) allLocMap[k] = { location: inc.Location || '', deviceType: inc.DeviceType || '' };
+        if (jflVal !== null && (allLocMap[k].jflUptime === undefined || allLocMap[k].jflUptime === null)) {
+          allLocMap[k].jflUptime = jflVal;
+        }
+        if (proVal !== null && (allLocMap[k].proactiveUptime === undefined || allLocMap[k].proactiveUptime === null)) {
+          allLocMap[k].proactiveUptime = proVal;
+        }
+      });
     }
   });
 
@@ -715,10 +731,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const actResMins        = incDown ? incDown.actualResTime : 0;
     const totResMins        = incDown ? incDown.totalResTime : 0;
 
-    let jflUptime = upData?.jflUptime ?? null;
-    let proactiveUptime = upData?.proactiveUptime ?? null;
+    let jflUptime = upData?.jflUptime ?? normaliseUptimePct(d['JFL -Uptime %'] || d['JFL Uptime %'] || d.JFLUptimePct) ?? null;
+    let proactiveUptime = upData?.proactiveUptime ?? normaliseUptimePct(d['Proactive -Uptime%'] || d['Proactive Uptime %'] || d.ProactiveUptimePct) ?? null;
 
-    if (jflUptime === null || isNaN(jflUptime) || holdMins > 0) {
+    if (jflUptime === null || isNaN(jflUptime)) {
       // JFL Switch / Device Uptime % Formula (AGENTS.md Rule 3 & SSOT):
       // ((Total Available Minutes - Time on Hold) / Total Available Minutes) * 100
       const safeHold = Math.max(0, holdMins);
@@ -726,7 +742,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       jflUptime = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
     }
 
-    if (proactiveUptime === null || isNaN(proactiveUptime) || proactiveDownMins > 0) {
+    if (proactiveUptime === null || isNaN(proactiveUptime)) {
       // Proactive Switch / Device Uptime % Formula (AGENTS.md Rule 3 & SSOT):
       // ((Total Available Minutes - Proactive Downtime) / Total Available Minutes) * 100
       // Falls back to holdMins (Time on Hold) when Actual Resolution Time is absent for open/on-hold tickets,

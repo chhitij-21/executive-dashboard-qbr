@@ -309,11 +309,9 @@ function MainPortal() {
           </div>
           <div className="download-header-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="status-badge completed">✓ Validated Engine</div>
-            {jobId && jobId !== 'latest' && jobId !== 'default' && (
-              <a href={`${API_BASE_URL}/api/pdf/${jobId}`} className="btn-primary" download>
-                📄 Download PDF Report
-              </a>
-            )}
+            <a href={`${API_BASE_URL}/api/pdf/${jobId || 'latest'}`} className="btn-primary" download>
+              📄 Download PDF Report
+            </a>
           </div>
         </div>
 
