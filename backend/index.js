@@ -848,14 +848,14 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
             pdfPath: freshPdfPath,
           });
 
-          console.log(`[server] Fresh PDF generated & served: ${freshPdfPath}`);
+          console.log(`[server] Fresh HTML Report generated & served: ${freshPdfPath}`);
           targetPath = freshPdfPath;
         } catch (genErr) {
-          console.error('[server] On-the-fly PDF generation failed:', genErr.message);
-          return res.status(500).json({ error: `PDF generation failed: ${genErr.message}` });
+          console.error('[server] On-the-fly HTML Report generation failed:', genErr.message);
+          return res.status(500).json({ error: `Report generation failed: ${genErr.message}` });
         }
       } else {
-        return res.status(404).json({ error: 'Dashboard data not found for PDF generation. Please re-upload your files.' });
+        return res.status(404).json({ error: 'Dashboard data not found for report generation. Please re-upload your files.' });
       }
 
       const resolvedTarget = path.resolve(targetPath);
@@ -869,8 +869,13 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
         return res.status(403).json({ error: 'Access denied.' });
       }
 
-      console.log(`[server] Serving PDF download: ${resolvedTarget}`);
-      return res.download(resolvedTarget);
+      // Serve HTML report — opens in browser where user can Ctrl+P → Save as PDF.
+      // This is more reliable than Puppeteer across all platforms.
+      console.log(`[server] Serving HTML Report download: ${resolvedTarget}`);
+      const htmlContent = fs.readFileSync(resolvedTarget, 'utf8');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', 'inline; filename="JFL_QBR_Executive_Report.html"');
+      return res.send(htmlContent);
     }
 
     // ── PPT: Generate fresh PPT on-the-fly from dashboard_data.json (SSOT guarantee) ────
@@ -988,7 +993,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 };
 
 app.get(['/api/pdf/:jobId', '/pdf/:jobId', '/api/pdf', '/pdf'], sendFileHelper('pdfPath', 'JFL_QBR_Report.pdf'));
-app.get(['/api/ppt/:jobId', '/ppt/:jobId'], sendFileHelper('pptPath', 'JFL_QBR_Report.pptx'));
+app.get(['/api/ppt/:jobId', '/ppt/:jobId', '/api/ppt', '/ppt'], sendFileHelper('pptPath', 'JFL_QBR_Report.pptx'));
 app.get(['/api/report/:jobId', '/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
 app.get(['/api/error-report/:jobId', '/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
 app.get(['/api/data-quality/:jobId', '/data-quality/:jobId'], sendFileHelper('dataQualityPath', 'data_quality_report.md'));

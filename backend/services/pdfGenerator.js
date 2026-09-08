@@ -1,15 +1,22 @@
 // backend/services/pdfGenerator.js
-// Executive PDF Generator: Renders QBR Data Model (SSOT) to print-ready Executive PDF.
+// Executive PDF Generator: Renders QBR Data Model (SSOT) to print-ready Executive HTML Report.
+// NOTE: Puppeteer is intentionally NOT used — it is an optional heavy dependency not available
+// on all platforms. Instead, we generate a beautiful print-ready HTML file that users can
+// open in any browser and print/save as PDF via Ctrl+P → Save as PDF.
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
 /**
- * Generates an executive QBR PDF report directly from the SSOT qbrData model.
+ * Generates an executive QBR HTML report directly from the SSOT qbrData model.
+ * Writes a fully self-contained HTML file that renders as a professional executive report.
+ *
+ * To convert to PDF: Open the HTML file in Chrome → Ctrl+P → Save as PDF → Landscape → A4.
+ *
  * @param {Object} qbrData - Processed dashboard data model
- * @param {string} templatePath - Optional template path (ignored or used for background assets)
- * @param {string} outputPath - Target PDF file path
+ * @param {string} templatePath - Optional template path (unused, kept for API compatibility)
+ * @param {string} outputPath - Target file path (.pdf extension is accepted; HTML is written)
  */
 async function generatePDF(qbrData, templatePath, outputPath) {
   const targetPath = outputPath || path.join(process.env.VERCEL ? os.tmpdir() : 'reports', `JFL_QBR_${Date.now()}.pdf`);
@@ -20,37 +27,11 @@ async function generatePDF(qbrData, templatePath, outputPath) {
 
   const htmlContent = buildHTMLReport(qbrData);
 
-  try {
-    const puppeteer = require('puppeteer');
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none'],
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    });
-
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1440, height: 900 });
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 30000 });
-
-    await page.pdf({
-      path: targetPath,
-      format: 'A4',
-      landscape: true,
-      printBackground: true,
-      margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
-    });
-
-    await browser.close();
-    console.log(`[pdfGenerator] Executive QBR PDF successfully generated: ${targetPath}`);
-    return targetPath;
-  } catch (err) {
-    console.warn(`[pdfGenerator] Puppeteer PDF error: ${err.message}. Writing HTML fallback to ${targetPath.replace('.pdf', '.html')}`);
-    const fallbackHtmlPath = targetPath.replace('.pdf', '.html');
-    fs.writeFileSync(fallbackHtmlPath, htmlContent, 'utf8');
-    // If pdf fails, write HTML to targetPath as well for availability
-    fs.writeFileSync(targetPath, htmlContent, 'utf8');
-    return targetPath;
-  }
+  // Write HTML directly — no Puppeteer required.
+  // The HTML is fully self-contained with inline styles and is print-optimised via @media print.
+  fs.writeFileSync(targetPath, htmlContent, 'utf8');
+  console.log(`[pdfGenerator] Executive QBR HTML Report generated: ${targetPath}`);
+  return targetPath;
 }
 
 function buildHTMLReport(data) {
@@ -214,9 +195,49 @@ function buildHTMLReport(data) {
     .cover-title { font-size: 32px; font-weight: 800; margin-bottom: 8px; color: #38bdf8; }
     .cover-subtitle { font-size: 18px; color: #cbd5e1; margin-bottom: 24px; }
     .cover-meta { background: rgba(255,255,255,0.08); padding: 16px 28px; border-radius: 8px; font-size: 13px; color: #f8fafc; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff; }
+      .page { height: auto; page-break-after: always; }
+    }
+    @media screen {
+      body { background: #f1f5f9; padding: 20px; }
+      .page {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        margin-bottom: 32px;
+        padding: 28px 32px;
+        max-width: 1200px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .print-hint {
+        background: linear-gradient(135deg, #0f172a, #1e3a5f);
+        color: #e0f2fe;
+        padding: 14px 28px;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: 10px;
+        margin-bottom: 28px;
+        max-width: 1200px;
+        margin-left: auto;
+        margin-right: auto;
+        box-shadow: 0 2px 8px rgba(2,132,199,0.3);
+      }
+      .print-hint strong { color: #38bdf8; }
+      .print-hint kbd { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-family: monospace; }
+    }
   </style>
 </head>
 <body>
+
+  <!-- SCREEN-ONLY PRINT HINT BANNER (hidden when printing) -->
+  <div class="print-hint no-print">
+    📄 <strong>Executive QBR Report</strong> &nbsp;|&nbsp;
+    To save as PDF: Press <kbd>Ctrl+P</kbd> (Windows) or <kbd>⌘+P</kbd> (Mac) &nbsp;→&nbsp; Destination: <strong>Save as PDF</strong> &nbsp;→&nbsp; Layout: <strong>Landscape</strong> &nbsp;→&nbsp; Save
+  </div>
 
   <!-- PAGE 1: COVER & EXECUTIVE OVERVIEW -->
   <div class="page">

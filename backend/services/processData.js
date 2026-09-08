@@ -1188,15 +1188,32 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
 
   incidents.forEach(inc => {
     const rawSite = String(inc.SiteID || inc.Location || '').trim();
-    const site = (!isGenericLocation(rawSite) ? normalizeSiteName(rawSite) : null) || devToSiteMap[inc.DeviceID] || devToSiteMap[inc.SerialNo] || devToSiteMap[inc.Hostname] || 'Unknown';
+    const site = (!isGenericLocation(rawSite) ? normalizeSiteName(rawSite) : null)
+      || devToSiteMap[inc.DeviceID]
+      || devToSiteMap[inc.SerialNo]
+      || devToSiteMap[inc.Hostname]
+      || null;
 
-    const targetSite = (site && !isGenericLocation(site)) ? site : 'Unassigned / Other';
-    if (!sitesMap[targetSite]) sitesMap[targetSite] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
-    sitesMap[targetSite].incidents.push(inc);
+    // Only assign incident to a site that already has devices OR is a known valid site.
+    // Never create a new phantom 'Unknown' / 'Unassigned' entry purely from unresolved incidents.
+    const VALID_SITES_SET = new Set(Object.keys(sitesMap));
+    const targetSite = (site && !isGenericLocation(site) && VALID_SITES_SET.has(site)) ? site
+      : (site && !isGenericLocation(site)) ? site
+      : null;
+
+    if (targetSite) {
+      if (!sitesMap[targetSite]) sitesMap[targetSite] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
+      sitesMap[targetSite].incidents.push(inc);
+    }
+    // Incidents with no resolvable site are intentionally dropped from site buckets.
+    // They still appear in the global incident totals via buildAllAnalytics.
   });
 
+  // Exclude internal phantom buckets: 'Unknown', 'Unassigned / Other', and any generic location strings.
+  // These are internal aggregation buckets only — never customer-facing site rows.
+  const EXCLUDED_BUCKETS = new Set(['Unknown', 'Unassigned / Other', 'Unassigned', 'Other']);
   return Object.entries(sitesMap)
-    .filter(([siteId, s]) => !isGenericLocation(siteId) || s.incidents.length > 0)
+    .filter(([siteId]) => !isGenericLocation(siteId) && !EXCLUDED_BUCKETS.has(siteId))
     .map(([siteId, s]) => {
     const swJflUps = s.switches.map(d => d.__jflUptime ?? 100);
     const swProUps = s.switches.map(d => d.__proactiveUptime ?? 100);
@@ -1823,9 +1840,12 @@ function filterDashboardBySite(data, siteFilter) {
   }
   execSummary.totalSites = 1;
 
+  // Preserve original period options from the full dataset so uptime labels/targets remain correct.
   const periodOptions = {
-    periodLabel: data.switchAnalytics?.periodLabel || 'Monthly Uptime %',
-    periodType:  data.switchAnalytics?.periodType  || 'monthly',
+    periodLabel:  data.switchAnalytics?.periodLabel  || 'Monthly Uptime %',
+    periodType:   data.switchAnalytics?.periodType   || 'monthly',
+    startDate:    data.report_period?.start_date     || null,
+    endDate:      data.report_period?.end_date       || null,
   };
   const switchAn     = buildSwitchAnalytics(switches, enrichedIncidents, periodOptions);
   const apAn         = buildAPAnalytics(aps, enrichedIncidents, activeDevices);
@@ -1836,8 +1856,11 @@ function filterDashboardBySite(data, siteFilter) {
   return {
     ...data,
     siteFilterApplied: normalizeSiteName(siteFilter),
+    // Always preserve the original report_period from the full dataset — never lose period label on site drill-down.
+    report_period:    data.report_period || null,
+    reportingPeriod:  data.reportingPeriod || '',
     executiveSummary: execSummary,
-    siteSummary: data.siteSummary || [],
+    siteSummary:      data.siteSummary || [],
     switchAnalytics:  switchAn,
     apAnalytics:      apAn,
     incidentAnalytics:incAn,

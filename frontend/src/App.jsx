@@ -309,8 +309,24 @@ function MainPortal() {
           </div>
           <div className="download-header-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="status-badge completed">✓ Validated Engine</div>
-            <a href={`${API_BASE_URL}/api/pdf/${jobId || 'latest'}`} className="btn-primary" download>
-              📄 Download PDF Report
+            <a
+              href={`${API_BASE_URL}/api/pdf/${jobId || 'latest'}`}
+              className="btn-primary"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Opens the executive HTML report in your browser. Press Ctrl+P → Save as PDF to export."
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              📄 View HTML Report
+            </a>
+            <a
+              href={`${API_BASE_URL}/api/ppt/${jobId || 'latest'}`}
+              className="btn-secondary"
+              download
+              title="Download the PowerPoint presentation"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              📊 Download PPT
             </a>
           </div>
         </div>
@@ -373,8 +389,13 @@ function MainPortal() {
               <KpiCard title="Primary RCA Driver (Switches)" value={exec.primaryRcaSwitches || exec.primaryRca || 'Stable Operations (No Incidents)'} />
               {/* Primary RCA Driver (APs) — reads from AP-specific field with fallback */}
               <KpiCard title="Primary RCA Driver (APs)" value={exec.primaryRcaAPs || exec.primaryRcaForAPs || 'Stable Operations (No Incidents)'} />
+              {/* JFL Switch Uptime & Proactive Switch Uptime — key executive KPIs from SSOT */}
+              <KpiCard title="JFL Switch Uptime" value={exec.jflSwitchUptime} unit="%" />
+              <KpiCard title="Proactive Switch Uptime" value={exec.proactiveSwitchUptime} unit="%" />
               <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" />
               <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" />
+              {/* SLA Uptime Target — dynamically 99.9% (monthly) or 99.3% (quarterly) from SSOT */}
+              <KpiCard title="SLA Uptime Target" value={slaAn.slaTarget ?? exec.slaTarget ?? 99.3} unit="%" />
               <KpiCard title="SLA Compliance" value={exec.slaCompliance} unit="%" />
               <KpiCard title="Health Score" value={`${exec.healthScore} (${exec.healthLabel})`} />
               <KpiCard title="Total Incidents" value={exec.totalIncidents} />
