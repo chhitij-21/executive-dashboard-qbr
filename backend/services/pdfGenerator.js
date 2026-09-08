@@ -387,6 +387,13 @@ function buildHTMLReport(data) {
     </div>
   </div>
 
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        try { window.print(); } catch (e) {}
+      }, 600);
+    };
+  </script>
 </body>
 </html>
   `;

@@ -597,41 +597,50 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
     const candidates = [
       path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
       path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard.json'),
-      path.resolve('data', 'bundled_default', 'dashboard_data.json'),
       path.resolve('data', 'dashboard_data.json'),
+      path.resolve('data', 'bundled_default', 'dashboard_data.json'),
     ];
     dPath = candidates.find((p) => fs.existsSync(p));
   }
 
   // If no dashboard JSON is found from previous jobs, attempt auto-processing candidate Excel files in workspace root
   if (!dPath || !fs.existsSync(dPath)) {
-    const incCandidates = [
-      path.resolve('1 (1).xlsx'),
-      path.resolve('1.xlsx'),
-      path.join(__dirname, '..', '1 (1).xlsx'),
-      path.join(__dirname, '..', '1.xlsx'),
-      path.join(__dirname, '..', '..', 'New folder', '1 (1).xlsx'),
-      path.join(__dirname, '..', '..', 'New folder', '1.xlsx'),
-      path.resolve('SLA_Compliance_Report.csv'),
-      path.resolve('jfl incidents.xlsx'),
-      path.join(__dirname, '..', 'jfl incidents.xlsx'),
-      path.join(__dirname, '..', '..', 'New folder', 'jfl incidents.xlsx'),
-    ];
-    const invCandidates = [
-      path.resolve('2.xlsx'),
-      path.join(__dirname, '..', '2.xlsx'),
-      path.join(__dirname, '..', '..', 'New folder', '2.xlsx'),
-      path.resolve('JFL Updated Inventory.xlsx'),
-      path.join(__dirname, '..', 'JFL Updated Inventory.xlsx'),
-      path.join(__dirname, '..', '..', 'New folder', 'JFL Updated Inventory.xlsx'),
-    ];
+    // ── Smart Excel file discovery: scan project root and common locations for ANY .xlsx file ──
+    // This removes the need to rename files to '1.xlsx' / '2.xlsx'.
+    const scanDirs = [
+      path.resolve('.'),                    // backend working dir
+      path.resolve('..'),                   // project root
+      path.join(__dirname, '..'),           // one up from backend/
+      path.join(__dirname, '..', '..'),     // two up (for nested structures)
+    ].filter((d, i, arr) => fs.existsSync(d) && arr.indexOf(d) === i); // unique existing dirs
 
-    const incPath = incCandidates.find((p) => fs.existsSync(p));
-    const invPath = invCandidates.find((p) => fs.existsSync(p));
+    const allXlsxFiles = [];
+    scanDirs.forEach((dir) => {
+      try {
+        fs.readdirSync(dir)
+          .filter((f) => f.toLowerCase().endsWith('.xlsx') || f.toLowerCase().endsWith('.xls') || f.toLowerCase().endsWith('.csv'))
+          .forEach((f) => {
+            const fp = path.join(dir, f);
+            if (!allXlsxFiles.includes(fp)) allXlsxFiles.push(fp);
+          });
+      } catch (e) {}
+    });
+
+    // Smart-pair: incident file = contains 'report', 'sla', 'incident', 'monthly', 'quarterly', 'compliance', 'raw'
+    // Inventory file = contains 'inventory', 'updated', 'device', 'asset'
+    const incKeywords = /report|sla|incident|monthly|quarterly|compliance|raw/i;
+    const invKeywords = /inventory|updated\s*inventory|device\s*list|asset|stock/i;
+
+    let incPath = allXlsxFiles.find((f) => incKeywords.test(path.basename(f)));
+    let invPath = allXlsxFiles.find((f) => invKeywords.test(path.basename(f)));
+
+    // Fallback: if no explicit pairing, use first file as incident, second as inventory
+    if (!incPath && allXlsxFiles.length > 0) incPath = allXlsxFiles[0];
+    if (!invPath && allXlsxFiles.length > 1) invPath = allXlsxFiles.find((f) => f !== incPath) || null;
 
     if (incPath) {
       try {
-        console.log(`[server] Auto-processing candidate workbooks (${path.basename(incPath)}, ${invPath ? path.basename(invPath) : 'none'})...`);
+        console.log(`[server] Auto-processing discovered workbooks: incident="${path.basename(incPath)}", inventory="${invPath ? path.basename(invPath) : 'none'}"`);
         const autoJobId = 'auto-jfl-active';
         const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
 

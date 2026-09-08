@@ -314,10 +314,10 @@ function MainPortal() {
               className="btn-primary"
               target="_blank"
               rel="noopener noreferrer"
-              title="Opens the executive HTML report in your browser. Press Ctrl+P → Save as PDF to export."
+              title="Opens executive report formatted for print/PDF export. Auto-triggers print dialog (Save as PDF)."
               style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
             >
-              📄 View HTML Report
+              📄 Download / View PDF
             </a>
             <a
               href={`${API_BASE_URL}/api/ppt/${jobId || 'latest'}`}

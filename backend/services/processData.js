@@ -699,18 +699,38 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
     const incProactiveMin = actMin > 0 ? actMin : holdMin;
 
+    // ─── Per-incident Excel uptime values (ServiceNow-computed, relative to full period) ────
+    // JFLUptimePct per row = (window - that_incident_hold) / window * 100 from ServiceNow.
+    // ProactiveUptimePct per row = (window - actual_resolution) / window * 100 from ServiceNow.
+    // These are more accurate than recalculating from raw minutes because ServiceNow already
+    // handles business hours, calendar adjustments, and SLA exclusions.
+    const rowJflPct       = parseFloat(inc.JFLUptimePct);
+    const rowProactivePct = parseFloat(inc.ProactiveUptimePct);
+
     let entry = null;
     for (const k of normKeys) {
       if (incDowntimeMap[k]) { entry = incDowntimeMap[k]; break; }
     }
     if (!entry) {
-      entry = { holdTime: 0, proactiveDowntime: 0, actualResTime: 0, totalResTime: 0, ticketCount: 0 };
+      entry = {
+        holdTime: 0, proactiveDowntime: 0, actualResTime: 0, totalResTime: 0, ticketCount: 0,
+        // Arrays to track per-incident Excel uptime values for accurate min() aggregation
+        rowJflPcts: [], rowProactivePcts: [],
+      };
     }
     if (holdMin > 0) entry.holdTime += holdMin;
     if (incProactiveMin > 0) entry.proactiveDowntime += incProactiveMin;
     if (actMin > 0) entry.actualResTime += actMin;
     if (totMin > 0) entry.totalResTime += totMin;
     entry.ticketCount += 1;
+
+    // Collect valid per-incident Excel uptime percentages for final min() computation
+    if (!isNaN(rowJflPct) && rowJflPct >= 0 && rowJflPct <= 100) {
+      entry.rowJflPcts.push(rowJflPct);
+    }
+    if (!isNaN(rowProactivePct) && rowProactivePct >= 0 && rowProactivePct <= 100) {
+      entry.rowProactivePcts.push(rowProactivePct);
+    }
 
     for (const k of normKeys) {
       incDowntimeMap[k] = entry;
@@ -731,22 +751,35 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const actResMins        = incDown ? incDown.actualResTime : 0;
     const totResMins        = incDown ? incDown.totalResTime : 0;
 
+    // ── Priority 1: Use pre-computed uptime from the 'All Location' sheet (most accurate, direct from source system) ──
     let jflUptime = upData?.jflUptime ?? normaliseUptimePct(d['JFL -Uptime %'] || d['JFL Uptime %'] || d.JFLUptimePct) ?? null;
     let proactiveUptime = upData?.proactiveUptime ?? normaliseUptimePct(d['Proactive -Uptime%'] || d['Proactive Uptime %'] || d.ProactiveUptimePct) ?? null;
 
+    // ── Priority 2: Use per-incident Excel uptime values (ServiceNow-computed, per-incident relative to full period) ──
+    // For a device with MULTIPLE incidents, each incident's JFLUptimePct represents the
+    // uptime impact of THAT specific incident relative to the total period window.
+    // To avoid double-counting overlapping hold times, we use the MINIMUM per-incident uptime
+    // (worst uptime = highest downtime impact from any single incident).
+    // This is conservative but prevents artificially low values from summing non-additive hold times.
+    if ((jflUptime === null || isNaN(jflUptime)) && incDown?.rowJflPcts?.length > 0) {
+      jflUptime = Math.min(...incDown.rowJflPcts);
+      jflUptime = parseFloat(Math.max(0, Math.min(100, jflUptime)).toFixed(2));
+    }
+    if ((proactiveUptime === null || isNaN(proactiveUptime)) && incDown?.rowProactivePcts?.length > 0) {
+      proactiveUptime = Math.min(...incDown.rowProactivePcts);
+      proactiveUptime = parseFloat(Math.max(0, Math.min(100, proactiveUptime)).toFixed(2));
+    }
+
+    // ── Priority 3 (fallback): Compute from summed hold times if no Excel uptime values exist ──
+    // WARNING: This path can double-count downtime if a device has multiple overlapping incidents.
+    // It is only reached when the Excel does not have JFLUptimePct / ProactiveUptimePct columns.
     if (jflUptime === null || isNaN(jflUptime)) {
-      // JFL Switch / Device Uptime % Formula (AGENTS.md Rule 3 & SSOT):
-      // ((Total Available Minutes - Time on Hold) / Total Available Minutes) * 100
       const safeHold = Math.max(0, holdMins);
       const jflVal = ((windowMinutes - Math.min(windowMinutes, safeHold)) / windowMinutes) * 100;
       jflUptime = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
     }
 
     if (proactiveUptime === null || isNaN(proactiveUptime)) {
-      // Proactive Switch / Device Uptime % Formula (AGENTS.md Rule 3 & SSOT):
-      // ((Total Available Minutes - Proactive Downtime) / Total Available Minutes) * 100
-      // Falls back to holdMins (Time on Hold) when Actual Resolution Time is absent for open/on-hold tickets,
-      // so that devices with incidents are never incorrectly shown at 100.00%.
       const safePro = Math.max(0, proactiveDownMins);
       const proVal = ((windowMinutes - Math.min(windowMinutes, safePro)) / windowMinutes) * 100;
       proactiveUptime = Math.max(0, Math.min(100, parseFloat(proVal.toFixed(2))));
@@ -862,7 +895,19 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── 11. Save dashboard JSON ───────────────────────────────────────────────
   const dashPath = path.join(outputDir, 'dashboard_data.json');
   fs.writeFileSync(dashPath, JSON.stringify(qbrData, null, 2));
-  log('Dashboard JSON saved');
+  log('Dashboard JSON saved to job folder');
+
+  // Also write to data/dashboard_data.json as canonical latest so the dashboard
+  // always shows the correct most-recent run even after a server restart.
+  try {
+    const canonicalDir = path.resolve('data');
+    if (!fs.existsSync(canonicalDir)) fs.mkdirSync(canonicalDir, { recursive: true });
+    const canonicalPath = path.join(canonicalDir, 'dashboard_data.json');
+    fs.writeFileSync(canonicalPath, JSON.stringify(qbrData, null, 2));
+    log(`Dashboard JSON also saved to canonical path: ${canonicalPath}`);
+  } catch (canonErr) {
+    log(`WARNING: Could not write canonical dashboard_data.json: ${canonErr.message}`);
+  }
 
   writeFile(outputDir, 'error_report.md',
     pdfError ? `# Error Report\n\n## PDF Error\n\n> ${pdfError}` : '# Error Report\n\nNo errors.');
@@ -1127,31 +1172,32 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const activeSlaTarget = activeDevices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
   return {
-    customerName:       customerName || 'Jubilant Foodworks Ltd (JFL)',
-    reportingPeriod:    reportingPeriod || 'User Selected Period',
-    totalSites:         sites.size,
-    totalDevices:       total,
-    totalStockDevices:  stockDevices.length,
-    totalSwitches:      switches.length,
-    totalAPs:           aps.length,
-    apIncidents:        apIncidents.length,
+    customerName:           customerName || 'Jubilant Foodworks Ltd (JFL)',
+    reportingPeriod:        reportingPeriod || 'User Selected Period',
+    totalSites:             sites.size,
+    totalDevices:           total,
+    totalStockDevices:      stockDevices.length,
+    totalSwitches:          switches.length,
+    totalAPs:               aps.length,
+    apIncidents:            apIncidents.length,
     uniqueAPsWithIncidents,
     primaryRcaSwitches,
     primaryRcaAPs,
-    primaryRca:         primaryRcaSwitches,
-    primaryRcaForAPs:   primaryRcaAPs,
+    primaryRca:             primaryRcaSwitches,
+    primaryRcaForAPs:       primaryRcaAPs,
     overallUptime,
+    // ── Key uptime KPIs (SSOT) — exposed at executive summary level for dashboard KPI cards ──
     jflSwitchUptime,
     proactiveSwitchUptime,
-    incidentFreePercent:incidentFreePct,
+    incidentFreePercent:    incidentFreePct,
     healthScore,
-    healthLabel:        ruleEngine.getHealthLabel(healthScore),
-    slaCompliance:      slaPct,
-    slaTarget:          activeSlaTarget,
-    totalIncidents:     incidents.length,
-    criticalIncidents:  sevSplit.critical,
-    majorIncidents:     sevSplit.major,
-    minorIncidents:     sevSplit.minor,
+    healthLabel:            ruleEngine.getHealthLabel(healthScore),
+    slaCompliance:          slaPct,
+    slaTarget:              activeSlaTarget,
+    totalIncidents:         incidents.length,
+    criticalIncidents:      sevSplit.critical,
+    majorIncidents:         sevSplit.major,
+    minorIncidents:         sevSplit.minor,
   };
 }
 
