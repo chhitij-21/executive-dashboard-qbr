@@ -383,6 +383,49 @@ app.post(['/api/analyze-excel', '/analyze-excel'], requireAuth, heavyRateLimit, 
   }
 });
 
+// ── Executive QBR AI Chatbot Assistant Endpoint ────────────────────────────
+app.post(['/api/chat', '/chat'], async (req, res) => {
+  try {
+    const { prompt, jobId } = req.body;
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'Prompt string is required.' });
+    }
+
+    // Resolve target job dataset
+    let job = null;
+    const reqJobId = jobId || 'latest';
+    if (reqJobId === 'latest' || reqJobId === 'default') {
+      const history = historyService.getHistory();
+      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+    } else {
+      job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+    }
+
+    let qbrData = null;
+    let dPath = job?.dashboardPath;
+    if (!dPath || !fs.existsSync(dPath)) {
+      const activeJobId = job?.jobId || reqJobId;
+      const candidates = [
+        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
+        path.resolve('data', 'dashboard_data.json'),
+        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+      ];
+      dPath = candidates.find((p) => fs.existsSync(p));
+    }
+
+    if (dPath && fs.existsSync(dPath)) {
+      try { qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8')); } catch (e) {}
+    }
+
+    const { processChatQuery } = require('./services/aiChatService');
+    const result = await processChatQuery(prompt, qbrData);
+    res.json({ success: true, prompt, ...result });
+  } catch (err) {
+    console.error('[server] Error in /api/chat:', err.message);
+    res.status(500).json({ error: `AI Chat processing error: ${err.message}` });
+  }
+});
+
 // ── Upload & Report Generation Workflow Endpoint ────────────────────────────
 app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields([
   { name: 'incidents', maxCount: 1 },

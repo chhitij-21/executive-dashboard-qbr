@@ -18,6 +18,7 @@ import { API_BASE_URL, apiFetch } from './config/api';
 import defaultDashboardData from './data/defaultDashboardData.json';
 // FINDING-025 FIX: Import shared utilities instead of duplicating them inline.
 import { normalizeLoc, isGenericLocation } from './utils/siteUtils';
+import { AIChatbot } from './components/AIChatbot';
 
 /**
  * ErrorBoundary — catches React render errors and shows a clean executive error card.
@@ -950,6 +951,7 @@ function MainPortal() {
         {tab === 'clients' && <ClientManager />}
       </main>
 
+      <AIChatbot jobId={jobId} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
     </div>
   );
