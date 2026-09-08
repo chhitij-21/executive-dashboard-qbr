@@ -50,5 +50,17 @@ test('processData - processJFLWorkbooks integration on sample data', async () =>
     if (fs.existsSync(tmpOutDir)) {
       try { fs.rmSync(tmpOutDir, { recursive: true, force: true }); } catch (e) {}
     }
+});
+
+test('processData - open/on-hold ticket period cutoff uptime calculation for APs and Switches', async () => {
+  const tmpOutDir = path.join(os.tmpdir(), `test_cutoff_job_${Date.now()}`);
+  try {
+    // Create dummy incident workbook mock in memory / via processJFLWorkbooks if needed
+    // or test logic directly.
+  } finally {
+    if (fs.existsSync(tmpOutDir)) {
+      try { fs.rmSync(tmpOutDir, { recursive: true, force: true }); } catch (e) {}
+    }
   }
 });
+

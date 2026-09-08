@@ -49,6 +49,7 @@ function loadHistory() {
       return {
         ...item,
         dashboardPath: normalize(item.dashboardPath),
+        pdfPath: normalize(item.pdfPath),
         pptPath: normalize(item.pptPath),
         reportPath: normalize(item.reportPath),
         dataQualityPath: normalize(item.dataQualityPath),
@@ -105,6 +106,7 @@ function recordReport(metadata) {
     reportVersion: metadata.reportVersion || '1.0',
     status: metadata.status || 'processing',
     dashboardPath: metadata.dashboardPath || null,
+    pdfPath: metadata.pdfPath || null,
     pptPath: metadata.pptPath || null,
     reportPath: metadata.reportPath || null,
     dataQualityPath: metadata.dataQualityPath || null,

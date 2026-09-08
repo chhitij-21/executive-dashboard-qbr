@@ -286,8 +286,7 @@ function MainPortal() {
         {activeDashboardData && !apiError && jobId && jobId !== 'latest' && jobId !== 'default' && (
           <div className="alert-box alert-success" style={{ marginBottom: '1rem', background: '#d4edda', color: '#155724', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #c3e6cb', fontWeight: 500 }}>
             <strong>Dashboard Generated Successfully</strong> •{' '}
-            {/* Only show PPT success if there's a real job to download */}
-            <strong>PowerPoint Generated Successfully</strong> • <strong>Validation Completed</strong> — <strong>Ready for Download</strong>
+            <strong>Executive PDF Report Generated Successfully</strong> • <strong>Validation Completed</strong> — <strong>Ready for Download</strong>
           </div>
         )}
 
@@ -310,8 +309,8 @@ function MainPortal() {
           <div className="download-header-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="status-badge completed">✓ Validated Engine</div>
             {jobId && jobId !== 'latest' && jobId !== 'default' && (
-              <a href={`${API_BASE_URL}/api/ppt/${jobId}`} className="btn-primary" download>
-                Download PPT
+              <a href={`${API_BASE_URL}/api/pdf/${jobId}`} className="btn-primary" download>
+                📄 Download PDF Report
               </a>
             )}
           </div>

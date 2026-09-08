@@ -229,12 +229,12 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
                               📈 Dashboard
                             </button>
                             <a
-                              href={`${API_BASE_URL}/api/ppt/${item.jobId}`}
+                              href={`${API_BASE_URL}/api/pdf/${item.jobId}`}
                               className="btn-action btn-ppt"
                               download
-                              title="Download PowerPoint Presentation"
+                              title="Download Executive PDF Report"
                             >
-                              📊 PPT
+                              📄 PDF
                             </a>
                             <a
                               href={`${API_BASE_URL}/api/report/${item.jobId}`}

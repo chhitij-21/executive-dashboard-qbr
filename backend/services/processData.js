@@ -11,6 +11,7 @@ const {
 } = require('./excelParser');
 const ruleEngine = require('./ruleEngine');
 const { generatePPT } = require('./pptGenerator');
+const { generatePDF } = require('./pdfGenerator');
 
 // Helper for returning structured failure results
 function fail(outputDir, errorCode, message, log) {
@@ -96,6 +97,23 @@ function applyHardwareReplacementSwaps(devices, incidents, log, slaTarget) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared Utilities (module-level)
 // ─────────────────────────────────────────────────────────────────────────────
+
+function getNormalizedKeys(item) {
+  if (!item) return [];
+  const keys = new Set();
+  [
+    item.DeviceID, item.SerialNo, item.Hostname,
+    item.rawSerial, item.Device, item.Serial, item.Host
+  ].forEach(val => {
+    if (val !== undefined && val !== null) {
+      const s = String(val).trim();
+      if (s && s.toLowerCase() !== 'n/a' && s.toLowerCase() !== 'unknown' && s.toLowerCase() !== 'null') {
+        keys.add(s.toLowerCase());
+      }
+    }
+  });
+  return Array.from(keys);
+}
 
 function parseNumeric(v) {
   if (v === null || v === undefined || v === '') return null;
@@ -621,11 +639,11 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   const windowMinutes = getAvailableMinutesForPeriod(periodMode, activeReportingPeriod, startDate, endDate);
 
-  // Aggregate downtime & hold time per device ID from raw incidents
+  // Aggregate downtime & hold time per device ID/Serial/Hostname from raw incidents
   const incDowntimeMap = {};
   incidents.forEach((inc) => {
-    const devId = inc.DeviceID;
-    if (!devId) return;
+    const normKeys = getNormalizedKeys(inc);
+    if (normKeys.length === 0) return;
 
     let actMin  = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
     let totMin  = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
@@ -637,7 +655,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     // RULE: For Open / On Hold tickets during the reporting period,
     // calculate the hold time elapsed from max(OpenTime, Period Start) up to the end of the reporting period (endDate 23:59:59 PM).
     if (isOpenOrOnHold) {
-      const openTimeRaw = inc.OpenTime || inc.CreatedTime || inc.created_at || inc['Open Date'];
+      const openTimeRaw = inc.OpenTime || inc.CreatedTime || inc.created_at || inc['Open Date'] || inc['Created Date'];
       if (openTimeRaw) {
         let openDt = parseAnyDate(openTimeRaw);
         if (openDt) {
@@ -652,10 +670,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
           if (effectiveEnd > effectiveStart) {
             const elapsedMins = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / 60000);
-            if (holdMin <= 0 || holdMin > elapsedMins) {
+            if (holdMin <= 0 || holdMin < elapsedMins) {
               holdMin = Math.max(0, elapsedMins);
             }
-            if (totMin <= 0 || totMin > elapsedMins) {
+            if (totMin <= 0 || totMin < elapsedMins) {
               totMin = Math.max(0, elapsedMins);
             }
           }
@@ -663,36 +681,58 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       }
     }
 
-    if (!incDowntimeMap[devId]) incDowntimeMap[devId] = { holdTime: 0, actualResTime: 0, totalResTime: 0 };
-    if (holdMin > 0) incDowntimeMap[devId].holdTime += holdMin;
-    if (actMin > 0) incDowntimeMap[devId].actualResTime += actMin;
-    if (totMin > 0) incDowntimeMap[devId].totalResTime += totMin;
+    const incProactiveMin = actMin > 0 ? actMin : holdMin;
+
+    let entry = null;
+    for (const k of normKeys) {
+      if (incDowntimeMap[k]) { entry = incDowntimeMap[k]; break; }
+    }
+    if (!entry) {
+      entry = { holdTime: 0, proactiveDowntime: 0, actualResTime: 0, totalResTime: 0, ticketCount: 0 };
+    }
+    if (holdMin > 0) entry.holdTime += holdMin;
+    if (incProactiveMin > 0) entry.proactiveDowntime += incProactiveMin;
+    if (actMin > 0) entry.actualResTime += actMin;
+    if (totMin > 0) entry.totalResTime += totMin;
+    entry.ticketCount += 1;
+
+    for (const k of normKeys) {
+      incDowntimeMap[k] = entry;
+    }
   });
 
   devices = devices.map((d) => {
     const upData = allLocMap[d.DeviceID] || allLocMap[d.SerialNo] || uptimeSummaryMap[d.DeviceID] || uptimeSummaryMap[d.SerialNo] || null;
-    const incDown = incDowntimeMap[d.DeviceID] || incDowntimeMap[d.SerialNo];
-    const holdMins   = incDown ? incDown.holdTime : 0;
-    const actResMins = incDown ? incDown.actualResTime : 0;
-    const totResMins = incDown ? incDown.totalResTime : 0;
+
+    const normKeys = getNormalizedKeys(d);
+    let incDown = null;
+    for (const k of normKeys) {
+      if (incDowntimeMap[k]) { incDown = incDowntimeMap[k]; break; }
+    }
+
+    const holdMins          = incDown ? incDown.holdTime : 0;
+    const proactiveDownMins = incDown ? incDown.proactiveDowntime : 0;
+    const actResMins        = incDown ? incDown.actualResTime : 0;
+    const totResMins        = incDown ? incDown.totalResTime : 0;
 
     let jflUptime = upData?.jflUptime ?? null;
     let proactiveUptime = upData?.proactiveUptime ?? null;
 
     if (jflUptime === null || isNaN(jflUptime) || holdMins > 0) {
-      // JFL Switch Uptime % Formula (AGENTS.md Rule 3 & SSOT): ((Total Available Minutes - Time on Hold) / Total Available Minutes) * 100
+      // JFL Switch / Device Uptime % Formula (AGENTS.md Rule 3 & SSOT):
+      // ((Total Available Minutes - Time on Hold) / Total Available Minutes) * 100
       const safeHold = Math.max(0, holdMins);
       const jflVal = ((windowMinutes - Math.min(windowMinutes, safeHold)) / windowMinutes) * 100;
       jflUptime = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
     }
 
-    if (proactiveUptime === null || isNaN(proactiveUptime) || actResMins > 0 || (holdMins > 0 && actResMins === 0)) {
-      // Proactive Switch Uptime % Formula (AGENTS.md Rule 3 & SSOT):
-      // ((Total Available Minutes - Actual Resolution Time) / Total Available Minutes) * 100
-      // Fall back to holdMins (Time on Hold) when Actual Resolution Time is absent,
-      // so that devices with incidents are never incorrectly shown at 100%.
-      const safeAct = actResMins > 0 ? Math.max(0, actResMins) : Math.max(0, holdMins);
-      const proVal = ((windowMinutes - Math.min(windowMinutes, safeAct)) / windowMinutes) * 100;
+    if (proactiveUptime === null || isNaN(proactiveUptime) || proactiveDownMins > 0) {
+      // Proactive Switch / Device Uptime % Formula (AGENTS.md Rule 3 & SSOT):
+      // ((Total Available Minutes - Proactive Downtime) / Total Available Minutes) * 100
+      // Falls back to holdMins (Time on Hold) when Actual Resolution Time is absent for open/on-hold tickets,
+      // so that devices with incidents are never incorrectly shown at 100.00%.
+      const safePro = Math.max(0, proactiveDownMins);
+      const proVal = ((windowMinutes - Math.min(windowMinutes, safePro)) / windowMinutes) * 100;
       proactiveUptime = Math.max(0, Math.min(100, parseFloat(proVal.toFixed(2))));
     }
 
@@ -783,19 +823,25 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── 9. Data quality report ────────────────────────────────────────────────
   writeDataQualityReport(outputDir, devices, incidents, allLocMap, log);
 
-  // ── 10. PPT ───────────────────────────────────────────────────────────────
+  // ── 10. PDF Report Generation ─────────────────────────────────────────────
   const templatePath = path.resolve('templates', 'master_template.pptx');
+  const pdfPath = path.join(outputDir, `JFL_QBR_${Date.now()}.pdf`);
   const pptPath = path.join(outputDir, `JFL_QBR_${Date.now()}.pptx`);
-  let pptGenerated = false, pptError = null;
+  let pdfGenerated = false, pdfError = null;
   try {
-    log('Generating PPT...');
-    await generatePPT(qbrData, templatePath, pptPath);
-    pptGenerated = true;
-    log(`PPT generated: ${pptPath}`);
+    log('Generating Executive QBR PDF Report...');
+    await generatePDF(qbrData, templatePath, pdfPath);
+    pdfGenerated = true;
+    log(`PDF generated: ${pdfPath}`);
   } catch (e) {
-    pptError = e.message;
-    log(`PPT error: ${e.message}`);
+    pdfError = e.message;
+    log(`PDF error: ${e.message}`);
   }
+
+  // Also attempt PPT generation for backward compatibility if needed
+  try {
+    await generatePPT(qbrData, templatePath, pptPath).catch(() => {});
+  } catch (e) {}
 
   // ── 11. Save dashboard JSON ───────────────────────────────────────────────
   const dashPath = path.join(outputDir, 'dashboard_data.json');
@@ -803,13 +849,14 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   log('Dashboard JSON saved');
 
   writeFile(outputDir, 'error_report.md',
-    pptError ? `# Error Report\n\n## PPT Error\n\n> ${pptError}` : '# Error Report\n\nNo errors.');
+    pdfError ? `# Error Report\n\n## PDF Error\n\n> ${pdfError}` : '# Error Report\n\nNo errors.');
 
   log('Pipeline complete ✓');
   return {
     success: true,
     dashboardPath:    dashPath,
-    pptPath:          pptGenerated ? pptPath : null,
+    pdfPath:          pdfGenerated ? pdfPath : null,
+    pptPath:          fs.existsSync(pptPath) ? pptPath : null,
     reportPath:       path.join(outputDir, 'validation_report.md'),
     errorReportPath:  path.join(outputDir, 'error_report.md'),
     dataQualityPath:  path.join(outputDir, 'data_quality_report.md'),
@@ -1056,6 +1103,11 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const apRcaBrk = classifyRCALocal(apIncidents);
   const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
+  const swJflUps = switches.map(d => d.__jflUptime ?? 100);
+  const swProUps = switches.map(d => d.__proactiveUptime ?? 100);
+  const jflSwitchUptime = swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00';
+  const proactiveSwitchUptime = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
+
   const activeSlaTarget = activeDevices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
   return {
@@ -1073,6 +1125,8 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
     primaryRca:         primaryRcaSwitches,
     primaryRcaForAPs:   primaryRcaAPs,
     overallUptime,
+    jflSwitchUptime,
+    proactiveSwitchUptime,
     incidentFreePercent:incidentFreePct,
     healthScore,
     healthLabel:        ruleEngine.getHealthLabel(healthScore),
@@ -1130,28 +1184,9 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
     .map(([siteId, s]) => {
     const swJflUps = s.switches.map(d => d.__jflUptime ?? 100);
     const swProUps = s.switches.map(d => d.__proactiveUptime ?? 100);
-    const swProUpsDefault = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
 
-
-    // ── Proactive Switch Uptime: average of per-incident "Proactive -Uptime%" column values ──
-    // The Excel pre-computes per-incident proactive uptime as (44640 - actRes) / 44640.
-    // The correct site figure is the average of ALL those per-incident values for SW rows
-    // at this site (matching manual calculation). Sites with no SW incidents → 100.00%.
-    const swIncRows = s.incidents.filter(i => /^sw$/i.test(i.DeviceType));
-    const swProUpFromCol = swIncRows
-      .map(i => normaliseUptimePct(i.ProactiveUptimePct))
-      .filter(v => v !== null && !isNaN(v));
-    const swJflUpFromCol = swIncRows
-      .map(i => normaliseUptimePct(i.JFLUptimePct))
-      .filter(v => v !== null && !isNaN(v));
-
-    const proactiveSwitchUptime = swProUpFromCol.length > 0
-      ? avg(swProUpFromCol).toFixed(2)
-      : swProUpsDefault;
-
-    const jflSwitchUptime = swJflUpFromCol.length > 0
-      ? avg(swJflUpFromCol).toFixed(2)
-      : (swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00');
+    const proactiveSwitchUptime = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
+    const jflSwitchUptime       = swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00';
 
 
     const apSerialsAndHosts = new Set([

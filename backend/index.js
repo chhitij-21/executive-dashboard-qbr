@@ -13,6 +13,7 @@ const { processJFLWorkbooks, filterDashboardBySite } = require('./services/proce
 // from the job's own dashboard_data.json whenever the pre-generated file is missing.
 // This is the SSOT guarantee: the PPT always reflects the exact same data as the dashboard.
 const { generatePPT } = require('./services/pptGenerator');
+const { generatePDF } = require('./services/pdfGenerator');
 
 const clientService = require('./services/clientService');
 const historyService = require('./services/historyService');
@@ -773,7 +774,63 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
     if (!job) return res.status(404).json({ error: 'Report job not found' });
 
-    // ── PPT: Always generate fresh PPT on-the-fly from dashboard_data.json (SSOT guarantee) ────
+    // ── PDF: Generate fresh PDF on-the-fly from dashboard_data.json (SSOT guarantee) ────
+    if (pathKey === 'pdfPath') {
+      const activeJobId = job?.jobId || reqJobId;
+      const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
+      const dashCandidates = [
+        job?.dashboardPath,
+        path.join(jobOutputDir, 'dashboard_data.json'),
+        path.resolve('data', 'dashboard_data.json'),
+        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+      ].filter(Boolean);
+
+      const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
+
+      if (dashPath) {
+        try {
+          console.log(`[server] Generating fresh PDF on-the-fly from SSOT: ${dashPath}`);
+          if (!fs.existsSync(jobOutputDir)) fs.mkdirSync(jobOutputDir, { recursive: true });
+          const freshPdfPath = path.join(jobOutputDir, `JFL_QBR_${Date.now()}.pdf`);
+          const qbrData = JSON.parse(fs.readFileSync(dashPath, 'utf8'));
+          await generatePDF(qbrData, null, freshPdfPath);
+
+          // Update job record with fresh PDF path
+          job.pdfPath = freshPdfPath;
+          jobs[activeJobId] = { ...jobs[activeJobId], pdfPath: freshPdfPath };
+          historyService.recordReport({
+            ...job,
+            jobId: activeJobId,
+            status: 'completed',
+            pdfPath: freshPdfPath,
+          });
+
+          console.log(`[server] Fresh PDF generated & served: ${freshPdfPath}`);
+          targetPath = freshPdfPath;
+        } catch (genErr) {
+          console.error('[server] On-the-fly PDF generation failed:', genErr.message);
+          return res.status(500).json({ error: `PDF generation failed: ${genErr.message}` });
+        }
+      } else {
+        return res.status(404).json({ error: 'Dashboard data not found for PDF generation. Please re-upload your files.' });
+      }
+
+      const resolvedTarget = path.resolve(targetPath);
+      const resolvedReports = path.resolve(REPORTS_DIR);
+      const resolvedData    = path.resolve(__dirname, '..', 'data');
+      const isUnderReports  = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
+      const isUnderData     = resolvedTarget.startsWith(resolvedData    + path.sep) || resolvedTarget === resolvedData;
+
+      if (!isUnderReports && !isUnderData) {
+        console.error(`[server] SECURITY: Path traversal attempt blocked. Requested: ${resolvedTarget}`);
+        return res.status(403).json({ error: 'Access denied.' });
+      }
+
+      console.log(`[server] Serving PDF download: ${resolvedTarget}`);
+      return res.download(resolvedTarget);
+    }
+
+    // ── PPT: Generate fresh PPT on-the-fly from dashboard_data.json (SSOT guarantee) ────
     if (pathKey === 'pptPath') {
       const activeJobId = job?.jobId || reqJobId;
       const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
@@ -830,7 +887,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       return res.download(resolvedTarget);
     }
 
-    // ── Non-PPT files: existing logic (reports, logs, etc.) ──────────────────
+    // ── Non-PPT/PDF files: existing logic (reports, logs, etc.) ──────────────────
     let targetPath = job?.[pathKey];
     if (!targetPath || !fs.existsSync(targetPath)) {
       const activeJobId = job?.jobId || reqJobId;
@@ -887,6 +944,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
   }
 };
 
+app.get(['/api/pdf/:jobId', '/pdf/:jobId', '/api/pdf', '/pdf'], sendFileHelper('pdfPath', 'JFL_QBR_Report.pdf'));
 app.get(['/api/ppt/:jobId', '/ppt/:jobId'], sendFileHelper('pptPath', 'JFL_QBR_Report.pptx'));
 app.get(['/api/report/:jobId', '/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
 app.get(['/api/error-report/:jobId', '/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
