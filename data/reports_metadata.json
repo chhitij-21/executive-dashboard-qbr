@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "jobId": "8b08ee97-e485-4235-9c19-c387f3570d58",
+    "clientId": "client-jfl",
+    "clientName": "Jubilant Foodworks Ltd (JFL)",
+    "location": "All Locations",
+    "reportPeriod": "2026-08-01 to 2026-08-31",
+    "uploadTimestamp": "2026-09-08T18:14:24.073Z",
+    "uploadedBy": "Super Admin",
+    "reportVersion": "1.0",
+    "status": "completed",
+    "dashboardPath": "C:\\Users\\Chhitij\\Desktop\\New folder\\Executive-Dashboard-QBR-Generator\\reports\\job_8b08ee97-e485-4235-9c19-c387f3570d58\\dashboard_data.json",
+    "pdfPath": null,
+    "pptPath": "C:\\Users\\Chhitij\\Desktop\\New folder\\Executive-Dashboard-QBR-Generator\\reports\\job_8b08ee97-e485-4235-9c19-c387f3570d58\\JFL_QBR_1788891263806.pptx",
+    "reportPath": "C:\\Users\\Chhitij\\Desktop\\New folder\\Executive-Dashboard-QBR-Generator\\reports\\job_8b08ee97-e485-4235-9c19-c387f3570d58\\validation_report.md",
+    "dataQualityPath": "C:\\Users\\Chhitij\\Desktop\\New folder\\Executive-Dashboard-QBR-Generator\\reports\\job_8b08ee97-e485-4235-9c19-c387f3570d58\\data_quality_report.md",
+    "processingLogPath": "C:\\Users\\Chhitij\\Desktop\\New folder\\Executive-Dashboard-QBR-Generator\\reports\\job_8b08ee97-e485-4235-9c19-c387f3570d58\\processing_log.md",
+    "error": null
+  }
+]

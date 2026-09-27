@@ -636,7 +636,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       const ed = new Date(edStr + 'T23:59:59Z');
       if (!isNaN(sd.getTime()) && !isNaN(ed.getTime()) && ed >= sd) {
         const diffMs = ed.getTime() - sd.getTime();
-        const diffMins = Math.ceil(diffMs / 60000);
+        const diffMins = Math.round(diffMs / 60000);
         return diffMins > 0 ? diffMins : 44640;
       }
     }
@@ -663,7 +663,14 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
     let actMin  = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
     let totMin  = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
-    let holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || Math.max(0, totMin - actMin));
+    let holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || 0);
+
+    if (actMin <= 0 && totMin > 0) {
+      actMin = Math.max(0, totMin - holdMin);
+    }
+    if (actMin <= 0 && holdMin > 0) {
+      actMin = holdMin;
+    }
 
     const rawStatus = String(inc.Status || '').trim().toLowerCase();
     const isOpenOrOnHold = !rawStatus || /open|pending|on[\s-]?hold|hold|wip|in[\s-]?progress|assigned/i.test(rawStatus);
@@ -689,6 +696,9 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
             if (holdMin <= 0 || holdMin < elapsedMins) {
               holdMin = Math.max(0, elapsedMins);
             }
+            if (actMin <= 0 || actMin < elapsedMins) {
+              actMin = Math.max(0, elapsedMins);
+            }
             if (totMin <= 0 || totMin < elapsedMins) {
               totMin = Math.max(0, elapsedMins);
             }
@@ -697,16 +707,6 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       }
     }
 
-    const incProactiveMin = actMin > 0 ? actMin : holdMin;
-
-    // ─── Per-incident Excel uptime values (ServiceNow-computed, relative to full period) ────
-    // JFLUptimePct per row = (window - that_incident_hold) / window * 100 from ServiceNow.
-    // ProactiveUptimePct per row = (window - actual_resolution) / window * 100 from ServiceNow.
-    // These are more accurate than recalculating from raw minutes because ServiceNow already
-    // handles business hours, calendar adjustments, and SLA exclusions.
-    const rowJflPct       = parseFloat(inc.JFLUptimePct);
-    const rowProactivePct = parseFloat(inc.ProactiveUptimePct);
-
     let entry = null;
     for (const k of normKeys) {
       if (incDowntimeMap[k]) { entry = incDowntimeMap[k]; break; }
@@ -714,23 +714,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     if (!entry) {
       entry = {
         holdTime: 0, proactiveDowntime: 0, actualResTime: 0, totalResTime: 0, ticketCount: 0,
-        // Arrays to track per-incident Excel uptime values for accurate min() aggregation
-        rowJflPcts: [], rowProactivePcts: [],
       };
     }
     if (holdMin > 0) entry.holdTime += holdMin;
-    if (incProactiveMin > 0) entry.proactiveDowntime += incProactiveMin;
+    if (actMin > 0) entry.proactiveDowntime += actMin;
     if (actMin > 0) entry.actualResTime += actMin;
     if (totMin > 0) entry.totalResTime += totMin;
     entry.ticketCount += 1;
-
-    // Collect valid per-incident Excel uptime percentages for final min() computation
-    if (!isNaN(rowJflPct) && rowJflPct >= 0 && rowJflPct <= 100) {
-      entry.rowJflPcts.push(rowJflPct);
-    }
-    if (!isNaN(rowProactivePct) && rowProactivePct >= 0 && rowProactivePct <= 100) {
-      entry.rowProactivePcts.push(rowProactivePct);
-    }
 
     for (const k of normKeys) {
       incDowntimeMap[k] = entry;
@@ -751,34 +741,19 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const actResMins        = incDown ? incDown.actualResTime : 0;
     const totResMins        = incDown ? incDown.totalResTime : 0;
 
-    // ── Priority 1: Use pre-computed uptime from the 'All Location' sheet (most accurate, direct from source system) ──
-    let jflUptime = upData?.jflUptime ?? normaliseUptimePct(d['JFL -Uptime %'] || d['JFL Uptime %'] || d.JFLUptimePct) ?? null;
-    let proactiveUptime = upData?.proactiveUptime ?? normaliseUptimePct(d['Proactive -Uptime%'] || d['Proactive Uptime %'] || d.ProactiveUptimePct) ?? null;
+    // ── Priority 1: Pre-computed uptime from 'All Location' sheet if available from source system ──
+    let jflUptime = upData?.jflUptime ?? normaliseUptimePct(d['JFL -Uptime %'] || d['JFL Uptime %'] || d.JFLUPct) ?? null;
+    let proactiveUptime = upData?.proactiveUptime ?? normaliseUptimePct(d['Proactive -Uptime%'] || d['Proactive Uptime %'] || d.ProactiveUPct) ?? null;
 
-    // ── Priority 2: Use per-incident Excel uptime values (ServiceNow-computed, per-incident relative to full period) ──
-    // For a device with MULTIPLE incidents, each incident's JFLUptimePct represents the
-    // uptime impact of THAT specific incident relative to the total period window.
-    // To avoid double-counting overlapping hold times, we use the MINIMUM per-incident uptime
-    // (worst uptime = highest downtime impact from any single incident).
-    // This is conservative but prevents artificially low values from summing non-additive hold times.
-    if ((jflUptime === null || isNaN(jflUptime)) && incDown?.rowJflPcts?.length > 0) {
-      jflUptime = Math.min(...incDown.rowJflPcts);
-      jflUptime = parseFloat(Math.max(0, Math.min(100, jflUptime)).toFixed(2));
-    }
-    if ((proactiveUptime === null || isNaN(proactiveUptime)) && incDown?.rowProactivePcts?.length > 0) {
-      proactiveUptime = Math.min(...incDown.rowProactivePcts);
-      proactiveUptime = parseFloat(Math.max(0, Math.min(100, proactiveUptime)).toFixed(2));
-    }
-
-    // ── Priority 3 (fallback): Compute from summed hold times if no Excel uptime values exist ──
-    // WARNING: This path can double-count downtime if a device has multiple overlapping incidents.
-    // It is only reached when the Excel does not have JFLUptimePct / ProactiveUptimePct columns.
+    // ── Priority 2: Compute strictly from SSOT Uptime Formulas in AGENTS.md Rule 3 ──
+    // JFL Switch Uptime % Formula: (Total Available Minutes - Time on Hold (Minutes)) / Total Available Minutes * 100
     if (jflUptime === null || isNaN(jflUptime)) {
       const safeHold = Math.max(0, holdMins);
       const jflVal = ((windowMinutes - Math.min(windowMinutes, safeHold)) / windowMinutes) * 100;
       jflUptime = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
     }
 
+    // Proactive Switch Uptime % Formula: (Total Available Minutes - Actual Resolution Time (Minutes)) / Total Available Minutes * 100
     if (proactiveUptime === null || isNaN(proactiveUptime)) {
       const safePro = Math.max(0, proactiveDownMins);
       const proVal = ((windowMinutes - Math.min(windowMinutes, safePro)) / windowMinutes) * 100;
@@ -1088,7 +1063,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
   const stockDevices  = devices.filter(d => d.__isStock);
 
   const switches = activeDevices.filter(d =>
-    /^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType) || (!/^ap$/i.test(d.DeviceType) && !/access/i.test(d.DeviceType))
+    /^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType)
   );
   const aps = activeDevices.filter(d =>
     /^ap$/i.test(d.DeviceType) || /access/i.test(d.DeviceType)
@@ -1282,7 +1257,7 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
 
       return (
         devType === 'ap' || devType.includes('access') ||
-        /ap/i.test(host) || /ap/i.test(devId) ||
+        /\bap\b/i.test(host) || /\bap\b/i.test(devId) ||
         (devId && apSerialsAndHosts.has(devId)) ||
         (serial && apSerialsAndHosts.has(serial)) ||
         (host && apSerialsAndHosts.has(host))
@@ -1328,12 +1303,13 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
     const finalHlth  = healthScore;
     const finalSwRca = primaryRca;
     const finalApRca = primaryRcaForAPs;
-    const finalDevCount = s.devices.length;
+    const finalDevCount = s.activeDevices.length; // Active operational only (excluding stock) — matches PPT Slide 5 "No of devices"
 
     return {
       siteId,
-      deviceCount:            finalDevCount,
-      activeDeviceCount:      s.activeDevices.length || finalDevCount,
+      deviceCount:            finalDevCount,       // Active operational devices (PPT Slide 5 "No of devices")
+      totalDeviceCount:       s.devices.length,    // Total incl. stock (for internal reference only)
+      activeDeviceCount:      s.activeDevices.length,
       stockCount:             s.stockDevices.length,
       stockDevices:           s.stockDevices.map(d => ({
         DeviceID: d.DeviceID,
@@ -1531,7 +1507,7 @@ function buildAPAnalytics(aps, incidents, allDevices) {
     const devType = String(i.DeviceType || '').toLowerCase();
     return (
       devType === 'ap' || devType.includes('access') ||
-      /ap/i.test(host) || /ap/i.test(devId) ||
+      /\bap\b/i.test(host) || /\bap\b/i.test(devId) ||
       (devId && apKeys.has(devId)) ||
       (serial && apKeys.has(serial)) ||
       (host && apKeys.has(host))
@@ -1865,7 +1841,7 @@ function filterDashboardBySite(data, siteFilter) {
   // Old code used strict === 'switch' which excluded 'SW', 'Switch', etc.
   const switches = activeDevices.filter((d) => {
     const t = String(d.DeviceType || '').toLowerCase();
-    return /^sw$/i.test(t) || t.includes('switch') || (!t.includes('ap') && !t.includes('access'));
+    return /^sw$/i.test(t) || t.includes('switch');
   });
   const aps = activeDevices.filter((d) => /ap|access.?point|wireless/i.test(String(d.DeviceType || '')));
 

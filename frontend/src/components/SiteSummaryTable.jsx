@@ -10,8 +10,8 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
     const str = String(loc).trim().toLowerCase();
     if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
     if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
-    if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('july') || str.includes('august') || str.includes('september') || str.includes('report') || str.includes('compliance')) return true;
-    const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'nagpur', 'noida'];
+    if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
+    const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'mumbai-dc', 'nagpur', 'noida'];
     const norm = str.replace(/[^a-z0-9]/g, '');
     const isMatched = validSites.some(v => v.replace(/[^a-z0-9]/g, '') === norm || norm.includes(v.replace(/[^a-z0-9]/g, '')));
     return !isMatched;
@@ -71,7 +71,7 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
                 ? rawApRca 
                 : 'Stable Operations (No Incidents)';
 
-              const apIncDisplay = `${site.apIncidents ?? 0}/${site.uniqueAPsWithIncidents ?? 0}`;
+              const apIncDisplay = `${site.apIncidents ?? 0} / ${site.uniqueAPsWithIncidents ?? 0}`;
 
               return (
                 <tr

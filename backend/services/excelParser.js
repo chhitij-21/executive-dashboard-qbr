@@ -95,7 +95,8 @@ function normalizeSiteName(site) {
   if (/guwahati|gau/i.test(lower)) return 'Guwahati';
   if (/hyd|hyderabad/i.test(lower)) return 'Hyderabad';
   if (/mohali|moh/i.test(lower)) return 'Mohali';
-  if (/mumbai|mumd|mumbai_dc|mumbai-dc/i.test(lower)) return 'Mumbai-DC';
+  if (/mumbai[\s_-]?dc|mumd[\s_-]?dc/i.test(lower)) return 'Mumbai-DC';
+  if (/mumbai|mumd/i.test(lower)) return 'Mumbai';
   if (/nagpur|nag/i.test(lower)) return 'Nagpur';
   if (/noida/i.test(lower)) return 'Noida';
 

@@ -52,6 +52,7 @@ export default function SiteInspector({
     if (str.includes('guwahati') || str.includes('gau')) return 'guwahati';
     if (str.includes('hyd') || str.includes('hyderabad')) return 'hyderabad';
     if (str.includes('mohali') || str.includes('moh')) return 'mohali';
+    if (str.includes('mumbai-dc') || str.includes('mumbai_dc') || str.includes('mumd-dc') || str.includes('mumd_dc')) return 'mumbai-dc';
     if (str.includes('mumbai') || str.includes('mumd')) return 'mumbai';
     if (str.includes('nagpur') || str.includes('nag')) return 'nagpur';
     if (str.includes('noida')) return 'noida';
@@ -63,9 +64,9 @@ export default function SiteInspector({
     const str = String(loc).trim().toLowerCase();
     if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
     if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
-    if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('july') || str.includes('august') || str.includes('september') || str.includes('report') || str.includes('compliance')) return true;
+    if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
     const norm = normalizeLoc(str);
-    const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'nagpur', 'noida'];
+    const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'mumbai-dc', 'nagpur', 'noida'];
     if (!validSites.includes(norm)) return true;
     return false;
   };
@@ -186,7 +187,7 @@ export default function SiteInspector({
       }
     });
 
-    const avgResTime = durationCount > 0 ? (totalDuration / durationCount).toFixed(1) : '2.4';
+    const avgResTime = durationCount > 0 ? (totalDuration / durationCount).toFixed(1) : 'N/A';
 
     return {
       total: siteIncidents.length,
