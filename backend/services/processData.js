@@ -467,6 +467,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       if (!raw || raw === 'N/A') return false;
       const dt = parseAnyDate(raw);
       if (!dt) return false;
+
+      const rawStatus = String(inc.Status || '').trim().toLowerCase();
+      const isOpenOrOnHold = !rawStatus || /open|pending|on[\s-]?hold|hold|wip|in[\s-]?progress|assigned/i.test(rawStatus);
+
+      if (isOpenOrOnHold) {
+        return dt <= rangeEnd;
+      }
       return dt >= rangeStart && dt <= rangeEnd;
     });
 
@@ -753,27 +760,28 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const actResMins        = incDown ? incDown.actualResTime : 0;
     const totResMins        = incDown ? incDown.totalResTime : 0;
 
-    // ── Priority 1: Pre-computed uptime from 'All Location' sheet if available from source system ──
-    let jflUptime = upData?.jflUptime ?? normaliseUptimePct(d['JFL -Uptime %'] || d['JFL Uptime %'] || d.JFLUPct) ?? null;
-    let proactiveUptime = upData?.proactiveUptime ?? normaliseUptimePct(d['Proactive -Uptime%'] || d['Proactive Uptime %'] || d.ProactiveUPct) ?? null;
-
-    // ── Priority 2: Compute strictly from SSOT Uptime Formulas in AGENTS.md Rule 3 ──
-    // JFL Switch Uptime % Formula: (Total Available Minutes - Time on Hold (Minutes)) / Total Available Minutes * 100
-    if (jflUptime === null || isNaN(jflUptime)) {
+    // ── Priority 1: Compute strictly from SSOT Uptime Formulas in AGENTS.md Rule 3 when raw incident data exists ──
+    let dynamicJfl = null;
+    let dynamicPro = null;
+    if (incDown) {
       const safeHold = Math.max(0, holdMins);
       const jflVal = ((windowMinutes - Math.min(windowMinutes, safeHold)) / windowMinutes) * 100;
-      jflUptime = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
-    }
+      dynamicJfl = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
 
-    // Proactive Switch Uptime % Formula: (Total Available Minutes - Actual Resolution Time (Minutes)) / Total Available Minutes * 100
-    if (proactiveUptime === null || isNaN(proactiveUptime)) {
       const safePro = Math.max(0, proactiveDownMins);
       const proVal = ((windowMinutes - Math.min(windowMinutes, safePro)) / windowMinutes) * 100;
-      proactiveUptime = Math.max(0, Math.min(100, parseFloat(proVal.toFixed(2))));
+      dynamicPro = Math.max(0, Math.min(100, parseFloat(proVal.toFixed(2))));
     }
 
-    if (jflUptime > 100) jflUptime = 100;
-    if (proactiveUptime > 100) proactiveUptime = 100;
+    // ── Priority 2: Fall back to pre-computed uptime from 'All Location' sheet if raw incident data is absent ──
+    const pivotJfl = upData?.jflUptime ?? normaliseUptimePct(d['JFL -Uptime %'] || d['JFL Uptime %'] || d.JFLUPct) ?? null;
+    const pivotPro = upData?.proactiveUptime ?? normaliseUptimePct(d['Proactive -Uptime%'] || d['Proactive Uptime %'] || d.ProactiveUPct) ?? null;
+
+    let jflUptime = dynamicJfl ?? pivotJfl;
+    let proactiveUptime = dynamicPro ?? pivotPro;
+
+    if (jflUptime !== null && jflUptime > 100) jflUptime = 100;
+    if (proactiveUptime !== null && proactiveUptime > 100) proactiveUptime = 100;
 
     const isStock = isStockDevice(d);
     const slaBreach = !isStock && (jflUptime < SLA_TARGET);
@@ -1151,8 +1159,8 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const apRcaBrk = classifyRCALocal(apIncidents);
   const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
-  const swJflUps = switches.map(d => d.__jflUptime ?? 100);
-  const swProUps = switches.map(d => d.__proactiveUptime ?? 100);
+  const swJflUps = switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
+  const swProUps = switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
   const jflSwitchUptime = swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00';
   const proactiveSwitchUptime = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
 
@@ -1248,8 +1256,8 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
   return Object.entries(sitesMap)
     .filter(([siteId]) => !isGenericLocation(siteId) && !EXCLUDED_BUCKETS.has(siteId))
     .map(([siteId, s]) => {
-    const swJflUps = s.switches.map(d => d.__jflUptime ?? 100);
-    const swProUps = s.switches.map(d => d.__proactiveUptime ?? 100);
+    const swJflUps = s.switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
+    const swProUps = s.switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
 
     const proactiveSwitchUptime = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
     const jflSwitchUptime       = swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00';
