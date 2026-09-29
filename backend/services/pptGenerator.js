@@ -550,7 +550,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildCoverSlide(pres, exec, displayPeriod);
 
   // Slide 2: Executive Summary Table — All Sites (Reference PDF Structure)
-  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod);
+  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents);
 
   // Slide 3: Executive Summary Overview
   buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown);
@@ -867,7 +867,78 @@ function buildNetworkHealthSlide(pres, exec, siteSummary, incidents) {
 
 // ── Slide 5: Infrastructure Summary & Executive Overview ───────────────────
 // displayPeriod: canonical period string from report_period.display_label (passed from buildPresentation)
-function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod) {
+function buildAIInsightsBullets(validSites, incidents, displayPeriod, slaTarget = 99.30) {
+  const bullets = [];
+
+  // 1. Top sites by JFL Switch Uptime
+  const sortedByJfl = [...validSites].sort((a, b) => parseFloat(b.jflSwitchUptime || b.switchUptime || 100) - parseFloat(a.jflSwitchUptime || a.switchUptime || 100));
+  if (sortedByJfl.length > 0) {
+    const top3 = sortedByJfl.slice(0, 3).map(s => `${s.siteId} (${s.jflSwitchUptime || s.switchUptime || '100.00'}%)`).join(', ');
+    bullets.push(`Top sites by JFL Switch Uptime: ${top3}.`);
+  }
+
+  // 2. Bottom sites by JFL Switch Uptime (flag breaches)
+  const sortedAsc = [...validSites].sort((a, b) => parseFloat(a.jflSwitchUptime || a.switchUptime || 0) - parseFloat(b.jflSwitchUptime || b.switchUptime || 0));
+  if (sortedAsc.length > 0) {
+    const bottom3 = sortedAsc.slice(0, 3).map(s => {
+      const val = parseFloat(s.jflSwitchUptime || s.switchUptime || 100);
+      const breachFlag = val < slaTarget ? ' BREACH' : '';
+      return `${s.siteId} (${val.toFixed(2)}%${breachFlag})`;
+    }).join(', ');
+    bullets.push(`Bottom sites by JFL Switch Uptime: ${bottom3}.`);
+  }
+
+  // 3. Largest RCA driver across all sites
+  const rcaCounts = {};
+  (incidents || []).forEach(inc => {
+    const r = inc.RCA || 'Unknown';
+    if (r !== 'Unknown' && r !== 'NA' && r !== 'None' && r !== 'Stable operations (No Incidents)') {
+      rcaCounts[r] = (rcaCounts[r] || 0) + 1;
+    }
+  });
+  const topRcaPairs = Object.entries(rcaCounts).sort((a, b) => b[1] - a[1]);
+  if (topRcaPairs.length > 0) {
+    bullets.push(`Largest RCA driver across all sites: ${topRcaPairs[0][0]} (${topRcaPairs[0][1]} incidents).`);
+  }
+
+  // 4. Site with highest AP incident density
+  const densityList = validSites.map(s => {
+    const devCount = Math.max(1, s.deviceCount || 1);
+    const apIncs = s.apIncidents || 0;
+    return { siteId: s.siteId, density: apIncs / devCount, apIncs };
+  }).filter(s => s.apIncs > 0).sort((a, b) => b.density - a.density);
+  if (densityList.length > 0) {
+    bullets.push(`Highest AP incident density: ${densityList[0].siteId} (${densityList[0].density.toFixed(2)} incidents per device).`);
+  }
+
+  // 5. Site with most On Hold tickets
+  const holdCounts = {};
+  (incidents || []).forEach(inc => {
+    const st = String(inc.Status || '').toLowerCase();
+    if (st.includes('hold')) {
+      const site = inc.SiteID || inc.Location || 'Unknown';
+      if (site !== 'Unknown') holdCounts[site] = (holdCounts[site] || 0) + 1;
+    }
+  });
+  const topHoldPairs = Object.entries(holdCounts).sort((a, b) => b[1] - a[1]);
+  if (topHoldPairs.length > 0) {
+    bullets.push(`Site with the most On Hold tickets: ${topHoldPairs[0][0]} (${topHoldPairs[0][1]} tickets).`);
+  }
+
+  // 6. Proactive vs JFL Switch Uptime variance > 5%
+  const varianceList = validSites.filter(s => {
+    const pro = parseFloat(s.proactiveSwitchUptime || s.switchUptime || 100);
+    const jfl = parseFloat(s.jflSwitchUptime || s.switchUptime || 100);
+    return Math.abs(pro - jfl) > 5.0;
+  }).map(s => `${s.siteId} (Proactive: ${s.proactiveSwitchUptime}%, JFL: ${s.jflSwitchUptime}%)`);
+  if (varianceList.length > 0) {
+    bullets.push(`Sites with Proactive and JFL Switch Uptime variance > 5%: ${varianceList.join('; ')}.`);
+  }
+
+  return bullets.slice(0, 6);
+}
+
+function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents = []) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -893,11 +964,8 @@ function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod) {
 
   const rows = validSites.slice(0, 9).map((site, idx) => {
     const fill   = rowFill(idx);
-    // Always use the canonical SSOT fields for uptime (proactiveSwitchUptime / jflSwitchUptime)
     const proUp  = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
     const jflUp  = site.jflSwitchUptime       ? `${site.jflSwitchUptime}`       : `${site.switchUptime || '100.00'}`;
-    // Use primaryRcaSwitches (canonical) first; fall back to primaryRca for legacy snapshots.
-    // 'Stable Operations (No Incidents)' replaces any empty/None/N/A fallback.
     const noIncidentStr = 'Stable Operations (No Incidents)';
     const badVals = ['None', 'Not case received', 'N/A', '', 'Unknown'];
     const swRcaRaw = site.primaryRcaSwitches || site.primaryRca || '';
@@ -918,17 +986,30 @@ function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod) {
   });
 
   s.addTable([headers, ...rows], {
-    x: 0.45, y: 1.35, w: W_TOTAL,
-    colW: COL_W, fontSize: 12, rowH: 0.52,
+    x: 0.45, y: 1.15, w: W_TOTAL,
+    colW: COL_W, fontSize: 11, rowH: 0.42,
     border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
 
-  // Use canonical displayPeriod (report_period.display_label from SSOT)
-  // Never use exec.reportingPeriod here — it may contain a stale/hardcoded date string.
   const periodStr = displayPeriod || exec.reportingPeriod || 'User Selected Period';
+
+  // AI Insights Block (placed immediately below the All-Sites table)
+  const aiBullets = buildAIInsightsBullets(validSites, incidents, periodStr, SLA_TARGET);
+  if (aiBullets.length > 0) {
+    s.addText('AI Insights', {
+      x: 0.45, y: 5.6, w: 12.43, h: 0.28,
+      fontSize: 11, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY,
+    });
+    const bulletText = aiBullets.map(b => `• ${b}`).join('\n');
+    s.addText(bulletText, {
+      x: 0.45, y: 5.88, w: 12.43, h: 0.9,
+      fontSize: 9, color: C.TEXT_DARK, fontFace: 'Calibri', lineSpacing: 12,
+    });
+  }
+
   s.addText(`This review consolidates SLA performance, rack and switch uptime, and access-point incident RCA for all ${validSites.length} monitored JFL sites for the period ${periodStr}.`, {
-    x: 0.45, y: 6.6, w: 12.43, h: 0.4,
-    fontSize: 9, italic: true, color: C.TEXT_MUTED, fontFace: 'Calibri',
+    x: 0.45, y: 6.85, w: 12.43, h: 0.3,
+    fontSize: 8.5, italic: true, color: C.TEXT_MUTED, fontFace: 'Calibri',
   });
 }
 
