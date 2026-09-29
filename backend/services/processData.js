@@ -1303,13 +1303,13 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
     const finalHlth  = healthScore;
     const finalSwRca = primaryRca;
     const finalApRca = primaryRcaForAPs;
-    const finalDevCount = s.activeDevices.length; // Active operational only (excluding stock) — matches PPT Slide 5 "No of devices"
+    const finalDevCount = s.devices.length; // Total inventory incl. stock — matches human report "No of devices" column
 
     return {
       siteId,
-      deviceCount:            finalDevCount,       // Active operational devices (PPT Slide 5 "No of devices")
-      totalDeviceCount:       s.devices.length,    // Total incl. stock (for internal reference only)
-      activeDeviceCount:      s.activeDevices.length,
+      deviceCount:            finalDevCount,       // Total devices (active + stock) — matches human report executive summary
+      totalDeviceCount:       s.devices.length,    // Total incl. stock (same as deviceCount)
+      activeDeviceCount:      s.activeDevices.length,  // Active SLA-eligible only — used for SLA/uptime calculations
       stockCount:             s.stockDevices.length,
       stockDevices:           s.stockDevices.map(d => ({
         DeviceID: d.DeviceID,
