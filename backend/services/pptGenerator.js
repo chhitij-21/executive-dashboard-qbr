@@ -152,11 +152,18 @@ function rowFill(idx) {
 
 function findSite(siteSummary, siteKey) {
   const normKey = normalizeSiteName(siteKey);
-  return (
-    siteSummary.find(s => normalizeSiteName(s.siteId) === normKey) ||
-    { siteId: siteKey }
-  );
+  const found = siteSummary.find(s => normalizeSiteName(s.siteId) === normKey);
+  if (found) return found;
+
+  // Alias fallback: 'Mumbai' in TARGET_SITES matches 'Mumbai-DC' in siteSummary
+  if (normKey === 'Mumbai') {
+    const dcFallback = siteSummary.find(s => normalizeSiteName(s.siteId) === 'Mumbai-DC');
+    if (dcFallback) return dcFallback;
+  }
+
+  return { siteId: siteKey };
 }
+
 
 function avg(arr) {
   if (!arr.length) return 0;
