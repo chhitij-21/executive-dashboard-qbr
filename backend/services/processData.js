@@ -136,6 +136,18 @@ function parseAnyDate(raw) {
   const str = String(raw).trim();
   if (!str || str.toLowerCase() === 'n/a') return null;
 
+  const ymdMatch = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    const hrs = parseInt(ymdMatch[4] || '0', 10);
+    const mins = parseInt(ymdMatch[5] || '0', 10);
+    const secs = parseInt(ymdMatch[6] || '0', 10);
+    const dUtc = new Date(Date.UTC(year, month, day, hrs, mins, secs));
+    if (!isNaN(dUtc.getTime())) return dUtc;
+  }
+
   let d = new Date(str);
   if (!isNaN(d.getTime())) return d;
 

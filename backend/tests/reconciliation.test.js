@@ -121,8 +121,19 @@ test('Reconciliation Engine - FAIL CLOSED on Metric Mismatch', () => {
 
 test('Reconciliation Engine - Mathematical Identity Constraints Check', () => {
   const invalidRcaSnapshot = {
-    executiveSummary: { totalIncidents: 171 },
-    siteSummary: [{ siteId: 'SiteA', incidentCount: 171 }],
+    executiveSummary: { totalIncidents: 171, primaryRca: 'Power', primaryRcaSwitches: 'Power', primaryRcaForAPs: 'Power' },
+    siteSummary: [{
+      siteId: 'SiteA',
+      deviceCount: 10,
+      activeDeviceCount: 10,
+      stockCount: 0,
+      proactiveSwitchUptime: '100.00',
+      jflSwitchUptime: '100.00',
+      incidentCount: 171,
+      apIncidents: 0,
+      uniqueAPsWithIncidents: 0,
+      healthScore: 100
+    }],
     rcaAnalytics: { breakdown: [{ rca: 'Power', count: 150 }] } // Sum = 150 != 171
   };
 

@@ -15,7 +15,7 @@ test('excelParser - normalizeSiteName', () => {
   assert.equal(normalizeSiteName('G.Noida'), 'Greater Noida');
   assert.equal(normalizeSiteName('Guwahati'), 'Guwahati');
   assert.equal(normalizeSiteName('HYD'), 'Hyderabad');
-  assert.equal(normalizeSiteName('MUMBAI_DC'), 'Mumbai');
+  assert.equal(normalizeSiteName('MUMBAI_DC'), 'Mumbai-DC');
   assert.equal(normalizeSiteName('Unknown'), 'Unknown');
   assert.equal(normalizeSiteName(null), 'Unknown');
 });
