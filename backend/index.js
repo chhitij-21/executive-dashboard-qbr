@@ -458,7 +458,7 @@ app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
   const reqJobId = jobId;
   if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
     const history = historyService.getHistory();
-    job = history.slice().reverse().find((h) => h.status === 'completed') ||
+    job = history.find((h) => h.status === 'completed') ||
           Object.values(jobs).reverse().find((j) => j.status === 'completed');
   } else {
     job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
@@ -823,6 +823,7 @@ app.all(['/api/switch-mode', '/switch-mode'], async (req, res) => {
 //
 const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
   try {
+    let targetPath = null;
     const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
     let job = null;
 
@@ -1009,7 +1010,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
     }
 
     // ── Non-PPT/PDF files: existing logic (reports, logs, etc.) ──────────────────
-    let targetPath = job?.[pathKey];
+    targetPath = job?.[pathKey];
     if (!targetPath || !fs.existsSync(targetPath)) {
       const activeJobId = job?.jobId || reqJobId;
       const candidates = [

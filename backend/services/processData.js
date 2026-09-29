@@ -1856,7 +1856,7 @@ function filterDashboardBySite(data, siteFilter) {
     execSummary.totalSwitches = targetSiteSummary.switchCount || 0;
     execSummary.totalAPs = targetSiteSummary.apCount || 0;
     execSummary.totalStockDevices = targetSiteSummary.stockCount || 0;
-    execSummary.overallUptime = targetSiteSummary.proactiveSwitchUptime || targetSiteSummary.overallUptime || '100.00';
+    execSummary.overallUptime = targetSiteSummary.jflSwitchUptime || targetSiteSummary.proactiveSwitchUptime || targetSiteSummary.overallUptime || '100.00';
     execSummary.primaryRcaSwitches = targetSiteSummary.primaryRcaSwitches || targetSiteSummary.primaryRca || 'Stable Operations (No Incidents)';
     execSummary.primaryRcaAPs = targetSiteSummary.primaryRcaAPs || targetSiteSummary.primaryRcaForAPs || 'Stable Operations (No Incidents)';
   }
