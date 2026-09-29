@@ -1,6 +1,20 @@
 # Global business rules configuration
 # All values are configurable — no hardcoding in application code.
 
+# ── Claudex Loop Agentic Reasoning Engine ─────────────────────────────────────
+# Controls the Think→Act→Observe→Repeat feedback loop used by the AI Chatbot
+# in Precision Mode. Adjust thresholds here without any code changes.
+claudex_loop:
+  max_iterations: 4              # Hard cap on reasoning cycles per query
+  min_confidence: 0.82           # Loop exits early when confidence >= this value
+  score_weights:
+    answer_length:    0.18       # Weight for answer substantiveness
+    numeric_coverage: 0.32       # Weight for KPI numeric citations
+    goal_coverage:    0.28       # Weight for goal tree coverage
+    formatting:       0.10       # Weight for markdown/structure quality
+    sla_awareness:    0.12       # Weight for SLA target/compliance mentions
+
+
 # ── SLA ──────────────────────────────────────────────────────────────────────
 # TWO DISTINCT SLA METRICS — never mix or average these:
 #

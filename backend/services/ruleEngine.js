@@ -320,6 +320,29 @@ function detectColumnFromRows(rows, candidates) {
   return null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Claudex Loop Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the Claudex Loop configuration from rules.yaml.
+ * Falls back to sensible defaults if the claudex_loop section is absent.
+ */
+function getClaudexLoopConfig() {
+  const cfg = rules.claudex_loop || {};
+  return {
+    maxIterations: cfg.max_iterations ?? 4,
+    minConfidence: cfg.min_confidence ?? 0.82,
+    scoreWeights: {
+      answerLength:    cfg.score_weights?.answer_length    ?? 0.18,
+      numericCoverage: cfg.score_weights?.numeric_coverage ?? 0.32,
+      goalCoverage:    cfg.score_weights?.goal_coverage    ?? 0.28,
+      formatting:      cfg.score_weights?.formatting       ?? 0.10,
+      slaAwareness:    cfg.score_weights?.sla_awareness    ?? 0.12,
+    },
+  };
+}
+
 module.exports = {
   loadRules,
   getRules: () => rules,
@@ -341,7 +364,10 @@ module.exports = {
   buildStandardRCABreakdown,
   // AP
   countUniqueAPsWithIncidents,
+  // Claudex Loop
+  getClaudexLoopConfig,
   // Utils
   isValidNumber,
   detectColumnFromRows,
 };
+

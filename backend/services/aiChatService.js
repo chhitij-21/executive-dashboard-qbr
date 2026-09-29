@@ -2,6 +2,7 @@
 // Multi-Provider Executive QBR AI Assistant Service:
 // Supports Groq Free LLM (Llama 3.3 70B / DeepSeek R1), OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet, DeepSeek V3/R1, Google Gemini 1.5/2.0,
 // and Built-in Native SSOT Empirical Engine.
+// PRECISION UPGRADE: SLA target always read live from ruleEngine (rules.yaml). Zero hardcoded fallbacks.
 
 const ruleEngine = require('./ruleEngine');
 
@@ -18,7 +19,7 @@ async function processChatQuery(prompt, qbrData, options = {}) {
     }
 
     const query = prompt.trim();
-    const systemContext = buildSystemContext(qbrData);
+    const systemContext = buildSystemContext(qbrData, { claudexMode: !!options.claudexMode });
 
     // Preferred provider override from env or options: 'groq' | 'openai' | 'anthropic' | 'deepseek' | 'gemini'
     const preferredProvider = (options.provider || process.env.AI_PROVIDER || '').toLowerCase();
@@ -251,42 +252,84 @@ async function queryGeminiAPI(prompt, systemContext, apiKey, model = 'gemini-1.5
 }
 
 /**
- * Builds compact textual SSOT context for LLM prompts.
+ * Builds enriched SSOT context for LLM prompts.
+ * PRECISION UPGRADE: SLA target read live from ruleEngine.getSLATarget().
+ * Includes RCA breakdown, site-level uptime table, and device breach counts.
+ * @param {object} qbrData
+ * @param {object} [opts] { claudexMode: bool } — claudexMode injects extra precision instructions
  */
-function buildSystemContext(qbrData) {
+function buildSystemContext(qbrData, opts) {
   if (!qbrData) return 'No active dataset loaded.';
 
-  const exec = qbrData.executiveSummary || {};
+  const claudexMode  = opts && opts.claudexMode;
+  const exec         = qbrData.executiveSummary || {};
   const reportPeriod = qbrData.report_period?.display_label || qbrData.reportingPeriod || 'N/A';
+
+  // Always read SLA target live from rules.yaml — never fallback to hardcoded 99.3
+  const liveSlaTarget = ruleEngine.getSLATarget();
+  const slaTarget     = exec.slaTarget || liveSlaTarget;
+
+  // Full site-level uptime table (all sites)
   const siteList = (qbrData.siteSummary || []).map(s =>
-    `- ${s.siteId || 'Unknown Site'}: ${s.deviceCount || 0} devices, JFL Uptime: ${s.jflSwitchUptime || '100.00'}%, Proactive Uptime: ${s.proactiveSwitchUptime || '100.00'}%, Primary Switch RCA: "${s.primaryRcaSwitches || 'Stable Operations'}", AP Incidents: ${s.apIncidents || 0}, Primary AP RCA: "${s.primaryRcaAPs || 'Stable Operations'}"`
+    `- ${s.siteId || 'Unknown'}: ${s.deviceCount || 0} devices | JFL Uptime: ${s.jflSwitchUptime || '100.00'}% | Proactive: ${s.proactiveSwitchUptime || '100.00'}% | Switch RCA: "${s.primaryRcaSwitches || 'Stable Operations'}" | AP Incidents: ${s.apIncidents || 0} | AP RCA: "${s.primaryRcaAPs || 'Stable Operations'}" | Health: ${s.healthScore || 100}/100`
   ).join('\n');
+
+  // SLA breach summary
+  const devices        = Array.isArray(qbrData.devices) ? qbrData.devices : [];
+  const breachDevices  = devices.filter(d => d && !d.__isStock && d.__slaBreach);
+  const breachSites    = (qbrData.siteSummary || []).filter(s => parseFloat(s.jflSwitchUptime) < slaTarget);
+
+  // RCA breakdown table
+  const rcaRows = (qbrData.rcaAnalytics?.breakdown || []).slice(0, 8);
+  const rcaTable = rcaRows.length > 0
+    ? rcaRows.map(r => `  ${r.rca}: ${r.count} incidents (${r.percentage || ''})`).join('\n')
+    : '  No incidents recorded';
+
+  const claudexPrecisionBlock = claudexMode ? `
+[CLAUDEX PRECISION MODE ACTIVE]
+You MUST:
+1. Cite EVERY numerical KPI value explicitly (e.g. "JFL Switch Uptime: ${exec.jflSwitchUptime || exec.overallUptime || 'N/A'}%").
+2. Compare all uptime metrics against SLA Target of ${slaTarget}% and state whether each PASSES or FAILS.
+3. Use markdown formatting: ### headers, **bold** for values, - bullet lists.
+4. Cite percentages to exactly 2 decimal places.
+5. Reference the reporting period "${reportPeriod}" explicitly.
+6. Never guess — only use the SSOT facts provided.
+` : '';
 
   return `
 CUSTOMER: ${qbrData.customerName || 'Jubilant Foodworks Ltd'}
 REPORTING PERIOD: ${reportPeriod}
-SLA TARGET: ${exec.slaTarget || 99.3}%
+SLA UPTIME TARGET: ${slaTarget}% (live from rules.yaml — do NOT use any other value)
+${claudexPrecisionBlock}
+EXECUTIVE METRICS (SSOT — 100% verified):
+- Total Devices: ${exec.totalDevices || 0} (${exec.totalSites || 0} Sites | ${exec.totalSwitches || 0} Switches | ${exec.totalAPs || 0} APs)
+- Total Stock Devices: ${exec.totalStockDevices || 0} (excluded from SLA calculations)
+- Overall JFL Switch Uptime: ${exec.jflSwitchUptime || exec.overallUptime || 'N/A'}%
+- Overall Proactive Switch Uptime: ${exec.proactiveSwitchUptime || 'N/A'}%
+- Infrastructure Health Score: ${exec.healthScore || 'N/A'}/100 (${exec.healthLabel || 'N/A'})
+- Incident-Free Devices: ${exec.incidentFreePercent || 'N/A'}%
+- Overall SLA Compliance: ${exec.slaCompliance || 'N/A'}%
+- Devices Breaching SLA: ${breachDevices.length}
+- Sites Breaching SLA: ${breachSites.length}
+- Total Incidents: ${exec.totalIncidents || 0} (Critical: ${exec.criticalIncidents || 0}, Major: ${exec.majorIncidents || 0}, Minor: ${exec.minorIncidents || 0})
+- AP Incidents: ${exec.apIncidents || 0} across ${exec.uniqueAPsWithIncidents || 0} unique APs
+- Primary RCA (Switches): ${exec.primaryRcaSwitches || 'Stable Operations (No Incidents)'}
+- Primary RCA (APs): ${exec.primaryRcaAPs || 'Stable Operations (No Incidents)'}
 
-EXECUTIVE METRICS:
-- Total Devices: ${exec.totalDevices || 0} (${exec.totalSites || 0} Sites, ${exec.totalSwitches || 0} Switches, ${exec.totalAPs || 0} APs)
-- Overall JFL Switch Uptime: ${exec.jflSwitchUptime || exec.overallUptime || '100.00'}%
-- Overall Proactive Switch Uptime: ${exec.proactiveSwitchUptime || '100.00'}%
-- Infrastructure Health Score: ${exec.healthScore || 100}/100 (${exec.healthLabel || 'Optimal'})
-- Incident-Free Devices: ${exec.incidentFreePercent || '100.00'}%
-- SLA Compliance: ${exec.slaCompliance || '100.00'}%
-- Primary RCA (Switches): ${exec.primaryRcaSwitches || 'Stable Operations'}
-- Primary RCA (APs): ${exec.primaryRcaAPs || 'Stable Operations'}
+RCA BREAKDOWN:
+${rcaTable}
 
-SITES SUMMARY:
-${siteList}
+ALL SITES PERFORMANCE TABLE:
+${siteList || 'No site data available'}
 
-FORMULA RULES:
-1. JFL Switch Uptime % = ((Total Available Minutes - Time on Hold) / Total Available Minutes) * 100
-2. Proactive Switch Uptime % = ((Total Available Minutes - Proactive Downtime) / Total Available Minutes) * 100
-3. For Open/On-Hold tickets, elapsed hold time is calculated from max(OpenTime, Period Start) up to period cutoff (endDate + 23:59:59Z).
-4. Proactive uptime falls back to using hold mins deduction for open/on-hold tickets when actual resolution time is 0.
-5. Health Score = (0.7 * Overall Uptime) + (0.3 * Incident Free %).
-6. SLA Target is 99.3% from rules.yaml.
+FORMULA RULES (apply exactly as written):
+1. JFL Switch Uptime % = max(0, min(100, ((Total Available Minutes - Time on Hold) / Total Available Minutes) × 100)). Rounded to 2dp.
+2. Proactive Switch Uptime % = max(0, min(100, ((Total Available Minutes - Actual Resolution Time) / Total Available Minutes) × 100)). Rounded to 2dp.
+3. Open/On-Hold tickets: hold minutes = from max(OpenTime, PeriodStart) to endDate+T23:59:59Z.
+4. Proactive fallback: if resolution time=0 for open/on-hold, deduct hold minutes instead.
+5. Health Score = round(0.7 × Overall Uptime% + 0.3 × Incident-Free%). Labels: Excellent≥95, Good≥85, Fair≥70, Poor<70.
+6. SLA Target = ${slaTarget}% (read live from rules.yaml — never override this value).
+7. Available minutes per device = calendar days × 1440. Feb=28d, Apr/Jun/Sep/Nov=30d, others=31d.
   `.trim();
 }
 

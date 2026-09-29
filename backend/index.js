@@ -426,6 +426,70 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
   }
 });
 
+// ── Claudex Loop — Agentic SSE Endpoint ────────────────────────────────────
+// GET /api/chat/loop?prompt=...&jobId=...
+// Streams Think->Act->Observe->Repeat events via Server-Sent Events.
+// The frontend EventSource consumes these events to render each reasoning step live.
+app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
+  const prompt  = req.query.prompt  || '';
+  const jobId   = req.query.jobId   || 'latest';
+  const maxIter = parseInt(req.query.maxIterations, 10) || 4;
+
+  if (!prompt.trim()) {
+    return res.status(400).json({ error: 'prompt query parameter is required.' });
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  res.flushHeaders();
+
+  // Helper to emit an SSE event
+  function emit(eventName, payload) {
+    if (res.writableEnded) { return; }
+    const data = JSON.stringify(payload);
+    res.write(`event: ${eventName}\ndata: ${data}\n\n`);
+  }
+
+  // Resolve QBR SSOT data (same logic as /api/chat)
+  let job = null;
+  const reqJobId = jobId;
+  if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
+    const history = historyService.getHistory();
+    job = history.slice().reverse().find((h) => h.status === 'completed') ||
+          Object.values(jobs).reverse().find((j) => j.status === 'completed');
+  } else {
+    job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+  }
+
+  let qbrData = null;
+  let dPath = job && job.dashboardPath ? job.dashboardPath : null;
+  if (!dPath || !fs.existsSync(dPath)) {
+    const activeJobId = (job && job.jobId) ? job.jobId : reqJobId;
+    const candidates = [
+      path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
+      path.resolve('data', 'dashboard_data.json'),
+      path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+    ];
+    dPath = candidates.find((p) => fs.existsSync(p));
+  }
+  if (dPath && fs.existsSync(dPath)) {
+    try { qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8')); } catch (e) {}
+  }
+
+  try {
+    const { runClaudexLoop } = require('./services/claudexLoopService');
+    await runClaudexLoop(prompt, qbrData, emit, { maxIterations: maxIter });
+  } catch (err) {
+    console.error('[server] Claudex Loop error:', err.message);
+    emit('error', { message: 'Claudex Loop error: ' + err.message });
+  } finally {
+    if (!res.writableEnded) { res.end(); }
+  }
+});
+
 // ── Upload & Report Generation Workflow Endpoint ────────────────────────────
 app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields([
   { name: 'incidents', maxCount: 1 },
