@@ -35,6 +35,13 @@ const COLUMN_HEADER_MAP = {
   slaTarget: 'SLA Target %',
   gap: 'Gap %',
   siteId: 'Site',
+  display_reference: 'Reference',
+  TicketNumber: 'Ticket Number',
+  IncidentNumber: 'Incident ID',
+  Category: 'Category / Type',
+  Status: 'Status',
+  Description: 'Description / Task Details',
+  CreatedTime: 'Created Time',
 };
 
 export default function DataTable({ columns, rows, title, noScroll = false, columnLabels = {} }) {

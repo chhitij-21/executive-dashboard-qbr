@@ -216,6 +216,19 @@ function MainPortal() {
     return trend.map((t) => ({ label: t.month, value: t.count }));
   }, [activeDashboardData?.incidentAnalytics]);
 
+  const otherActivityIncidents = useMemo(() => {
+    const incs = activeDashboardData?.incidents || [];
+    return incs.filter((i) => {
+      const cat = String(i.Category || i.category || i.Description || i.description || '').toLowerCase();
+      const devType = String(i.DeviceType || i.device_type || '').toLowerCase();
+      return (
+        i.IsChangeRequest ||
+        /change request|request fulfillment|ise|wlc|router|asset scan|whitelist|mac address|maintenance|credentials|license/i.test(cat) ||
+        (!/sw|switch|ap|access.?point/i.test(devType) && devType.length > 0)
+      );
+    });
+  }, [activeDashboardData]);
+
   // Render full 7-section Executive Dashboard
   const renderDashboard = () => {
     const renderProcessing = () => (
@@ -341,6 +354,7 @@ function MainPortal() {
             { id: 'incidents', label: 'Incident Analytics' },
             { id: 'rca', label: 'RCA Analytics' },
             { id: 'sla', label: 'SLA Analytics' },
+            { id: 'other', label: 'Other Activity' },
           ].map(({ id, label }) => (
             <button
               key={id}
@@ -921,6 +935,34 @@ function MainPortal() {
                   Active Operational Devices Below SLA Threshold
                 </h4>
                 <DataTable columns={['DeviceID', 'SerialNo', 'Location', 'uptime', 'slaTarget', 'gap']} rows={slaAn.deviceSLA} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── 8. Other Activity ──────────────────────────────────────────── */}
+        {dashTab === 'other' && (
+          <div className="section-body card pad-md">
+            <h3 className="section-title">Other Activity — Change Requests, Maintenance & Non-Hardware Tickets</h3>
+            <div className="kpi-grid">
+              <KpiCard title="Total Other Activity Tickets" value={otherActivityIncidents.length} />
+              <KpiCard title="Change Requests & Fulfillment" value={otherActivityIncidents.filter(i => i.IsChangeRequest || /change request|request fulfillment/i.test(i.Category || i.Description || '')).length} />
+              <KpiCard title="Maintenance & Asset Tasks" value={otherActivityIncidents.filter(i => /asset scan|maintenance|credentials|license|whitelist/i.test(i.Category || i.Description || '')).length} />
+            </div>
+
+            {otherActivityIncidents.length > 0 ? (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                  Non-Hardware Activity Logs & Requests
+                </h4>
+                <DataTable
+                  columns={['display_reference', 'DeviceID', 'SerialNo', 'Location', 'Category', 'Status', 'Description']}
+                  rows={otherActivityIncidents}
+                />
+              </div>
+            ) : (
+              <div style={{ marginTop: '1.5rem', padding: '1.5rem', background: '#f8fafc', borderRadius: '8px', textAlign: 'center', color: '#64748b' }}>
+                No non-hardware change requests or maintenance activity recorded for this period.
               </div>
             )}
           </div>
