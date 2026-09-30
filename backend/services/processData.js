@@ -812,8 +812,9 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const pivotJfl = upData?.jflUptime ?? normaliseUptimePct(d['JFL -Uptime %'] || d['JFL Uptime %'] || d.JFLUPct) ?? null;
     const pivotPro = upData?.proactiveUptime ?? normaliseUptimePct(d['Proactive -Uptime%'] || d['Proactive Uptime %'] || d.ProactiveUPct) ?? null;
 
-    let jflUptime = dynamicJfl ?? pivotJfl;
-    let proactiveUptime = dynamicPro ?? pivotPro;
+    // Priority 3: When zero downtime/incidents exist for a device during the reporting period, operational uptime is 100.0%
+    let jflUptime = dynamicJfl ?? pivotJfl ?? 100.0;
+    let proactiveUptime = dynamicPro ?? pivotPro ?? 100.0;
 
     if (jflUptime !== null && jflUptime > 100) jflUptime = 100;
     if (proactiveUptime !== null && proactiveUptime > 100) proactiveUptime = 100;

@@ -124,6 +124,9 @@ export default function DataTable({ columns, rows, title, noScroll = false, colu
                       } else if (col === 'status') {
                         const upVal = parseFloat(row.periodUptime || row.monthlyUptime || row.quarterlyUptime || row.avgUptime || row.uptime || 100);
                         val = isNaN(upVal) || upVal >= 100 ? 'Stable Operations (100% Uptime)' : 'Operational';
+                      } else if (col === 'uptime') {
+                        const u = row.uptime ?? row.__effectiveUptime ?? row.__jflUptime ?? 100.0;
+                        val = typeof u === 'number' ? `${u.toFixed(2)}%` : String(u);
                       }
                     }
                     const display = val === null || val === undefined ? 'Data Not Available' : String(val);
