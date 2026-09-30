@@ -906,7 +906,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // Also write to data/dashboard_data.json as canonical latest so the dashboard
   // always shows the correct most-recent run even after a server restart.
   const isTestRun = options.isTest || process.env.NODE_ENV === 'test' ||
-    (outputDir && (outputDir.includes('Temp') || outputDir.includes('test') || outputDir.includes('tmp')));
+    (outputDir && (outputDir.includes('Temp') || outputDir.includes('test') || outputDir.includes('tmp') || outputDir === 'data' || outputDir.endsWith('/data') || outputDir.endsWith('\\data')));
   if (!isTestRun) {
     try {
       const canonicalDir = path.resolve('data');
