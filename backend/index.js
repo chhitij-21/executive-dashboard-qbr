@@ -168,14 +168,25 @@ if (process.env.VERCEL) {
 // Frontend static assets are served later (after API routes) with existence check.
 // Removed duplicate early static registrations that pre-empted API routes on some paths.
 
+// Helper to resolve data paths robustly whether running from project root or backend/ folder
+function resolveDataPath(...subpaths) {
+  const p1 = subpaths.length ? path.resolve(__dirname, '..', 'data', ...subpaths) : path.resolve(__dirname, '..', 'data');
+  if (fs.existsSync(p1)) return p1;
+  const p2 = subpaths.length ? path.resolve('data', ...subpaths) : path.resolve('data');
+  if (fs.existsSync(p2)) return p2;
+  const dir1 = path.resolve(__dirname, '..', 'data');
+  if (fs.existsSync(dir1)) return p1;
+  return p1;
+}
+
 // Directories (os.tmpdir fallback for Vercel serverless environment, PERSISTENT_DIR for cloud persistent storage)
 const BASE_STORAGE_DIR = process.env.PERSISTENT_DIR || process.env.STORAGE_DIR || process.env.RENDER_DISK_PATH;
 const INCOMING_DIR = BASE_STORAGE_DIR
   ? path.join(BASE_STORAGE_DIR, 'data', 'incoming')
-  : (process.env.VERCEL ? path.join(os.tmpdir(), 'incoming') : path.resolve('data', 'incoming'));
+  : (process.env.VERCEL ? path.join(os.tmpdir(), 'incoming') : resolveDataPath('incoming'));
 const REPORTS_DIR = BASE_STORAGE_DIR
   ? path.join(BASE_STORAGE_DIR, 'reports')
-  : (process.env.VERCEL ? path.join(os.tmpdir(), 'reports') : path.resolve('reports'));
+  : (process.env.VERCEL ? path.join(os.tmpdir(), 'reports') : (fs.existsSync(path.resolve(__dirname, '..', 'reports')) ? path.resolve(__dirname, '..', 'reports') : path.resolve('reports')));
 
 [INCOMING_DIR, REPORTS_DIR].forEach((d) => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -407,8 +418,8 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
       const activeJobId = job?.jobId || reqJobId;
       const candidates = [
         path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-        path.resolve('data', 'dashboard_data.json'),
-        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+        resolveDataPath('dashboard_data.json'),
+        resolveDataPath('bundled_default', 'dashboard_data.json'),
       ];
       dPath = candidates.find((p) => fs.existsSync(p));
     }
@@ -470,8 +481,8 @@ app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
     const activeJobId = (job && job.jobId) ? job.jobId : reqJobId;
     const candidates = [
       path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-      path.resolve('data', 'dashboard_data.json'),
-      path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+      resolveDataPath('dashboard_data.json'),
+      resolveDataPath('bundled_default', 'dashboard_data.json'),
     ];
     dPath = candidates.find((p) => fs.existsSync(p));
   }
@@ -645,7 +656,7 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
   let job = null;
   let dPath = null;
 
-  const canonicalPath = path.resolve('data', 'dashboard_data.json');
+  const canonicalPath = resolveDataPath('dashboard_data.json');
   if ((!reqJobId || reqJobId === 'latest' || reqJobId === 'default') && fs.existsSync(canonicalPath)) {
     dPath = canonicalPath;
   } else {
@@ -664,10 +675,10 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
     if (!dPath || !fs.existsSync(dPath)) {
       const activeJobId = job?.jobId || reqJobId;
       const candidates = [
-        path.resolve('data', 'dashboard_data.json'),
+        resolveDataPath('dashboard_data.json'),
         path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
         path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard.json'),
-        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+        resolveDataPath('bundled_default', 'dashboard_data.json'),
       ];
       dPath = candidates.find((p) => fs.existsSync(p));
     }
@@ -904,8 +915,8 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       const dashCandidates = [
         job?.dashboardPath,
         path.join(jobOutputDir, 'dashboard_data.json'),
-        path.resolve('data', 'dashboard_data.json'),
-        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+        resolveDataPath('dashboard_data.json'),
+        resolveDataPath('bundled_default', 'dashboard_data.json'),
       ].filter(Boolean);
 
       const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
@@ -965,8 +976,8 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       const dashCandidates = [
         job?.dashboardPath,
         path.join(jobOutputDir, 'dashboard_data.json'),
-        path.resolve('data', 'dashboard_data.json'),
-        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+        resolveDataPath('dashboard_data.json'),
+        resolveDataPath('bundled_default', 'dashboard_data.json'),
       ].filter(Boolean);
 
       const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
@@ -1021,8 +1032,8 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       const activeJobId = job?.jobId || reqJobId;
       const candidates = [
         path.join(REPORTS_DIR, `job_${activeJobId}`, defaultFilename),
-        path.resolve('data', 'bundled_default', defaultFilename),
-        path.resolve('data', defaultFilename),
+        resolveDataPath('bundled_default', defaultFilename),
+        resolveDataPath(defaultFilename),
       ];
       targetPath = candidates.find((p) => fs.existsSync(p));
     }
@@ -1032,8 +1043,8 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       const activeJobId = job?.jobId || reqJobId;
       const dirsToSearch = [
         activeJobId ? path.join(REPORTS_DIR, `job_${activeJobId}`) : null,
-        path.resolve('data', 'bundled_default'),
-        path.resolve('data'),
+        resolveDataPath('bundled_default'),
+        resolveDataPath(),
       ].filter(Boolean);
 
       for (const d of dirsToSearch) {
@@ -1127,8 +1138,8 @@ if (require.main === module || !process.env.VERCEL) {
 
   // ── Startup Cache Eviction Guard ──────────────────────────────────────────
   try {
-    const canonicalPath = path.resolve('data', 'dashboard_data.json');
-    const bundledPath = path.resolve('data', 'bundled_default', 'dashboard_data.json');
+    const canonicalPath = resolveDataPath('dashboard_data.json');
+    const bundledPath = resolveDataPath('bundled_default', 'dashboard_data.json');
     if (fs.existsSync(bundledPath)) {
       const raw = fs.existsSync(canonicalPath) ? fs.readFileSync(canonicalPath, 'utf8') : '';
       const isStale = !fs.existsSync(canonicalPath) ||
