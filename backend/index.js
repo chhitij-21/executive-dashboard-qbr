@@ -1125,6 +1125,23 @@ if (require.main === module || !process.env.VERCEL) {
     });
   };
 
+  // ── Startup Cache Eviction Guard ──────────────────────────────────────────
+  try {
+    const canonicalPath = path.resolve('data', 'dashboard_data.json');
+    const bundledPath = path.resolve('data', 'bundled_default', 'dashboard_data.json');
+    if (fs.existsSync(canonicalPath)) {
+      const raw = fs.readFileSync(canonicalPath, 'utf8');
+      if (raw.includes('User Selected Period') && fs.existsSync(bundledPath)) {
+        console.log('[startup] Stale placeholder dashboard_data.json detected. Overwriting with canonical bundled default.');
+        fs.copyFileSync(bundledPath, canonicalPath);
+      }
+    } else if (fs.existsSync(bundledPath)) {
+      fs.copyFileSync(bundledPath, canonicalPath);
+    }
+  } catch (err) {
+    console.warn('[startup] Warning during startup cache validation:', err.message);
+  }
+
   startServer(Number(DEFAULT_PORT));
 }
 
