@@ -1894,7 +1894,9 @@ function filterDashboardBySite(data, siteFilter) {
     execSummary.totalDevices = targetSiteSummary.deviceCount || targetSiteSummary.activeDeviceCount || 0;
     execSummary.totalSwitches = targetSiteSummary.switchCount || 0;
     execSummary.totalAPs = targetSiteSummary.apCount || 0;
-    execSummary.totalStockDevices = targetSiteSummary.stockCount || 0;
+    execSummary.totalStockDevices = (targetSiteSummary.stockCount !== undefined && targetSiteSummary.stockCount !== null)
+      ? targetSiteSummary.stockCount
+      : Math.max(0, execSummary.totalDevices - (execSummary.totalSwitches + execSummary.totalAPs));
     execSummary.overallUptime = targetSiteSummary.jflSwitchUptime || targetSiteSummary.proactiveSwitchUptime || targetSiteSummary.overallUptime || '100.00';
     execSummary.primaryRcaSwitches = targetSiteSummary.primaryRcaSwitches || targetSiteSummary.primaryRca || 'Stable Operations (No Incidents)';
     execSummary.primaryRcaAPs = targetSiteSummary.primaryRcaAPs || targetSiteSummary.primaryRcaForAPs || 'Stable Operations (No Incidents)';
