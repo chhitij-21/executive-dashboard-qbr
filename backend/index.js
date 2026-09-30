@@ -643,28 +643,34 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
   const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
   const siteFilter = req.query.site || req.query.location || 'ALL';
   let job = null;
+  let dPath = null;
 
-  if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-    const history = historyService.getHistory(); // history is sorted newest-first
-    job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+  const canonicalPath = path.resolve('data', 'dashboard_data.json');
+  if ((!reqJobId || reqJobId === 'latest' || reqJobId === 'default') && fs.existsSync(canonicalPath)) {
+    dPath = canonicalPath;
   } else {
-    job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
-  }
+    if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
+      const history = historyService.getHistory(); // history is sorted newest-first
+      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+    } else {
+      job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+    }
 
-  if (job && job.status === 'processing') {
-    return res.status(202).json({ status: 'processing', message: 'Report is generating...' });
-  }
+    if (job && job.status === 'processing') {
+      return res.status(202).json({ status: 'processing', message: 'Report is generating...' });
+    }
 
-  let dPath = job?.dashboardPath;
-  if (!dPath || !fs.existsSync(dPath)) {
-    const activeJobId = job?.jobId || reqJobId;
-    const candidates = [
-      path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-      path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard.json'),
-      path.resolve('data', 'dashboard_data.json'),
-      path.resolve('data', 'bundled_default', 'dashboard_data.json'),
-    ];
-    dPath = candidates.find((p) => fs.existsSync(p));
+    dPath = job?.dashboardPath;
+    if (!dPath || !fs.existsSync(dPath)) {
+      const activeJobId = job?.jobId || reqJobId;
+      const candidates = [
+        path.resolve('data', 'dashboard_data.json'),
+        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
+        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard.json'),
+        path.resolve('data', 'bundled_default', 'dashboard_data.json'),
+      ];
+      dPath = candidates.find((p) => fs.existsSync(p));
+    }
   }
 
   // If no dashboard JSON is found from previous jobs, attempt auto-processing candidate Excel files in workspace root
