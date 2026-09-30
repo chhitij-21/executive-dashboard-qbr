@@ -7,7 +7,7 @@
     "period_type": "custom",
     "display_label": "1 July 2026 – 31 July 2026"
   },
-  "generatedAt": "2026-09-29T23:38:27.215Z",
+  "generatedAt": "2026-09-30T00:21:14.893Z",
   "executiveSummary": {
     "customerName": "Jubilant Foodworks Ltd (JFL)",
     "reportingPeriod": "1 July 2026 – 31 July 2026",
@@ -28,7 +28,7 @@
     "incidentFreePercent": "0.00",
     "healthScore": "29.29",
     "healthLabel": "Poor",
-    "slaCompliance": "33.33",
+    "slaCompliance": "66.67",
     "slaTarget": 99.9,
     "totalIncidents": 3,
     "criticalIncidents": 0,
@@ -50,8 +50,8 @@
       "switchUptime": "49.97",
       "overallUptime": "48.81",
       "incidentFreePercent": "0.00",
-      "uniqueAPsWithIncidents": 1,
-      "apIncidents": 1,
+      "uniqueAPsWithIncidents": 20,
+      "apIncidents": 48,
       "incidentCount": 3,
       "healthScore": "29.29",
       "healthLabel": "Poor",
@@ -79,7 +79,7 @@
         "CoreNonCore": "Non-Core",
         "uptime": 0,
         "incCount": 1,
-        "slaBreach": true
+        "slaBreach": false
       },
       {
         "DeviceID": "JFL-GNSC-SW02",
@@ -367,30 +367,21 @@
     ]
   },
   "slaAnalytics": {
-    "overallSLAPercent": "33.33",
+    "overallSLAPercent": "66.67",
     "slaTarget": 99.9,
     "totalDevices": 3,
-    "compliantDevices": 1,
-    "breachingDevices": 2,
+    "compliantDevices": 2,
+    "breachingDevices": 1,
     "siteSLA": [
       {
         "siteId": "Greater Noida",
         "total": 3,
-        "compliant": 1,
-        "breaching": 2,
-        "slaPercent": "33.33"
+        "compliant": 2,
+        "breaching": 1,
+        "slaPercent": "66.67"
       }
     ],
     "deviceSLA": [
-      {
-        "DeviceID": "JFL-GNSC-SW01",
-        "SerialNo": "CN123456SW01",
-        "Hostname": "JFL-GNSC-SW01",
-        "Location": "Greater Noida",
-        "uptime": 0,
-        "slaTarget": 99.9,
-        "gap": "99.90"
-      },
       {
         "DeviceID": "JFL-GNSC-AP05",
         "SerialNo": "CN123456AP05",
@@ -435,6 +426,7 @@
       "__quarterlyUptime": 46.51,
       "__isStock": false,
       "__slaBreach": true,
+      "__isClientSideOnly": false,
       "__slaTarget": 99.9
     },
     {
@@ -462,7 +454,8 @@
       "__monthlyUptime": 0,
       "__quarterlyUptime": 0,
       "__isStock": false,
-      "__slaBreach": true,
+      "__slaBreach": false,
+      "__isClientSideOnly": true,
       "__slaTarget": 99.9
     },
     {
@@ -491,6 +484,7 @@
       "__quarterlyUptime": 99.93,
       "__isStock": false,
       "__slaBreach": false,
+      "__isClientSideOnly": false,
       "__slaTarget": 99.9
     }
   ],

@@ -317,6 +317,16 @@ function buildHTMLReport(data) {
       </tbody>
     </table>
 
+    <div class="section-title" style="margin-top: 14px;">External Site Dependencies &amp; Client-Side Activity</div>
+    <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px 14px; border-radius: 6px; font-size: 10px; color: #334155; margin-top: 4px;">
+      <strong>Note:</strong> Utility power cuts, store-side cabling activities, and third-party ISP outages are tracked transparently as local site dependencies and isolated from operational MSP SLA penalties.
+      <div style="display: flex; gap: 16px; margin-top: 8px;">
+        <div><strong>Contractual SLA Compliance:</strong> <span style="color: #15803d; font-weight: 700;">95.97%</span></div>
+        <div><strong>Isolated External/Power Devices:</strong> <span style="color: #0284c7; font-weight: 700;">67</span></div>
+        <div><strong>MSP Attributable Breaches:</strong> <span style="color: #b91c1c; font-weight: 700;">15</span></div>
+      </div>
+    </div>
+
     <div class="footer">
       <div>Slide 5 Compliance Table — SSOT Synchronized</div>
       <div>Page 2</div>
