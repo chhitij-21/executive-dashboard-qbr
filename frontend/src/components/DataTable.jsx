@@ -42,6 +42,13 @@ const COLUMN_HEADER_MAP = {
   Status: 'Status',
   Description: 'Description / Task Details',
   CreatedTime: 'Created Time',
+  Subject: 'Subject',
+  SubCategory: 'Sub Category',
+  DeviceName: 'Device Name',
+  DeviceSerial: 'Device Serial',
+  DeviceType: 'Device Type',
+  Hostname: 'Hostname',
+  RCA: 'RCA',
 };
 
 export default function DataTable({ columns, rows, title, noScroll = false, columnLabels = {} }) {

@@ -217,13 +217,17 @@ function MainPortal() {
   }, [activeDashboardData?.incidentAnalytics]);
 
   const otherActivityIncidents = useMemo(() => {
+    const fromQbr = activeDashboardData?.otherActivities;
+    if (Array.isArray(fromQbr) && fromQbr.length > 0) {
+      return fromQbr;
+    }
     const incs = activeDashboardData?.incidents || [];
     return incs.filter((i) => {
-      const cat = String(i.Category || i.category || i.Description || i.description || '').toLowerCase();
+      const cat = String(i.Category || i.category || i.SubCategory || i.Description || i.description || '').toLowerCase();
       const devType = String(i.DeviceType || i.device_type || '').toLowerCase();
       return (
         i.IsChangeRequest ||
-        /change request|request fulfillment|ise|wlc|router|asset scan|whitelist|mac address|maintenance|credentials|license/i.test(cat) ||
+        /change request|request fulfillment|ise|wlc|router|asset scan|whitelist|mac address|maintenance|credentials|license|ios upgradation/i.test(cat) ||
         (!/sw|switch|ap|access.?point/i.test(devType) && devType.length > 0)
       );
     });
@@ -956,7 +960,7 @@ function MainPortal() {
                   Non-Hardware Activity Logs & Requests
                 </h4>
                 <DataTable
-                  columns={['display_reference', 'DeviceID', 'SerialNo', 'Location', 'Category', 'Status', 'Description']}
+                  columns={['Subject', 'SubCategory', 'DeviceName', 'DeviceSerial', 'DeviceType', 'Hostname', 'Status', 'RCA']}
                   rows={otherActivityIncidents}
                 />
               </div>

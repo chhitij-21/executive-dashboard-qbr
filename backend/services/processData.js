@@ -446,15 +446,42 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
   }
 
-  // Change Requests are NOT part of Incidents per business spec
-  incidents = incidents.filter(i => {
-    const isCR = i.IsChangeRequest ||
-                 /change|change\s*request|^cr$/i.test(i.Category || '') ||
-                 /change|change\s*request|^cr$/i.test(i.RCA || '') ||
-                 /change\s*request|change\s*management/i.test(i.Description || '');
-    return !isCR;
-  });
+  // Extract Other Activity records (Change Requests, Request Fulfillment, IOS Upgradation, Whitelist, MAC Address, Asset Scan, Credentials)
+  const isOtherActivity = (i) => {
+    const cat = String(i.Category || i.SubCategory || '').toLowerCase();
+    const rca = String(i.RCA || '').toLowerCase();
+    const desc = String(i.Description || i.Subject || '').toLowerCase();
+    const devType = String(i.DeviceType || '').toLowerCase();
+    return (
+      i.IsChangeRequest ||
+      /change|request|fulfillment|ios|upgradation|asset|scan|whitelist|mac address|maintenance|credentials|license|ise|wlc/i.test(cat) ||
+      /change|request|fulfillment|ios|upgradation|asset|scan|whitelist|mac address|maintenance|credentials|license|ise|wlc/i.test(desc) ||
+      /change|request|fulfillment/i.test(rca) ||
+      (!/sw|switch|ap|access.?point/i.test(devType) && devType.length > 0)
+    );
+  };
+
+  const otherActivities = incidents.filter(isOtherActivity).map(item => ({
+    Subject: item.Description || item.Subject || '',
+    Description: item.Description || item.Subject || '',
+    SubCategory: item.Category || item.SubCategory || 'Change Request',
+    Category: item.Category || item.SubCategory || 'Change Request',
+    DeviceName: item.Location || item.SiteID || '',
+    Location: item.Location || item.SiteID || '',
+    DeviceSerial: item.SerialNo || item.DeviceID || '',
+    SerialNo: item.SerialNo || item.DeviceID || '',
+    DeviceID: item.SerialNo || item.DeviceID || '',
+    DeviceType: item.DeviceType || 'SW',
+    Hostname: item.Hostname || '',
+    Status: item.Status || 'Closed',
+    RCA: item.RCA || 'New Configuration',
+    display_reference: item.display_reference || `Ticket: ${item.TicketNumber || item.IncidentNumber || 'CR'}`
+  }));
+
+  // Change Requests are NOT part of hardware Incidents per business spec
+  incidents = incidents.filter(i => !isOtherActivity(i));
   log(`Incidents for target customer (excluding Change Requests): ${incidents.length}`);
+  log(`Other Activity tickets extracted: ${otherActivities.length}`);
 
   // ── 5b. Date-range filtering (Requirement 2 & 3) ─────────────────────────
   // Only filter when explicit startDate / endDate are provided.
@@ -863,7 +890,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── 8. Build all analytics ────────────────────────────────────────────────
   log('Building analytics sections...');
-  const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta, periodOptions);
+  const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta, periodOptions, otherActivities);
   log('Analytics complete');
 
   // ── 8b. PART 4: Strict data validation ── attach any warnings to SSOT output ──
@@ -1093,7 +1120,7 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
 // Full Analytics Builder
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, customerName = 'Jubilant Foodworks Ltd (JFL)', reportPeriodMeta = null, periodOptions = {}) {
+function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, customerName = 'Jubilant Foodworks Ltd (JFL)', reportPeriodMeta = null, periodOptions = {}, otherActivities = []) {
   const activeDevices = devices.filter(d => !d.__isStock);
   const stockDevices  = devices.filter(d => d.__isStock);
 
@@ -1139,6 +1166,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
     slaAnalytics:     slaAn,
     devices,
     incidents,
+    otherActivities:  otherActivities || [],
   };
 }
 
