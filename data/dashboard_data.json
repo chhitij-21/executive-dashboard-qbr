@@ -1,634 +1,215 @@
 {
   "customerName": "Jubilant Foodworks Ltd (JFL)",
-  "reportingPeriod": "1 July 2026 – 31 July 2026",
+  "reportingPeriod": "1 August 2026 – 31 August 2026",
   "report_period": {
-    "start_date": "2026-07-01",
-    "end_date": "2026-07-31",
+    "start_date": "2026-08-01",
+    "end_date": "2026-08-31",
     "period_type": "custom",
-    "display_label": "1 July 2026 – 31 July 2026"
+    "display_label": "1 August 2026 – 31 August 2026"
   },
-  "generatedAt": "2026-09-30T00:21:14.893Z",
   "executiveSummary": {
     "customerName": "Jubilant Foodworks Ltd (JFL)",
-    "reportingPeriod": "1 July 2026 – 31 July 2026",
-    "totalSites": 1,
-    "totalDevices": 3,
-    "totalStockDevices": 0,
-    "totalSwitches": 2,
-    "totalAPs": 1,
-    "apIncidents": 1,
-    "uniqueAPsWithIncidents": 1,
-    "primaryRcaSwitches": "Power Outage",
-    "primaryRcaAPs": "Fiber Cut",
-    "primaryRca": "Power Outage",
-    "primaryRcaForAPs": "Fiber Cut",
-    "overallUptime": "48.81",
-    "jflSwitchUptime": "49.97",
-    "proactiveSwitchUptime": "49.87",
-    "incidentFreePercent": "0.00",
-    "healthScore": "29.29",
-    "healthLabel": "Poor",
-    "slaCompliance": "66.67",
-    "slaTarget": 99.9,
-    "totalIncidents": 3,
+    "reportingPeriod": "1 August 2026 – 31 August 2026",
+    "totalSites": 8,
+    "totalDevices": 444,
+    "totalStockDevices": 72,
+    "totalSwitches": 148,
+    "totalAPs": 224,
+    "apIncidents": 61,
+    "uniqueAPsWithIncidents": 32,
+    "primaryRcaSwitches": "Device Power Issues",
+    "primaryRcaAPs": "Device Power Issues",
+    "primaryRca": "Device Power Issues",
+    "primaryRcaForAPs": "Device Power Issues",
+    "overallUptime": "99.43",
+    "jflSwitchUptime": "94.43",
+    "proactiveSwitchUptime": "99.96",
+    "incidentFreePercent": "88.51",
+    "healthScore": "95.06",
+    "healthLabel": "Excellent",
+    "slaCompliance": "95.97",
+    "slaTarget": 99.3,
+    "totalIncidents": 98,
     "criticalIncidents": 0,
     "majorIncidents": 0,
-    "minorIncidents": 3
+    "minorIncidents": 98
   },
   "siteSummary": [
     {
+      "siteId": "Bangalore",
+      "deviceCount": 182,
+      "totalDeviceCount": 182,
+      "activeDeviceCount": 182,
+      "switchCount": 49,
+      "apCount": 78,
+      "proactiveSwitchUptime": "99.92",
+      "jflSwitchUptime": "98.18",
+      "switchUptime": "98.18",
+      "overallUptime": "98.18",
+      "incidentFreePercent": "95.00",
+      "uniqueAPsWithIncidents": 1,
+      "apIncidents": 1,
+      "incidentCount": 12,
+      "healthScore": "96.91",
+      "healthLabel": "Excellent",
+      "primaryRcaSwitches": "Device Power Issues",
+      "primaryRcaAPs": "New Configuration",
+      "primaryRca": "Device Power Issues",
+      "primaryRcaForAPs": "New Configuration"
+    },
+    {
       "siteId": "Greater Noida",
-      "deviceCount": 3,
-      "totalDeviceCount": 3,
-      "activeDeviceCount": 3,
-      "stockCount": 0,
-      "stockDevices": [],
-      "switchCount": 2,
-      "apCount": 1,
-      "proactiveSwitchUptime": "49.87",
-      "jflSwitchUptime": "49.97",
-      "switchUptime": "49.97",
-      "overallUptime": "48.81",
-      "incidentFreePercent": "0.00",
+      "deviceCount": 122,
+      "totalDeviceCount": 122,
+      "activeDeviceCount": 122,
+      "switchCount": 42,
+      "apCount": 72,
+      "proactiveSwitchUptime": "99.86",
+      "jflSwitchUptime": "65.11",
+      "switchUptime": "65.11",
+      "overallUptime": "65.11",
+      "incidentFreePercent": "42.98",
       "uniqueAPsWithIncidents": 20,
       "apIncidents": 48,
-      "incidentCount": 3,
-      "healthScore": "29.29",
-      "healthLabel": "Poor",
-      "primaryRcaSwitches": "Power Outage",
-      "primaryRcaAPs": "Fiber Cut",
-      "primaryRca": "Power Outage",
-      "primaryRcaForAPs": "Fiber Cut"
-    }
-  ],
-  "switchAnalytics": {
-    "available": true,
-    "totalSwitches": 2,
-    "coreSwitches": 0,
-    "nonCoreSwitches": 2,
-    "coreUptime": "100.00",
-    "nonCoreUptime": "49.97",
-    "overallUptime": "49.97",
-    "switchIncidents": 2,
-    "totalSwitchIncidents": 2,
-    "top10SwitchOutages": [
-      {
-        "DeviceID": "JFL-GNSC-SW01",
-        "SerialNo": "CN123456SW01",
-        "Location": "Greater Noida",
-        "CoreNonCore": "Non-Core",
-        "uptime": 0,
-        "incCount": 1,
-        "slaBreach": false
-      },
-      {
-        "DeviceID": "JFL-GNSC-SW02",
-        "SerialNo": "CN123456SW02",
-        "Location": "Greater Noida",
-        "CoreNonCore": "Non-Core",
-        "uptime": 99.93,
-        "incCount": 1,
-        "slaBreach": false
-      }
-    ],
-    "rackwiseUptime": [
-      {
-        "site": "Greater Noida",
-        "rack": "Main Rack",
-        "deviceCount": 2,
-        "SerialNo": "CN123456SW01, CN123456SW02",
-        "serialNumbers": "CN123456SW01, CN123456SW02",
-        "periodUptime": "49.87%",
-        "monthlyUptime": "49.87%",
-        "quarterlyUptime": "49.87%",
-        "avgUptime": "49.87%",
-        "periodLabel": "Monthly Uptime %",
-        "periodType": "monthly",
-        "status": "Operational"
-      }
-    ],
-    "expandedRackwiseUptime": [
-      {
-        "sNo": 1,
-        "displaySNo": "1",
-        "site": "Greater Noida",
-        "rack": "Main Rack",
-        "serialNumber": "CN123456SW01",
-        "DeviceID": "JFL-GNSC-SW01",
-        "switchCount": 2,
-        "monthlyUptime": "0.00%",
-        "operatingStatus": "Operational",
-        "isFirstInRack": true,
-        "rackIndex": 1
-      },
-      {
-        "sNo": "",
-        "displaySNo": "",
-        "site": "Greater Noida",
-        "rack": "Main Rack",
-        "serialNumber": "CN123456SW02",
-        "DeviceID": "JFL-GNSC-SW02",
-        "switchCount": 2,
-        "monthlyUptime": "99.73%",
-        "operatingStatus": "Operational",
-        "isFirstInRack": false,
-        "rackIndex": 1
-      }
-    ],
-    "periodLabel": "Monthly Uptime %",
-    "periodType": "monthly",
-    "slaTarget": 99.9,
-    "incidentSLADetails": [
-      {
-        "Device": "JFL-GNSC-SW01",
-        "SerialNo": "CN123456SW01",
-        "Location": "Greater Noida",
-        "IncidentID": "INC/62625",
-        "display_reference": {
-          "type": "Ticket",
-          "value": "PRO/INC/62625"
-        },
-        "resolution_time_hours": 0,
-        "sla_target_hours": 2,
-        "sla_status": "SLA Met",
-        "RCA": "Power Outage"
-      },
-      {
-        "Device": "JFL-GNSC-SW02",
-        "SerialNo": "CN123456SW02",
-        "Location": "Greater Noida",
-        "IncidentID": "INC/62626",
-        "display_reference": {
-          "type": "Ticket",
-          "value": "PRO/INC/62626"
-        },
-        "resolution_time_hours": 2,
-        "sla_target_hours": 2,
-        "sla_status": "SLA Met",
-        "RCA": "Hardware Failure"
-      }
-    ],
-    "slaSummary": {
-      "total": 2,
-      "met": 2,
-      "breached": 0,
-      "open": 0,
-      "unknown": 0,
-      "percentMet": "100.0"
-    },
-    "rcaBreakdown": [
-      {
-        "rca": "Power Outage",
-        "count": 1,
-        "percentage": "50.0%",
-        "isTop": true,
-        "tied": false
-      },
-      {
-        "rca": "Hardware Failure",
-        "count": 1,
-        "percentage": "50.0%",
-        "isTop": false,
-        "tied": false
-      }
-    ]
-  },
-  "apAnalytics": {
-    "available": true,
-    "totalAPs": 1,
-    "apAverageUptime": "46.51",
-    "apIncidents": 1,
-    "totalAPIncidentRows": 1,
-    "uniqueAPsWithIncidents": 1,
-    "top10APOutages": [
-      {
-        "DeviceID": "JFL-GNSC-AP05",
-        "SerialNo": "CN123456AP05",
-        "Location": "Greater Noida",
-        "uptime": 46.51,
-        "incCount": 1
-      }
-    ],
-    "rcaBreakdown": [
-      {
-        "rca": "Fiber Cut",
-        "count": 1,
-        "percentage": "100.0%",
-        "isTop": true,
-        "tied": false
-      }
-    ],
-    "incidentSLADetails": [
-      {
-        "Device": "JFL-GNSC-AP05",
-        "SerialNo": "CN123456AP05",
-        "Location": "Greater Noida",
-        "IncidentID": "INC/62624",
-        "display_reference": {
-          "type": "Ticket",
-          "value": "PRO/INC/62624"
-        },
-        "resolution_time_hours": 0,
-        "sla_target_hours": 2,
-        "sla_status": "SLA Met",
-        "RCA": "Fiber Cut"
-      }
-    ],
-    "slaSummary": {
-      "total": 1,
-      "met": 1,
-      "breached": 0,
-      "open": 0,
-      "unknown": 0,
-      "percentMet": "100.0"
-    }
-  },
-  "incidentAnalytics": {
-    "totalIncidents": 3,
-    "criticalIncidents": 0,
-    "majorIncidents": 0,
-    "minorIncidents": 3,
-    "mttrHours": "2.0",
-    "monthlyTrend": [
-      {
-        "month": "2026-07",
-        "count": 3
-      }
-    ],
-    "siteWiseIncidents": [
-      {
-        "siteId": "Greater Noida",
-        "count": 3
-      }
-    ],
-    "deviceWiseIncidents": [
-      {
-        "DeviceID": "JFL-GNSC-AP05",
-        "SerialNo": "CN123456AP05",
-        "count": 1
-      },
-      {
-        "DeviceID": "JFL-GNSC-SW01",
-        "SerialNo": "CN123456SW01",
-        "count": 1
-      },
-      {
-        "DeviceID": "JFL-GNSC-SW02",
-        "SerialNo": "CN123456SW02",
-        "count": 1
-      }
-    ],
-    "rcaBreakdown": [
-      {
-        "rca": "Fiber Cut",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": true,
-        "tied": false
-      },
-      {
-        "rca": "Power Outage",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": false,
-        "tied": false
-      },
-      {
-        "rca": "Hardware Failure",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": false,
-        "tied": false
-      }
-    ]
-  },
-  "rcaAnalytics": {
-    "totalIncidents": 3,
-    "topRca": "Fiber Cut",
-    "breakdown": [
-      {
-        "rca": "Fiber Cut",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": true,
-        "tied": false
-      },
-      {
-        "rca": "Power Outage",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": false,
-        "tied": false
-      },
-      {
-        "rca": "Hardware Failure",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": false,
-        "tied": false
-      }
-    ],
-    "rawBreakdown": [
-      {
-        "rca": "Fiber Cut",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": true,
-        "tied": false
-      },
-      {
-        "rca": "Power Outage",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": false,
-        "tied": false
-      },
-      {
-        "rca": "Hardware Failure",
-        "count": 1,
-        "percentage": "33.3%",
-        "isTop": false,
-        "tied": false
-      }
-    ],
-    "standardBreakdown": [
-      {
-        "category": "Unknown",
-        "rca": "Unknown",
-        "count": 2,
-        "percentage": "66.7%"
-      },
-      {
-        "category": "Hardware Failure",
-        "rca": "Hardware Failure",
-        "count": 1,
-        "percentage": "33.3%"
-      }
-    ]
-  },
-  "slaAnalytics": {
-    "overallSLAPercent": "66.67",
-    "slaTarget": 99.9,
-    "totalDevices": 3,
-    "compliantDevices": 2,
-    "breachingDevices": 1,
-    "siteSLA": [
-      {
-        "siteId": "Greater Noida",
-        "total": 3,
-        "compliant": 2,
-        "breaching": 1,
-        "slaPercent": "66.67"
-      }
-    ],
-    "deviceSLA": [
-      {
-        "DeviceID": "JFL-GNSC-AP05",
-        "SerialNo": "CN123456AP05",
-        "Hostname": "JFL-GNSC-AP05",
-        "Location": "Greater Noida",
-        "uptime": 46.51,
-        "slaTarget": 99.9,
-        "gap": "53.39"
-      }
-    ],
-    "monthlySLATrend": [
-      {
-        "month": "2026-07",
-        "slaPercent": "0.00"
-      }
-    ]
-  },
-  "devices": [
-    {
-      "DeviceID": "JFL-GNSC-AP05",
-      "SerialNo": "CN123456AP05",
-      "Hostname": "JFL-GNSC-AP05",
-      "Location": "Greater Noida",
-      "SiteID": "Greater Noida",
-      "DeviceType": "AP",
-      "Rack": "",
-      "CoreNonCore": "",
-      "Model": "",
-      "NetworkName": "",
-      "ReplacedSerial": "",
-      "__source": {
-        "file": "inventory.xlsx",
-        "sheet": "Greater Noida",
-        "row": 2
-      },
-      "JFL Uptime %": "46.51%",
-      "Proactive Uptime %": "46.51%",
-      "__effectiveUptime": 46.51,
-      "__jflUptime": 46.51,
-      "__proactiveUptime": 46.51,
-      "__monthlyUptime": 46.51,
-      "__quarterlyUptime": 46.51,
-      "__isStock": false,
-      "__slaBreach": true,
-      "__isClientSideOnly": false,
-      "__slaTarget": 99.9
+      "incidentCount": 225,
+      "healthScore": "56.26",
+      "healthLabel": "Fair",
+      "primaryRcaSwitches": "New Configuration",
+      "primaryRcaAPs": "Device Power Issues",
+      "primaryRca": "New Configuration",
+      "primaryRcaForAPs": "Device Power Issues"
     },
     {
-      "DeviceID": "JFL-GNSC-SW01",
-      "SerialNo": "CN123456SW01",
-      "Hostname": "JFL-GNSC-SW01",
-      "Location": "Greater Noida",
-      "SiteID": "Greater Noida",
-      "DeviceType": "Switch",
-      "Rack": "",
-      "CoreNonCore": "",
-      "Model": "",
-      "NetworkName": "",
-      "ReplacedSerial": "",
-      "__source": {
-        "file": "inventory.xlsx",
-        "sheet": "Greater Noida",
-        "row": 3
-      },
-      "JFL Uptime %": "0%",
-      "Proactive Uptime %": "0%",
-      "__effectiveUptime": 0,
-      "__jflUptime": 0,
-      "__proactiveUptime": 0,
-      "__monthlyUptime": 0,
-      "__quarterlyUptime": 0,
-      "__isStock": false,
-      "__slaBreach": false,
-      "__isClientSideOnly": true,
-      "__slaTarget": 99.9
+      "siteId": "Noida",
+      "deviceCount": 82,
+      "totalDeviceCount": 82,
+      "activeDeviceCount": 82,
+      "switchCount": 41,
+      "apCount": 36,
+      "proactiveSwitchUptime": "100.00",
+      "jflSwitchUptime": "100.00",
+      "switchUptime": "100.00",
+      "overallUptime": "100.00",
+      "incidentFreePercent": "100.00",
+      "uniqueAPsWithIncidents": 0,
+      "apIncidents": 0,
+      "incidentCount": 0,
+      "healthScore": "100.00",
+      "healthLabel": "Excellent",
+      "primaryRcaSwitches": "Stable Operations (No Incidents)",
+      "primaryRcaAPs": "Stable Operations (No Incidents)",
+      "primaryRca": "Stable Operations (No Incidents)",
+      "primaryRcaForAPs": "Stable Operations (No Incidents)"
     },
     {
-      "DeviceID": "JFL-GNSC-SW02",
-      "SerialNo": "CN123456SW02",
-      "Hostname": "JFL-GNSC-SW02",
-      "Location": "Greater Noida",
-      "SiteID": "Greater Noida",
-      "DeviceType": "Switch",
-      "Rack": "",
-      "CoreNonCore": "",
-      "Model": "",
-      "NetworkName": "",
-      "ReplacedSerial": "",
-      "__source": {
-        "file": "inventory.xlsx",
-        "sheet": "Greater Noida",
-        "row": 4
-      },
-      "JFL Uptime %": "99.93%",
-      "Proactive Uptime %": "99.73%",
-      "__effectiveUptime": 99.93,
-      "__jflUptime": 99.93,
-      "__proactiveUptime": 99.73,
-      "__monthlyUptime": 99.93,
-      "__quarterlyUptime": 99.93,
-      "__isStock": false,
-      "__slaBreach": false,
-      "__isClientSideOnly": false,
-      "__slaTarget": 99.9
-    }
-  ],
-  "incidents": [
-    {
-      "IncidentNumber": "INC/62624",
-      "TicketNumber": "PRO/INC/62624",
-      "DeviceID": "JFL-GNSC-AP05",
-      "SerialNo": "CN123456AP05",
-      "Hostname": "JFL-GNSC-AP05",
-      "Location": "Greater Noida",
-      "SiteID": "Greater Noida",
-      "DeviceType": "AP",
-      "Rack": "",
-      "Priority": "",
-      "RCA": "Fiber Cut",
-      "Status": "On-Hold",
-      "Category": "",
-      "Description": "",
-      "IsChangeRequest": false,
-      "ResolutionSLAStatusRaw": "",
-      "ResponseSLAStatus": "",
-      "CreatedTime": "2026-07-15 10:00:00",
-      "OpenTime": "2026-07-15 10:00:00",
-      "ResolvedTime": null,
-      "ActualResolutionMin": 0,
-      "TotalResolutionMin": "",
-      "ResolutionTimeMinRaw": "",
-      "HoldTimeMin": 0,
-      "DowntimeHours": "",
-      "OutageHours": "",
-      "ResolutionTimeHours": "",
-      "ReplacedSerial": "",
-      "NewSerial": "",
-      "AccountName": "",
-      "ProactiveUptimePct": "",
-      "JFLUptimePct": "",
-      "AgreedResolutionSLAMin": "",
-      "__source": {
-        "file": "incidents.xlsx",
-        "sheet": "Raw",
-        "row": 2
-      },
-      "resolution_time_hours": 0,
-      "sla_target_hours": 2,
-      "sla_status": "SLA Met",
-      "display_reference": {
-        "type": "Ticket",
-        "value": "PRO/INC/62624"
-      }
+      "siteId": "Mohali",
+      "deviceCount": 19,
+      "totalDeviceCount": 19,
+      "activeDeviceCount": 19,
+      "switchCount": 4,
+      "apCount": 15,
+      "proactiveSwitchUptime": "100.00",
+      "jflSwitchUptime": "100.00",
+      "switchUptime": "100.00",
+      "overallUptime": "100.00",
+      "incidentFreePercent": "73.68",
+      "uniqueAPsWithIncidents": 5,
+      "apIncidents": 5,
+      "incidentCount": 5,
+      "healthScore": "89.47",
+      "healthLabel": "Good",
+      "primaryRcaSwitches": "Stable Operations (No Incidents)",
+      "primaryRcaAPs": "Device Power Issues",
+      "primaryRca": "Stable Operations (No Incidents)",
+      "primaryRcaForAPs": "Device Power Issues"
     },
     {
-      "IncidentNumber": "INC/62625",
-      "TicketNumber": "PRO/INC/62625",
-      "DeviceID": "JFL-GNSC-SW01",
-      "SerialNo": "CN123456SW01",
-      "Hostname": "JFL-GNSC-SW01",
-      "Location": "Greater Noida",
-      "SiteID": "Greater Noida",
-      "DeviceType": "Switch",
-      "Rack": "",
-      "Priority": "",
-      "RCA": "Power Outage",
-      "Status": "Open",
-      "Category": "",
-      "Description": "",
-      "IsChangeRequest": false,
-      "ResolutionSLAStatusRaw": "",
-      "ResponseSLAStatus": "",
-      "CreatedTime": "2026-07-01 00:00:00",
-      "OpenTime": "2026-07-01 00:00:00",
-      "ResolvedTime": null,
-      "ActualResolutionMin": 0,
-      "TotalResolutionMin": "",
-      "ResolutionTimeMinRaw": "",
-      "HoldTimeMin": 0,
-      "DowntimeHours": "",
-      "OutageHours": "",
-      "ResolutionTimeHours": "",
-      "ReplacedSerial": "",
-      "NewSerial": "",
-      "AccountName": "",
-      "ProactiveUptimePct": "",
-      "JFLUptimePct": "",
-      "AgreedResolutionSLAMin": "",
-      "__source": {
-        "file": "incidents.xlsx",
-        "sheet": "Raw",
-        "row": 3
-      },
-      "resolution_time_hours": 0,
-      "sla_target_hours": 2,
-      "sla_status": "SLA Met",
-      "display_reference": {
-        "type": "Ticket",
-        "value": "PRO/INC/62625"
-      }
+      "siteId": "Hyderabad",
+      "deviceCount": 16,
+      "totalDeviceCount": 16,
+      "activeDeviceCount": 16,
+      "switchCount": 2,
+      "apCount": 14,
+      "proactiveSwitchUptime": "100.00",
+      "jflSwitchUptime": "100.00",
+      "switchUptime": "100.00",
+      "overallUptime": "100.00",
+      "incidentFreePercent": "56.25",
+      "uniqueAPsWithIncidents": 6,
+      "apIncidents": 7,
+      "incidentCount": 7,
+      "healthScore": "82.50",
+      "healthLabel": "Fair",
+      "primaryRcaSwitches": "Stable Operations (No Incidents)",
+      "primaryRcaAPs": "Device Power Issues",
+      "primaryRca": "Stable Operations (No Incidents)",
+      "primaryRcaForAPs": "Device Power Issues"
     },
     {
-      "IncidentNumber": "INC/62626",
-      "TicketNumber": "PRO/INC/62626",
-      "DeviceID": "JFL-GNSC-SW02",
-      "SerialNo": "CN123456SW02",
-      "Hostname": "JFL-GNSC-SW02",
-      "Location": "Greater Noida",
-      "SiteID": "Greater Noida",
-      "DeviceType": "Switch",
-      "Rack": "",
-      "Priority": "",
-      "RCA": "Hardware Failure",
-      "Status": "Resolved",
-      "Category": "",
-      "Description": "",
-      "IsChangeRequest": false,
-      "ResolutionSLAStatusRaw": "",
-      "ResponseSLAStatus": "",
-      "CreatedTime": "2026-07-05 08:00:00",
-      "OpenTime": "2026-07-05 08:00:00",
-      "ResolvedTime": "2026-07-05 10:00:00",
-      "ActualResolutionMin": 120,
-      "TotalResolutionMin": "",
-      "ResolutionTimeMinRaw": "",
-      "HoldTimeMin": 30,
-      "DowntimeHours": "",
-      "OutageHours": "",
-      "ResolutionTimeHours": "",
-      "ReplacedSerial": "",
-      "NewSerial": "",
-      "AccountName": "",
-      "ProactiveUptimePct": "",
-      "JFLUptimePct": "",
-      "AgreedResolutionSLAMin": "",
-      "__source": {
-        "file": "incidents.xlsx",
-        "sheet": "Raw",
-        "row": 4
-      },
-      "resolution_time_hours": 2,
-      "sla_target_hours": 2,
-      "sla_status": "SLA Met",
-      "display_reference": {
-        "type": "Ticket",
-        "value": "PRO/INC/62626"
-      }
+      "siteId": "Nagpur",
+      "deviceCount": 10,
+      "totalDeviceCount": 10,
+      "activeDeviceCount": 10,
+      "switchCount": 4,
+      "apCount": 6,
+      "proactiveSwitchUptime": "99.96",
+      "jflSwitchUptime": "92.15",
+      "switchUptime": "92.15",
+      "overallUptime": "92.15",
+      "incidentFreePercent": "100.00",
+      "uniqueAPsWithIncidents": 0,
+      "apIncidents": 0,
+      "incidentCount": 1,
+      "healthScore": "95.29",
+      "healthLabel": "Excellent",
+      "primaryRcaSwitches": "Client Side Activity",
+      "primaryRcaAPs": "Stable Operations (No Incidents)",
+      "primaryRca": "Client Side Activity",
+      "primaryRcaForAPs": "Stable Operations (No Incidents)"
+    },
+    {
+      "siteId": "Mumbai-DC",
+      "deviceCount": 8,
+      "totalDeviceCount": 8,
+      "activeDeviceCount": 8,
+      "switchCount": 4,
+      "apCount": 0,
+      "proactiveSwitchUptime": "100.00",
+      "jflSwitchUptime": "100.00",
+      "switchUptime": "100.00",
+      "overallUptime": "100.00",
+      "incidentFreePercent": "100.00",
+      "uniqueAPsWithIncidents": 0,
+      "apIncidents": 0,
+      "incidentCount": 0,
+      "healthScore": "100.00",
+      "healthLabel": "Excellent",
+      "primaryRcaSwitches": "Stable Operations (No Incidents)",
+      "primaryRcaAPs": "Stable Operations (No Incidents)",
+      "primaryRca": "Stable Operations (No Incidents)",
+      "primaryRcaForAPs": "Stable Operations (No Incidents)"
+    },
+    {
+      "siteId": "Guwahati",
+      "deviceCount": 5,
+      "totalDeviceCount": 5,
+      "activeDeviceCount": 5,
+      "switchCount": 2,
+      "apCount": 3,
+      "proactiveSwitchUptime": "99.98",
+      "jflSwitchUptime": "100.00",
+      "switchUptime": "100.00",
+      "overallUptime": "100.00",
+      "incidentFreePercent": "100.00",
+      "uniqueAPsWithIncidents": 0,
+      "apIncidents": 0,
+      "incidentCount": 1,
+      "healthScore": "100.00",
+      "healthLabel": "Excellent",
+      "primaryRcaSwitches": "Device Boot Issues",
+      "primaryRcaAPs": "Stable Operations (No Incidents)",
+      "primaryRca": "Device Boot Issues",
+      "primaryRcaForAPs": "Stable Operations (No Incidents)"
     }
   ]
 }

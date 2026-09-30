@@ -905,14 +905,18 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // Also write to data/dashboard_data.json as canonical latest so the dashboard
   // always shows the correct most-recent run even after a server restart.
-  try {
-    const canonicalDir = path.resolve('data');
-    if (!fs.existsSync(canonicalDir)) fs.mkdirSync(canonicalDir, { recursive: true });
-    const canonicalPath = path.join(canonicalDir, 'dashboard_data.json');
-    fs.writeFileSync(canonicalPath, JSON.stringify(qbrData, null, 2));
-    log(`Dashboard JSON also saved to canonical path: ${canonicalPath}`);
-  } catch (canonErr) {
-    log(`WARNING: Could not write canonical dashboard_data.json: ${canonErr.message}`);
+  const isTestRun = options.isTest || process.env.NODE_ENV === 'test' ||
+    (outputDir && (outputDir.includes('Temp') || outputDir.includes('test') || outputDir.includes('tmp')));
+  if (!isTestRun) {
+    try {
+      const canonicalDir = path.resolve('data');
+      if (!fs.existsSync(canonicalDir)) fs.mkdirSync(canonicalDir, { recursive: true });
+      const canonicalPath = path.join(canonicalDir, 'dashboard_data.json');
+      fs.writeFileSync(canonicalPath, JSON.stringify(qbrData, null, 2));
+      log(`Dashboard JSON also saved to canonical path: ${canonicalPath}`);
+    } catch (canonErr) {
+      log(`WARNING: Could not write canonical dashboard_data.json: ${canonErr.message}`);
+    }
   }
 
   writeFile(outputDir, 'error_report.md',
@@ -1326,43 +1330,15 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
           ? topAllRcas.join(' / ')
           : (s.incidents.length > 0 ? 'Unknown' : 'Stable Operations (No Incidents)'));
 
-    let finalProUp = proactiveSwitchUptime;
-    let finalJflUp = jflSwitchUptime;
-    let finalApInc = apIncidentsAtSite.length;
-    let finalUnqAp = uniqueAPsWithIncidents;
-    let finalSwRca = primaryRcaSwitches;
-    let finalApRca = primaryRcaAPs;
+    const finalProUp = proactiveSwitchUptime;
+    const finalJflUp = jflSwitchUptime;
+    const finalApInc = apIncidentsAtSite.length;
+    const finalUnqAp = uniqueAPsWithIncidents;
+    const finalSwRca = primaryRcaSwitches;
+    const finalApRca = primaryRcaAPs;
     const finalIncFr = incFreePct.toFixed(2);
     const finalHlth  = healthScore;
     const finalDevCount = s.devices.length; // Total inventory incl. stock — matches human report "No of devices" column
-
-    const normSiteId = normalizeSiteName(siteId);
-
-    // Human-verified reference site overrides (SSOT Ground Truth alignment)
-    if (normSiteId === 'Noida') {
-      // Noida exception rule: All tickets were pending customer decision (On Hold).
-      // Zero switch or AP incidents causing SLA penalties -> 100% Uptime, 0/0 APs.
-      finalProUp = '100.00';
-      finalJflUp = '100.00';
-      finalSwRca = 'Stable Operations (No Incidents)';
-      finalApInc = 0;
-      finalUnqAp = 0;
-      finalApRca = 'Stable Operations (No Incidents)';
-    } else if (normSiteId === 'Greater Noida') {
-      // Greater Noida AP incident ratio alignment: 48 total AP incidents / 20 unique APs
-      finalApInc = 48;
-      finalUnqAp = 20;
-      if (!finalSwRca || finalSwRca === 'Stable Operations (No Incidents)') finalSwRca = 'New Configuration';
-      if (!finalApRca || finalApRca === 'Stable Operations (No Incidents)') finalApRca = 'Device Power Issues';
-    } else if (normSiteId === 'Nagpur') {
-      // Nagpur reference alignment: 99.96 Proactive, 92.15 JFL, Client Side Activity, 0/0 APs
-      finalProUp = '99.96';
-      finalJflUp = '92.15';
-      finalSwRca = 'Client Side Activity';
-      finalApInc = 0;
-      finalUnqAp = 0;
-      finalApRca = 'Stable Operations (No Incidents)';
-    }
 
     return {
       siteId,
