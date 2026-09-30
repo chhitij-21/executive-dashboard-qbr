@@ -79,3 +79,14 @@
 - **Validation Engine**:
   - `validateAnalytics(qbrData)` checks RCA breakdown sums, SLA status totals, and RCA percentage totals.
   - Inconsistencies log silently as warnings to `qbrData.validationWarnings` without blocking report or PPT generation.
+
+---
+
+## 7. System State, Cache Eviction & Deployment Synchronization Rules
+- **Canonical Dataset Priority**:
+  - `/api/dashboard` handler MUST evaluate and serve `data/dashboard_data.json` directly for all latest/default requests before checking historical job paths.
+- **Startup Cache Eviction Guard**:
+  - On server launch, `backend/index.js` inspects `data/dashboard_data.json`. If un-interpolated placeholders (e.g. `"User Selected Period"`) or stale historical aggregations exist, it automatically overwrites the file with `data/bundled_default/dashboard_data.json`.
+- **Physical Inventory Arithmetic Integrity**:
+  - `totalStockDevices` MUST evaluate to $\text{totalDevices} - (\text{totalSwitches} + \text{totalAPs})$ whenever stock count is omitted in site summary objects, guaranteeing that $\text{Active Switches} + \text{Active APs} + \text{Stock Devices} = \text{Total Devices}$.
+
