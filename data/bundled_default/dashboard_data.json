@@ -38,91 +38,707 @@
   "siteSummary": [
     {
       "siteId": "Bangalore",
-      "totalDevices": 56,
+      "deviceCount": 56,
+      "totalDeviceCount": 56,
+      "activeDeviceCount": 47,
+      "stockCount": 9,
+      "stockDevices": [
+        {
+          "DeviceID": "JFL-BANG-STK-01",
+          "SerialNo": "STK-SER-0001",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-BANG-STK-09",
+          "SerialNo": "STK-SER-0009",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-BANG-STK-17",
+          "SerialNo": "STK-SER-0017",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-BANG-STK-25",
+          "SerialNo": "STK-SER-0025",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-BANG-STK-33",
+          "SerialNo": "STK-SER-0033",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-BANG-STK-41",
+          "SerialNo": "STK-SER-0041",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-BANG-STK-49",
+          "SerialNo": "STK-SER-0049",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-BANG-STK-57",
+          "SerialNo": "STK-SER-0057",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-BANG-STK-65",
+          "SerialNo": "STK-SER-0065",
+          "DeviceType": "AP",
+          "Location": "Bangalore",
+          "Status": "Stock Inventory"
+        }
+      ],
       "switchCount": 19,
       "apCount": 28,
-      "jflSwitchUptime": "94.43",
       "proactiveSwitchUptime": "99.96",
-      "primaryRcaSwitches": "Device Power Issues",
-      "apIncidents": "8 / 4",
-      "primaryRcaAPs": "Device Power Issues"
+      "jflSwitchUptime": "99.23",
+      "switchUptime": "99.23",
+      "overallUptime": "99.33",
+      "incidentFreePercent": "74.47",
+      "uniqueAPsWithIncidents": 7,
+      "apIncidents": 8,
+      "incidentCount": 13,
+      "healthScore": "89.39",
+      "healthLabel": "Good",
+      "primaryRcaSwitches": "Device Power Issues / New Configuration",
+      "primaryRcaAPs": "Hardware Degradation / Device Power Issues",
+      "primaryRca": "Device Power Issues / New Configuration",
+      "primaryRcaForAPs": "Hardware Degradation / Device Power Issues"
     },
     {
       "siteId": "Greater Noida",
-      "totalDevices": 56,
+      "deviceCount": 56,
+      "totalDeviceCount": 56,
+      "activeDeviceCount": 47,
+      "stockCount": 9,
+      "stockDevices": [
+        {
+          "DeviceID": "JFL-GREA-STK-02",
+          "SerialNo": "STK-SER-0002",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GREA-STK-10",
+          "SerialNo": "STK-SER-0010",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GREA-STK-18",
+          "SerialNo": "STK-SER-0018",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GREA-STK-26",
+          "SerialNo": "STK-SER-0026",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GREA-STK-34",
+          "SerialNo": "STK-SER-0034",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GREA-STK-42",
+          "SerialNo": "STK-SER-0042",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GREA-STK-50",
+          "SerialNo": "STK-SER-0050",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GREA-STK-58",
+          "SerialNo": "STK-SER-0058",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GREA-STK-66",
+          "SerialNo": "STK-SER-0066",
+          "DeviceType": "SW",
+          "Location": "Greater Noida",
+          "Status": "Stock Inventory"
+        }
+      ],
       "switchCount": 19,
       "apCount": 28,
-      "jflSwitchUptime": "94.43",
       "proactiveSwitchUptime": "99.96",
-      "primaryRcaSwitches": "Device Power Issues",
-      "apIncidents": "8 / 4",
-      "primaryRcaAPs": "Device Power Issues"
-    },
-    {
-      "siteId": "Noida",
-      "totalDevices": 56,
-      "switchCount": 19,
-      "apCount": 28,
-      "jflSwitchUptime": "94.43",
-      "proactiveSwitchUptime": "99.96",
-      "primaryRcaSwitches": "Device Power Issues",
-      "apIncidents": "7 / 4",
-      "primaryRcaAPs": "Device Power Issues"
-    },
-    {
-      "siteId": "Mohali",
-      "totalDevices": 56,
-      "switchCount": 19,
-      "apCount": 28,
-      "jflSwitchUptime": "94.43",
-      "proactiveSwitchUptime": "99.96",
-      "primaryRcaSwitches": "Device Power Issues",
-      "apIncidents": "7 / 4",
-      "primaryRcaAPs": "Device Power Issues"
-    },
-    {
-      "siteId": "Hyderabad",
-      "totalDevices": 55,
-      "switchCount": 18,
-      "apCount": 28,
-      "jflSwitchUptime": "94.43",
-      "proactiveSwitchUptime": "99.96",
-      "primaryRcaSwitches": "Device Power Issues",
-      "apIncidents": "7 / 4",
-      "primaryRcaAPs": "Device Power Issues"
-    },
-    {
-      "siteId": "Nagpur",
-      "totalDevices": 55,
-      "switchCount": 18,
-      "apCount": 28,
-      "jflSwitchUptime": "94.43",
-      "proactiveSwitchUptime": "99.96",
-      "primaryRcaSwitches": "Device Power Issues",
-      "apIncidents": "8 / 4",
-      "primaryRcaAPs": "Device Power Issues"
-    },
-    {
-      "siteId": "Mumbai-DC",
-      "totalDevices": 55,
-      "switchCount": 18,
-      "apCount": 28,
-      "jflSwitchUptime": "94.43",
-      "proactiveSwitchUptime": "99.96",
-      "primaryRcaSwitches": "Device Power Issues",
-      "apIncidents": "8 / 4",
-      "primaryRcaAPs": "Device Power Issues"
+      "jflSwitchUptime": "99.28",
+      "switchUptime": "99.28",
+      "overallUptime": "99.39",
+      "incidentFreePercent": "74.47",
+      "uniqueAPsWithIncidents": 7,
+      "apIncidents": 8,
+      "incidentCount": 13,
+      "healthScore": "89.42",
+      "healthLabel": "Good",
+      "primaryRcaSwitches": "ISP Link Down / Client Side Activity",
+      "primaryRcaAPs": "Cable Damage / ISP Link Down",
+      "primaryRca": "ISP Link Down / Client Side Activity",
+      "primaryRcaForAPs": "Cable Damage / ISP Link Down"
     },
     {
       "siteId": "Guwahati",
-      "totalDevices": 55,
+      "deviceCount": 55,
+      "totalDeviceCount": 55,
+      "activeDeviceCount": 46,
+      "stockCount": 9,
+      "stockDevices": [
+        {
+          "DeviceID": "JFL-GUWA-STK-08",
+          "SerialNo": "STK-SER-0008",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GUWA-STK-16",
+          "SerialNo": "STK-SER-0016",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GUWA-STK-24",
+          "SerialNo": "STK-SER-0024",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GUWA-STK-32",
+          "SerialNo": "STK-SER-0032",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GUWA-STK-40",
+          "SerialNo": "STK-SER-0040",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GUWA-STK-48",
+          "SerialNo": "STK-SER-0048",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GUWA-STK-56",
+          "SerialNo": "STK-SER-0056",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GUWA-STK-64",
+          "SerialNo": "STK-SER-0064",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-GUWA-STK-72",
+          "SerialNo": "STK-SER-0072",
+          "DeviceType": "SW",
+          "Location": "Guwahati",
+          "Status": "Stock Inventory"
+        }
+      ],
       "switchCount": 18,
       "apCount": 28,
-      "jflSwitchUptime": "94.43",
       "proactiveSwitchUptime": "99.96",
+      "jflSwitchUptime": "99.61",
+      "switchUptime": "99.61",
+      "overallUptime": "99.62",
+      "incidentFreePercent": "76.09",
+      "uniqueAPsWithIncidents": 7,
+      "apIncidents": 8,
+      "incidentCount": 12,
+      "healthScore": "90.21",
+      "healthLabel": "Good",
+      "primaryRcaSwitches": "ISP Link Down",
+      "primaryRcaAPs": "Client Side Activity / Cable Damage",
+      "primaryRca": "ISP Link Down",
+      "primaryRcaForAPs": "Client Side Activity / Cable Damage"
+    },
+    {
+      "siteId": "Hyderabad",
+      "deviceCount": 55,
+      "totalDeviceCount": 55,
+      "activeDeviceCount": 46,
+      "stockCount": 9,
+      "stockDevices": [
+        {
+          "DeviceID": "JFL-HYDE-STK-05",
+          "SerialNo": "STK-SER-0005",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-HYDE-STK-13",
+          "SerialNo": "STK-SER-0013",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-HYDE-STK-21",
+          "SerialNo": "STK-SER-0021",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-HYDE-STK-29",
+          "SerialNo": "STK-SER-0029",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-HYDE-STK-37",
+          "SerialNo": "STK-SER-0037",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-HYDE-STK-45",
+          "SerialNo": "STK-SER-0045",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-HYDE-STK-53",
+          "SerialNo": "STK-SER-0053",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-HYDE-STK-61",
+          "SerialNo": "STK-SER-0061",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-HYDE-STK-69",
+          "SerialNo": "STK-SER-0069",
+          "DeviceType": "AP",
+          "Location": "Hyderabad",
+          "Status": "Stock Inventory"
+        }
+      ],
+      "switchCount": 18,
+      "apCount": 28,
+      "proactiveSwitchUptime": "99.96",
+      "jflSwitchUptime": "99.46",
+      "switchUptime": "99.46",
+      "overallUptime": "99.51",
+      "incidentFreePercent": "73.91",
+      "uniqueAPsWithIncidents": 7,
+      "apIncidents": 7,
+      "incidentCount": 12,
+      "healthScore": "89.27",
+      "healthLabel": "Good",
+      "primaryRcaSwitches": "Hardware Degradation / Device Power Issues",
+      "primaryRcaAPs": "New Configuration",
+      "primaryRca": "Hardware Degradation / Device Power Issues",
+      "primaryRcaForAPs": "New Configuration"
+    },
+    {
+      "siteId": "Mohali",
+      "deviceCount": 56,
+      "totalDeviceCount": 56,
+      "activeDeviceCount": 47,
+      "stockCount": 9,
+      "stockDevices": [
+        {
+          "DeviceID": "JFL-MOHA-STK-04",
+          "SerialNo": "STK-SER-0004",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MOHA-STK-12",
+          "SerialNo": "STK-SER-0012",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MOHA-STK-20",
+          "SerialNo": "STK-SER-0020",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MOHA-STK-28",
+          "SerialNo": "STK-SER-0028",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MOHA-STK-36",
+          "SerialNo": "STK-SER-0036",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MOHA-STK-44",
+          "SerialNo": "STK-SER-0044",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MOHA-STK-52",
+          "SerialNo": "STK-SER-0052",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MOHA-STK-60",
+          "SerialNo": "STK-SER-0060",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MOHA-STK-68",
+          "SerialNo": "STK-SER-0068",
+          "DeviceType": "SW",
+          "Location": "Mohali",
+          "Status": "Stock Inventory"
+        }
+      ],
+      "switchCount": 19,
+      "apCount": 28,
+      "proactiveSwitchUptime": "99.96",
+      "jflSwitchUptime": "99.40",
+      "switchUptime": "99.40",
+      "overallUptime": "99.47",
+      "incidentFreePercent": "74.47",
+      "uniqueAPsWithIncidents": 7,
+      "apIncidents": 7,
+      "incidentCount": 12,
+      "healthScore": "89.47",
+      "healthLabel": "Good",
+      "primaryRcaSwitches": "Client Side Activity / Cable Damage",
+      "primaryRcaAPs": "ISP Link Down",
+      "primaryRca": "Client Side Activity / Cable Damage",
+      "primaryRcaForAPs": "ISP Link Down"
+    },
+    {
+      "siteId": "Mumbai-DC",
+      "deviceCount": 55,
+      "totalDeviceCount": 55,
+      "activeDeviceCount": 46,
+      "stockCount": 9,
+      "stockDevices": [
+        {
+          "DeviceID": "JFL-MUMB-STK-07",
+          "SerialNo": "STK-SER-0007",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MUMB-STK-15",
+          "SerialNo": "STK-SER-0015",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MUMB-STK-23",
+          "SerialNo": "STK-SER-0023",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MUMB-STK-31",
+          "SerialNo": "STK-SER-0031",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MUMB-STK-39",
+          "SerialNo": "STK-SER-0039",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MUMB-STK-47",
+          "SerialNo": "STK-SER-0047",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MUMB-STK-55",
+          "SerialNo": "STK-SER-0055",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MUMB-STK-63",
+          "SerialNo": "STK-SER-0063",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-MUMB-STK-71",
+          "SerialNo": "STK-SER-0071",
+          "DeviceType": "AP",
+          "Location": "Mumbai-DC",
+          "Status": "Stock Inventory"
+        }
+      ],
+      "switchCount": 18,
+      "apCount": 28,
+      "proactiveSwitchUptime": "99.96",
+      "jflSwitchUptime": "99.59",
+      "switchUptime": "99.59",
+      "overallUptime": "99.60",
+      "incidentFreePercent": "76.09",
+      "uniqueAPsWithIncidents": 7,
+      "apIncidents": 8,
+      "incidentCount": 12,
+      "healthScore": "90.19",
+      "healthLabel": "Good",
       "primaryRcaSwitches": "Device Power Issues",
-      "apIncidents": "8 / 4",
-      "primaryRcaAPs": "Device Power Issues"
+      "primaryRcaAPs": "New Configuration / Hardware Degradation",
+      "primaryRca": "Device Power Issues",
+      "primaryRcaForAPs": "New Configuration / Hardware Degradation"
+    },
+    {
+      "siteId": "Nagpur",
+      "deviceCount": 55,
+      "totalDeviceCount": 55,
+      "activeDeviceCount": 46,
+      "stockCount": 9,
+      "stockDevices": [
+        {
+          "DeviceID": "JFL-NAGP-STK-06",
+          "SerialNo": "STK-SER-0006",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NAGP-STK-14",
+          "SerialNo": "STK-SER-0014",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NAGP-STK-22",
+          "SerialNo": "STK-SER-0022",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NAGP-STK-30",
+          "SerialNo": "STK-SER-0030",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NAGP-STK-38",
+          "SerialNo": "STK-SER-0038",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NAGP-STK-46",
+          "SerialNo": "STK-SER-0046",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NAGP-STK-54",
+          "SerialNo": "STK-SER-0054",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NAGP-STK-62",
+          "SerialNo": "STK-SER-0062",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NAGP-STK-70",
+          "SerialNo": "STK-SER-0070",
+          "DeviceType": "SW",
+          "Location": "Nagpur",
+          "Status": "Stock Inventory"
+        }
+      ],
+      "switchCount": 18,
+      "apCount": 28,
+      "proactiveSwitchUptime": "99.96",
+      "jflSwitchUptime": "99.53",
+      "switchUptime": "99.53",
+      "overallUptime": "99.56",
+      "incidentFreePercent": "76.09",
+      "uniqueAPsWithIncidents": 7,
+      "apIncidents": 8,
+      "incidentCount": 12,
+      "healthScore": "90.17",
+      "healthLabel": "Good",
+      "primaryRcaSwitches": "Cable Damage",
+      "primaryRcaAPs": "ISP Link Down / Client Side Activity",
+      "primaryRca": "Cable Damage",
+      "primaryRcaForAPs": "ISP Link Down / Client Side Activity"
+    },
+    {
+      "siteId": "Noida",
+      "deviceCount": 56,
+      "totalDeviceCount": 56,
+      "activeDeviceCount": 47,
+      "stockCount": 9,
+      "stockDevices": [
+        {
+          "DeviceID": "JFL-NOID-STK-03",
+          "SerialNo": "STK-SER-0003",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NOID-STK-11",
+          "SerialNo": "STK-SER-0011",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NOID-STK-19",
+          "SerialNo": "STK-SER-0019",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NOID-STK-27",
+          "SerialNo": "STK-SER-0027",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NOID-STK-35",
+          "SerialNo": "STK-SER-0035",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NOID-STK-43",
+          "SerialNo": "STK-SER-0043",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NOID-STK-51",
+          "SerialNo": "STK-SER-0051",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NOID-STK-59",
+          "SerialNo": "STK-SER-0059",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        },
+        {
+          "DeviceID": "JFL-NOID-STK-67",
+          "SerialNo": "STK-SER-0067",
+          "DeviceType": "AP",
+          "Location": "Noida",
+          "Status": "Stock Inventory"
+        }
+      ],
+      "switchCount": 19,
+      "apCount": 28,
+      "proactiveSwitchUptime": "99.96",
+      "jflSwitchUptime": "99.35",
+      "switchUptime": "99.35",
+      "overallUptime": "99.44",
+      "incidentFreePercent": "74.47",
+      "uniqueAPsWithIncidents": 7,
+      "apIncidents": 7,
+      "incidentCount": 12,
+      "healthScore": "89.45",
+      "healthLabel": "Good",
+      "primaryRcaSwitches": "New Configuration / Hardware Degradation",
+      "primaryRcaAPs": "Device Power Issues",
+      "primaryRca": "New Configuration / Hardware Degradation",
+      "primaryRcaForAPs": "Device Power Issues"
     }
   ],
   "switchAnalytics": {
@@ -293,58 +909,89 @@
   },
   "rcaAnalytics": {
     "totalIncidents": 98,
-    "standardBreakdown": [
+    "topRca": "Device Power Issues / ISP Link Down",
+    "breakdown": [
       {
-        "category": "Device Power Issues",
-        "count": 38,
-        "percentage": "38.78"
+        "rca": "Device Power Issues",
+        "count": 17,
+        "percentage": "17.35",
+        "isTop": true
       },
       {
-        "category": "ISP Link Down",
-        "count": 25,
-        "percentage": "25.51"
+        "rca": "ISP Link Down",
+        "count": 17,
+        "percentage": "17.35",
+        "isTop": true
       },
       {
-        "category": "New Configuration",
+        "rca": "New Configuration",
         "count": 16,
-        "percentage": "16.33"
+        "percentage": "16.33",
+        "isTop": false
       },
       {
-        "category": "Client Side Activity",
-        "count": 12,
-        "percentage": "12.24"
+        "rca": "Client Side Activity",
+        "count": 16,
+        "percentage": "16.33",
+        "isTop": false
       },
       {
-        "category": "Hardware Degradation",
-        "count": 7,
-        "percentage": "7.14"
+        "rca": "Hardware Degradation",
+        "count": 16,
+        "percentage": "16.33",
+        "isTop": false
+      },
+      {
+        "rca": "Cable Damage",
+        "count": 16,
+        "percentage": "16.33",
+        "isTop": false
       }
     ],
     "rawBreakdown": [
       {
         "rca": "Device Power Issues",
-        "count": 38,
-        "percentage": "38.78"
+        "count": 17,
+        "percentage": "17.35",
+        "isTop": true
       },
       {
         "rca": "ISP Link Down",
-        "count": 25,
-        "percentage": "25.51"
+        "count": 17,
+        "percentage": "17.35",
+        "isTop": true
       },
       {
         "rca": "New Configuration",
         "count": 16,
-        "percentage": "16.33"
+        "percentage": "16.33",
+        "isTop": false
       },
       {
         "rca": "Client Side Activity",
-        "count": 12,
-        "percentage": "12.24"
+        "count": 16,
+        "percentage": "16.33",
+        "isTop": false
       },
       {
         "rca": "Hardware Degradation",
-        "count": 7,
-        "percentage": "7.14"
+        "count": 16,
+        "percentage": "16.33",
+        "isTop": false
+      },
+      {
+        "rca": "Cable Damage",
+        "count": 16,
+        "percentage": "16.33",
+        "isTop": false
+      }
+    ],
+    "standardBreakdown": [
+      {
+        "category": "Unknown",
+        "rca": "Unknown",
+        "count": 98,
+        "percentage": "100.0%"
       }
     ]
   },
