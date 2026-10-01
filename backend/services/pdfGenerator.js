@@ -127,13 +127,13 @@ function buildHTMLReport(data) {
   // 1. All Site Summary Rows
   const siteRowsHtml = siteSummary.map((s, idx) => `
     <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-      <td class="bold">${s.siteId}</td>
-      <td class="center">${s.deviceCount || (s.switchCount + s.apCount) || 0}</td>
-      <td class="center ${getSlaClass(s.proactiveSwitchUptime)}">${fmtPct(s.proactiveSwitchUptime)}</td>
-      <td class="center ${getSlaClass(s.jflSwitchUptime)}">${fmtPct(s.jflSwitchUptime)}</td>
-      <td>${s.primaryRcaSwitches || 'Stable Operations (No Incidents)'}</td>
-      <td class="center">${s.apIncidents || 0} / ${s.uniqueAPsWithIncidents || 0}</td>
-      <td>${s.primaryRcaAPs || 'Stable Operations (No Incidents)'}</td>
+      <td class="bold text-left">${s.siteId}</td>
+      <td class="center bold">${s.deviceCount || (s.switchCount + s.apCount) || 0}</td>
+      <td class="center"><span class="${getSlaClass(s.proactiveSwitchUptime)}">${fmtPct(s.proactiveSwitchUptime)}</span></td>
+      <td class="center"><span class="${getSlaClass(s.jflSwitchUptime)}">${fmtPct(s.jflSwitchUptime)}</span></td>
+      <td class="text-left">${s.primaryRcaSwitches || 'Stable Operations (No Incidents)'}</td>
+      <td class="center bold text-primary">${s.apIncidents || 0} / ${s.uniqueAPsWithIncidents || 0}</td>
+      <td class="text-left">${s.primaryRcaAPs || 'Stable Operations (No Incidents)'}</td>
     </tr>
   `).join('');
 
@@ -146,12 +146,12 @@ function buildHTMLReport(data) {
 
   const rackRowsHtml = rackSwitches.map((r, idx) => `
     <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-      <td class="bold">${r.site || r.Location || r.SiteID || 'N/A'}</td>
-      <td>${r.rack || r.Rack || 'Main Rack'}</td>
-      <td>${r.serialNumber || r.SerialNo || 'N/A'}</td>
-      <td class="bold">${r.hostname || r.Hostname || r.DeviceID || 'N/A'}</td>
-      <td class="center ${getSlaClass(r.proactiveUptime || r.__proactiveUptime || r.monthlyUptime || r.periodUptime)}">${fmtPct(r.proactiveUptime || r.__proactiveUptime || r.monthlyUptime || r.periodUptime)}</td>
-      <td class="center ${getSlaClass(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}">${fmtPct(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}</td>
+      <td class="bold text-left">${r.site || r.Location || r.SiteID || 'N/A'}</td>
+      <td class="text-left">${r.rack || r.Rack || 'Main Rack'}</td>
+      <td class="font-mono text-left">${r.serialNumber || r.SerialNo || 'N/A'}</td>
+      <td class="bold text-left">${r.hostname || r.Hostname || r.DeviceID || 'N/A'}</td>
+      <td class="center"><span class="${getSlaClass(r.proactiveUptime || r.__proactiveUptime || r.monthlyUptime || r.periodUptime)}">${fmtPct(r.proactiveUptime || r.__proactiveUptime || r.monthlyUptime || r.periodUptime)}</span></td>
+      <td class="center"><span class="${getSlaClass(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}">${fmtPct(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}</span></td>
       <td class="center">${r.operatingStatus || r.status || (r.__slaBreach ? '<span class="badge-danger">Breached</span>' : '<span class="badge-success">Operational</span>')}</td>
     </tr>
   `).join('');
@@ -181,12 +181,12 @@ function buildHTMLReport(data) {
 
   const apOutageRowsHtml = apOutages.map((a, idx) => `
     <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-      <td class="bold">${a.DeviceID || a.Hostname || 'N/A'}</td>
-      <td>${a.SerialNo || 'N/A'}</td>
-      <td>${a.Location || a.SiteID || 'N/A'}</td>
+      <td class="bold text-left">${a.DeviceID || a.Hostname || 'N/A'}</td>
+      <td class="font-mono text-left">${a.SerialNo || 'N/A'}</td>
+      <td class="text-left">${a.Location || a.SiteID || 'N/A'}</td>
       <td class="center bold text-primary">${a.incCount || 1}</td>
-      <td class="center ${getSlaClass(a.uptime)}">${fmtPct(a.uptime)}</td>
-      <td>${a.rca || a.RCA || a.primaryRca || 'Device Power Issues'}</td>
+      <td class="center"><span class="${getSlaClass(a.uptime)}">${fmtPct(a.uptime)}</span></td>
+      <td class="text-left">${a.rca || a.RCA || a.primaryRca || 'Device Power Issues'}</td>
     </tr>
   `).join('');
 
@@ -200,13 +200,13 @@ function buildHTMLReport(data) {
 
     return `
       <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-        <td class="bold">${ref}</td>
-        <td>${inc.Location || inc.SiteID || inc.Site || 'N/A'}</td>
-        <td>${inc.DeviceID || inc.SerialNo || 'N/A'}</td>
-        <td class="center">${inc.DeviceType || (inc.DeviceID?.includes('-AP-') ? 'AP' : 'Switch')}</td>
+        <td class="bold font-mono text-left">${ref}</td>
+        <td class="text-left">${inc.Location || inc.SiteID || inc.Site || 'N/A'}</td>
+        <td class="text-left">${inc.DeviceID || inc.SerialNo || 'N/A'}</td>
+        <td class="center bold">${inc.DeviceType || (inc.DeviceID?.includes('-AP-') ? 'AP' : 'Switch')}</td>
         <td class="center">${inc.HoldTimeMin !== undefined ? inc.HoldTimeMin : (inc.HoldDurationMin || 0)} min</td>
         <td class="center">${inc.ActualResolutionMin !== undefined ? inc.ActualResolutionMin : (inc.ResolutionMin || 0)} min</td>
-        <td>${inc.RCA || inc.Category || 'Operational Fault'}</td>
+        <td class="text-left">${inc.RCA || inc.Category || 'Operational Fault'}</td>
         <td class="center">${slaBadge}</td>
       </tr>
     `;
@@ -216,9 +216,9 @@ function buildHTMLReport(data) {
   const rcaBreakdownList = rcaAn.breakdown || rcaAn.rawBreakdown || switchAn.rcaBreakdown || [];
   const rcaRowsHtml = Array.isArray(rcaBreakdownList) ? rcaBreakdownList.map((r, idx) => `
     <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-      <td class="bold">${r.category || r.rca || r.name || 'Other'}</td>
-      <td class="center">${r.count || r.incidents || 0}</td>
-      <td class="center">${fmtPct(r.percentage || r.share)}</td>
+      <td class="bold text-left">${r.category || r.rca || r.name || 'Other'}</td>
+      <td class="center bold">${r.count || r.incidents || 0}</td>
+      <td class="center bold text-primary">${fmtPct(r.percentage || r.share)}</td>
     </tr>
   `).join('') : '';
 
@@ -230,7 +230,7 @@ function buildHTMLReport(data) {
   <title>Executive QBR Summary Report - ${customerName}</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    body { margin: 0; padding: 0; background: #ffffff; color: #1e293b; font-size: 11px; line-height: 1.4; }
+    body { margin: 0; padding: 0; background: #ffffff; color: #0f172a; font-size: 11px; line-height: 1.4; }
     
     @page {
       size: A4 landscape;
@@ -251,9 +251,9 @@ function buildHTMLReport(data) {
       padding-bottom: 8px;
       margin-bottom: 12px;
     }
-    .header h1 { margin: 0; font-size: 20px; color: #0f172a; font-weight: 700; }
+    .header h1 { margin: 0; font-size: 20px; color: #0f172a; font-weight: 700; letter-spacing: -0.3px; }
     .header .subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
-    .header .period-badge { background: #e0f2fe; color: #0369a1; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 11px; }
+    .header .period-badge { background: #e0f2fe; color: #0369a1; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 11px; border: 1px solid #bae6fd; }
 
     .footer {
       border-top: 1px solid #e2e8f0;
@@ -277,28 +277,64 @@ function buildHTMLReport(data) {
       border-radius: 8px;
       padding: 10px 12px;
     }
-    .kpi-title { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 600; letter-spacing: 0.5px; }
+    .kpi-title { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
     .kpi-value { font-size: 20px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0; }
     .kpi-sub { font-size: 9px; color: #64748b; }
 
-    .badge-success { background: #dcfce7; color: #15803d; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-block; }
-    .badge-danger { background: #fee2e2; color: #b91c1c; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+    .badge-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; font-weight: 700; padding: 3px 8px; border-radius: 4px; display: inline-block; min-width: 75px; text-align: center; }
+    .badge-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; font-weight: 700; padding: 3px 8px; border-radius: 4px; display: inline-block; min-width: 75px; text-align: center; }
 
-    table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 10px; }
-    th { background: #0f172a; color: #ffffff; text-align: left; padding: 6px 8px; font-weight: 600; font-size: 10px; }
-    td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+    /* Explicit Table Alignment & Representation Styles */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      margin-bottom: 16px;
+      font-size: 10.5px;
+      table-layout: fixed;
+      page-break-inside: auto;
+    }
+    thead {
+      display: table-header-group;
+    }
+    th {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 7px 10px;
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid #1e293b;
+      vertical-align: middle;
+    }
+    td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #e2e8f0;
+      border-right: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+    td:first-child { border-left: 1px solid #e2e8f0; }
+    td:last-child { border-right: 1px solid #e2e8f0; }
+
     tr { page-break-inside: avoid; }
-    tr.even { background: #f8fafc; }
-    tr.odd { background: #ffffff; }
-    .bold { font-weight: 600; }
-    .center { text-align: center; }
+    tr.even { background: #ffffff; }
+    tr.odd { background: #f8fafc; }
+    tr:hover { background: #f1f5f9; }
+
+    /* Text alignment helper classes */
+    .text-left { text-align: left !important; }
+    .text-right { text-align: right !important; }
+    .center { text-align: center !important; }
+    .bold { font-weight: 700; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 10px; }
     .text-primary { color: #0284c7; }
 
     .section-title {
       font-size: 13px;
       font-weight: 700;
       color: #0f172a;
-      margin: 12px 0 6px 0;
+      margin: 14px 0 6px 0;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -316,6 +352,8 @@ function buildHTMLReport(data) {
       .no-print { display: none !important; }
       body { background: #fff; }
       .page { page-break-after: always; }
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; page-break-after: auto; }
     }
     @media screen {
       body { background: #f1f5f9; padding: 20px; }
@@ -374,12 +412,12 @@ function buildHTMLReport(data) {
       </div>
       <div class="kpi-card">
         <div class="kpi-title">JFL Switch Uptime %</div>
-        <div class="kpi-value ${getSlaClass(exec.jflSwitchUptime)}">${fmtPct(exec.jflSwitchUptime)}</div>
+        <div class="kpi-value"><span class="${getSlaClass(exec.jflSwitchUptime)}">${fmtPct(exec.jflSwitchUptime)}</span></div>
         <div class="kpi-sub">Target SLA: ${fmtNum(exec.slaTarget, '99.3')}%</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-title">Proactive Switch Uptime %</div>
-        <div class="kpi-value ${getSlaClass(exec.proactiveSwitchUptime)}">${fmtPct(exec.proactiveSwitchUptime)}</div>
+        <div class="kpi-value"><span class="${getSlaClass(exec.proactiveSwitchUptime)}">${fmtPct(exec.proactiveSwitchUptime)}</span></div>
         <div class="kpi-sub">Net Resolution Deducted</div>
       </div>
       <div class="kpi-card">
@@ -420,13 +458,13 @@ function buildHTMLReport(data) {
     <table>
       <thead>
         <tr>
-          <th>Site Location</th>
-          <th style="text-align:center;">No of Devices</th>
-          <th style="text-align:center;">Proactive Switch Uptime</th>
-          <th style="text-align:center;">JFL Switch Uptime</th>
-          <th>Primary RCA Driver (Switches)</th>
-          <th style="text-align:center;">AP Incidents (Unique)</th>
-          <th>Primary RCA Driver (APs)</th>
+          <th style="width: 16%; text-align: left;">Site Location</th>
+          <th style="width: 11%; text-align: center;">No of Devices</th>
+          <th style="width: 16%; text-align: center;">Proactive Switch Uptime</th>
+          <th style="width: 16%; text-align: center;">JFL Switch Uptime</th>
+          <th style="width: 17%; text-align: left;">Primary RCA Driver (Switches)</th>
+          <th style="width: 10%; text-align: center;">AP Incidents (Unique)</th>
+          <th style="width: 14%; text-align: left;">Primary RCA Driver (APs)</th>
         </tr>
       </thead>
       <tbody>
@@ -463,13 +501,13 @@ function buildHTMLReport(data) {
     <table>
       <thead>
         <tr>
-          <th>Site Location</th>
-          <th>Rack Location</th>
-          <th>Serial Number</th>
-          <th>Hostname / Device ID</th>
-          <th style="text-align:center;">Proactive Uptime %</th>
-          <th style="text-align:center;">JFL Uptime %</th>
-          <th style="text-align:center;">Operating Status</th>
+          <th style="width: 15%; text-align: left;">Site Location</th>
+          <th style="width: 14%; text-align: left;">Rack Location</th>
+          <th style="width: 16%; text-align: left;">Serial Number</th>
+          <th style="width: 18%; text-align: left;">Hostname / Device ID</th>
+          <th style="width: 13%; text-align: center;">Proactive Uptime %</th>
+          <th style="width: 12%; text-align: center;">JFL Uptime %</th>
+          <th style="width: 12%; text-align: center;">Operating Status</th>
         </tr>
       </thead>
       <tbody>
@@ -496,12 +534,12 @@ function buildHTMLReport(data) {
     <table>
       <thead>
         <tr>
-          <th>Device Hostname / ID</th>
-          <th>Serial Number</th>
-          <th>Site Location</th>
-          <th style="text-align:center;">Incident Count</th>
-          <th style="text-align:center;">Effective Uptime %</th>
-          <th>Primary RCA Driver</th>
+          <th style="width: 20%; text-align: left;">Device Hostname / ID</th>
+          <th style="width: 18%; text-align: left;">Serial Number</th>
+          <th style="width: 16%; text-align: left;">Site Location</th>
+          <th style="width: 12%; text-align: center;">Incident Count</th>
+          <th style="width: 14%; text-align: center;">Effective Uptime %</th>
+          <th style="width: 20%; text-align: left;">Primary RCA Driver</th>
         </tr>
       </thead>
       <tbody>
@@ -529,9 +567,9 @@ function buildHTMLReport(data) {
     <table>
       <thead>
         <tr>
-          <th>Root Cause Category</th>
-          <th style="text-align:center;">Incident Count</th>
-          <th style="text-align:center;">Percentage Share (%)</th>
+          <th style="width: 50%; text-align: left;">Root Cause Category</th>
+          <th style="width: 25%; text-align: center;">Incident Count</th>
+          <th style="width: 25%; text-align: center;">Percentage Share (%)</th>
         </tr>
       </thead>
       <tbody>
@@ -559,14 +597,14 @@ function buildHTMLReport(data) {
     <table>
       <thead>
         <tr>
-          <th>Reference (Ticket / Incident ID)</th>
-          <th>Location</th>
-          <th>Device ID / Serial</th>
-          <th style="text-align:center;">Type</th>
-          <th style="text-align:center;">Hold Time</th>
-          <th style="text-align:center;">Fix Time</th>
-          <th>RCA Driver</th>
-          <th style="text-align:center;">SLA Status</th>
+          <th style="width: 18%; text-align: left;">Reference (Ticket / Incident ID)</th>
+          <th style="width: 13%; text-align: left;">Location</th>
+          <th style="width: 16%; text-align: left;">Device ID / Serial</th>
+          <th style="width: 7%; text-align: center;">Type</th>
+          <th style="width: 9%; text-align: center;">Hold Time</th>
+          <th style="width: 9%; text-align: center;">Fix Time</th>
+          <th style="width: 16%; text-align: left;">RCA Driver</th>
+          <th style="width: 12%; text-align: center;">SLA Status</th>
         </tr>
       </thead>
       <tbody>
@@ -585,4 +623,4 @@ function buildHTMLReport(data) {
   `;
 }
 
-module.exports = { generatePDF };
+module.exports = { generatePDF, buildHTMLReport };
