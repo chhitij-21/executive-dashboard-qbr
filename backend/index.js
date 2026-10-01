@@ -609,6 +609,16 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
 
         jobs[jobId] = updatedJob;
 
+        // Synchronize canonical dataset with the latest upload job
+        if (isSuccess && updatedJob.dashboardPath && fs.existsSync(updatedJob.dashboardPath)) {
+          try {
+            fs.copyFileSync(updatedJob.dashboardPath, resolveDataPath('dashboard_data.json'));
+            console.log(`[server] Synchronized data/dashboard_data.json with latest upload job: ${jobId}`);
+          } catch (syncErr) {
+            console.error('[server] Failed to sync data/dashboard_data.json:', syncErr.message);
+          }
+        }
+
         // Update persistent metadata history
         historyService.recordReport({
           jobId,
@@ -656,32 +666,21 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
   let job = null;
   let dPath = null;
 
-  const canonicalPath = resolveDataPath('dashboard_data.json');
-  if ((!reqJobId || reqJobId === 'latest' || reqJobId === 'default') && fs.existsSync(canonicalPath)) {
-    dPath = canonicalPath;
-  } else {
-    if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-      const history = historyService.getHistory(); // history is sorted newest-first
-      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+  if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
+    const history = historyService.getHistory(); // history is reverse scan (newest-first)
+    job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+    if (job && job.dashboardPath && fs.existsSync(job.dashboardPath)) {
+      dPath = job.dashboardPath;
     } else {
-      job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+      const canonicalPath = resolveDataPath('dashboard_data.json');
+      if (fs.existsSync(canonicalPath)) dPath = canonicalPath;
     }
-
+  } else {
+    job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
     if (job && job.status === 'processing') {
       return res.status(202).json({ status: 'processing', message: 'Report is generating...' });
     }
-
     dPath = job?.dashboardPath;
-    if (!dPath || !fs.existsSync(dPath)) {
-      const activeJobId = job?.jobId || reqJobId;
-      const candidates = [
-        resolveDataPath('dashboard_data.json'),
-        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard.json'),
-        resolveDataPath('bundled_default', 'dashboard_data.json'),
-      ];
-      dPath = candidates.find((p) => fs.existsSync(p));
-    }
   }
 
   // If no dashboard JSON is found from previous jobs, attempt auto-processing candidate Excel files in workspace root

@@ -136,6 +136,7 @@ function parseAnyDate(raw) {
   const str = String(raw).trim();
   if (!str || str.toLowerCase() === 'n/a') return null;
 
+  // 1. Check YYYY-MM-DD / YYYY/MM/DD ISO format
   const ymdMatch = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
   if (ymdMatch) {
     const year = parseInt(ymdMatch[1], 10);
@@ -148,10 +149,9 @@ function parseAnyDate(raw) {
     if (!isNaN(dUtc.getTime())) return dUtc;
   }
 
-  let d = new Date(str);
-  if (!isNaN(d.getTime())) return d;
-
-  const dmYMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  // 2. Check DD/MM/YYYY or DD-MM-YYYY format BEFORE native Date constructor
+  // Native Date("05/08/2026") parses as MM/DD/YYYY (May 8) in Node V8; checking regex first enforces 5th August.
+  const dmYMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
   if (dmYMatch) {
     const day = parseInt(dmYMatch[1], 10);
     const month = parseInt(dmYMatch[2], 10) - 1;
@@ -159,9 +159,13 @@ function parseAnyDate(raw) {
     const hrs = parseInt(dmYMatch[4] || '0', 10);
     const mins = parseInt(dmYMatch[5] || '0', 10);
     const secs = parseInt(dmYMatch[6] || '0', 10);
-    d = new Date(Date.UTC(year, month, day, hrs, mins, secs));
+    const d = new Date(Date.UTC(year, month, day, hrs, mins, secs));
     if (!isNaN(d.getTime())) return d;
   }
+
+  // 3. Native Date fallback for text date strings ("13 April 2026", "5 Aug 2026")
+  let d = new Date(str);
+  if (!isNaN(d.getTime())) return d;
 
   const num = Number(str);
   if (!isNaN(num) && num > 30000 && num < 100000) {
