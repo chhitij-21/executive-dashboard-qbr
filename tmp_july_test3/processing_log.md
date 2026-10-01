@@ -1,0 +1,24 @@
+# Processing Log
+
+- `2026-10-01T11:24:06.826Z` JFL pipeline started (Period: 1 July 2026 – 31 July 2026, periodType: monthly, startDate: 2026-07-01, endDate: 2026-07-31)
+- `2026-10-01T11:24:06.838Z` Rules loaded from: rules.yaml. Uptime SLA Target: 99.9% | Incident Resolution SLA: 2h
+- `2026-10-01T11:24:07.249Z` Incident file parsed — sheets: Raw-1 july to 31 july 26
+- `2026-10-01T11:24:07.250Z` Inventory file parsed — sheets: Raw-1 july to 31 july 26
+- `2026-10-01T11:24:07.250Z` Incident sheets detected: incidentSheet=Raw-1 july to 31 july 26, uptimeSheet=null
+- `2026-10-01T11:24:07.251Z` Raw incident rows: 839
+- `2026-10-01T11:24:07.251Z` Uptime summary devices: 0
+- `2026-10-01T11:24:07.251Z` All Location sheet rows: 0
+- `2026-10-01T11:24:07.325Z` Inventory devices merged: 231 from 1 sheets
+- `2026-10-01T11:24:07.464Z` Incidents for target customer (excluding Change Requests): 416
+- `2026-10-01T11:24:07.464Z` Other Activity tickets extracted: 7
+- `2026-10-01T11:24:07.465Z` Date-range filter [2026-07-01 → 2026-07-31]: 163 incidents within range (out of 416 total)
+- `2026-10-01T11:24:07.469Z` Devices enriched with uptime. Stock devices: 0. Breaching SLA: 11
+- `2026-10-01T11:24:07.470Z` Incidents enriched with sla_status and display_reference
+- `2026-10-01T11:24:07.471Z` Building analytics sections...
+- `2026-10-01T11:24:07.471Z` Devices — Active: 231, Stock (Excluded from SLA): 0, Switches: 0, APs: 0
+- `2026-10-01T11:24:07.482Z` Analytics complete
+- `2026-10-01T11:24:07.483Z` Data validation passed — all RCA breakdown sums and SLA status counts are consistent.
+- `2026-10-01T11:24:07.484Z` Generating Executive QBR PDF Report...
+- `2026-10-01T11:24:07.485Z` PDF generated: tmp_july_test3\JFL_QBR_1790853847484.pdf
+- `2026-10-01T11:24:07.489Z` Dashboard JSON saved to job folder
+- `2026-10-01T11:24:07.490Z` Pipeline complete ✓

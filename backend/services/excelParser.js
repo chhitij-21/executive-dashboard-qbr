@@ -107,7 +107,7 @@ function isGenericLocation(loc) {
   if (!loc) return true;
   const str = String(loc).trim().toLowerCase();
   if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
-  if (/^raw$/i.test(str) || /^sheet\d*$/i.test(str) || /^sla$/i.test(str) || /^jfl$/i.test(str) || /^incident$/i.test(str)) return true;
+  if (/raw/i.test(str) || /^sheet\d*$/i.test(str) || /sla/i.test(str) || /jfl/i.test(str) || /incident/i.test(str) || /july|august|september|october|november|december|january|february|march|april|may|june/i.test(str)) return true;
   if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
 
   return false;
@@ -135,10 +135,16 @@ function mergeInventorySheets(workbookData, locationSheets) {
       const normLoc = rawLoc ? normalizeSiteName(rawLoc) : (isGenericLocation(sheet) ? 'Unknown' : normalizeSiteName(sheet));
 
       const host = String(getColVal(row, ['Hostname', 'Host Name', 'Device Hostname', 'Host', 'Device Host', 'Device Name', 'Node Name', 'Name'])).trim();
-      const devType = String(getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Device_Type', 'Category', 'Hardware Type', 'Model Type'])).trim();
       const rack = String(getColVal(row, ['Rack no.', 'Rack', 'Rack Number', 'Rack No', 'Rack No.', 'RackID', 'Rack ID'])).trim();
       const core = String(getColVal(row, ['Core/Non Core', 'Core Non Core', 'Core_Non_Core', 'Core / Non Core', 'Core Status'])).trim();
       const model = String(getColVal(row, ['Model', 'Model Name', 'Device Model', 'Hardware Model'])).trim();
+      let devType = String(getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Device_Type', 'Hardware Type', 'Model Type'])).trim();
+      if (!devType || devType === 'Meraki Managed Services' || devType === 'N/A' || devType === 'Unknown') {
+        const combined = `${host} ${serial} ${model} ${getColVal(row, ['Subject', 'Category', 'Sub Category'])}`.toLowerCase();
+        if (/\bap\b|access|ap\d|q5aa/i.test(combined)) devType = 'AP';
+        else if (/\bsw\b|switch|sw\d|fvh/i.test(combined)) devType = 'SW';
+        else devType = 'SW';
+      }
 
       if (!deviceMap[serial]) {
         deviceMap[serial] = {

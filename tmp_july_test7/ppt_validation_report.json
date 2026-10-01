@@ -1,0 +1,755 @@
+{
+  "reportId": "N/A",
+  "generatedAt": "2026-10-01T11:30:50.319Z",
+  "overallStatus": "FAIL",
+  "metricsChecked": 92,
+  "mismatchesCount": 1,
+  "mismatches": [
+    {
+      "slide": "Phase 10 Identity",
+      "metric": "Site_Incidents_Total_Equals_TotalIncidents",
+      "expected": 163,
+      "actual": 138,
+      "path": "siteSummary.sumSiteIncidents",
+      "status": "FAIL"
+    }
+  ],
+  "auditTrail": [
+    {
+      "slide": "Slide 3",
+      "metric": "totalSites",
+      "expected": 9,
+      "actual": 9,
+      "path": "executiveSummary.totalSites",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "totalDevices",
+      "expected": 231,
+      "actual": 231,
+      "path": "executiveSummary.totalDevices",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "totalStockDevices",
+      "expected": 0,
+      "actual": 0,
+      "path": "executiveSummary.totalStockDevices",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "totalSwitches",
+      "expected": 125,
+      "actual": 125,
+      "path": "executiveSummary.totalSwitches",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "totalAPs",
+      "expected": 106,
+      "actual": 106,
+      "path": "executiveSummary.totalAPs",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "apIncidents",
+      "expected": 132,
+      "actual": 132,
+      "path": "executiveSummary.apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "uniqueAPsWithIncidents",
+      "expected": 55,
+      "actual": 55,
+      "path": "executiveSummary.uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "primaryRca",
+      "expected": "Device Power Issues",
+      "actual": "Device Power Issues",
+      "path": "executiveSummary.primaryRca",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "primaryRcaForAPs",
+      "expected": "Device Power Issues",
+      "actual": "Device Power Issues",
+      "path": "executiveSummary.primaryRcaForAPs",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "overallUptime",
+      "expected": "91.00",
+      "actual": "91.00",
+      "path": "executiveSummary.overallUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "incidentFreePercent",
+      "expected": "67.53",
+      "actual": "67.53",
+      "path": "executiveSummary.incidentFreePercent",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "healthScore",
+      "expected": "81.61",
+      "actual": "81.61",
+      "path": "executiveSummary.healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "slaCompliance",
+      "expected": "95.24",
+      "actual": "95.24",
+      "path": "executiveSummary.slaCompliance",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "totalIncidents",
+      "expected": 163,
+      "actual": 163,
+      "path": "executiveSummary.totalIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "criticalIncidents",
+      "expected": 0,
+      "actual": 0,
+      "path": "executiveSummary.criticalIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "majorIncidents",
+      "expected": 0,
+      "actual": 0,
+      "path": "executiveSummary.majorIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 3",
+      "metric": "minorIncidents",
+      "expected": 163,
+      "actual": 163,
+      "path": "executiveSummary.minorIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "siteCount",
+      "expected": 8,
+      "actual": 8,
+      "path": "siteSummary.length",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_deviceCount",
+      "expected": 2,
+      "actual": 2,
+      "path": "siteSummary[Bangalore].deviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_activeDeviceCount",
+      "expected": 2,
+      "actual": 2,
+      "path": "siteSummary[Bangalore].activeDeviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_stockCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Bangalore].stockCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_proactiveSwitchUptime",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Bangalore].proactiveSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_jflSwitchUptime",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Bangalore].jflSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_incidentCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Bangalore].incidentCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_apIncidents",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Bangalore].apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_uniqueAPs",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Bangalore].uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Bangalore_healthScore",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Bangalore].healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_deviceCount",
+      "expected": 83,
+      "actual": 83,
+      "path": "siteSummary[Greater Noida].deviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_activeDeviceCount",
+      "expected": 83,
+      "actual": 83,
+      "path": "siteSummary[Greater Noida].activeDeviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_stockCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Greater Noida].stockCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_proactiveSwitchUptime",
+      "expected": "0.00",
+      "actual": "0.00",
+      "path": "siteSummary[Greater Noida].proactiveSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_jflSwitchUptime",
+      "expected": "0.00",
+      "actual": "0.00",
+      "path": "siteSummary[Greater Noida].jflSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_incidentCount",
+      "expected": 106,
+      "actual": 106,
+      "path": "siteSummary[Greater Noida].incidentCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_apIncidents",
+      "expected": 100,
+      "actual": 100,
+      "path": "siteSummary[Greater Noida].apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_uniqueAPs",
+      "expected": 31,
+      "actual": 31,
+      "path": "siteSummary[Greater Noida].uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Greater Noida_healthScore",
+      "expected": "72.21",
+      "actual": "72.21",
+      "path": "siteSummary[Greater Noida].healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_deviceCount",
+      "expected": 6,
+      "actual": 6,
+      "path": "siteSummary[Guwahati].deviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_activeDeviceCount",
+      "expected": 6,
+      "actual": 6,
+      "path": "siteSummary[Guwahati].activeDeviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_stockCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Guwahati].stockCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_proactiveSwitchUptime",
+      "expected": "99.98",
+      "actual": "99.98",
+      "path": "siteSummary[Guwahati].proactiveSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_jflSwitchUptime",
+      "expected": "91.66",
+      "actual": "91.66",
+      "path": "siteSummary[Guwahati].jflSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_incidentCount",
+      "expected": 2,
+      "actual": 2,
+      "path": "siteSummary[Guwahati].incidentCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_apIncidents",
+      "expected": 1,
+      "actual": 1,
+      "path": "siteSummary[Guwahati].apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_uniqueAPs",
+      "expected": 1,
+      "actual": 1,
+      "path": "siteSummary[Guwahati].uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Guwahati_healthScore",
+      "expected": "85.00",
+      "actual": "85.00",
+      "path": "siteSummary[Guwahati].healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_deviceCount",
+      "expected": 7,
+      "actual": 7,
+      "path": "siteSummary[Hyderabad].deviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_activeDeviceCount",
+      "expected": 7,
+      "actual": 7,
+      "path": "siteSummary[Hyderabad].activeDeviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_stockCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Hyderabad].stockCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_proactiveSwitchUptime",
+      "expected": "99.82",
+      "actual": "99.82",
+      "path": "siteSummary[Hyderabad].proactiveSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_jflSwitchUptime",
+      "expected": "29.51",
+      "actual": "29.51",
+      "path": "siteSummary[Hyderabad].jflSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_incidentCount",
+      "expected": 5,
+      "actual": 5,
+      "path": "siteSummary[Hyderabad].incidentCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_apIncidents",
+      "expected": 4,
+      "actual": 4,
+      "path": "siteSummary[Hyderabad].apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_uniqueAPs",
+      "expected": 4,
+      "actual": 4,
+      "path": "siteSummary[Hyderabad].uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Hyderabad_healthScore",
+      "expected": "55.87",
+      "actual": "55.87",
+      "path": "siteSummary[Hyderabad].healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_deviceCount",
+      "expected": 17,
+      "actual": 17,
+      "path": "siteSummary[Mohali].deviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_activeDeviceCount",
+      "expected": 17,
+      "actual": 17,
+      "path": "siteSummary[Mohali].activeDeviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_stockCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Mohali].stockCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_proactiveSwitchUptime",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Mohali].proactiveSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_jflSwitchUptime",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Mohali].jflSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_incidentCount",
+      "expected": 16,
+      "actual": 16,
+      "path": "siteSummary[Mohali].incidentCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_apIncidents",
+      "expected": 16,
+      "actual": 16,
+      "path": "siteSummary[Mohali].apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_uniqueAPs",
+      "expected": 9,
+      "actual": 9,
+      "path": "siteSummary[Mohali].uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mohali_healthScore",
+      "expected": "74.40",
+      "actual": "74.40",
+      "path": "siteSummary[Mohali].healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_deviceCount",
+      "expected": 1,
+      "actual": 1,
+      "path": "siteSummary[Mumbai].deviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_activeDeviceCount",
+      "expected": 1,
+      "actual": 1,
+      "path": "siteSummary[Mumbai].activeDeviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_stockCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Mumbai].stockCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_proactiveSwitchUptime",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Mumbai].proactiveSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_jflSwitchUptime",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Mumbai].jflSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_incidentCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Mumbai].incidentCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_apIncidents",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Mumbai].apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_uniqueAPs",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Mumbai].uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Mumbai_healthScore",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Mumbai].healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_deviceCount",
+      "expected": 13,
+      "actual": 13,
+      "path": "siteSummary[Nagpur].deviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_activeDeviceCount",
+      "expected": 13,
+      "actual": 13,
+      "path": "siteSummary[Nagpur].activeDeviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_stockCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Nagpur].stockCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_proactiveSwitchUptime",
+      "expected": "0.00",
+      "actual": "0.00",
+      "path": "siteSummary[Nagpur].proactiveSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_jflSwitchUptime",
+      "expected": "0.00",
+      "actual": "0.00",
+      "path": "siteSummary[Nagpur].jflSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_incidentCount",
+      "expected": 9,
+      "actual": 9,
+      "path": "siteSummary[Nagpur].incidentCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_apIncidents",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Nagpur].apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_uniqueAPs",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Nagpur].uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Nagpur_healthScore",
+      "expected": "87.62",
+      "actual": "87.62",
+      "path": "siteSummary[Nagpur].healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_deviceCount",
+      "expected": 2,
+      "actual": 2,
+      "path": "siteSummary[Noida].deviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_activeDeviceCount",
+      "expected": 2,
+      "actual": 2,
+      "path": "siteSummary[Noida].activeDeviceCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_stockCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Noida].stockCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_proactiveSwitchUptime",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Noida].proactiveSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_jflSwitchUptime",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Noida].jflSwitchUptime",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_incidentCount",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Noida].incidentCount",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_apIncidents",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Noida].apIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_uniqueAPs",
+      "expected": 0,
+      "actual": 0,
+      "path": "siteSummary[Noida].uniqueAPsWithIncidents",
+      "status": "PASS"
+    },
+    {
+      "slide": "Slide 5",
+      "metric": "site_Noida_healthScore",
+      "expected": "100.00",
+      "actual": "100.00",
+      "path": "siteSummary[Noida].healthScore",
+      "status": "PASS"
+    },
+    {
+      "slide": "Phase 10 Identity",
+      "metric": "RCA_Total_Equals_TotalIncidents",
+      "expected": 163,
+      "actual": 163,
+      "path": "rcaAnalytics.sumRcaCounts",
+      "status": "PASS"
+    },
+    {
+      "slide": "Phase 10 Identity",
+      "metric": "Site_Incidents_Total_Equals_TotalIncidents",
+      "expected": 163,
+      "actual": 138,
+      "path": "siteSummary.sumSiteIncidents",
+      "status": "FAIL"
+    }
+  ]
+}
