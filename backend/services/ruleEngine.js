@@ -123,6 +123,17 @@ function getIncidentSLATargetHours() {
 }
 
 /**
+ * Returns the period type day thresholds from rules.yaml (or defaults: 35, 100, 190).
+ */
+function getPeriodTypeThresholds() {
+  return {
+    monthly_max_days:     rules.period_type_thresholds?.monthly_max_days ?? 35,
+    quarterly_max_days:   rules.period_type_thresholds?.quarterly_max_days ?? 100,
+    half_yearly_max_days: rules.period_type_thresholds?.half_yearly_max_days ?? 190,
+  };
+}
+
+/**
  * Enrich each device with SLA fields.
  * N/A or blank uptime → treated as 100% (no incidents reported).
  * @param {Array} devicesArray
@@ -354,6 +365,7 @@ module.exports = {
   // SLA — TWO DISTINCT METRICS:
   getSLATarget,             // JFL Switch Uptime SLA (% target, period-aware)
   getIncidentSLATargetHours, // Incident Resolution SLA (hours TAT target)
+  getPeriodTypeThresholds,
   applySLAThresholds,
   // Severity
   getDeviceSeverity,

@@ -77,3 +77,11 @@ test('ruleEngine - per-client configFile loading', () => {
   // Falls back to rules.yaml if specific file does not exist yet
   assert.ok(rules.sla, 'SLA rules present in loaded config');
 });
+
+test('ruleEngine - getPeriodTypeThresholds', () => {
+  ruleEngine.loadRules();
+  const thresholds = ruleEngine.getPeriodTypeThresholds();
+  assert.equal(thresholds.monthly_max_days, 35);
+  assert.equal(thresholds.quarterly_max_days, 100);
+  assert.equal(thresholds.half_yearly_max_days, 190);
+});

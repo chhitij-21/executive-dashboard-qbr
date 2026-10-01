@@ -1,0 +1,22 @@
+# Processing Log
+
+- `2026-09-30T21:41:51.559Z` JFL pipeline started (Period: Monthly Report, periodType: monthly, startDate: null, endDate: null)
+- `2026-09-30T21:41:51.570Z` Rules loaded from: rules.yaml. Uptime SLA Target: 99.9% | Incident Resolution SLA: 2h
+- `2026-09-30T21:41:51.677Z` Incident file parsed — sheets: Raw, RCA, Device Wise Uptime , All Location , BLR, Grater Noida , Guwahati, Hyd, mohali, Mumbai, Nagpur, Noida
+- `2026-09-30T21:41:51.678Z` Incident sheets detected: incidentSheet=Raw, uptimeSheet=All Location 
+- `2026-09-30T21:41:51.678Z` Raw incident rows: 363
+- `2026-09-30T21:41:51.679Z` Uptime summary devices: 434
+- `2026-09-30T21:41:51.680Z` All Location sheet rows: 434
+- `2026-09-30T21:41:51.680Z` Device list built from All Location sheet: 434
+- `2026-09-30T21:41:51.750Z` Incidents for target customer (excluding Change Requests): 357
+- `2026-09-30T21:41:51.751Z` Other Activity tickets extracted: 6
+- `2026-09-30T21:41:51.756Z` Devices enriched with uptime. Stock devices: 0. Breaching SLA: 28
+- `2026-09-30T21:41:51.757Z` Incidents enriched with sla_status and display_reference
+- `2026-09-30T21:41:51.757Z` Building analytics sections...
+- `2026-09-30T21:41:51.758Z` Devices — Active: 434, Stock (Excluded from SLA): 0, Switches: 151, APs: 277
+- `2026-09-30T21:41:51.773Z` Analytics complete
+- `2026-09-30T21:41:51.773Z` Data validation passed — all RCA breakdown sums and SLA status counts are consistent.
+- `2026-09-30T21:41:51.774Z` Generating Executive QBR PDF Report...
+- `2026-09-30T21:41:51.776Z` PDF generated: tmp_legacy_m\JFL_QBR_1790804511774.pdf
+- `2026-09-30T21:41:51.930Z` Dashboard JSON saved to job folder
+- `2026-09-30T21:41:51.930Z` Pipeline complete ✓

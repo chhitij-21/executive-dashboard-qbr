@@ -1,0 +1,10 @@
+{
+  "name": "executive-dashboard-qbr-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "pdf-parse": "^2.4.5"
+  }
+}

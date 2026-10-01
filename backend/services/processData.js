@@ -308,9 +308,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       const start = new Date(sd + 'T00:00:00Z');
       const end = new Date(ed + 'T23:59:59Z');
       const diffDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
-      if (diffDays <= 35) return 'monthly';
-      if (diffDays <= 100) return 'quarterly';
-      if (diffDays <= 190) return 'half_yearly';
+      const thresholds = ruleEngine.getPeriodTypeThresholds();
+      if (diffDays <= thresholds.monthly_max_days) return 'monthly';
+      if (diffDays <= thresholds.quarterly_max_days) return 'quarterly';
+      if (diffDays <= thresholds.half_yearly_max_days) return 'half_yearly';
       return 'yearly';
   }
   const periodType = determinePeriodType(startDate, endDate);
@@ -329,7 +330,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   ruleEngine.loadRules(ruleConfigFile);
 
   // JFL Switch Uptime SLA target (period-aware % target) — distinct from incident resolution SLA
-  const SLA_TARGET = ruleEngine.getSLATarget(periodMode);
+  const effectivePeriodMode = (options.periodMode && options.periodMode !== 'custom') ? options.periodMode : periodType;
+  const SLA_TARGET = ruleEngine.getSLATarget(effectivePeriodMode);
   // Incident Resolution SLA target (hours) — distinct from uptime SLA
   const INCIDENT_SLA_TARGET_HOURS = ruleEngine.getIncidentSLATargetHours();
   const CUSTOMER_NAME    = options.clientName    || 'Jubilant Foodworks Ltd (JFL)';
@@ -461,22 +463,39 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     );
   };
 
-  const otherActivities = incidents.filter(isOtherActivity).map(item => ({
-    Subject: item.Description || item.Subject || '',
-    Description: item.Description || item.Subject || '',
-    SubCategory: item.Category || item.SubCategory || 'Change Request',
-    Category: item.Category || item.SubCategory || 'Change Request',
-    DeviceName: item.Location || item.SiteID || '',
-    Location: item.Location || item.SiteID || '',
-    DeviceSerial: item.SerialNo || item.DeviceID || '',
-    SerialNo: item.SerialNo || item.DeviceID || '',
-    DeviceID: item.SerialNo || item.DeviceID || '',
-    DeviceType: item.DeviceType || 'SW',
-    Hostname: item.Hostname || '',
-    Status: item.Status || 'Closed',
-    RCA: item.RCA || 'New Configuration',
-    display_reference: item.display_reference || `Ticket: ${item.TicketNumber || item.IncidentNumber || 'CR'}`
-  }));
+    function deriveSubCategory(item) {
+      const desc = String(item.Description || item.Subject || '').toLowerCase();
+      const rca = String(item.RCA || '').toLowerCase();
+      const sub = String(item.SubCategory || item['Sub Category'] || item['Sub-Category'] || '').trim();
+      if (sub && sub.toLowerCase() !== 'meraki managed services' && sub.toLowerCase() !== 'n/a') return sub;
+      if (/licence|license/i.test(desc)) return 'License Request';
+      if (/asset scan/i.test(desc)) return 'Asset Task';
+      if (/whitelist|mac address|ip whitelist/i.test(desc)) return 'Request Fulfillment';
+      if (/bescom|shutdown|power load|ad disjoined|authentication/i.test(desc)) return 'Maintenance Task';
+      if (/scheduled maintenance/i.test(desc)) return 'Scheduled Maintenance';
+      if (/change|request|fulfillment/i.test(rca) || /new configuration/i.test(rca)) return 'Request Fulfillment';
+      return 'Change Request';
+    }
+
+  const otherActivities = incidents.filter(isOtherActivity).map(item => {
+    const subCat = deriveSubCategory(item);
+    return {
+      Subject: item.Description || item.Subject || '',
+      Description: item.Description || item.Subject || '',
+      SubCategory: subCat,
+      Category: subCat,
+      DeviceName: item.Location || item.SiteID || '',
+      Location: item.Location || item.SiteID || '',
+      DeviceSerial: item.SerialNo || item.DeviceID || '',
+      SerialNo: item.SerialNo || item.DeviceID || '',
+      DeviceID: item.SerialNo || item.DeviceID || '',
+      DeviceType: item.DeviceType || 'SW',
+      Hostname: item.Hostname || '',
+      Status: item.Status || 'Closed',
+      RCA: item.RCA || 'New Configuration',
+      display_reference: item.display_reference || `Ticket: ${item.TicketNumber || item.IncidentNumber || 'CR'}`
+    };
+  });
 
   // Change Requests are NOT part of hardware Incidents per business spec
   incidents = incidents.filter(i => !isOtherActivity(i));

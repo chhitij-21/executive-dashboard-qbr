@@ -950,8 +950,8 @@ function MainPortal() {
             <h3 className="section-title">Other Activity — Change Requests, Maintenance & Non-Hardware Tickets</h3>
             <div className="kpi-grid">
               <KpiCard title="Total Other Activity Tickets" value={otherActivityIncidents.length} />
-              <KpiCard title="Change Requests & Fulfillment" value={otherActivityIncidents.filter(i => i.IsChangeRequest || /change request|request fulfillment/i.test(i.Category || i.Description || '')).length} />
-              <KpiCard title="Maintenance & Asset Tasks" value={otherActivityIncidents.filter(i => /asset scan|maintenance|credentials|license|whitelist/i.test(i.Category || i.Description || '')).length} />
+              <KpiCard title="Change Requests & Fulfillment" value={otherActivityIncidents.filter(i => i.IsChangeRequest || /change|fulfillment|license|licence|whitelist|request|configuration/i.test((i.SubCategory || '') + ' ' + (i.Category || '') + ' ' + (i.Description || '') + ' ' + (i.RCA || ''))).length} />
+              <KpiCard title="Maintenance & Asset Tasks" value={otherActivityIncidents.filter(i => /asset|maintenance|credentials|shutdown|power load|ad disjoined|scheduled/i.test((i.SubCategory || '') + ' ' + (i.Category || '') + ' ' + (i.Description || '') + ' ' + (i.RCA || ''))).length} />
             </div>
 
             {otherActivityIncidents.length > 0 ? (

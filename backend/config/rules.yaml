@@ -31,6 +31,11 @@ sla:
   quarterly_uptime_target_percent: 99.3 # JFL Switch Uptime SLA — quarterly (99.30%)
   monthly_uptime_target_percent: 99.9   # JFL Switch Uptime SLA — monthly (99.90%)
 
+period_type_thresholds:
+  monthly_max_days: 35
+  quarterly_max_days: 100
+  half_yearly_max_days: 190
+
 # ── Health Score ─────────────────────────────────────────────────────────────
 health_score:
   # Formula: (uptime% × uptime_weight) + (incident_free% × incident_free_weight)

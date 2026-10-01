@@ -12,7 +12,9 @@
     "dev:frontend": "npx vite --config frontend/vite.config.js",
     "build": "npm install --prefer-offline && cd frontend && npm install --include=dev --prefer-offline && npm run build",
     "start": "node backend/index.js",
-    "test": "node --test backend/tests/*.test.js"
+    "test": "node --test backend/tests/*.test.js",
+    "parity": "node scripts/deployment-parity.js",
+    "reconcile": "node scripts/ssot-reconciler.js"
   },
   "dependencies": {
     "adm-zip": "^0.5.10",
