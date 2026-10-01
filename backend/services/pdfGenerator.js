@@ -1,22 +1,84 @@
 // backend/services/pdfGenerator.js
-// Executive PDF Generator: Renders QBR Data Model (SSOT) to print-ready Executive HTML Report.
-// NOTE: Puppeteer is intentionally NOT used — it is an optional heavy dependency not available
-// on all platforms. Instead, we generate a beautiful print-ready HTML file that users can
-// open in any browser and print/save as PDF via Ctrl+P → Save as PDF.
+// Executive PDF Generator: Renders QBR Data Model (SSOT) to print-ready Executive Report (Binary PDF / Print HTML).
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+let puppeteer;
+try {
+  puppeteer = require('puppeteer');
+} catch (e) {
+  puppeteer = null;
+}
+
 /**
- * Generates an executive QBR HTML report directly from the SSOT qbrData model.
- * Writes a fully self-contained HTML file that renders as a professional executive report.
+ * Locates Chrome executable if default Puppeteer shell is not available.
+ */
+function findChromeExecutable() {
+  const candidatePaths = [
+    path.join(os.homedir(), '.cache', 'puppeteer', 'chrome', 'win64-151.0.7922.47', 'chrome-win64', 'chrome.exe'),
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium'
+  ];
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+/**
+ * Attempts to render HTML string into a binary PDF using Puppeteer.
+ */
+async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
+  if (!puppeteer) return false;
+  let browser = null;
+  try {
+    try {
+      browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    } catch (e1) {
+      const execPath = findChromeExecutable();
+      if (execPath) {
+        browser = await puppeteer.launch({ headless: true, executablePath: execPath, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+      }
+    }
+
+    if (!browser) return false;
+
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      landscape: true,
+      printBackground: true,
+      margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' }
+    });
+    await browser.close();
+
+    if (pdfBuffer && pdfBuffer.length > 0) {
+      fs.writeFileSync(outputPath, pdfBuffer);
+      console.log(`[pdfGenerator] Real Binary PDF successfully generated via Puppeteer: ${outputPath} (${pdfBuffer.length} bytes)`);
+      return true;
+    }
+  } catch (err) {
+    console.warn(`[pdfGenerator] Puppeteer PDF notice: ${err.message}. Falling back to HTML format.`);
+    if (browser) {
+      try { await browser.close(); } catch (_) {}
+    }
+  }
+  return false;
+}
+
+/**
+ * Generates an executive QBR report directly from the SSOT qbrData model.
+ * Attempts binary PDF generation via Puppeteer first; falls back to print-optimized HTML.
  *
- * To convert to PDF: Open the HTML file in Chrome → Ctrl+P → Save as PDF → Landscape → A4.
- *
- * @param {Object} qbrData - Processed dashboard data model
- * @param {string} templatePath - Optional template path (unused, kept for API compatibility)
- * @param {string} outputPath - Target file path (.pdf extension is accepted; HTML is written)
+ * @param {Object} qbrData - Processed dashboard data model (SSOT)
+ * @param {string} templatePath - Optional template path (unused)
+ * @param {string} outputPath - Target file path (.pdf extension)
  */
 async function generatePDF(qbrData, templatePath, outputPath) {
   const targetPath = outputPath || path.join(process.env.VERCEL ? os.tmpdir() : 'reports', `JFL_QBR_${Date.now()}.pdf`);
@@ -27,10 +89,15 @@ async function generatePDF(qbrData, templatePath, outputPath) {
 
   const htmlContent = buildHTMLReport(qbrData);
 
-  // Write HTML directly — no Puppeteer required.
-  // The HTML is fully self-contained with inline styles and is print-optimised via @media print.
+  // 1. Try rendering true binary PDF with Puppeteer
+  const pdfSuccess = await tryRenderPuppeteerPDF(htmlContent, targetPath);
+  if (pdfSuccess) {
+    return targetPath;
+  }
+
+  // 2. Fallback: Write print-ready self-contained HTML report to target path
   fs.writeFileSync(targetPath, htmlContent, 'utf8');
-  console.log(`[pdfGenerator] Executive QBR HTML Report generated: ${targetPath}`);
+  console.log(`[pdfGenerator] Executive QBR HTML Report generated (Fallback): ${targetPath}`);
   return targetPath;
 }
 
@@ -39,8 +106,9 @@ function buildHTMLReport(data) {
   const siteSummary = data.siteSummary || [];
   const switchAn = data.switchAnalytics || {};
   const apAn = data.apAnalytics || {};
-  const customerName = data.customerName || 'Jubilant Foodworks Ltd (JFL)';
-  const reportingPeriod = data.reportingPeriod || data.report_period?.display_label || 'User Selected Period';
+  const rcaAn = data.rcaAnalytics || {};
+  const customerName = data.customerName || exec.customerName || 'Jubilant Foodworks Ltd (JFL)';
+  const reportingPeriod = data.reportingPeriod || data.report_period?.display_label || exec.reportingPeriod || 'User Selected Period';
 
   const fmtNum = (val, def = '0') => (val !== undefined && val !== null ? String(val) : def);
   const fmtPct = (val, def = '100.00%') => {
@@ -56,47 +124,113 @@ function buildHTMLReport(data) {
     return n >= target ? 'badge-success' : 'badge-danger';
   };
 
+  // 1. All Site Summary Rows
   const siteRowsHtml = siteSummary.map((s, idx) => `
     <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
       <td class="bold">${s.siteId}</td>
-      <td class="center">${s.deviceCount}</td>
+      <td class="center">${s.deviceCount || (s.switchCount + s.apCount) || 0}</td>
       <td class="center ${getSlaClass(s.proactiveSwitchUptime)}">${fmtPct(s.proactiveSwitchUptime)}</td>
       <td class="center ${getSlaClass(s.jflSwitchUptime)}">${fmtPct(s.jflSwitchUptime)}</td>
       <td>${s.primaryRcaSwitches || 'Stable Operations (No Incidents)'}</td>
-      <td class="center">${s.apIncidents} / ${s.uniqueAPsWithIncidents}</td>
+      <td class="center">${s.apIncidents || 0} / ${s.uniqueAPsWithIncidents || 0}</td>
       <td>${s.primaryRcaAPs || 'Stable Operations (No Incidents)'}</td>
     </tr>
   `).join('');
 
-  const rackRowsHtml = (switchAn.expandedRackwiseUptime || switchAn.rackwiseUptime || []).slice(0, 30).map((r, idx) => `
+  // 2. All Switch Devices (UNTRUNCATED)
+  let rackSwitches = switchAn.expandedRackwiseUptime || switchAn.rackwiseUptime || [];
+  if (!rackSwitches || rackSwitches.length === 0) {
+    const devices = data.devices || [];
+    rackSwitches = devices.filter(d => (d.DeviceType === 'SW' || (d.DeviceID && d.DeviceID.includes('-SW-'))) && !d.__isStock);
+  }
+
+  const rackRowsHtml = rackSwitches.map((r, idx) => `
     <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-      <td class="bold">${r.site || r.Location || 'N/A'}</td>
+      <td class="bold">${r.site || r.Location || r.SiteID || 'N/A'}</td>
       <td>${r.rack || r.Rack || 'Main Rack'}</td>
-      <td>${r.serialNumber || r.SerialNo || r.DeviceID || 'N/A'}</td>
-      <td class="center ${getSlaClass(r.monthlyUptime || r.periodUptime)}">${fmtPct(r.monthlyUptime || r.periodUptime)}</td>
-      <td class="center">${r.operatingStatus || r.status || 'Operational'}</td>
+      <td>${r.serialNumber || r.SerialNo || 'N/A'}</td>
+      <td class="bold">${r.hostname || r.Hostname || r.DeviceID || 'N/A'}</td>
+      <td class="center ${getSlaClass(r.proactiveUptime || r.__proactiveUptime || r.monthlyUptime || r.periodUptime)}">${fmtPct(r.proactiveUptime || r.__proactiveUptime || r.monthlyUptime || r.periodUptime)}</td>
+      <td class="center ${getSlaClass(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}">${fmtPct(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}</td>
+      <td class="center">${r.operatingStatus || r.status || (r.__slaBreach ? '<span class="badge-danger">Breached</span>' : '<span class="badge-success">Operational</span>')}</td>
     </tr>
   `).join('');
 
-  const apOutageRowsHtml = (apAn.top10APOutages || []).slice(0, 10).map((a, idx) => `
+  // 3. All AP Devices / Outages (UNTRUNCATED)
+  let apOutages = apAn.allAPOutages || apAn.top10APOutages || [];
+  if (!apOutages || apOutages.length === 0) {
+    const incidents = data.incidents || data.incidentDetails || [];
+    const apIncidents = incidents.filter(i => i.DeviceType === 'AP' || (i.DeviceID && i.DeviceID.includes('-AP-')));
+    const apMap = {};
+    apIncidents.forEach(inc => {
+      const id = inc.DeviceID || inc.SerialNo || 'Unknown-AP';
+      if (!apMap[id]) {
+        apMap[id] = {
+          DeviceID: id,
+          SerialNo: inc.SerialNo || id,
+          Location: inc.Location || inc.SiteID || 'N/A',
+          incCount: 0,
+          uptime: inc.__effectiveUptime || inc.uptime || '98.50%',
+          rca: inc.RCA || inc.Category || 'Device Power Issues'
+        };
+      }
+      apMap[id].incCount++;
+    });
+    apOutages = Object.values(apMap);
+  }
+
+  const apOutageRowsHtml = apOutages.map((a, idx) => `
     <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-      <td class="bold">${a.DeviceID || 'N/A'}</td>
+      <td class="bold">${a.DeviceID || a.Hostname || 'N/A'}</td>
       <td>${a.SerialNo || 'N/A'}</td>
-      <td>${a.Location || 'N/A'}</td>
-      <td class="center bold text-primary">${a.incCount}</td>
+      <td>${a.Location || a.SiteID || 'N/A'}</td>
+      <td class="center bold text-primary">${a.incCount || 1}</td>
       <td class="center ${getSlaClass(a.uptime)}">${fmtPct(a.uptime)}</td>
+      <td>${a.rca || a.RCA || a.primaryRca || 'Device Power Issues'}</td>
     </tr>
   `).join('');
+
+  // 4. All Incident Audit Trail Records (UNTRUNCATED)
+  const allIncidents = data.incidents || data.incidentDetails || data.incidentList || [];
+  const incidentRowsHtml = allIncidents.map((inc, idx) => {
+    const ref = inc.display_reference ? `${inc.display_reference.type}: ${inc.display_reference.value}` : (inc.TicketNumber || inc.IncidentNumber || inc.IncidentID || `INC-${idx+1}`);
+    const slaBadge = inc.sla_status === 'SLA Breached' 
+      ? '<span class="badge-danger">SLA Breached</span>'
+      : '<span class="badge-success">SLA Met</span>';
+
+    return `
+      <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
+        <td class="bold">${ref}</td>
+        <td>${inc.Location || inc.SiteID || inc.Site || 'N/A'}</td>
+        <td>${inc.DeviceID || inc.SerialNo || 'N/A'}</td>
+        <td class="center">${inc.DeviceType || (inc.DeviceID?.includes('-AP-') ? 'AP' : 'Switch')}</td>
+        <td class="center">${inc.HoldTimeMin !== undefined ? inc.HoldTimeMin : (inc.HoldDurationMin || 0)} min</td>
+        <td class="center">${inc.ActualResolutionMin !== undefined ? inc.ActualResolutionMin : (inc.ResolutionMin || 0)} min</td>
+        <td>${inc.RCA || inc.Category || 'Operational Fault'}</td>
+        <td class="center">${slaBadge}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // 5. RCA Breakdown Rows
+  const rcaBreakdownList = rcaAn.breakdown || rcaAn.rawBreakdown || switchAn.rcaBreakdown || [];
+  const rcaRowsHtml = Array.isArray(rcaBreakdownList) ? rcaBreakdownList.map((r, idx) => `
+    <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
+      <td class="bold">${r.category || r.rca || r.name || 'Other'}</td>
+      <td class="center">${r.count || r.incidents || 0}</td>
+      <td class="center">${fmtPct(r.percentage || r.share)}</td>
+    </tr>
+  `).join('') : '';
 
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Executive QBR Report - ${customerName}</title>
+  <title>Executive QBR Summary Report - ${customerName}</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    body { margin: 0; padding: 0; background: #ffffff; color: #1e293b; font-size: 12px; line-height: 1.4; }
+    body { margin: 0; padding: 0; background: #ffffff; color: #1e293b; font-size: 11px; line-height: 1.4; }
     
     @page {
       size: A4 landscape;
@@ -105,10 +239,6 @@ function buildHTMLReport(data) {
 
     .page {
       page-break-after: always;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
       padding: 10px;
     }
     .page:last-child { page-break-after: avoid; }
@@ -128,6 +258,7 @@ function buildHTMLReport(data) {
     .footer {
       border-top: 1px solid #e2e8f0;
       padding-top: 6px;
+      margin-top: 16px;
       display: flex;
       justify-content: space-between;
       font-size: 9px;
@@ -150,12 +281,13 @@ function buildHTMLReport(data) {
     .kpi-value { font-size: 20px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0; }
     .kpi-sub { font-size: 9px; color: #64748b; }
 
-    .badge-success { background: #dcfce7; color: #15803d; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
-    .badge-danger { background: #fee2e2; color: #b91c1c; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+    .badge-success { background: #dcfce7; color: #15803d; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+    .badge-danger { background: #fee2e2; color: #b91c1c; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-block; }
 
     table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 10px; }
     th { background: #0f172a; color: #ffffff; text-align: left; padding: 6px 8px; font-weight: 600; font-size: 10px; }
     td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+    tr { page-break-inside: avoid; }
     tr.even { background: #f8fafc; }
     tr.odd { background: #ffffff; }
     .bold { font-weight: 600; }
@@ -166,7 +298,7 @@ function buildHTMLReport(data) {
       font-size: 13px;
       font-weight: 700;
       color: #0f172a;
-      margin: 10px 0 6px 0;
+      margin: 12px 0 6px 0;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -180,25 +312,10 @@ function buildHTMLReport(data) {
       border-radius: 2px;
     }
 
-    .cover-page {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      color: #ffffff;
-      border-radius: 12px;
-      height: 100%;
-      padding: 40px;
-    }
-    .cover-title { font-size: 32px; font-weight: 800; margin-bottom: 8px; color: #38bdf8; }
-    .cover-subtitle { font-size: 18px; color: #cbd5e1; margin-bottom: 24px; }
-    .cover-meta { background: rgba(255,255,255,0.08); padding: 16px 28px; border-radius: 8px; font-size: 13px; color: #f8fafc; }
     @media print {
       .no-print { display: none !important; }
       body { background: #fff; }
-      .page { height: auto; page-break-after: always; }
+      .page { page-break-after: always; }
     }
     @media screen {
       body { background: #f1f5f9; padding: 20px; }
@@ -233,13 +350,13 @@ function buildHTMLReport(data) {
 </head>
 <body>
 
-  <!-- SCREEN-ONLY PRINT HINT BANNER (hidden when printing) -->
+  <!-- SCREEN-ONLY PRINT HINT BANNER -->
   <div class="print-hint no-print">
     📄 <strong>Executive QBR Report</strong> &nbsp;|&nbsp;
     To save as PDF: Press <kbd>Ctrl+P</kbd> (Windows) or <kbd>⌘+P</kbd> (Mac) &nbsp;→&nbsp; Destination: <strong>Save as PDF</strong> &nbsp;→&nbsp; Layout: <strong>Landscape</strong> &nbsp;→&nbsp; Save
   </div>
 
-  <!-- PAGE 1: COVER & EXECUTIVE OVERVIEW -->
+  <!-- SECTION 1: EXECUTIVE OVERVIEW -->
   <div class="page">
     <div class="header">
       <div>
@@ -253,7 +370,7 @@ function buildHTMLReport(data) {
       <div class="kpi-card">
         <div class="kpi-title">Total Infrastructure</div>
         <div class="kpi-value">${fmtNum(exec.totalDevices)} Devices</div>
-        <div class="kpi-sub">${fmtNum(exec.totalSites)} Sites (${fmtNum(exec.totalSwitches)} Switches / ${fmtNum(exec.totalAPs)} APs)</div>
+        <div class="kpi-sub">${fmtNum(exec.totalSites)} Sites (${fmtNum(exec.totalSwitches)} Switches / ${fmtNum(exec.totalAPs)} APs / ${fmtNum(exec.totalStockDevices || exec.stockDevices)} Stock)</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-title">JFL Switch Uptime %</div>
@@ -273,7 +390,7 @@ function buildHTMLReport(data) {
     </div>
 
     <div class="section-title">Primary Executive Findings</div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
       <div class="kpi-card">
         <div class="kpi-title">Primary RCA Driver (Switches)</div>
         <div style="font-size: 14px; font-weight: 700; color: #0284c7; margin-top: 6px;">${exec.primaryRcaSwitches || 'Stable Operations (No Incidents)'}</div>
@@ -290,7 +407,7 @@ function buildHTMLReport(data) {
     </div>
   </div>
 
-  <!-- PAGE 2: SITE SUMMARY TABLE -->
+  <!-- SECTION 2: SITE EXECUTIVE SUMMARY -->
   <div class="page">
     <div class="header">
       <div>
@@ -317,13 +434,13 @@ function buildHTMLReport(data) {
       </tbody>
     </table>
 
-    <div class="section-title" style="margin-top: 14px;">External Site Dependencies &amp; Client-Side Activity</div>
+    <div class="section-title" style="margin-top: 14px;">External Site Dependencies & Client-Side Activity</div>
     <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px 14px; border-radius: 6px; font-size: 10px; color: #334155; margin-top: 4px;">
       <strong>Note:</strong> Utility power cuts, store-side cabling activities, and third-party ISP outages are tracked transparently as local site dependencies and isolated from operational MSP SLA penalties.
       <div style="display: flex; gap: 16px; margin-top: 8px;">
-        <div><strong>Contractual SLA Compliance:</strong> <span style="color: #15803d; font-weight: 700;">95.97%</span></div>
-        <div><strong>Isolated External/Power Devices:</strong> <span style="color: #0284c7; font-weight: 700;">67</span></div>
-        <div><strong>MSP Attributable Breaches:</strong> <span style="color: #b91c1c; font-weight: 700;">15</span></div>
+        <div><strong>Contractual SLA Target:</strong> <span style="color: #15803d; font-weight: 700;">${fmtNum(exec.slaTarget, '99.3')}%</span></div>
+        <div><strong>Overall SLA Compliance:</strong> <span style="color: #0284c7; font-weight: 700;">${fmtPct(exec.slaCompliance)}</span></div>
+        <div><strong>Total Incident Records:</strong> <span style="color: #0f172a; font-weight: 700;">${fmtNum(exec.totalIncidents || allIncidents.length)}</span></div>
       </div>
     </div>
 
@@ -333,77 +450,136 @@ function buildHTMLReport(data) {
     </div>
   </div>
 
-  <!-- PAGE 3: RACK-WISE SWITCH UPTIME -->
+  <!-- SECTION 3: SWITCH INFRASTRUCTURE UPTIME -->
   <div class="page">
     <div class="header">
       <div>
-        <h1>Switch Infrastructure & Rack Performance</h1>
-        <div class="subtitle">Detailed Rack-wise Operational Uptime & Device Status</div>
+        <h1>Switch Infrastructure & Rack Performance (${rackSwitches.length} Devices)</h1>
+        <div class="subtitle">Complete Rack-wise Operational Uptime & Device Status</div>
       </div>
       <div class="period-badge">${reportingPeriod}</div>
     </div>
 
-    <div class="section-title">Rack-Wise Switch Summary</div>
     <table>
       <thead>
         <tr>
           <th>Site Location</th>
           <th>Rack Location</th>
-          <th>Serial Number / Hostname</th>
-          <th style="text-align:center;">Period Uptime %</th>
+          <th>Serial Number</th>
+          <th>Hostname / Device ID</th>
+          <th style="text-align:center;">Proactive Uptime %</th>
+          <th style="text-align:center;">JFL Uptime %</th>
           <th style="text-align:center;">Operating Status</th>
         </tr>
       </thead>
       <tbody>
-        ${rackRowsHtml.length > 0 ? rackRowsHtml : '<tr><td colspan="5" class="center">No rack switch data available.</td></tr>'}
+        ${rackRowsHtml.length > 0 ? rackRowsHtml : '<tr><td colspan="7" class="center">No switch rack data available.</td></tr>'}
       </tbody>
     </table>
 
     <div class="footer">
-      <div>Switch Analytics — SSOT Engine</div>
+      <div>Switch Analytics — SSOT Engine (Complete ${rackSwitches.length} Switches)</div>
       <div>Page 3</div>
     </div>
   </div>
 
-  <!-- PAGE 4: AP ANALYTICS & TOP OUTAGES -->
+  <!-- SECTION 4: ACCESS POINT (AP) OUTAGES -->
   <div class="page">
     <div class="header">
       <div>
-        <h1>Access Point (AP) Analytics</h1>
-        <div class="subtitle">Top Affected AP Devices & Incident Distribution</div>
+        <h1>Access Point (AP) Analytics (${apOutages.length} Outage Records)</h1>
+        <div class="subtitle">Complete AP Device Incident Distribution & Uptime Impact</div>
       </div>
       <div class="period-badge">${reportingPeriod}</div>
     </div>
 
-    <div class="section-title">Top 10 Affected AP Outages</div>
     <table>
       <thead>
         <tr>
-          <th>Device Hostname</th>
+          <th>Device Hostname / ID</th>
           <th>Serial Number</th>
           <th>Site Location</th>
           <th style="text-align:center;">Incident Count</th>
           <th style="text-align:center;">Effective Uptime %</th>
+          <th>Primary RCA Driver</th>
         </tr>
       </thead>
       <tbody>
-        ${apOutageRowsHtml.length > 0 ? apOutageRowsHtml : '<tr><td colspan="5" class="center">No AP incidents recorded during period. Operations Stable.</td></tr>'}
+        ${apOutageRowsHtml.length > 0 ? apOutageRowsHtml : '<tr><td colspan="6" class="center">No AP outages recorded during period. Operations Stable.</td></tr>'}
       </tbody>
     </table>
 
     <div class="footer">
-      <div>AP Analytics — SSOT Engine</div>
+      <div>AP Analytics — SSOT Engine (Complete ${apOutages.length} AP Records)</div>
       <div>Page 4</div>
     </div>
   </div>
 
-  <script>
-    window.onload = function() {
-      setTimeout(function() {
-        try { window.print(); } catch (e) {}
-      }, 600);
-    };
-  </script>
+  ${rcaRowsHtml.length > 0 ? `
+  <!-- SECTION 5: ROOT CAUSE ANALYSIS (RCA) BREAKDOWN -->
+  <div class="page">
+    <div class="header">
+      <div>
+        <h1>Root Cause Analysis (RCA) Distribution</h1>
+        <div class="subtitle">Categorized Downtime Drivers & Technical Breakdown</div>
+      </div>
+      <div class="period-badge">${reportingPeriod}</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Root Cause Category</th>
+          <th style="text-align:center;">Incident Count</th>
+          <th style="text-align:center;">Percentage Share (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rcaRowsHtml}
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <div>RCA Analytics — SSOT Engine</div>
+      <div>Page 5</div>
+    </div>
+  </div>
+  ` : ''}
+
+  <!-- SECTION 6: INCIDENTS & SLA COMPLIANCE AUDIT TRAIL -->
+  <div class="page">
+    <div class="header">
+      <div>
+        <h1>Incidents & SLA Compliance Audit Trail (${allIncidents.length} Tickets)</h1>
+        <div class="subtitle">Complete Ticket Log with Hold Time, Actual Resolution & SLA Breach Status</div>
+      </div>
+      <div class="period-badge">${reportingPeriod}</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Reference (Ticket / Incident ID)</th>
+          <th>Location</th>
+          <th>Device ID / Serial</th>
+          <th style="text-align:center;">Type</th>
+          <th style="text-align:center;">Hold Time</th>
+          <th style="text-align:center;">Fix Time</th>
+          <th>RCA Driver</th>
+          <th style="text-align:center;">SLA Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${incidentRowsHtml.length > 0 ? incidentRowsHtml : '<tr><td colspan="8" class="center">No incident records found. Operations 100% Stable.</td></tr>'}
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <div>Incidents Audit Trail — SSOT Engine (Complete ${allIncidents.length} Tickets)</div>
+      <div>Page Audit</div>
+    </div>
+  </div>
+
 </body>
 </html>
   `;
