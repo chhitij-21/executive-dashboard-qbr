@@ -134,13 +134,13 @@ function MainPortal() {
     };
 
     fetchDashboard().then((done) => {
-      // If still processing, start polling every 3 seconds until complete
-      if (!done && isSubscribed && status === 'processing') {
+      // If server is processing (HTTP 202 or pending status), poll every 2.5s until completed
+      if (!done && isSubscribed) {
         pollInterval = setInterval(() => {
           fetchDashboard().then((complete) => {
             if (complete && pollInterval) { clearInterval(pollInterval); pollInterval = null; }
           });
-        }, 3000);
+        }, 2500);
       }
     });
 

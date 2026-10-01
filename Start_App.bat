@@ -20,8 +20,8 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000 " ^| findstr "LISTENIN
     taskkill /F /PID %%a >nul 2>&1
 )
 
-echo Launching Backend Server on http://localhost:3000 ...
-start "JFL Dashboard Backend" node backend/index.js
+echo Launching Backend Server with Auto-Reload on http://localhost:3000 ...
+start "JFL Dashboard Backend" node --watch --watch-path=backend backend/index.js
 timeout /t 3 /nobreak >nul
 
 echo Opening Web Browser at http://localhost:3000 ...

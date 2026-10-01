@@ -27,7 +27,14 @@ export function getAuthHeaders() {
 export async function apiFetch(url, options = {}) {
   const headers = {
     ...getAuthHeaders(),
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
     ...(options.headers || {}),
   };
-  return fetch(url, { ...options, headers });
+  let fetchUrl = url;
+  if (!options.method || options.method.toUpperCase() === 'GET') {
+    const separator = fetchUrl.includes('?') ? '&' : '?';
+    fetchUrl = `${fetchUrl}${separator}_t=${Date.now()}`;
+  }
+  return fetch(fetchUrl, { ...options, headers, cache: 'no-store' });
 }
