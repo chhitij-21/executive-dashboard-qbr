@@ -55,20 +55,22 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
                 return isNaN(n) ? '100' : (n === 100 ? '100' : n.toFixed(2));
               };
 
-              const proUp = formatPct(site.proactiveSwitchUptime);
-              const jflUp = formatPct(site.jflSwitchUptime);
+              // Per-ticket averages (matches Excel); fall back to per-device for backward compatibility
+              const proUp = formatPct(site.proactiveTicketAvg ?? site.proactiveSwitchUptime);
+              const jflUp = formatPct(site.jflTicketAvg ?? site.jflSwitchUptime);
+
               const rawSwRca = site.primaryRcaSwitches || site.primaryRca;
               const rawApRca = site.primaryRcaAPs || site.primaryRcaForAPs;
-              
+
               const hasSwInc = site.incidentCount > 0 || (site.switches && site.switches.some(d => d.__effectiveUptime < 100));
               const hasApInc = (site.apIncidents ?? 0) > 0;
 
-              const swRca = rawSwRca && !['None', 'Not case received', 'N/A', ''].includes(rawSwRca) 
-                ? rawSwRca 
+              const swRca = rawSwRca && !['None', 'Not case received', 'N/A', ''].includes(rawSwRca)
+                ? rawSwRca
                 : 'Stable Operations (No Incidents)';
 
-              const apRca = rawApRca && !['None', 'Not case received', 'N/A', ''].includes(rawApRca) 
-                ? rawApRca 
+              const apRca = rawApRca && !['None', 'Not case received', 'N/A', ''].includes(rawApRca)
+                ? rawApRca
                 : 'Stable Operations (No Incidents)';
 
               const apIncDisplay = `${site.apIncidents ?? 0} / ${site.uniqueAPsWithIncidents ?? 0}`;

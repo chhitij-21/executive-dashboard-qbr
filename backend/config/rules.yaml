@@ -29,7 +29,7 @@ claudex_loop:
 sla:
   resolution_threshold_hours: 2        # Incident TAT target (hours) — SLA Met/Breached per ticket
   quarterly_uptime_target_percent: 99.3 # JFL Switch Uptime SLA — quarterly (99.30%)
-  monthly_uptime_target_percent: 99.3   # JFL Switch Uptime SLA — monthly (99.30%)
+  monthly_uptime_target_percent: 99.9   # JFL Switch Uptime SLA — monthly (99.90%)
 
 period_type_thresholds:
   monthly_max_days: 35

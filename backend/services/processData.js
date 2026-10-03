@@ -3,7 +3,7 @@
 // ZERO ASSUMPTION: every metric is traceable to its source row.
 
 const path = require('path');
-const fs   = require('fs');
+const fs = require('fs');
 const {
   loadWorkbook, detectSheets,
   mergeInventorySheets, parseIncidentSheet, parseUptimeSummary,
@@ -267,20 +267,20 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── Custom date range (Requirement 2 & 3) ──────────────────────────────────
   let startDate = options.startDate || options.start_date || null;
-  let endDate   = options.endDate   || options.end_date   || null;
+  let endDate = options.endDate || options.end_date || null;
 
   // If startDate / endDate not passed directly, but reportingPeriod is in format 'YYYY-MM-DD to YYYY-MM-DD'
   if (!startDate && options.reportingPeriod && typeof options.reportingPeriod === 'string' && options.reportingPeriod.includes(' to ')) {
     const parts = options.reportingPeriod.split(' to ');
     if (parts.length === 2 && /^\d{4}-\d{2}-\d{2}$/.test(parts[0].trim()) && /^\d{4}-\d{2}-\d{2}$/.test(parts[1].trim())) {
       startDate = parts[0].trim();
-      endDate   = parts[1].trim();
+      endDate = parts[1].trim();
     }
   }
 
   // Build the report period metadata object (Requirement 4)
   let reportPeriodMeta = null;
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   if (startDate && endDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
     const sdParts = startDate.split('-');  // [YYYY, MM, DD]
@@ -288,16 +288,16 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const sdLabel = `${parseInt(sdParts[2], 10)} ${months[parseInt(sdParts[1], 10) - 1]} ${sdParts[0]}`;
     const edLabel = `${parseInt(edParts[2], 10)} ${months[parseInt(edParts[1], 10) - 1]} ${edParts[0]}`;
     reportPeriodMeta = {
-      start_date:    startDate,
-      end_date:      endDate,
-      period_type:   'custom',
+      start_date: startDate,
+      end_date: endDate,
+      period_type: 'custom',
       display_label: `${sdLabel} – ${edLabel}`,
     };
   } else if (options.reportingPeriod && options.reportingPeriod !== 'User Selected Period' && options.reportingPeriod !== 'Custom Period') {
     reportPeriodMeta = {
-      start_date:    startDate,
-      end_date:      endDate,
-      period_type:   'custom',
+      start_date: startDate,
+      end_date: endDate,
+      period_type: 'custom',
       display_label: options.reportingPeriod,
     };
   }
@@ -308,22 +308,22 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     : (options.reportingPeriod || 'User Selected Period');
 
   function determinePeriodType(sd, ed) {
-      if (!sd || !ed) return 'monthly';
-      const start = new Date(sd + 'T00:00:00Z');
-      const end = new Date(ed + 'T23:59:59Z');
-      const diffDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
-      const thresholds = ruleEngine.getPeriodTypeThresholds();
-      if (diffDays <= thresholds.monthly_max_days) return 'monthly';
-      if (diffDays <= thresholds.quarterly_max_days) return 'quarterly';
-      if (diffDays <= thresholds.half_yearly_max_days) return 'half_yearly';
-      return 'yearly';
+    if (!sd || !ed) return 'monthly';
+    const start = new Date(sd + 'T00:00:00Z');
+    const end = new Date(ed + 'T23:59:59Z');
+    const diffDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
+    const thresholds = ruleEngine.getPeriodTypeThresholds();
+    if (diffDays <= thresholds.monthly_max_days) return 'monthly';
+    if (diffDays <= thresholds.quarterly_max_days) return 'quarterly';
+    if (diffDays <= thresholds.half_yearly_max_days) return 'half_yearly';
+    return 'yearly';
   }
   const periodType = determinePeriodType(startDate, endDate);
   const periodLabelMap = {
-      monthly: 'Monthly Uptime %',
-      quarterly: 'Quarterly Uptime %',
-      half_yearly: 'Half‑Yearly Uptime %',
-      yearly: 'Yearly Uptime %'
+    monthly: 'Monthly Uptime %',
+    quarterly: 'Quarterly Uptime %',
+    half_yearly: 'Half‑Yearly Uptime %',
+    yearly: 'Yearly Uptime %'
   };
   const periodLabel = periodLabelMap[periodType] || 'Monthly Uptime %';
   const periodOptions = { periodType, periodLabel, startDate, endDate };
@@ -338,7 +338,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const SLA_TARGET = ruleEngine.getSLATarget(effectivePeriodMode);
   // Incident Resolution SLA target (hours) — distinct from uptime SLA
   const INCIDENT_SLA_TARGET_HOURS = ruleEngine.getIncidentSLATargetHours();
-  const CUSTOMER_NAME    = options.clientName    || 'Jubilant Foodworks Ltd (JFL)';
+  const CUSTOMER_NAME = options.clientName || 'Jubilant Foodworks Ltd (JFL)';
   const REPORTING_PERIOD = activeReportingPeriod;
 
   log(`Rules loaded from: ${ruleConfigFile}. Uptime SLA Target: ${SLA_TARGET}% | Incident Resolution SLA: ${INCIDENT_SLA_TARGET_HOURS}h`);
@@ -425,14 +425,14 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       const serial = row['Serial No.'] || row['Serial No'] || '';
       if (!serial) return;
       devices.push({
-        DeviceID:    serial,
-        Location:    row['Location'] || '',
-        SiteID:      row['Location'] || '',
-        DeviceType:  row['Device Type'] || '',
-        Rack:        '',
+        DeviceID: serial,
+        Location: row['Location'] || '',
+        SiteID: row['Location'] || '',
+        DeviceType: row['Device Type'] || '',
+        Rack: '',
         CoreNonCore: '',
-        Hostname:    '',
-        __source:    row.__source,
+        Hostname: '',
+        __source: row.__source,
       });
     });
     log(`Device list built from All Location sheet: ${devices.length}`);
@@ -467,19 +467,19 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     );
   };
 
-    function deriveSubCategory(item) {
-      const desc = String(item.Description || item.Subject || '').toLowerCase();
-      const rca = String(item.RCA || '').toLowerCase();
-      const sub = String(item.SubCategory || item['Sub Category'] || item['Sub-Category'] || '').trim();
-      if (sub && sub.toLowerCase() !== 'meraki managed services' && sub.toLowerCase() !== 'n/a') return sub;
-      if (/licence|license/i.test(desc)) return 'License Request';
-      if (/asset scan/i.test(desc)) return 'Asset Task';
-      if (/whitelist|mac address|ip whitelist/i.test(desc)) return 'Request Fulfillment';
-      if (/bescom|shutdown|power load|ad disjoined|authentication/i.test(desc)) return 'Maintenance Task';
-      if (/scheduled maintenance/i.test(desc)) return 'Scheduled Maintenance';
-      if (/change|request|fulfillment/i.test(rca) || /new configuration/i.test(rca)) return 'Request Fulfillment';
-      return 'Change Request';
-    }
+  function deriveSubCategory(item) {
+    const desc = String(item.Description || item.Subject || '').toLowerCase();
+    const rca = String(item.RCA || '').toLowerCase();
+    const sub = String(item.SubCategory || item['Sub Category'] || item['Sub-Category'] || '').trim();
+    if (sub && sub.toLowerCase() !== 'meraki managed services' && sub.toLowerCase() !== 'n/a') return sub;
+    if (/licence|license/i.test(desc)) return 'License Request';
+    if (/asset scan/i.test(desc)) return 'Asset Task';
+    if (/whitelist|mac address|ip whitelist/i.test(desc)) return 'Request Fulfillment';
+    if (/bescom|shutdown|power load|ad disjoined|authentication/i.test(desc)) return 'Maintenance Task';
+    if (/scheduled maintenance/i.test(desc)) return 'Scheduled Maintenance';
+    if (/change|request|fulfillment/i.test(rca) || /new configuration/i.test(rca)) return 'Request Fulfillment';
+    return 'Change Request';
+  }
 
   const otherActivities = incidents.filter(isOtherActivity).map(item => {
     const subCat = deriveSubCategory(item);
@@ -510,7 +510,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // Only filter when explicit startDate / endDate are provided.
   if (startDate && endDate) {
     const rangeStart = new Date(startDate + 'T00:00:00Z');
-    const rangeEnd   = new Date(endDate   + 'T23:59:59Z');
+    const rangeEnd = new Date(endDate + 'T23:59:59Z');
 
     const inRangeIncidents = incidents.filter(inc => {
       const raw = inc.CreatedTime || inc.OpenTime || inc.created_at || inc['Created Date'] || inc['Open Date'];
@@ -551,7 +551,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       const sdISO = minDate.toISOString().slice(0, 10);
       const edISO = maxDate.toISOString().slice(0, 10);
       startDate = sdISO;
-      endDate   = edISO;
+      endDate = edISO;
       reportPeriodMeta = {
         start_date: sdISO,
         end_date: edISO,
@@ -570,7 +570,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const rawSerial = String(d.SerialNo || d.DeviceID || '').trim();
     const mappedHost = serialToHostMap[rawSerial] || String(d.Hostname || '').trim();
     const displayId = (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown') ? mappedHost : rawSerial;
-    
+
     let resolvedSite = d.Location || d.SiteID || '';
     if (!resolvedSite || isGenericLocation(resolvedSite)) {
       const h = (mappedHost || displayId || '').toLowerCase();
@@ -591,7 +591,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       DeviceID: displayId,
       Hostname: mappedHost || rawSerial,
       Location: normLoc,
-      SiteID:   normLoc,
+      SiteID: normLoc,
     };
   });
 
@@ -655,7 +655,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
 
     inc.Location = resolvedSite || 'Unknown';
-    inc.SiteID   = resolvedSite || 'Unknown';
+    inc.SiteID = resolvedSite || 'Unknown';
   });
 
   // ── 6. Attach uptime to each device from summary map ─────────────────────
@@ -665,10 +665,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const serial = String(row['Serial No.'] || row['Serial No'] || row['Device ID'] || row['DeviceID'] || row['Hostname'] || '').trim();
     if (!serial) return;
     const entry = {
-      jflUptime:      normaliseUptimePct(row['Average of JFL -Uptime %'] || row['JFL -Uptime %'] || row['JFL Uptime %'] || row['JFL Uptime']),
-      proactiveUptime:normaliseUptimePct(row['Average of Proactive -Uptime%'] || row['Proactive -Uptime%'] || row['Proactive Uptime %'] || row['Proactive Uptime']),
-      location:       row['Location'] || '',
-      deviceType:     row['Device Type'] || '',
+      jflUptime: normaliseUptimePct(row['Average of JFL -Uptime %'] || row['JFL -Uptime %'] || row['JFL Uptime %'] || row['JFL Uptime']),
+      proactiveUptime: normaliseUptimePct(row['Average of Proactive -Uptime%'] || row['Proactive -Uptime%'] || row['Proactive Uptime %'] || row['Proactive Uptime']),
+      location: row['Location'] || '',
+      deviceType: row['Device Type'] || '',
     };
     allLocMap[serial] = entry;
     const mappedHost = serialToHostMap[serial];
@@ -730,8 +730,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const normKeys = getNormalizedKeys(inc);
     if (normKeys.length === 0) return;
 
-    let actMin  = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
-    let totMin  = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
+    let actMin = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
+    let totMin = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
     let holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || 0);
 
     if (actMin <= 0 && totMin > 0) {
@@ -805,7 +805,21 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   });
 
   devices = devices.map((d) => {
-    const upData = allLocMap[d.DeviceID] || allLocMap[d.SerialNo] || uptimeSummaryMap[d.DeviceID] || uptimeSummaryMap[d.SerialNo] || null;
+    const deviceSiteKey = normalizeSiteName(d.SiteID || d.Location || '');
+
+    // Try device-level lookup first
+    const candidateUp = allLocMap[d.DeviceID] || allLocMap[d.SerialNo] ||
+      uptimeSummaryMap[d.DeviceID] || uptimeSummaryMap[d.SerialNo] || null;
+
+    // SITE CHECK: only use candidate if its location matches the device's site (or if location is empty)
+    const candidateSite = candidateUp ? normalizeSiteName(candidateUp.location || '') : '';
+    const isSiteMatch = !candidateSite || candidateSite === deviceSiteKey || candidateSite === 'Unknown';
+
+    const upData = (candidateUp && isSiteMatch) ? candidateUp : null;
+
+    if (candidateUp && !isSiteMatch) {
+      console.warn(`[uptime-fallback] Site mismatch for ${d.DeviceID}: device site=${deviceSiteKey}, pivot site=${candidateSite}. Rejected pivot value.`);
+    }
 
     const normKeys = getNormalizedKeys(d);
     let incDown = null;
@@ -813,25 +827,22 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       if (incDowntimeMap[k]) { incDown = incDowntimeMap[k]; break; }
     }
 
-    const holdMins          = incDown ? incDown.holdTime : 0;
+    const holdMins = incDown ? incDown.holdTime : 0;
     const proactiveDownMins = incDown ? incDown.proactiveDowntime : 0;
-    const actResMins        = incDown ? incDown.actualResTime : 0;
-    const totResMins        = incDown ? incDown.totalResTime : 0;
+    const actResMins = incDown ? incDown.actualResTime : 0;
+    const totResMins = incDown ? incDown.totalResTime : 0;
 
     // ── Priority 1: Compute strictly from SSOT Uptime Formulas in AGENTS.md Rule 3 when raw incident data exists ──
     let dynamicJfl = null;
     let dynamicPro = null;
     if (incDown) {
       const safeHold = Math.max(0, holdMins);
-      const safePro  = Math.max(0, proactiveDownMins);
-      
-      const deviceTAM = (safeHold > 2500) ? 15914.28 : windowMinutes;
-      const effectiveHold = (safeHold > 2500 && safeHold < 5000) ? 5552.49 : safeHold;
+      const safePro = Math.max(0, proactiveDownMins);
 
-      const jflVal = ((deviceTAM - Math.min(deviceTAM, effectiveHold)) / deviceTAM) * 100;
+      const jflVal = ((windowMinutes - Math.min(windowMinutes, safeHold)) / windowMinutes) * 100;
       dynamicJfl = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
 
-      const proVal = ((deviceTAM - Math.min(deviceTAM, safePro)) / deviceTAM) * 100;
+      const proVal = ((windowMinutes - Math.min(windowMinutes, safePro)) / windowMinutes) * 100;
       dynamicPro = Math.max(0, Math.min(100, parseFloat(proVal.toFixed(2))));
     }
 
@@ -851,19 +862,32 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const isClientSideOnly = incDown ? (!incDown.hasMspFault && incDown.rcaList.length > 0) : false;
     const slaBreach = !isStock && (jflUptime < SLA_TARGET) && !isClientSideOnly;
 
+    // Determine final source (FIX 3)
+    let __debugUptimeSource = 'default-100';
+    if (incDown && (incDown.actualResTime > 0 || incDown.holdTime > 0)) {
+      __debugUptimeSource = 'dynamic-from-incident';
+    } else if (upData && isSiteMatch) {
+      __debugUptimeSource = 'pivot-site-matched';
+    } else if (candidateUp && !isSiteMatch) {
+      __debugUptimeSource = 'rejected-cross-site-pivot';
+    } else {
+      __debugUptimeSource = 'default-100';
+    }
+
     return {
       ...d,
-      'JFL Uptime %':       `${jflUptime}%`,
+      'JFL Uptime %': `${jflUptime}%`,
       'Proactive Uptime %': `${proactiveUptime}%`,
-      __effectiveUptime:    jflUptime,
-      __jflUptime:          jflUptime,
-      __proactiveUptime:    proactiveUptime,
-      __monthlyUptime:      jflUptime,
-      __quarterlyUptime:    jflUptime,
-      __isStock:            isStock,
-      __slaBreach:          slaBreach,
-      __isClientSideOnly:   isClientSideOnly,
-      __slaTarget:          SLA_TARGET,
+      __effectiveUptime: jflUptime,
+      __jflUptime: jflUptime,
+      __proactiveUptime: proactiveUptime,
+      __monthlyUptime: jflUptime,
+      __quarterlyUptime: jflUptime,
+      __isStock: isStock,
+      __slaBreach: slaBreach,
+      __isClientSideOnly: isClientSideOnly,
+      __slaTarget: SLA_TARGET,
+      __debugUptimeSource,
     };
   });
 
@@ -871,7 +895,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // Pass SLA_TARGET explicitly to avoid closure/scope issues
   devices = applyHardwareReplacementSwaps(devices, incidents, log, SLA_TARGET);
 
-  log(`Devices enriched with uptime. Stock devices: ${devices.filter(d=>d.__isStock).length}. Breaching SLA: ${devices.filter(d=>d.__slaBreach).length}`);
+  log(`Devices enriched with uptime. Stock devices: ${devices.filter(d => d.__isStock).length}. Breaching SLA: ${devices.filter(d => d.__slaBreach).length}`);
 
   // ── 7. Validate ───────────────────────────────────────────────────────────
   const validationResult = validateJFL(devices, incidents, log);
@@ -899,7 +923,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     '**Overall Accuracy**: **100%**',
     '',
     '## Dataset Mapping Summary',
-    `- Inventory devices: ${devices.length} (${devices.filter(d=>!d.__isStock).length} active operational, ${devices.filter(d=>d.__isStock).length} stock excluded from SLA)`,
+    `- Inventory devices: ${devices.length} (${devices.filter(d => !d.__isStock).length} active operational, ${devices.filter(d => d.__isStock).length} stock excluded from SLA)`,
     `- Incident rows: ${incidents.length}`,
     `- Uptime-mapped devices: ${Object.keys(allLocMap).length}`,
     '',
@@ -950,8 +974,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // Also attempt PPT generation for backward compatibility if needed
   try {
-    await generatePPT(qbrData, templatePath, pptPath).catch(() => {});
-  } catch (e) {}
+    await generatePPT(qbrData, templatePath, pptPath).catch(() => { });
+  } catch (e) { }
 
   // ── 11. Save dashboard JSON ───────────────────────────────────────────────
   const dashPath = path.join(outputDir, 'dashboard_data.json');
@@ -980,13 +1004,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   log('Pipeline complete ✓');
   return {
     success: true,
-    dashboardPath:    dashPath,
-    pdfPath:          pdfGenerated ? pdfPath : null,
-    pptPath:          fs.existsSync(pptPath) ? pptPath : null,
-    reportPath:       path.join(outputDir, 'validation_report.md'),
-    errorReportPath:  path.join(outputDir, 'error_report.md'),
-    dataQualityPath:  path.join(outputDir, 'data_quality_report.md'),
-    processingLogPath:path.join(outputDir, 'processing_log.md'),
+    dashboardPath: dashPath,
+    pdfPath: pdfGenerated ? pdfPath : null,
+    pptPath: fs.existsSync(pptPath) ? pptPath : null,
+    reportPath: path.join(outputDir, 'validation_report.md'),
+    errorReportPath: path.join(outputDir, 'error_report.md'),
+    dataQualityPath: path.join(outputDir, 'data_quality_report.md'),
+    processingLogPath: path.join(outputDir, 'processing_log.md'),
   };
 }
 
@@ -1042,9 +1066,9 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
 
   // Hold time in minutes — ?? preserves 0 (valid hold value, not treated as missing)
   const holdMinRaw = inc.HoldTimeMin ?? '';
-  const holdMin    = parseFloat(holdMinRaw);
+  const holdMin = parseFloat(holdMinRaw);
   const netHoldMin = (!isNaN(holdMin) && holdMin >= 0) ? holdMin : 0;
-  const hasHold    = !isNaN(holdMin) && holdMin >= 0;
+  const hasHold = !isNaN(holdMin) && holdMin >= 0;
 
   // ── P1: Actual Resolution Time (min) — primary, already net ─────────────
   // Do NOT subtract hold here; this column is pre-deducted by ServiceNow.
@@ -1070,11 +1094,11 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
   // Gross wall-clock elapsed time → subtract hold to get net working time.
   if (resolutionHours === null && inc.OpenTime && inc.ResolvedTime) {
     const openNum = typeof inc.OpenTime === 'number' ? inc.OpenTime : parseFloat(inc.OpenTime);
-    const resNum  = typeof inc.ResolvedTime === 'number' ? inc.ResolvedTime : parseFloat(inc.ResolvedTime);
+    const resNum = typeof inc.ResolvedTime === 'number' ? inc.ResolvedTime : parseFloat(inc.ResolvedTime);
     if (!isNaN(openNum) && !isNaN(resNum) && resNum >= openNum) {
       // Excel serials are fractional days → × 1440 = total minutes elapsed (gross)
       const grossMin = (resNum - openNum) * 24 * 60;
-      const netMin   = Math.max(0, grossMin - netHoldMin);
+      const netMin = Math.max(0, grossMin - netHoldMin);
       resolutionHours = parseFloat((netMin / 60).toFixed(2));
     }
   }
@@ -1129,17 +1153,17 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
 
   // ── Display Reference (Req 7): Ticket if available, else Incident ID ──────
   const ticketVal = String(inc.TicketNumber || inc.Ticket || inc['Ticket #'] || '').trim();
-  const incIdVal  = String(inc.IncidentNumber || inc.IncidentID || inc['Incident Number'] || '').trim();
+  const incIdVal = String(inc.IncidentNumber || inc.IncidentID || inc['Incident Number'] || '').trim();
   const displayReference = (ticketVal && ticketVal.toLowerCase() !== 'n/a')
-    ? { type: 'Ticket',       value: ticketVal }
+    ? { type: 'Ticket', value: ticketVal }
     : { type: 'Incident ID', value: incIdVal || 'N/A' };
 
   return {
     ...inc,
     resolution_time_hours: resolutionHours,
-    sla_target_hours:      slaTargetHours,
-    sla_status:            slaStatus,
-    display_reference:     displayReference,
+    sla_target_hours: slaTargetHours,
+    sla_status: slaStatus,
+    display_reference: displayReference,
   };
 }
 
@@ -1150,7 +1174,7 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
 
 function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, customerName = 'Jubilant Foodworks Ltd (JFL)', reportPeriodMeta = null, periodOptions = {}, otherActivities = []) {
   const activeDevices = devices.filter(d => !d.__isStock);
-  const stockDevices  = devices.filter(d => d.__isStock);
+  const stockDevices = devices.filter(d => d.__isStock);
 
   const switches = activeDevices.filter(d =>
     /^sw$/i.test(d.DeviceType) || /switch/i.test(d.DeviceType)
@@ -1159,18 +1183,18 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
     /^ap$/i.test(d.DeviceType) || /access/i.test(d.DeviceType)
   );
 
-  const coreDevices    = activeDevices.filter(d => /core/i.test(d.CoreNonCore || '') && !/non/i.test(d.CoreNonCore || ''));
+  const coreDevices = activeDevices.filter(d => /core/i.test(d.CoreNonCore || '') && !/non/i.test(d.CoreNonCore || ''));
   const nonCoreDevices = activeDevices.filter(d => /non.?core/i.test(d.CoreNonCore || '') || !/core/i.test(d.CoreNonCore || ''));
 
   log(`Devices — Active: ${activeDevices.length}, Stock (Excluded from SLA): ${stockDevices.length}, Switches: ${switches.length}, APs: ${aps.length}`);
 
-  const execSummary  = buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName);
-  const siteSummary  = buildSiteSummary(devices, switches, aps, incidents, reportingPeriod);
-  const switchAn     = buildSwitchAnalytics(switches, incidents, periodOptions);
-  const apAn         = buildAPAnalytics(aps, incidents, activeDevices);
-  const incAn        = buildIncidentAnalytics(incidents, activeDevices);
-  const rcaAn        = buildRCAAnalytics(incidents);
-  const slaAn        = buildSLAAnalytics(activeDevices, incidents);
+  const execSummary = buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName);
+  const siteSummary = buildSiteSummary(devices, switches, aps, incidents, reportingPeriod);
+  const switchAn = buildSwitchAnalytics(switches, incidents, periodOptions);
+  const apAn = buildAPAnalytics(aps, incidents, activeDevices);
+  const incAn = buildIncidentAnalytics(incidents, activeDevices);
+  const rcaAn = buildRCAAnalytics(incidents);
+  const slaAn = buildSLAAnalytics(activeDevices, incidents);
 
   const activeLabel = reportPeriodMeta?.display_label || reportingPeriod;
 
@@ -1179,22 +1203,22 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
     reportingPeriod: activeLabel,
     // Requirement 4: Always-present report_period object in SSOT output
     report_period: reportPeriodMeta || {
-      start_date:    null,
-      end_date:      null,
-      period_type:   'custom',
+      start_date: null,
+      end_date: null,
+      period_type: 'custom',
       display_label: activeLabel,
     },
-    generatedAt:      new Date().toISOString(),
+    generatedAt: new Date().toISOString(),
     executiveSummary: execSummary,
     siteSummary,
-    switchAnalytics:  switchAn,
-    apAnalytics:      apAn,
-    incidentAnalytics:incAn,
-    rcaAnalytics:     rcaAn,
-    slaAnalytics:     slaAn,
+    switchAnalytics: switchAn,
+    apAnalytics: apAn,
+    incidentAnalytics: incAn,
+    rcaAnalytics: rcaAn,
+    slaAnalytics: slaAn,
     devices,
     incidents,
-    otherActivities:  otherActivities || [],
+    otherActivities: otherActivities || [],
   };
 }
 
@@ -1206,12 +1230,12 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const overallUptime = total > 0 ? avg(uptimes).toFixed(2) : '100.00';
 
   const deviceWithIncident = new Set(incidents.map(i => i.DeviceID));
-  const incidentFreeCount  = activeDevices.filter(d => !deviceWithIncident.has(d.DeviceID)).length;
-  const incidentFreePct    = total > 0 ? ((incidentFreeCount / total) * 100).toFixed(2) : '100.00';
+  const incidentFreeCount = activeDevices.filter(d => !deviceWithIncident.has(d.DeviceID)).length;
+  const incidentFreePct = total > 0 ? ((incidentFreeCount / total) * 100).toFixed(2) : '100.00';
 
   const healthScore = ruleEngine.calculateHealthScore(parseFloat(overallUptime), parseFloat(incidentFreePct));
   const slaBreaches = activeDevices.filter(d => d.__slaBreach).length;
-  const slaPct      = total > 0 ? (((total - slaBreaches) / total) * 100).toFixed(2) : '100.00';
+  const slaPct = total > 0 ? (((total - slaBreaches) / total) * 100).toFixed(2) : '100.00';
 
   const sevSplit = splitBySeverity(incidents);
   const sites = new Set(activeDevices.map(d => d.SiteID || d.Location).filter(Boolean));
@@ -1238,32 +1262,32 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const activeSlaTarget = activeDevices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
   return {
-    customerName:           customerName || 'Jubilant Foodworks Ltd (JFL)',
-    reportingPeriod:        reportingPeriod || 'User Selected Period',
-    totalSites:             sites.size,
-    totalDevices:           total,
-    totalStockDevices:      stockDevices.length,
-    totalSwitches:          switches.length,
-    totalAPs:               aps.length,
-    apIncidents:            apIncidents.length,
+    customerName: customerName || 'Jubilant Foodworks Ltd (JFL)',
+    reportingPeriod: reportingPeriod || 'User Selected Period',
+    totalSites: sites.size,
+    totalDevices: total,
+    totalStockDevices: stockDevices.length,
+    totalSwitches: switches.length,
+    totalAPs: aps.length,
+    apIncidents: apIncidents.length,
     uniqueAPsWithIncidents,
     primaryRcaSwitches,
     primaryRcaAPs,
-    primaryRca:             primaryRcaSwitches,
-    primaryRcaForAPs:       primaryRcaAPs,
+    primaryRca: primaryRcaSwitches,
+    primaryRcaForAPs: primaryRcaAPs,
     overallUptime,
     // ── Key uptime KPIs (SSOT) — exposed at executive summary level for dashboard KPI cards ──
     jflSwitchUptime,
     proactiveSwitchUptime,
-    incidentFreePercent:    incidentFreePct,
+    incidentFreePercent: incidentFreePct,
     healthScore,
-    healthLabel:            ruleEngine.getHealthLabel(healthScore),
-    slaCompliance:          slaPct,
-    slaTarget:              activeSlaTarget,
-    totalIncidents:         incidents.length,
-    criticalIncidents:      sevSplit.critical,
-    majorIncidents:         sevSplit.major,
-    minorIncidents:         sevSplit.minor,
+    healthLabel: ruleEngine.getHealthLabel(healthScore),
+    slaCompliance: slaPct,
+    slaTarget: activeSlaTarget,
+    totalIncidents: incidents.length,
+    criticalIncidents: sevSplit.critical,
+    majorIncidents: sevSplit.major,
+    minorIncidents: sevSplit.minor,
   };
 }
 
@@ -1271,7 +1295,6 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
 
 function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod) {
   const sitesMap = {};
-  const isQuarterlyMode = /quarter|q1|q2|q3|q4/i.test(String(reportingPeriod || ''));
 
   allDevices.forEach(d => {
     const rawSite = d.SiteID || d.Location || 'Unknown';
@@ -1306,132 +1329,145 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
       || devToSiteMap[inc.Hostname]
       || null;
 
-    // Only assign incident to a site that already has devices OR is a known valid site.
-    // Never create a new phantom 'Unknown' / 'Unassigned' entry purely from unresolved incidents.
     const VALID_SITES_SET = new Set(Object.keys(sitesMap));
     const targetSite = (site && !isGenericLocation(site) && VALID_SITES_SET.has(site)) ? site
       : (site && !isGenericLocation(site)) ? site
-      : null;
+        : null;
 
     if (targetSite) {
       if (!sitesMap[targetSite]) sitesMap[targetSite] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
       sitesMap[targetSite].incidents.push(inc);
     }
-    // Incidents with no resolvable site are intentionally dropped from site buckets.
-    // They still appear in the global incident totals via buildAllAnalytics.
   });
 
-  // Exclude internal phantom buckets: 'Unknown', 'Unassigned / Other', and any generic location strings.
-  // These are internal aggregation buckets only — never customer-facing site rows.
   const EXCLUDED_BUCKETS = new Set(['Unknown', 'Unassigned / Other', 'Unassigned', 'Other']);
+
   return Object.entries(sitesMap)
     .filter(([siteId]) => !isGenericLocation(siteId) && !EXCLUDED_BUCKETS.has(siteId))
     .map(([siteId, s]) => {
-    const swJflUps = s.switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
-    const swProUps = s.switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
+      const swJflUps = s.switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
+      const swProUps = s.switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
 
-    let proactiveSwitchUptime = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
-    let jflSwitchUptime       = swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00';
+      const proactiveSwitchUptime = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
+      const jflSwitchUptime = swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00';
 
-    if (siteId === 'Greater Noida' && s.incidents.some(i => String(i.IncidentNumber || i.TicketNumber || '').includes('45588') || (parseFloat(i.HoldTimeMin) > 2000))) {
-      proactiveSwitchUptime = '99.86';
-      jflSwitchUptime       = '65.11';
-    }
+      const apSerialsAndHosts = new Set([
+        ...s.aps.map(d => String(d.DeviceID || '').toLowerCase()),
+        ...s.aps.map(d => String(d.SerialNo || '').toLowerCase()),
+        ...s.aps.map(d => String(d.Hostname || '').toLowerCase())
+      ].filter(Boolean));
 
+      const apIncidentsAtSite = s.incidents.filter(i => {
+        const devId = String(i.DeviceID || '').toLowerCase();
+        const serial = String(i.SerialNo || '').toLowerCase();
+        const host = String(i.Hostname || '').toLowerCase();
+        const devType = String(i.DeviceType || '').toLowerCase();
 
-    const apSerialsAndHosts = new Set([
-      ...s.aps.map(d => String(d.DeviceID || '').toLowerCase()),
-      ...s.aps.map(d => String(d.SerialNo || '').toLowerCase()),
-      ...s.aps.map(d => String(d.Hostname || '').toLowerCase())
-    ].filter(Boolean));
+        return (
+          devType === 'ap' || devType.includes('access') ||
+          /\bap\b/i.test(host) || /\bap\b/i.test(devId) ||
+          (devId && apSerialsAndHosts.has(devId)) ||
+          (serial && apSerialsAndHosts.has(serial)) ||
+          (host && apSerialsAndHosts.has(host))
+        );
+      });
 
-    const apIncidentsAtSite = s.incidents.filter(i => {
-      const devId = String(i.DeviceID || '').toLowerCase();
-      const serial = String(i.SerialNo || '').toLowerCase();
-      const host = String(i.Hostname || '').toLowerCase();
-      const devType = String(i.DeviceType || '').toLowerCase();
+      const uniqueAPsWithIncidents = new Set(apIncidentsAtSite.map(i => i.DeviceID || i.SerialNo || i.Hostname).filter(Boolean)).size;
 
-      return (
-        devType === 'ap' || devType.includes('access') ||
-        /\bap\b/i.test(host) || /\bap\b/i.test(devId) ||
-        (devId && apSerialsAndHosts.has(devId)) ||
-        (serial && apSerialsAndHosts.has(serial)) ||
-        (host && apSerialsAndHosts.has(host))
-      );
-    });
+      const swIncidentsAtSite = s.incidents.filter(i => !apIncidentsAtSite.includes(i));
 
-    const uniqueAPsWithIncidents = new Set(apIncidentsAtSite.map(i => i.DeviceID || i.SerialNo || i.Hostname).filter(Boolean)).size;
+      const deviceUptimes = s.activeDevices.map(d => d.__effectiveUptime ?? 100);
+      const siteAvgUptime = deviceUptimes.length > 0 ? avg(deviceUptimes) : 100;
+      const siteIncDevIds = new Set(s.incidents.map(i => i.DeviceID));
+      const incFreeCount = s.activeDevices.filter(d => !siteIncDevIds.has(d.DeviceID)).length;
+      const incFreePct = s.activeDevices.length > 0 ? (incFreeCount / s.activeDevices.length) * 100 : 100;
+      const healthScore = ruleEngine.calculateHealthScore(siteAvgUptime, incFreePct);
 
-    const swIncidentsAtSite = s.incidents.filter(i => !apIncidentsAtSite.includes(i));
+      const swRcaBrk = classifyRCALocal(swIncidentsAtSite);
+      const topSwRcas = swRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
+      const primaryRcaSwitches = topSwRcas.length > 0 ? topSwRcas.join(' / ') : 'Stable Operations (No Incidents)';
 
-    const deviceUptimes = s.activeDevices.map(d => d.__effectiveUptime ?? 100);
-    const siteAvgUptime = deviceUptimes.length > 0 ? avg(deviceUptimes) : 100;
-    const siteIncDevIds = new Set(s.incidents.map(i => i.DeviceID));
-    const incFreeCount  = s.activeDevices.filter(d => !siteIncDevIds.has(d.DeviceID)).length;
-    const incFreePct    = s.activeDevices.length > 0 ? (incFreeCount / s.activeDevices.length) * 100 : 100;
-    const healthScore   = ruleEngine.calculateHealthScore(siteAvgUptime, incFreePct);
+      const apRcaBrk = classifyRCALocal(apIncidentsAtSite);
+      const topApRcas = apRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
+      const primaryRcaAPs = topApRcas.length > 0 ? topApRcas.join(' / ') : 'Stable Operations (No Incidents)';
+      const primaryRcaForAPs = primaryRcaAPs;
 
-    // Primary RCA for switches ONLY
-    const swRcaBrk = classifyRCALocal(swIncidentsAtSite);
-    const topSwRcas = swRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
-    const primaryRcaSwitches = topSwRcas.length > 0 ? topSwRcas.join(' / ') : 'Stable Operations (No Incidents)';
-
-    // Primary RCA specifically for AP incidents ONLY
-    const apRcaBrk = classifyRCALocal(apIncidentsAtSite);
-    const topApRcas = apRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
-    const primaryRcaAPs = topApRcas.length > 0 ? topApRcas.join(' / ') : 'Stable Operations (No Incidents)';
-    const primaryRcaForAPs = primaryRcaAPs;
-
-    // Overall Primary RCA for site (all incidents at site)
-    const allRcaBrk = classifyRCALocal(s.incidents);
-    const topAllRcas = allRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
-    const primaryRca = topSwRcas.length > 0
-      ? topSwRcas.join(' / ')
-      : (topAllRcas.length > 0
+      const allRcaBrk = classifyRCALocal(s.incidents);
+      const topAllRcas = allRcaBrk.filter(r => r.isTop && r.rca !== 'Unknown').map(r => r.rca);
+      const primaryRca = topSwRcas.length > 0
+        ? topSwRcas.join(' / ')
+        : (topAllRcas.length > 0
           ? topAllRcas.join(' / ')
           : (s.incidents.length > 0 ? 'Unknown' : 'Stable Operations (No Incidents)'));
 
-    const finalProUp = proactiveSwitchUptime;
-    const finalJflUp = jflSwitchUptime;
-    const finalApInc = apIncidentsAtSite.length;
-    const finalUnqAp = uniqueAPsWithIncidents;
-    const finalSwRca = primaryRcaSwitches;
-    const finalApRca = primaryRcaAPs;
-    const finalIncFr = incFreePct.toFixed(2);
-    const finalHlth  = healthScore;
-    const finalDevCount = s.devices.length; // Total inventory incl. stock — matches human report "No of devices" column
+      const finalProUp = proactiveSwitchUptime;
+      const finalJflUp = jflSwitchUptime;
+      const finalApInc = apIncidentsAtSite.length;
+      const finalUnqAp = uniqueAPsWithIncidents;
+      const finalSwRca = primaryRcaSwitches;
+      const finalApRca = primaryRcaAPs;
+      const finalIncFr = incFreePct.toFixed(2);
+      const finalHlth = healthScore;
+      const finalDevCount = s.devices.length;
 
-    return {
-      siteId,
-      deviceCount:            finalDevCount,       // Total devices (active + stock) — matches human report executive summary
-      totalDeviceCount:       s.devices.length,    // Total incl. stock (same as deviceCount)
-      activeDeviceCount:      s.activeDevices.length,  // Active SLA-eligible only — used for SLA/uptime calculations
-      stockCount:             s.stockDevices.length,
-      stockDevices:           s.stockDevices.map(d => ({
-        DeviceID: d.DeviceID,
-        SerialNo: d.SerialNo || d.DeviceID,
-        DeviceType: d.DeviceType || 'N/A',
-        Location: d.SiteID || d.Location,
-        Status: 'Stock Inventory'
-      })),
-      switchCount:            s.switches.length,
-      apCount:                s.aps.length,
-      proactiveSwitchUptime:  finalProUp,
-      jflSwitchUptime:        finalJflUp,
-      switchUptime:           finalJflUp,
-      overallUptime:          siteAvgUptime.toFixed(2),
-      incidentFreePercent:    finalIncFr,
-      uniqueAPsWithIncidents: finalUnqAp,
-      apIncidents:            finalApInc,
-      incidentCount:          s.incidents.length,
-      healthScore:            finalHlth,
-      healthLabel:            ruleEngine.getHealthLabel(finalHlth),
-      primaryRcaSwitches:     finalSwRca,
-      primaryRcaAPs:          finalApRca,
-      primaryRca:             finalSwRca,
-      primaryRcaForAPs:       finalApRca,
-    };
-  }).sort((a, b) => a.siteId.localeCompare(b.siteId));
+      return {
+        siteId,
+        deviceCount: finalDevCount,
+        totalDeviceCount: s.devices.length,
+        activeDeviceCount: s.activeDevices.length,
+        stockCount: s.stockDevices.length,
+        stockDevices: s.stockDevices.map(d => ({
+          DeviceID: d.DeviceID,
+          SerialNo: d.SerialNo || d.DeviceID,
+          DeviceType: d.DeviceType || 'N/A',
+          Location: d.SiteID || d.Location,
+          Status: 'Stock Inventory'
+        })),
+        switchCount: s.switches.length,
+        apCount: s.aps.length,
+        proactiveSwitchUptime: finalProUp,
+        jflSwitchUptime: finalJflUp,
+        proactiveTicketAvg: (() => {
+          const swIncRows = s.incidents.filter(i =>
+            i.DeviceType && /^sw$/i.test(String(i.DeviceType).trim())
+          );
+          const vals = swIncRows
+            .map(i => normaliseUptimePct(i.ProactiveUptimePct))
+            .filter(v => v !== null && !isNaN(v) && v > 0);
+          return vals.length > 0
+            ? avg(vals).toFixed(2)
+            : (swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00');
+        })(),
+        jflTicketAvg: (() => {
+          const swIncRows = s.incidents.filter(i =>
+            i.DeviceType && /^sw$/i.test(String(i.DeviceType).trim())
+          );
+          const vals = swIncRows
+            .map(i => normaliseUptimePct(i.JFLUptimePct))
+            .filter(v => v !== null && !isNaN(v) && v > 0);
+          return vals.length > 0
+            ? avg(vals).toFixed(2)
+            : (swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00');
+        })(),
+        ticketCountWithUptime: s.incidents.filter(i =>
+          i.DeviceType && /^sw$/i.test(String(i.DeviceType).trim()) &&
+          normaliseUptimePct(i.ProactiveUptimePct) !== null
+        ).length,
+        deviceCountWithUptime: s.switches.length,
+        switchUptime: finalJflUp,
+        overallUptime: siteAvgUptime.toFixed(2),
+        incidentFreePercent: finalIncFr,
+        uniqueAPsWithIncidents: finalUnqAp,
+        apIncidents: finalApInc,
+        incidentCount: s.incidents.length,
+        healthScore: finalHlth,
+        healthLabel: ruleEngine.getHealthLabel(finalHlth),
+        primaryRcaSwitches: finalSwRca,
+        primaryRcaAPs: finalApRca,
+        primaryRca: finalSwRca,
+        primaryRcaForAPs: finalApRca,
+      };
+    }).sort((a, b) => a.siteId.localeCompare(b.siteId));
 }
 
 // ── Switch Analytics ───────────────────────────────────────────────────────
@@ -1532,29 +1568,29 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
   // Per-incident SLA status table for Switch Analytics
   // Uses sla_status pre-computed by computeIncidentEnrichment — frontend must NOT recalculate.
   const incidentSLADetails = switchIncidents.map(inc => ({
-    Device:             inc.DeviceID || 'N/A',
-    SerialNo:           inc.SerialNo || inc.DeviceID || 'N/A',
-    Location:          inc.SiteID || inc.Location || 'N/A',
-    IncidentID:        inc.IncidentNumber || inc.IncidentID || 'N/A',
+    Device: inc.DeviceID || 'N/A',
+    SerialNo: inc.SerialNo || inc.DeviceID || 'N/A',
+    Location: inc.SiteID || inc.Location || 'N/A',
+    IncidentID: inc.IncidentNumber || inc.IncidentID || 'N/A',
     display_reference: inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
     resolution_time_hours: inc.resolution_time_hours,
-    sla_target_hours:  inc.sla_target_hours,
-    sla_status:        inc.sla_status || null,
-    RCA:               inc.RCA || inc['RCA 2'] || 'Unknown',  // PART 1: Primary RCA driver for this incident
+    sla_target_hours: inc.sla_target_hours,
+    sla_status: inc.sla_status || null,
+    RCA: inc.RCA || inc['RCA 2'] || 'Unknown',  // PART 1: Primary RCA driver for this incident
   }));
 
   // SLA summary aggregation for Switch incidents (incident-resolution SLA, not uptime SLA)
   // 'Open' = unresolved (no close date); 'No Timing Data' = closed but timing unavailable.
-  const slaMet      = incidentSLADetails.filter(i => i.sla_status === 'SLA Met').length;
+  const slaMet = incidentSLADetails.filter(i => i.sla_status === 'SLA Met').length;
   const slaBreached = incidentSLADetails.filter(i => i.sla_status === 'SLA Breached').length;
-  const slaOpen     = incidentSLADetails.filter(i => i.sla_status === 'Open').length;
-  const slaUnknown  = incidentSLADetails.filter(i => !i.sla_status && i.sla_status !== 'Open').length;
-  const slaSummary  = {
-    total:    switchIncidents.length,
-    met:      slaMet,
+  const slaOpen = incidentSLADetails.filter(i => i.sla_status === 'Open').length;
+  const slaUnknown = incidentSLADetails.filter(i => !i.sla_status && i.sla_status !== 'Open').length;
+  const slaSummary = {
+    total: switchIncidents.length,
+    met: slaMet,
     breached: slaBreached,
-    open:     slaOpen,
-    unknown:  slaUnknown,
+    open: slaOpen,
+    unknown: slaUnknown,
     percentMet: switchIncidents.length > 0
       ? ((slaMet / switchIncidents.length) * 100).toFixed(1)
       : '100.0',
@@ -1565,20 +1601,20 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
 
   return {
     available: true,
-    totalSwitches:        switches.length,
-    coreSwitches:         coreSwitches.length,
-    nonCoreSwitches:      nonCoreSwitches.length,
-    coreUptime:           coreUptimes.length > 0 ? avg(coreUptimes).toFixed(2) : '100.00',
-    nonCoreUptime:        nonCoreUptimes.length > 0 ? avg(nonCoreUptimes).toFixed(2) : '100.00',
-    overallUptime:        allUptimes.length > 0 ? avg(allUptimes).toFixed(2) : '100.00',
-    switchIncidents:      switchIncidents.length,
+    totalSwitches: switches.length,
+    coreSwitches: coreSwitches.length,
+    nonCoreSwitches: nonCoreSwitches.length,
+    coreUptime: coreUptimes.length > 0 ? avg(coreUptimes).toFixed(2) : '100.00',
+    nonCoreUptime: nonCoreUptimes.length > 0 ? avg(nonCoreUptimes).toFixed(2) : '100.00',
+    overallUptime: allUptimes.length > 0 ? avg(allUptimes).toFixed(2) : '100.00',
+    switchIncidents: switchIncidents.length,
     totalSwitchIncidents: switchIncidents.length,
     top10SwitchOutages,
     rackwiseUptime,
     expandedRackwiseUptime,
     periodLabel,
     periodType,
-    slaTarget:        activeSlaTarget,  // JFL Switch Uptime SLA target (%)
+    slaTarget: activeSlaTarget,  // JFL Switch Uptime SLA target (%)
     incidentSLADetails,                 // Per-incident Resolution SLA status table
     slaSummary,                         // Aggregated SLA Met / Breached counts
     rcaBreakdown,                       // RCA breakdown for switch incidents
@@ -1634,34 +1670,34 @@ function buildAPAnalytics(aps, incidents, allDevices) {
 
   return {
     available: true,
-    totalAPs:               aps.length,
-    apAverageUptime:        uptimes.length > 0 ? avg(uptimes).toFixed(2) : '100.00',
-    apIncidents:            apIncidents.length,
-    totalAPIncidentRows:    apIncidents.length,
+    totalAPs: aps.length,
+    apAverageUptime: uptimes.length > 0 ? avg(uptimes).toFixed(2) : '100.00',
+    apIncidents: apIncidents.length,
+    totalAPIncidentRows: apIncidents.length,
     uniqueAPsWithIncidents: Object.keys(apIncidentMap).length,
     top10APOutages,
     rcaBreakdown: classifyRCALocal(apIncidents),
     // Per-incident SLA status table for AP Analytics
     // Uses sla_status pre-computed by computeIncidentEnrichment — frontend must NOT recalculate.
     incidentSLADetails: apIncidents.map(inc => ({
-      Device:             inc.DeviceID || 'N/A',
-      SerialNo:           inc.SerialNo || inc.DeviceID || 'N/A',
-      Location:          inc.SiteID || inc.Location || 'N/A',
-      IncidentID:        inc.IncidentNumber || inc.IncidentID || 'N/A',
+      Device: inc.DeviceID || 'N/A',
+      SerialNo: inc.SerialNo || inc.DeviceID || 'N/A',
+      Location: inc.SiteID || inc.Location || 'N/A',
+      IncidentID: inc.IncidentNumber || inc.IncidentID || 'N/A',
       display_reference: inc.display_reference || { type: 'Incident ID', value: inc.IncidentNumber || 'N/A' },
       resolution_time_hours: inc.resolution_time_hours,
-      sla_target_hours:  inc.sla_target_hours,
-      sla_status:        inc.sla_status || null,
-      RCA:               inc.RCA || inc['RCA 2'] || 'Unknown',  // PART 1: Primary RCA driver for this incident
+      sla_target_hours: inc.sla_target_hours,
+      sla_status: inc.sla_status || null,
+      RCA: inc.RCA || inc['RCA 2'] || 'Unknown',  // PART 1: Primary RCA driver for this incident
     })),
     // SLA summary aggregation for AP incidents
     // 'Open' status = no resolution time yet; counted under 'No Timing Data'.
     slaSummary: (() => {
       const details = apIncidents;
-      const met      = details.filter(i => i.sla_status === 'SLA Met').length;
+      const met = details.filter(i => i.sla_status === 'SLA Met').length;
       const breached = details.filter(i => i.sla_status === 'SLA Breached').length;
-      const open     = details.filter(i => i.sla_status === 'Open').length;
-      const unknown  = details.filter(i => !i.sla_status && i.sla_status !== 'Open').length;
+      const open = details.filter(i => i.sla_status === 'Open').length;
+      const unknown = details.filter(i => !i.sla_status && i.sla_status !== 'Open').length;
       return {
         total: details.length,
         met, breached, open, unknown,
@@ -1716,37 +1752,37 @@ function buildIncidentAnalytics(incidents, devices) {
     if (!ct) return;
     const d = typeof ct === 'number' ? excelDateToJS(ct) : new Date(ct);
     if (isNaN(d.getTime())) return;
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     monthMap[key] = (monthMap[key] || 0) + 1;
   });
-  const monthlyTrend = Object.entries(monthMap).sort(([a],[b]) => a.localeCompare(b))
+  const monthlyTrend = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b))
     .map(([month, count]) => ({ month, count }));
 
   const siteMap = {};
-  incidents.forEach(i => { const s = i.SiteID||i.Location||'Unknown'; siteMap[s]=(siteMap[s]||0)+1; });
-  const siteWiseIncidents = Object.entries(siteMap).map(([siteId,count])=>({siteId,count})).sort((a,b)=>b.count-a.count);
+  incidents.forEach(i => { const s = i.SiteID || i.Location || 'Unknown'; siteMap[s] = (siteMap[s] || 0) + 1; });
+  const siteWiseIncidents = Object.entries(siteMap).map(([siteId, count]) => ({ siteId, count })).sort((a, b) => b.count - a.count);
 
   const devMap = {};
-  incidents.forEach(i => { const d = i.DeviceID||'Unknown'; devMap[d]=(devMap[d]||0)+1; });
-  const deviceWiseIncidents = Object.entries(devMap).map(([DeviceID,count])=> {
+  incidents.forEach(i => { const d = i.DeviceID || 'Unknown'; devMap[d] = (devMap[d] || 0) + 1; });
+  const deviceWiseIncidents = Object.entries(devMap).map(([DeviceID, count]) => {
     const matchInc = incidents.find(i => i.DeviceID === DeviceID);
     return {
       DeviceID,
       SerialNo: matchInc?.SerialNo || DeviceID,
       count,
     };
-  }).sort((a,b)=>b.count-a.count).slice(0,20);
+  }).sort((a, b) => b.count - a.count).slice(0, 20);
 
   return {
-    totalIncidents:     incidents.length,
-    criticalIncidents:  sevSplit.critical,
-    majorIncidents:     sevSplit.major,
-    minorIncidents:     sevSplit.minor,
+    totalIncidents: incidents.length,
+    criticalIncidents: sevSplit.critical,
+    majorIncidents: sevSplit.major,
+    minorIncidents: sevSplit.minor,
     mttrHours,
     monthlyTrend,
     siteWiseIncidents,
     deviceWiseIncidents,
-    rcaBreakdown:       classifyRCALocal(incidents),
+    rcaBreakdown: classifyRCALocal(incidents),
   };
 }
 
@@ -1758,9 +1794,9 @@ function buildRCAAnalytics(incidents) {
   const topRcas = rawBreakdown.filter(r => r.isTop).map(r => r.rca);
 
   return {
-    totalIncidents:  incidents.length,
-    topRca:          topRcas.length > 0 ? topRcas.join(' / ') : 'None',
-    breakdown:       rawBreakdown,
+    totalIncidents: incidents.length,
+    topRca: topRcas.length > 0 ? topRcas.join(' / ') : 'None',
+    breakdown: rawBreakdown,
     rawBreakdown,
     standardBreakdown,
   };
@@ -1769,24 +1805,26 @@ function buildRCAAnalytics(incidents) {
 // ── SLA Analytics ──────────────────────────────────────────────────────────
 
 function buildSLAAnalytics(devices, incidents) {
-  const total    = devices.length;
+  const total = devices.length;
   const breaches = devices.filter(d => d.__slaBreach).length;
-  const overallSLAPercent = total > 0 ? (((total-breaches)/total)*100).toFixed(2) : '100.00';
+  const overallSLAPercent = total > 0 ? (((total - breaches) / total) * 100).toFixed(2) : '100.00';
   const activeSlaTarget = devices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
   const siteGroups = {};
   devices.forEach(d => {
-    const site = d.SiteID||d.Location||'Unknown';
+    const site = d.SiteID || d.Location || 'Unknown';
     if (!siteGroups[site]) siteGroups[site] = [];
     siteGroups[site].push(d);
   });
   const siteSLA = Object.entries(siteGroups).map(([siteId, devs]) => {
-    const breach = devs.filter(d=>d.__slaBreach).length;
-    return { siteId, total: devs.length, compliant: devs.length-breach, breaching: breach,
-      slaPercent: ((devs.length-breach)/devs.length*100).toFixed(2) };
-  }).sort((a,b) => parseFloat(a.slaPercent)-parseFloat(b.slaPercent));
+    const breach = devs.filter(d => d.__slaBreach).length;
+    return {
+      siteId, total: devs.length, compliant: devs.length - breach, breaching: breach,
+      slaPercent: ((devs.length - breach) / devs.length * 100).toFixed(2)
+    };
+  }).sort((a, b) => parseFloat(a.slaPercent) - parseFloat(b.slaPercent));
 
-  const deviceSLA = devices.filter(d=>d.__slaBreach).map(d => ({
+  const deviceSLA = devices.filter(d => d.__slaBreach).map(d => ({
     DeviceID: d.__combinedSLASlot || d.DeviceID,
     SerialNo: d.SerialNo || d.DeviceID,
     Hostname: d.Hostname || '',
@@ -1794,7 +1832,7 @@ function buildSLAAnalytics(devices, incidents) {
     uptime: d.__effectiveUptime,
     slaTarget: activeSlaTarget,
     gap: (activeSlaTarget - d.__effectiveUptime).toFixed(2),
-  })).sort((a,b)=>a.uptime-b.uptime);
+  })).sort((a, b) => a.uptime - b.uptime);
 
   const monthDevMap = {};
   incidents.forEach(inc => {
@@ -1802,22 +1840,22 @@ function buildSLAAnalytics(devices, incidents) {
     if (!ct) return;
     const d = typeof ct === 'number' ? excelDateToJS(ct) : new Date(ct);
     if (isNaN(d.getTime())) return;
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     if (!monthDevMap[key]) monthDevMap[key] = new Set();
     if (inc.DeviceID) monthDevMap[key].add(inc.DeviceID);
   });
-  const monthlySLATrend = Object.entries(monthDevMap).sort(([a],[b])=>a.localeCompare(b))
+  const monthlySLATrend = Object.entries(monthDevMap).sort(([a], [b]) => a.localeCompare(b))
     .map(([month, devIds]) => ({
       month,
-      slaPercent: total > 0 ? (((total-devIds.size)/total)*100).toFixed(2) : '100.00',
+      slaPercent: total > 0 ? (((total - devIds.size) / total) * 100).toFixed(2) : '100.00',
     }));
 
   return {
     overallSLAPercent,
-    slaTarget:         activeSlaTarget,
-    totalDevices:      total,
-    compliantDevices:  total - breaches,
-    breachingDevices:  breaches,
+    slaTarget: activeSlaTarget,
+    totalDevices: total,
+    compliantDevices: total - breaches,
+    breachingDevices: breaches,
     siteSLA,
     deviceSLA,
     monthlySLATrend,
@@ -1833,7 +1871,7 @@ function buildSLAAnalytics(devices, incidents) {
 // Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
-function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
 
 
 
@@ -1866,13 +1904,13 @@ function classifyRCALocal(incidentRows) {
     rca, count,
     percentage: ((count / incidentRows.length) * 100).toFixed(1) + '%',
     isTop: topEntry && rca === topEntry[0],
-    tied:  false,
+    tied: false,
   }));
 }
 
 function writeDataQualityReport(outputDir, devices, incidents, allLocMap, log) {
   const lines = ['# Data Quality Report', ''];
-  lines.push('## Active Devices vs Stock Inventory', '', `- Active Operational Devices: **${devices.filter(d=>!d.__isStock).length}**`, `- Stock Inventory (Excluded from SLA): **${devices.filter(d=>d.__isStock).length}**`, '');
+  lines.push('## Active Devices vs Stock Inventory', '', `- Active Operational Devices: **${devices.filter(d => !d.__isStock).length}**`, `- Stock Inventory (Excluded from SLA): **${devices.filter(d => d.__isStock).length}**`, '');
   lines.push('## Incidents', '', `- Total Incidents: **${incidents.length}**`, '');
   writeFile(outputDir, 'data_quality_report.md', lines.join('\n'));
 }
@@ -1883,7 +1921,7 @@ function writeFile(outputDir, filename, content) {
 
 function createLogger(outputDir) {
   const logPath = path.join(outputDir, 'processing_log.md');
-  const lines   = ['# Processing Log', ''];
+  const lines = ['# Processing Log', ''];
   return (msg) => {
     const ts = new Date().toISOString();
     console.log(`[processData] ${ts} ${msg}`);
@@ -1935,7 +1973,7 @@ function filterDashboardBySite(data, siteFilter) {
   );
 
   const activeDevices = filteredDevices.filter((d) => !d.__isStock);
-  const stockDevices  = filteredDevices.filter((d) => d.__isStock);
+  const stockDevices = filteredDevices.filter((d) => d.__isStock);
 
   // FIX: Use the same device-type regex as buildAllAnalytics for consistency.
   // Old code used strict === 'switch' which excluded 'SW', 'Switch', etc.
@@ -1947,7 +1985,7 @@ function filterDashboardBySite(data, siteFilter) {
 
   const reportingPeriod = data.reportingPeriod || 'Q1 FY2026';
   const customerName = data.customerName || data.executiveSummary?.customerName || 'Jubilant Foodworks Ltd (JFL)';
-  const execSummary  = buildExecutiveSummary(activeDevices, switches, aps, enrichedIncidents, stockDevices, reportingPeriod, customerName);
+  const execSummary = buildExecutiveSummary(activeDevices, switches, aps, enrichedIncidents, stockDevices, reportingPeriod, customerName);
 
   // If site filter yields no filteredDevices directly from devices array, check siteSummary for pre-aggregated site counts
   const targetSiteSummary = (data.siteSummary || []).find((s) => normalizeSiteName(s.siteId).toLowerCase() === normTarget);
@@ -1966,32 +2004,32 @@ function filterDashboardBySite(data, siteFilter) {
 
   // Preserve original period options from the full dataset so uptime labels/targets remain correct.
   const periodOptions = {
-    periodLabel:  data.switchAnalytics?.periodLabel  || 'Monthly Uptime %',
-    periodType:   data.switchAnalytics?.periodType   || 'monthly',
-    startDate:    data.report_period?.start_date     || null,
-    endDate:      data.report_period?.end_date       || null,
+    periodLabel: data.switchAnalytics?.periodLabel || 'Monthly Uptime %',
+    periodType: data.switchAnalytics?.periodType || 'monthly',
+    startDate: data.report_period?.start_date || null,
+    endDate: data.report_period?.end_date || null,
   };
-  const switchAn     = buildSwitchAnalytics(switches, enrichedIncidents, periodOptions);
-  const apAn         = buildAPAnalytics(aps, enrichedIncidents, activeDevices);
-  const incAn        = buildIncidentAnalytics(enrichedIncidents, activeDevices);
-  const rcaAn        = buildRCAAnalytics(enrichedIncidents);
-  const slaAn        = buildSLAAnalytics(activeDevices, enrichedIncidents);
+  const switchAn = buildSwitchAnalytics(switches, enrichedIncidents, periodOptions);
+  const apAn = buildAPAnalytics(aps, enrichedIncidents, activeDevices);
+  const incAn = buildIncidentAnalytics(enrichedIncidents, activeDevices);
+  const rcaAn = buildRCAAnalytics(enrichedIncidents);
+  const slaAn = buildSLAAnalytics(activeDevices, enrichedIncidents);
 
   return {
     ...data,
     siteFilterApplied: normalizeSiteName(siteFilter),
     // Always preserve the original report_period from the full dataset — never lose period label on site drill-down.
-    report_period:    data.report_period || null,
-    reportingPeriod:  data.reportingPeriod || '',
+    report_period: data.report_period || null,
+    reportingPeriod: data.reportingPeriod || '',
     executiveSummary: execSummary,
-    siteSummary:      data.siteSummary || [],
-    switchAnalytics:  switchAn,
-    apAnalytics:      apAn,
-    incidentAnalytics:incAn,
-    rcaAnalytics:     rcaAn,
-    slaAnalytics:     slaAn,
-    devices:          filteredDevices,
-    incidents:        enrichedIncidents,
+    siteSummary: data.siteSummary || [],
+    switchAnalytics: switchAn,
+    apAnalytics: apAn,
+    incidentAnalytics: incAn,
+    rcaAnalytics: rcaAn,
+    slaAnalytics: slaAn,
+    devices: filteredDevices,
+    incidents: enrichedIncidents,
   };
 }
 

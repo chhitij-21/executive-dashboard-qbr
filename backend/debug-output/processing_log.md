@@ -1,0 +1,26 @@
+# Processing Log
+
+- `2026-10-03T13:57:39.655Z` JFL pipeline started (Period: 1 September 2026 – 30 September 2026, periodType: monthly, startDate: 2026-09-01, endDate: 2026-09-30)
+- `2026-10-03T13:57:39.664Z` Rules loaded from: rules.yaml. Uptime SLA Target: 99.9% | Incident Resolution SLA: 2h
+- `2026-10-03T13:57:39.739Z` Incident file parsed — sheets: Raw-1 sep to 31 sep 26+Rollover
+- `2026-10-03T13:57:39.739Z` Inventory file parsed — sheets: Sheet1
+- `2026-10-03T13:57:39.740Z` Incident sheets detected: incidentSheet=Raw-1 sep to 31 sep 26+Rollover, uptimeSheet=null
+- `2026-10-03T13:57:39.741Z` Raw incident rows: 253
+- `2026-10-03T13:57:39.741Z` Uptime summary devices: 0
+- `2026-10-03T13:57:39.741Z` All Location sheet rows: 0
+- `2026-10-03T13:57:39.750Z` Inventory devices merged: 444 from 1 sheets
+- `2026-10-03T13:57:39.800Z` Incidents for target customer (excluding Change Requests): 250
+- `2026-10-03T13:57:39.800Z` Other Activity tickets extracted: 3
+- `2026-10-03T13:57:39.802Z` Date-range filter [2026-09-01 → 2026-09-30]: 250 incidents within range (out of 250 total)
+- `2026-10-03T13:57:39.807Z` Detected 5 hardware replacement swap pair(s). Linking swapped stock devices to primary SLA entries.
+- `2026-10-03T13:57:39.808Z` Devices enriched with uptime. Stock devices: 73. Breaching SLA: 51
+- `2026-10-03T13:57:39.809Z` Incidents enriched with sla_status and display_reference
+- `2026-10-03T13:57:39.809Z` Building analytics sections...
+- `2026-10-03T13:57:39.810Z` Devices — Active: 371, Stock (Excluded from SLA): 73, Switches: 141, APs: 224
+- `2026-10-03T13:57:39.824Z` Analytics complete
+- `2026-10-03T13:57:39.825Z` Data validation passed — all RCA breakdown sums and SLA status counts are consistent.
+- `2026-10-03T13:57:39.825Z` Generating Executive QBR PDF Report...
+- `2026-10-03T13:57:40.918Z` PDF generated: debug-output\JFL_QBR_1791035859825.pdf
+- `2026-10-03T13:57:41.070Z` Dashboard JSON saved to job folder
+- `2026-10-03T13:57:41.074Z` Dashboard JSON also saved to canonical path: C:\Users\Chhitij\Desktop\New folder\Executive-Dashboard-QBR-Generator\backend\data\dashboard_data.json
+- `2026-10-03T13:57:41.075Z` Pipeline complete ✓

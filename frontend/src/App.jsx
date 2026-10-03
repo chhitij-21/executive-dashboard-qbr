@@ -275,6 +275,16 @@ function MainPortal() {
     }
 
     const exec = activeDashboardData.executiveSummary || {};
+    const exec = activeDashboardData.executiveSummary || {};
+    const _ticketAvg = (field, fallback) => {
+      const vals = (siteSummary || [])
+        .map(s => parseFloat(s[field]))
+        .filter(n => !isNaN(n));
+      if (vals.length === 0) return fallback;
+      return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+    };
+    const _proTicketAvg = _ticketAvg('proactiveTicketAvg', exec.proactiveSwitchUptime);
+    const _jflTicketAvg = _ticketAvg('jflTicketAvg', exec.jflSwitchUptime);
     const siteSummary = activeDashboardData.siteSummary || [];
     const switchAn = activeDashboardData.switchAnalytics || {};
     const apAn = activeDashboardData.apAnalytics || {};
@@ -318,9 +328,9 @@ function MainPortal() {
               Location Context: <strong>{activeLocation}</strong> • Period:{' '}
               <strong>
                 {activeDashboardData?.report_period?.display_label ||
-                 exec.reportingPeriod ||
-                 activeDashboardData?.reportingPeriod ||
-                 'User Selected Period'}
+                  exec.reportingPeriod ||
+                  activeDashboardData?.reportingPeriod ||
+                  'User Selected Period'}
               </strong>
             </p>
           </div>
@@ -398,8 +408,8 @@ function MainPortal() {
               } />
               <KpiCard title="Total Sites" value={exec.totalSites} />
               <KpiCard title="Active Operational Devices" value={exec.totalDevices} />
-              <KpiCard title="Stock Inventory Devices" value={exec.totalStockDevices ?? 0} />
-              <KpiCard title="Total Switches" value={exec.totalSwitches} />
+              <KpiCard title="JFL Switch Uptime" value={_jflTicketAvg} unit="%" />
+              <KpiCard title="Proactive Switch Uptime" value={_proTicketAvg} unit="%" />
               <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} />
               <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} />
               <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} />
@@ -634,15 +644,14 @@ function MainPortal() {
                                 <span style={{
                                   padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
                                   background:
-                                    row.sla_status === 'SLA Met'     ? '#dcfce7' :
-                                    row.sla_status === 'Open'         ? '#eff6ff' : '#fee2e2',
+                                    row.sla_status === 'SLA Met' ? '#dcfce7' :
+                                      row.sla_status === 'Open' ? '#eff6ff' : '#fee2e2',
                                   color:
-                                    row.sla_status === 'SLA Met'     ? '#15803d' :
-                                    row.sla_status === 'Open'         ? '#1d4ed8' : '#991b1b',
-                                  border: `1px solid ${
-                                    row.sla_status === 'SLA Met'     ? '#86efac' :
-                                    row.sla_status === 'Open'         ? '#bfdbfe' : '#fca5a5'
-                                  }`,
+                                    row.sla_status === 'SLA Met' ? '#15803d' :
+                                      row.sla_status === 'Open' ? '#1d4ed8' : '#991b1b',
+                                  border: `1px solid ${row.sla_status === 'SLA Met' ? '#86efac' :
+                                    row.sla_status === 'Open' ? '#bfdbfe' : '#fca5a5'
+                                    }`,
                                 }}>{row.sla_status}</span>
                               ) : (
                                 <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, background: '#f1f5f9', color: 'var(--text-secondary)', border: '1px solid #e2e8f0' }}>No Data</span>
@@ -785,15 +794,14 @@ function MainPortal() {
                                 <span style={{
                                   padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
                                   background:
-                                    row.sla_status === 'SLA Met'     ? '#dcfce7' :
-                                    row.sla_status === 'Open'         ? '#eff6ff' : '#fee2e2',
+                                    row.sla_status === 'SLA Met' ? '#dcfce7' :
+                                      row.sla_status === 'Open' ? '#eff6ff' : '#fee2e2',
                                   color:
-                                    row.sla_status === 'SLA Met'     ? '#15803d' :
-                                    row.sla_status === 'Open'         ? '#1d4ed8' : '#991b1b',
-                                  border: `1px solid ${
-                                    row.sla_status === 'SLA Met'     ? '#86efac' :
-                                    row.sla_status === 'Open'         ? '#bfdbfe' : '#fca5a5'
-                                  }`,
+                                    row.sla_status === 'SLA Met' ? '#15803d' :
+                                      row.sla_status === 'Open' ? '#1d4ed8' : '#991b1b',
+                                  border: `1px solid ${row.sla_status === 'SLA Met' ? '#86efac' :
+                                    row.sla_status === 'Open' ? '#bfdbfe' : '#fca5a5'
+                                    }`,
                                 }}>{row.sla_status}</span>
                               ) : (
                                 <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, background: '#f1f5f9', color: 'var(--text-secondary)', border: '1px solid #e2e8f0' }}>No Data</span>
@@ -903,10 +911,9 @@ function MainPortal() {
               <KpiCard title="Overall SLA Compliance" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" />
               {/* Device SLA Status: single clean Met/Breached indicator — no raw % target shown */}
               <div className="kpi-card" style={{
-                borderLeft: `4px solid ${
-                  parseFloat(slaAn.overallSLAPercent ?? 100) >= parseFloat(slaAn.slaTarget ?? 99.3)
-                    ? '#22c55e' : '#ef4444'
-                }`,
+                borderLeft: `4px solid ${parseFloat(slaAn.overallSLAPercent ?? 100) >= parseFloat(slaAn.slaTarget ?? 99.3)
+                  ? '#22c55e' : '#ef4444'
+                  }`,
               }}>
                 <span className="kpi-label">Device SLA Status</span>
                 <span className="kpi-value" style={{
