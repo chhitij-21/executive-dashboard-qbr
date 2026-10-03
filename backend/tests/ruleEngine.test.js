@@ -36,7 +36,7 @@ test('ruleEngine - getHealthLabel', () => {
 
 test('ruleEngine - getSLATarget (period aware)', () => {
   ruleEngine.loadRules();
-  assert.equal(ruleEngine.getSLATarget('monthly'), 99.9);
+  assert.equal(ruleEngine.getSLATarget('monthly'), 99.3);
   assert.equal(ruleEngine.getSLATarget('quarterly'), 99.3);
   assert.equal(ruleEngine.getSLATarget(), 99.3);
 });

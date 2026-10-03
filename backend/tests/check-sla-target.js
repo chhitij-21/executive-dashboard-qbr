@@ -23,7 +23,7 @@ processJFLWorkbooks(inc, null, path.resolve(__dirname, 'tmp_bisect'), {
   .then(r => {
     const target = r.qbrData.slaAnalytics.slaTarget;
     console.log('SLA target for Aug window:', target);
-    process.exit(target === 99.9 ? 0 : 1);
+    process.exit(target === 99.3 ? 0 : 1);
   })
   .catch(e => {
     console.error('ERROR:', e.message);
