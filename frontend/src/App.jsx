@@ -275,7 +275,6 @@ function MainPortal() {
     }
 
     const exec = activeDashboardData.executiveSummary || {};
-    const exec = activeDashboardData.executiveSummary || {};
     const _ticketAvg = (field, fallback) => {
       const vals = (siteSummary || [])
         .map(s => parseFloat(s[field]))
