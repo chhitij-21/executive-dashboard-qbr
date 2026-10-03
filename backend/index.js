@@ -44,7 +44,7 @@ app.use(cors({
       const isAllowed = ALLOWED_ORIGINS.some((o) => origin === o || origin.startsWith(o));
 
       if (isLocalhost || isAllowed) return callback(null, true);
-    } catch (e) {}
+    } catch (e) { }
 
     callback(new Error(`CORS: Origin ${origin} is not allowed.`));
   },
@@ -100,7 +100,7 @@ function heavyRateLimit(req, res, next) {
   }
   next();
 }
-
+require('./routes/validationRoutes').mount(app);
 /**
  * validateDateRange — Server-side date validation for report generation requests.
  * Enforces all four rules from Requirement 2:
@@ -124,7 +124,7 @@ function validateDateRange(startDate, endDate) {
   if (errors.length > 0) return { valid: false, errors };
 
   const sd = new Date(startDate.trim() + 'T00:00:00Z');
-  const ed = new Date(endDate.trim()   + 'T23:59:59Z');
+  const ed = new Date(endDate.trim() + 'T23:59:59Z');
 
   if (isNaN(sd.getTime())) {
     errors.push(`Invalid start date: "${startDate}". Please provide a valid calendar date.`);
@@ -203,7 +203,7 @@ const REPORTS_DIR = BASE_STORAGE_DIR
       try {
         fs.unlinkSync(target);
         console.log(`[server] Privacy Purge: Deleted root project file: ${path.basename(target)}`);
-      } catch (e) {}
+      } catch (e) { }
     }
   });
 });
@@ -384,7 +384,7 @@ app.post(['/api/analyze-excel', '/analyze-excel'], requireAuth, heavyRateLimit, 
     const analysis = analyzeWorkbookSchema(filePath);
 
     setTimeout(() => {
-      try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
+      try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) { }
     }, 2000);
 
     res.json({ success: true, ...analysis });
@@ -425,7 +425,7 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
     }
 
     if (dPath && fs.existsSync(dPath)) {
-      try { qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8')); } catch (e) {}
+      try { qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8')); } catch (e) { }
     }
 
     const { processChatQuery } = require('./services/aiChatService');
@@ -442,8 +442,8 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
 // Streams Think->Act->Observe->Repeat events via Server-Sent Events.
 // The frontend EventSource consumes these events to render each reasoning step live.
 app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
-  const prompt  = req.query.prompt  || '';
-  const jobId   = req.query.jobId   || 'latest';
+  const prompt = req.query.prompt || '';
+  const jobId = req.query.jobId || 'latest';
   const maxIter = parseInt(req.query.maxIterations, 10) || 4;
 
   if (!prompt.trim()) {
@@ -470,7 +470,7 @@ app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
   if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
     const history = historyService.getHistory();
     job = history.find((h) => h.status === 'completed') ||
-          Object.values(jobs).reverse().find((j) => j.status === 'completed');
+      Object.values(jobs).reverse().find((j) => j.status === 'completed');
   } else {
     job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
   }
@@ -487,7 +487,7 @@ app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
     dPath = candidates.find((p) => fs.existsSync(p));
   }
   if (dPath && fs.existsSync(dPath)) {
-    try { qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8')); } catch (e) {}
+    try { qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8')); } catch (e) { }
   }
 
   try {
@@ -510,15 +510,15 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
   const incidentFile = req.files?.incidents?.[0] || req.files?.excel?.[0] || null;
   const inventoryFile = req.files?.inventory?.[0] || null;
 
-  const clientId    = req.body.clientId   || 'client-jfl';
-  const location    = req.body.location   || 'All Locations';
-  const uploadedBy  = req.body.uploadedBy || 'System User';
+  const clientId = req.body.clientId || 'client-jfl';
+  const location = req.body.location || 'All Locations';
+  const uploadedBy = req.body.uploadedBy || 'System User';
 
   // Requirement 2: Accept start_date / end_date (custom date range only)
   // Legacy periodMode/reportPeriod are kept as fallback for /api/switch-mode internal backward compat.
-  const startDate   = (req.body.start_date   || '').trim();
-  const endDate     = (req.body.end_date     || '').trim();
-  const periodMode  = req.body.periodMode   || 'custom'; // legacy; not used by UI anymore
+  const startDate = (req.body.start_date || '').trim();
+  const endDate = (req.body.end_date || '').trim();
+  const periodMode = req.body.periodMode || 'custom'; // legacy; not used by UI anymore
   const reportPeriod = req.body.reportPeriod || req.body.reportingPeriod || '';
 
   // Server-side date validation (Requirement 2 — enforced independently of frontend)
@@ -530,7 +530,7 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
     });
   }
 
-  const client     = clientService.getClientById(clientId);
+  const client = clientService.getClientById(clientId);
   const clientName = client ? client.name : 'Executive Client';
 
   if (!incidentFile) {
@@ -703,7 +703,7 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
             const fp = path.join(dir, f);
             if (!allXlsxFiles.includes(fp)) allXlsxFiles.push(fp);
           });
-      } catch (e) {}
+      } catch (e) { }
     });
 
     // Smart-pair: incident file = contains 'report', 'sla', 'incident', 'monthly', 'quarterly', 'compliance', 'raw'
@@ -950,9 +950,9 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
       const resolvedTarget = path.resolve(targetPath);
       const resolvedReports = path.resolve(REPORTS_DIR);
-      const resolvedData    = path.resolve(__dirname, '..', 'data');
-      const isUnderReports  = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
-      const isUnderData     = resolvedTarget.startsWith(resolvedData    + path.sep) || resolvedTarget === resolvedData;
+      const resolvedData = path.resolve(__dirname, '..', 'data');
+      const isUnderReports = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
+      const isUnderData = resolvedTarget.startsWith(resolvedData + path.sep) || resolvedTarget === resolvedData;
 
       if (!isUnderReports && !isUnderData) {
         console.error(`[server] SECURITY: Path traversal attempt blocked. Requested: ${resolvedTarget}`);
@@ -1012,9 +1012,9 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       // Security path traversal guard
       const resolvedTarget = path.resolve(targetPath);
       const resolvedReports = path.resolve(REPORTS_DIR);
-      const resolvedData    = path.resolve(__dirname, '..', 'data');
-      const isUnderReports  = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
-      const isUnderData     = resolvedTarget.startsWith(resolvedData    + path.sep) || resolvedTarget === resolvedData;
+      const resolvedData = path.resolve(__dirname, '..', 'data');
+      const isUnderReports = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
+      const isUnderData = resolvedTarget.startsWith(resolvedData + path.sep) || resolvedTarget === resolvedData;
 
       if (!isUnderReports && !isUnderData) {
         console.error(`[server] SECURITY: Path traversal attempt blocked. Requested: ${resolvedTarget}`);
@@ -1142,8 +1142,8 @@ if (require.main === module || !process.env.VERCEL) {
     if (fs.existsSync(bundledPath)) {
       const raw = fs.existsSync(canonicalPath) ? fs.readFileSync(canonicalPath, 'utf8') : '';
       const isStale = !fs.existsSync(canonicalPath) ||
-                      raw.includes('User Selected Period') ||
-                      (!raw.includes('"totalDevices": 444') && !raw.includes('"totalDevices":444'));
+        raw.includes('User Selected Period') ||
+        (!raw.includes('"totalDevices": 444') && !raw.includes('"totalDevices":444'));
       if (isStale) {
         console.log('[startup] Syncing data/dashboard_data.json with canonical 444-device bundled default.');
         fs.copyFileSync(bundledPath, canonicalPath);
