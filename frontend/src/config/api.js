@@ -3,8 +3,9 @@
 // Uses VITE_API_URL if explicitly provided; otherwise defaults to relative path ("")
 // so requests seamlessly target host origin on Localhost, Vercel, or Render.
 
-const rawUrl = import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== ""
-  ? import.meta.env.VITE_API_URL
+const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (typeof process !== 'undefined' && process.env) ? process.env : {};
+const rawUrl = env.VITE_API_URL !== undefined && env.VITE_API_URL !== ""
+  ? env.VITE_API_URL
   : "";
 
 export const API_BASE_URL = rawUrl ? rawUrl.replace(/\/+$/, "") : "";

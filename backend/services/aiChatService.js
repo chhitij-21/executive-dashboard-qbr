@@ -6,6 +6,25 @@
 
 const ruleEngine = require('./ruleEngine');
 
+// ─────────────────────────────────────────────────────────────────────
+// PROVIDER DETECTION
+// ─────────────────────────────────────────────────────────────────────
+function isProviderConfigured(name) {
+  switch (name) {
+    case 'groq': return !!process.env.GROQ_API_KEY;
+    case 'openai': return !!process.env.OPENAI_API_KEY;
+    case 'anthropic': return !!process.env.ANTHROPIC_API_KEY;
+    case 'deepseek': return !!process.env.DEEPSEEK_API_KEY;
+    case 'gemini': return !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+    default: return false;
+  }
+}
+
+function getConfiguredProviders() {
+  const all = ['groq', 'openai', 'anthropic', 'deepseek', 'gemini'];
+  return all.filter(isProviderConfigured);
+}
+
 /**
  * Main AI answer generator with multi-provider failover.
  */
@@ -24,7 +43,14 @@ async function processChatQuery(prompt, qbrData, options = {}) {
     // Preferred provider override from env or options: 'groq' | 'openai' | 'anthropic' | 'deepseek' | 'gemini'
     const preferredProvider = (options.provider || process.env.AI_PROVIDER || '').toLowerCase();
 
-    // 1. Groq Free API (Llama 3.3 70B / DeepSeek R1 Distill) - Fast & Free
+    // Log which providers are configured (helps debugging on Render)
+    if (!global.__aiProvidersLogged) {
+      console.log(`[aiChatService] Configured providers: ${getConfiguredProviders().join(', ') || 'NONE (will use native fallback)'}`);
+      if (preferredProvider) console.log(`[aiChatService] Preferred provider: ${preferredProvider}`);
+      global.__aiProvidersLogged = true;
+    }
+
+    // 1. Groq Free API (Llama 3.3 70B / DeepSeek R1 Distill) — Fast & Free
     const groqKey = process.env.GROQ_API_KEY;
     if ((preferredProvider === 'groq' || (!preferredProvider && groqKey)) && groqKey) {
       try {
@@ -261,13 +287,13 @@ async function queryGeminiAPI(prompt, systemContext, apiKey, model = 'gemini-1.5
 function buildSystemContext(qbrData, opts) {
   if (!qbrData) return 'No active dataset loaded.';
 
-  const claudexMode  = opts && opts.claudexMode;
-  const exec         = qbrData.executiveSummary || {};
+  const claudexMode = opts && opts.claudexMode;
+  const exec = qbrData.executiveSummary || {};
   const reportPeriod = qbrData.report_period?.display_label || qbrData.reportingPeriod || 'N/A';
 
   // Always read SLA target live from rules.yaml — never fallback to hardcoded 99.3
   const liveSlaTarget = ruleEngine.getSLATarget();
-  const slaTarget     = exec.slaTarget || liveSlaTarget;
+  const slaTarget = exec.slaTarget || liveSlaTarget;
 
   // Full site-level uptime table (all sites)
   const siteList = (qbrData.siteSummary || []).map(s =>
@@ -275,9 +301,9 @@ function buildSystemContext(qbrData, opts) {
   ).join('\n');
 
   // SLA breach summary
-  const devices        = Array.isArray(qbrData.devices) ? qbrData.devices : [];
-  const breachDevices  = devices.filter(d => d && !d.__isStock && d.__slaBreach);
-  const breachSites    = (qbrData.siteSummary || []).filter(s => parseFloat(s.jflSwitchUptime) < slaTarget);
+  const devices = Array.isArray(qbrData.devices) ? qbrData.devices : [];
+  const breachDevices = devices.filter(d => d && !d.__isStock && d.__slaBreach);
+  const breachSites = (qbrData.siteSummary || []).filter(s => parseFloat(s.jflSwitchUptime) < slaTarget);
 
   // RCA breakdown table
   const rcaRows = (qbrData.rcaAnalytics?.breakdown || []).slice(0, 8);
@@ -476,4 +502,3 @@ ${siteDetails}`
 }
 
 module.exports = { processChatQuery };
-

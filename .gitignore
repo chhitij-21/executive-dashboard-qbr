@@ -40,6 +40,8 @@ frontend/.env          # contains local dev credentials — never commit
 
 # Logs
 *.log
+*.jsonl
+data/logs/
 
 # OS Files
 Thumbs.db
