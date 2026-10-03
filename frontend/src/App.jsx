@@ -275,6 +275,7 @@ function MainPortal() {
     }
 
     const exec = activeDashboardData.executiveSummary || {};
+    const siteSummary = activeDashboardData.siteSummary || [];
     const _ticketAvg = (field, fallback) => {
       const vals = (siteSummary || [])
         .map(s => parseFloat(s[field]))
@@ -283,8 +284,7 @@ function MainPortal() {
       return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
     };
     const _proTicketAvg = _ticketAvg('proactiveTicketAvg', exec.proactiveSwitchUptime);
-    const _jflTicketAvg = _ticketAvg('jflTicketAvg', exec.jflSwitchUptime);
-    const siteSummary = activeDashboardData.siteSummary || [];
+    const _jflTicketAvg = _ticketAvg('jflTicketAvg',       exec.jflSwitchUptime);
     const switchAn = activeDashboardData.switchAnalytics || {};
     const apAn = activeDashboardData.apAnalytics || {};
     const incAn = activeDashboardData.incidentAnalytics || {};
