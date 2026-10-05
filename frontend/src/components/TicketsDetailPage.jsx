@@ -201,13 +201,12 @@ export default function TicketsDetailPage({ data }) {
                   <th style={{ padding: '0.75rem 1rem' }}>Closed</th>
                   <th style={{ padding: '0.75rem 1rem' }}>SLA Met</th>
                   <th style={{ padding: '0.75rem 1rem' }}>SLA Breached</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Top Hold Reason</th>
                 </tr>
               </thead>
               <tbody>
                 {byEngineer.length === 0 ? (
                   <tr>
-                    <td colSpan="9" style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8' }}>
+                    <td colSpan="8" style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8' }}>
                       No engineer data available.
                     </td>
                   </tr>
@@ -222,7 +221,6 @@ export default function TicketsDetailPage({ data }) {
                       <td style={{ padding: '0.75rem 1rem', color: '#15803d' }}>{eng.closed}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#16a34a', fontWeight: 600 }}>{eng.slaMet}</td>
                       <td style={{ padding: '0.75rem 1rem', color: eng.slaMissed > 0 ? '#dc2626' : '#64748b', fontWeight: 600 }}>{eng.slaMissed}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{eng.topHoldReason}</td>
                     </tr>
                   ))
                 )}
@@ -294,12 +292,13 @@ export default function TicketsDetailPage({ data }) {
                   <th style={{ padding: '0.75rem 1rem' }}>Categorized Hold Reason</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Incident Count</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Engineers Assigned</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Site-wise</th>
                 </tr>
               </thead>
               <tbody>
                 {holdReasons.length === 0 ? (
                   <tr>
-                    <td colSpan="3" style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8' }}>
+                    <td colSpan="4" style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8' }}>
                       No hold reasons recorded in the active dataset.
                     </td>
                   </tr>
@@ -309,6 +308,7 @@ export default function TicketsDetailPage({ data }) {
                       <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#0f172a' }}>{hr.reason}</td>
                       <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#2563eb' }}>{hr.count}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{hr.engineers ? hr.engineers.join(', ') : 'None'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{hr.sites && hr.sites.length ? hr.sites.join(', ') : 'None'}</td>
                     </tr>
                   ))
                 )}

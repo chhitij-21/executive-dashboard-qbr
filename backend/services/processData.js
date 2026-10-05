@@ -463,7 +463,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       /change|request|fulfillment|ios|upgradation|asset|scan|whitelist|mac address|maintenance|credentials|license|ise|wlc/i.test(cat) ||
       /change|request|fulfillment|ios|upgradation|asset|scan|whitelist|mac address|maintenance|credentials|license|ise|wlc/i.test(desc) ||
       /change|request|fulfillment/i.test(rca) ||
-      (!/sw|switch|ap|access.?point/i.test(devType) && devType.length > 0)
+      (!/sw|switch|ap|access.?point|cisco[\s-]?ise|catalyst/i.test(devType) && devType.length > 0)
     );
   };
 
@@ -1387,9 +1387,9 @@ function buildProactiveTicketAnalytics(incidents) {
 
     if (bk === 'onHold') {
       const cat = normalizeHoldReason(inc.HoldReason);
-      if (!holdMap.has(cat)) holdMap.set(cat, { count: 0, engineers: new Set() });
+      if (!holdMap.has(cat)) holdMap.set(cat, { count: 0, engineers: new Set(), sites: new Set() });
       const h = holdMap.get(cat);
-      h.count++; h.engineers.add(eng);
+      h.count++; h.engineers.add(eng); h.sites.add(site);
       e.holdReasons[cat] = (e.holdReasons[cat] || 0) + 1;
     }
   }
@@ -1406,7 +1406,7 @@ function buildProactiveTicketAnalytics(incidents) {
     .sort((a, b) => b.total - a.total);
 
   const holdReasons = Array.from(holdMap.entries())
-    .map(([reason, v]) => ({ reason, count: v.count, engineers: Array.from(v.engineers) }))
+    .map(([reason, v]) => ({ reason, count: v.count, engineers: Array.from(v.engineers), sites: Array.from(v.sites) }))
     .sort((a, b) => b.count - a.count);
 
   return { overall, bySite, byEngineer, holdReasons };
