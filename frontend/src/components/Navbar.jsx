@@ -72,6 +72,13 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
       {/* Navigation Tabs */}
       <nav className="nav-tabs">
         <button
+          className={activeTab === 'overview' ? 'active' : ''}
+          onClick={() => setActiveTab('overview')}
+        >
+          🌐 Overview
+        </button>
+
+        <button
           className={activeTab === 'upload' ? 'active' : ''}
           onClick={() => setActiveTab('upload')}
         >
@@ -83,6 +90,13 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
           onClick={() => setActiveTab('dashboard')}
         >
           📈 Executive Dashboard
+        </button>
+
+        <button
+          className={activeTab === 'tickets' ? 'active' : ''}
+          onClick={() => setActiveTab('tickets')}
+        >
+          🎫 Proactive Tickets
         </button>
 
         <button

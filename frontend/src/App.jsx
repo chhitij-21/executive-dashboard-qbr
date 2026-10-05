@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useMemo, Component } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
+import OverviewPage from './components/OverviewPage';
+import TicketsDetailPage from './components/TicketsDetailPage';
 import LoginModal from './components/LoginModal';
 import FileUploader from './components/FileUploader';
 import ReportHistory from './components/ReportHistory';
@@ -64,7 +66,7 @@ class ErrorBoundary extends Component {
 
 function MainPortal() {
   const { user, activeClient, activeLocation, setActiveLocation } = useAuth();
-  const [tab, setTab] = useState('upload'); // Land directly on File Upload view per strict business rule
+  const [tab, setTab] = useState('overview'); // Land directly on Overview view
   const [dashTab, setDashTab] = useState('executive');
   const [selectedSite, setSelectedSite] = useState('ALL');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -993,6 +995,14 @@ function MainPortal() {
       />
 
       <main className="main-content">
+        {tab === 'overview' && (
+          <OverviewPage
+            data={activeDashboardData}
+            onOpenReports={() => setTab('dashboard')}
+            onOpenTickets={() => setTab('tickets')}
+          />
+        )}
+
         {tab === 'upload' && (
           <FileUploader
             onJobStarted={(jid) => {
@@ -1016,6 +1026,10 @@ function MainPortal() {
             )}
             {renderDashboard()}
           </ErrorBoundary>
+        )}
+
+        {tab === 'tickets' && (
+          <TicketsDetailPage data={activeDashboardData} />
         )}
 
         {tab === 'history' && (

@@ -1051,6 +1051,9 @@ function validateJFL(devices, incidents, log) {
  * @param {number} slaTargetHours - from ruleEngine.getIncidentSLATargetHours()
  */
 function computeIncidentEnrichment(inc, slaTargetHours) {
+  inc.TicketOwner = String(inc['Ticket Owner'] || inc.TicketOwner || '').trim() || 'Unassigned';
+  inc.HoldReason  = String(inc['Hold Reason']  || inc.HoldReason  || '').trim();
+  inc.RawStatus   = String(inc['Status']       || inc.RawStatus   || inc.Status || '').trim();
   // ── Resolution time calculation ──────────────────────────────────────────
   // JFL SLA POLICY: net_resolution_hours = active working time only (hold excluded).
   //
@@ -1195,6 +1198,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
   const incAn = buildIncidentAnalytics(incidents, activeDevices);
   const rcaAn = buildRCAAnalytics(incidents);
   const slaAn = buildSLAAnalytics(activeDevices, incidents);
+  const proactiveTicketAnalytics = buildProactiveTicketAnalytics(incidents);
 
   const activeLabel = reportPeriodMeta?.display_label || reportingPeriod;
 
@@ -1216,6 +1220,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
     incidentAnalytics: incAn,
     rcaAnalytics: rcaAn,
     slaAnalytics: slaAn,
+    proactiveTicketAnalytics,
     devices,
     incidents,
     otherActivities: otherActivities || [],
@@ -1289,6 +1294,105 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
     majorIncidents: sevSplit.major,
     minorIncidents: sevSplit.minor,
   };
+}
+
+function buildProactiveTicketAnalytics(incidents) {
+  const HOLD_CATEGORIES = [
+    { rx: /power|psu|ups/i,                                                                 label: 'Power Issue at Site' },
+    { rx: /client[\s-]?side|client[\s-]?site/i,                                             label: 'Client-Side Activity' },
+    { rx: /firmware/i,                                                                      label: 'Firmware Upgradation' },
+    { rx: /dhcp/i,                                                                          label: 'DHCP Server Issue' },
+    { rx: /unreachable|not reachable|unrachable|un reachable|offline/i,                     label: 'Device Unreachable on Dashboard' },
+    { rx: /boot/i,                                                                          label: 'Device Boot Issue' },
+    { rx: /isp/i,                                                                           label: 'ISP Issue' },
+    { rx: /awaiting|customer response|customer confirmation|customer reply|discussed with|observation shared|need customer/i, label: 'Awaiting Customer Response' },
+    { rx: /coordinating|ground team|need configuration|need to check/i,                     label: 'Coordination in Progress' },
+  ];
+
+  const normalizeHoldReason = (raw) => {
+    if (!raw) return 'Unspecified';
+    for (const c of HOLD_CATEGORIES) if (c.rx.test(raw)) return c.label;
+    return 'Other';
+  };
+
+  const bucketStatus = (s) => {
+    const t = String(s || '').trim();
+    if (/^closed$/i.test(t))                 return 'closed';
+    if (/^on[\s-]?hold$/i.test(t))           return 'onHold';
+    if (/^ticket[\s-]?assignment$/i.test(t)) return 'assignment';
+    return 'open';
+  };
+
+  const empty = { total: 0, open: 0, onHold: 0, assignment: 0, closed: 0,
+                  slaMet: 0, slaBreached: 0, slaPercent: '0.00' };
+  if (!incidents || incidents.length === 0) {
+    return { overall: { ...empty }, bySite: [], byEngineer: [], holdReasons: [] };
+  }
+
+  const engMap = new Map();
+  const siteMap = new Map();
+  const holdMap = new Map();
+  const overall = { ...empty, total: incidents.length };
+
+  const pct = (met, br) => (met + br) === 0 ? '0.00' : ((met / (met + br)) * 100).toFixed(2);
+
+  for (const inc of incidents) {
+    const eng  = inc.TicketOwner || 'Unassigned';
+    const site = inc.SiteID || inc.Location || 'Unknown';
+    const bk   = bucketStatus(inc.RawStatus || inc.Status);
+
+    // The enriched incidents carry sla_status (already computed).
+    // Fall back to Excel column if sla_status missing.
+    const slaRaw = inc.sla_status || inc.ResolutionSLAStatusRaw || '';
+    const s = String(slaRaw || '').trim();
+
+    overall[bk]++;
+    if (s === 'SLA Met')      overall.slaMet++;
+    else if (s === 'SLA Breached') overall.slaBreached++;
+
+    if (!engMap.has(eng)) engMap.set(eng, {
+      name: eng, total: 0, open: 0, onHold: 0, assignment: 0, closed: 0,
+      slaMet: 0, slaMissed: 0, holdReasons: {}
+    });
+    const e = engMap.get(eng);
+    e.total++; e[bk]++;
+    if (s === 'SLA Met')           e.slaMet++;
+    else if (s === 'SLA Breached') e.slaMissed++;
+
+    if (!siteMap.has(site)) siteMap.set(site, {
+      siteId: site, total: 0, open: 0, onHold: 0, assignment: 0, closed: 0,
+      slaMet: 0, slaBreached: 0
+    });
+    const st = siteMap.get(site);
+    st.total++; st[bk]++;
+    if (s === 'SLA Met')           st.slaMet++;
+    else if (s === 'SLA Breached') st.slaBreached++;
+
+    if (bk === 'onHold') {
+      const cat = normalizeHoldReason(inc.HoldReason);
+      if (!holdMap.has(cat)) holdMap.set(cat, { count: 0, engineers: new Set() });
+      const h = holdMap.get(cat);
+      h.count++; h.engineers.add(eng);
+      e.holdReasons[cat] = (e.holdReasons[cat] || 0) + 1;
+    }
+  }
+
+  overall.slaPercent = pct(overall.slaMet, overall.slaBreached);
+
+  const byEngineer = Array.from(engMap.values()).map(e => {
+    const top = Object.entries(e.holdReasons).sort((a, b) => b[1] - a[1])[0];
+    return { ...e, topHoldReason: top ? top[0] : '—' };
+  }).sort((a, b) => b.total - a.total);
+
+  const bySite = Array.from(siteMap.values())
+    .map(s => ({ ...s, slaPercent: pct(s.slaMet, s.slaBreached) }))
+    .sort((a, b) => b.total - a.total);
+
+  const holdReasons = Array.from(holdMap.entries())
+    .map(([reason, v]) => ({ reason, count: v.count, engineers: Array.from(v.engineers) }))
+    .sort((a, b) => b.count - a.count);
+
+  return { overall, bySite, byEngineer, holdReasons };
 }
 
 // ── Site Summary ───────────────────────────────────────────────────────────
