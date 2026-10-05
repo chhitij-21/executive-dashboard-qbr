@@ -686,75 +686,10 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
     dPath = job?.dashboardPath;
   }
 
-  // If no dashboard JSON is found from previous jobs, attempt auto-processing candidate Excel files in workspace root
-  if (!dPath || !fs.existsSync(dPath)) {
-    // ── Smart Excel file discovery: scan project root and common locations for ANY .xlsx file ──
-    // This removes the need to rename files to '1.xlsx' / '2.xlsx'.
-    const scanDirs = [
-      path.resolve('.'),                    // backend working dir
-      path.resolve('..'),                   // project root
-      path.join(__dirname, '..'),           // one up from backend/
-      path.join(__dirname, '..', '..'),     // two up (for nested structures)
-    ].filter((d, i, arr) => fs.existsSync(d) && arr.indexOf(d) === i); // unique existing dirs
-
-    const allXlsxFiles = [];
-    scanDirs.forEach((dir) => {
-      try {
-        fs.readdirSync(dir)
-          .filter((f) => f.toLowerCase().endsWith('.xlsx') || f.toLowerCase().endsWith('.xls') || f.toLowerCase().endsWith('.csv'))
-          .forEach((f) => {
-            const fp = path.join(dir, f);
-            if (!allXlsxFiles.includes(fp)) allXlsxFiles.push(fp);
-          });
-      } catch (e) { }
-    });
-
-    // Smart-pair: incident file = contains 'report', 'sla', 'incident', 'monthly', 'quarterly', 'compliance', 'raw'
-    // Inventory file = contains 'inventory', 'updated', 'device', 'asset'
-    const incKeywords = /report|sla|incident|monthly|quarterly|compliance|raw/i;
-    const invKeywords = /inventory|updated\s*inventory|device\s*list|asset|stock/i;
-
-    let incPath = allXlsxFiles.find((f) => incKeywords.test(path.basename(f)));
-    let invPath = allXlsxFiles.find((f) => invKeywords.test(path.basename(f)));
-
-    // Fallback: if no explicit pairing, use first file as incident, second as inventory
-    if (!incPath && allXlsxFiles.length > 0) incPath = allXlsxFiles[0];
-    if (!invPath && allXlsxFiles.length > 1) invPath = allXlsxFiles.find((f) => f !== incPath) || null;
-
-    if (incPath) {
-      try {
-        console.log(`[server] Auto-processing discovered workbooks: incident="${path.basename(incPath)}", inventory="${invPath ? path.basename(invPath) : 'none'}"`);
-        const autoJobId = 'auto-jfl-active';
-        const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
-
-        const result = await processJFLWorkbooks(incPath, invPath || null, outputDir);
-
-        if (result && result.success && result.dashboardPath && fs.existsSync(result.dashboardPath)) {
-          job = historyService.recordReport({
-            jobId: autoJobId,
-            clientId: 'client-jfl',
-            clientName: 'Jubilant Foodworks Ltd (JFL)',
-            location: 'All Locations',
-            reportPeriod: result.qbrData?.report_period?.display_label || 'Active Dataset',
-            uploadedBy: 'System Auto-Engine',
-            status: 'completed',
-            dashboardPath: result.dashboardPath,
-            pptPath: result.pptPath,
-            reportPath: result.reportPath,
-            dataQualityPath: result.dataQualityPath,
-            processingLogPath: result.processingLogPath,
-          });
-          jobs[autoJobId] = { status: 'completed', ...result, ...job };
-          dPath = result.dashboardPath;
-        }
-      } catch (err) {
-        console.error('[server] Error auto-processing candidate dataset:', err.message);
-      }
-    }
-  }
-
   try {
-    if (!dPath || !fs.existsSync(dPath)) return res.status(404).json({ error: 'Dashboard JSON not found' });
+    if (!dPath || !fs.existsSync(dPath)) {
+      return res.status(200).json({ status: 'empty', message: 'No dataset uploaded yet.' });
+    }
     const content = fs.readFileSync(dPath, 'utf8');
     const rawData = JSON.parse(content);
     const filteredData = filterDashboardBySite(rawData, siteFilter);
@@ -853,62 +788,9 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
     }
 
-    // Auto-generate default dataset if no job exists at all
     if (!job) {
-      const incCandidates = [
-        path.resolve('1 (1).xlsx'),
-        path.resolve('1.xlsx'),
-        path.join(__dirname, '..', '1 (1).xlsx'),
-        path.join(__dirname, '..', '1.xlsx'),
-        path.join(__dirname, '..', '..', 'New folder', '1 (1).xlsx'),
-        path.join(__dirname, '..', '..', 'New folder', '1.xlsx'),
-        path.resolve('SLA_Compliance_Report.csv'),
-        path.resolve('jfl incidents.xlsx'),
-        path.join(__dirname, '..', 'jfl incidents.xlsx'),
-      ];
-      const invCandidates = [
-        path.resolve('2.xlsx'),
-        path.join(__dirname, '..', '2.xlsx'),
-        path.join(__dirname, '..', '..', 'New folder', '2.xlsx'),
-        path.resolve('JFL Updated Inventory.xlsx'),
-        path.join(__dirname, '..', 'JFL Updated Inventory.xlsx'),
-      ];
-
-      const incPath = incCandidates.find((p) => fs.existsSync(p));
-      const invPath = invCandidates.find((p) => fs.existsSync(p));
-
-      if (incPath) {
-        console.log(`[server] Auto-processing sample dataset for download request (${path.basename(incPath)})...`);
-        const autoJobId = 'master-jfl-q1-fy2026';
-        const outputDir = path.join(REPORTS_DIR, `job_${autoJobId}`);
-
-        const result = await processJFLWorkbooks(
-          incPath,
-          invPath || null,
-          outputDir
-        );
-
-        if (result && result.success) {
-          job = historyService.recordReport({
-            jobId: autoJobId,
-            clientId: 'client-jfl',
-            clientName: 'Jubilant Foodworks Ltd (JFL)',
-            location: 'All Locations',
-            reportPeriod: 'Q1 FY2026',
-            uploadedBy: 'System Auto-Engine',
-            status: 'completed',
-            dashboardPath: result.dashboardPath,
-            pptPath: result.pptPath,
-            reportPath: result.reportPath,
-            dataQualityPath: result.dataQualityPath,
-            processingLogPath: result.processingLogPath,
-          });
-          jobs[autoJobId] = { status: 'completed', ...result, ...job };
-        }
-      }
+      return res.status(404).json({ error: 'File not available. Please upload a dataset first.' });
     }
-
-    if (!job) return res.status(404).json({ error: 'Report job not found' });
 
     // ── PDF: Generate fresh PDF on-the-fly from dashboard_data.json (SSOT guarantee) ────
     if (pathKey === 'pdfPath') {
@@ -1138,41 +1020,19 @@ if (require.main === module || !process.env.VERCEL) {
     });
   };
 
-  // ── Startup Cache Eviction Guard ──────────────────────────────────────────
+  // ── Startup Cache Validation (read-only) ─────────────────
   try {
     const canonicalPath = resolveDataPath('dashboard_data.json');
-    const bundledPath = resolveDataPath('bundled_default', 'dashboard_data.json');
-
-    let isValidCanonical = false;
-    let incidentCount = 0;
-
     if (fs.existsSync(canonicalPath)) {
       try {
-        const raw = fs.readFileSync(canonicalPath, 'utf8');
-        const parsed = JSON.parse(raw);
-        if (
-          parsed &&
-          parsed.executiveSummary &&
-          typeof parsed.executiveSummary.totalIncidents === 'number' &&
-          parsed.executiveSummary.totalIncidents > 0
-        ) {
-          isValidCanonical = true;
-          incidentCount = parsed.executiveSummary.totalIncidents;
-        }
-      } catch (parseErr) {
-        isValidCanonical = false;
+        const parsed = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
+        const n = parsed?.executiveSummary?.totalIncidents;
+        console.log(`[startup] Canonical dashboard_data.json present (${n ?? 'unknown'} incidents).`);
+      } catch (e) {
+        console.warn('[startup] Canonical dashboard_data.json exists but is unreadable:', e.message);
       }
-    }
-
-    if (isValidCanonical) {
-      console.log(`[startup] Canonical dashboard_data.json exists (${incidentCount} incidents) — skipping bundled-default overwrite.`);
     } else {
-      if (fs.existsSync(bundledPath)) {
-        console.log('[startup] Canonical dashboard_data.json missing/invalid — writing bundled default.');
-        fs.copyFileSync(bundledPath, canonicalPath);
-      } else {
-        console.warn('[startup] Canonical dashboard_data.json missing/invalid and bundled default not found.');
-      }
+      console.log('[startup] No canonical dashboard_data.json — empty state until first upload.');
     }
   } catch (err) {
     console.warn('[startup] Warning during startup cache validation:', err.message);

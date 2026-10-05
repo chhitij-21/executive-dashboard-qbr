@@ -985,8 +985,18 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // Also write to data/dashboard_data.json as canonical latest so the dashboard
   // always shows the correct most-recent run even after a server restart.
-  const isTestRun = options.isTest || process.env.NODE_ENV === 'test';
-  if (!isTestRun) {
+  const isTestRun = Boolean(
+    options.isTest ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.npm_lifecycle_event === 'test' ||
+    process.argv.some(a => /jest|mocha|vitest|_mocha|\btest\b/i.test(a))
+  );
+
+  const CANONICAL_MIN_BYTES = 50 * 1024; // 50 KB
+  const payloadBytes = Buffer.byteLength(jsonPayloadStr, 'utf8');
+  const tooSmallForCanonical = payloadBytes < CANONICAL_MIN_BYTES;
+
+  if (!isTestRun && !tooSmallForCanonical) {
     try {
       const canonicalDir = path.resolve(__dirname, '..', '..', 'data');
       if (!fs.existsSync(canonicalDir)) fs.mkdirSync(canonicalDir, { recursive: true });
@@ -999,6 +1009,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       console.error('[processData] ERROR writing canonical dashboard_data.json:', canonErr.message);
       log(`WARNING: Could not write canonical dashboard_data.json: ${canonErr.message}`);
     }
+  } else if (tooSmallForCanonical) {
+    console.warn('[processData] Canonical write SKIPPED — payload too small (' 
+                 + payloadBytes + ' bytes < ' + CANONICAL_MIN_BYTES + '). This looks like a test fixture.');
+    log('[processData] Canonical write skipped — payload ' + payloadBytes + ' bytes (< 50KB)');
   }
 
   writeFile(outputDir, 'error_report.md',
