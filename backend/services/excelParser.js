@@ -53,18 +53,18 @@ function detectSheets(workbookData) {
   const rankIncidentSheet = (name) => {
     const s = String(name || '').trim();
     const lower = s.toLowerCase();
-    if (/^raw\b/i.test(s))          return 1;  // starts with "raw" word
+    if (/^raw\b/i.test(s)) return 1;  // starts with "raw" word
     if (lower.includes('rollover')) return 2;
-    if (lower.includes('raw'))      return 3;
-    if (lower === 'incident')       return 4;
+    if (lower.includes('raw')) return 3;
+    if (lower === 'incident') return 4;
     if (lower.includes('incident')) {
       // skip AP-only and other-only incident sheets unless nothing better
-      if (/^ap[\s-]?incident/i.test(s))    return 90;
+      if (/^ap[\s-]?incident/i.test(s)) return 90;
       if (/^other[\s-]?incident/i.test(s)) return 91;
       return 5;
     }
     if (lower.includes('compliance')) return 6;
-    if (lower.includes('sla'))        return 7;
+    if (lower.includes('sla')) return 7;
     if (lower === 'jfl' || lower.includes('jfl')) return 8;
     return 999;
   };
@@ -75,9 +75,9 @@ function detectSheets(workbookData) {
     if (!rows.length) return false;
     const first = rows[0] || {};
     const keys = Object.keys(first);
-    const want = ['Ticket Owner', 'Device ID', 'DeviceID', 
-                  'Ticket Number', 'TicketNumber', 'Hold Reason',
-                  'Resolution SLA Status'];
+    const want = ['Ticket Owner', 'Device ID', 'DeviceID',
+      'Ticket Number', 'TicketNumber', 'Hold Reason',
+      'Resolution SLA Status'];
     return want.some(k => keys.includes(k));
   };
 
@@ -95,15 +95,15 @@ function detectSheets(workbookData) {
       matchedIncidentSheet = cand.name;
       break;
     }
-    console.log('[excelParser] Skipping', cand.name, 
-                '- missing required columns');
+    console.log('[excelParser] Skipping', cand.name,
+      '- missing required columns');
   }
   // Ultimate fallback: first ranked sheet if any, else first sheet.
   if (!matchedIncidentSheet) {
     matchedIncidentSheet = ranked.length > 0 ? ranked[0].name
       : (sheets.length > 0 ? sheets[0] : null);
     console.log('[excelParser] Column check failed for all; ' +
-                'falling back to', matchedIncidentSheet);
+      'falling back to', matchedIncidentSheet);
   }
   console.log('[excelParser] Picked incident sheet:', matchedIncidentSheet);
 
@@ -197,18 +197,18 @@ function mergeInventorySheets(workbookData, locationSheets) {
 
       if (!deviceMap[serial]) {
         deviceMap[serial] = {
-          DeviceID:   serial,
-          SerialNo:   serial,
-          Hostname:   host,
-          Location:   normLoc,
-          SiteID:     normLoc,
+          DeviceID: serial,
+          SerialNo: serial,
+          Hostname: host,
+          Location: normLoc,
+          SiteID: normLoc,
           DeviceType: devType,
-          Rack:       rack,
-          CoreNonCore:core,
-          Model:      model,
-          NetworkName:getColVal(row, ['Network Name', 'NetworkName', 'Network']) || '',
+          Rack: rack,
+          CoreNonCore: core,
+          Model: model,
+          NetworkName: getColVal(row, ['Network Name', 'NetworkName', 'Network']) || '',
           ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Old Serial', 'Replaced Device', 'Replaced Serial No']) || '',
-          __source:   row.__source || { file: 'inventory', sheet, row: idx + 2 },
+          __source: row.__source || { file: 'inventory', sheet, row: idx + 2 },
         };
       } else {
         const existing = deviceMap[serial];
@@ -320,30 +320,32 @@ function parseIncidentSheet(rows) {
     ]);
 
     const isCR = /change|change\s*request|^cr$|normal\s*change|standard\s*change|emergency\s*change/i.test(cat) ||
-                 /change|change\s*request|^cr$/i.test(rcaStr) ||
-                 /change\s*request|change\s*management/i.test(desc);
+      /change|change\s*request|^cr$/i.test(rcaStr) ||
+      /change\s*request|change\s*management/i.test(desc);
 
     return {
       IncidentNumber: incidentId,
-      TicketNumber:   ticketNo,
-      DeviceID:       devId,
-      SerialNo:       devId,
-      Hostname:       getColVal(row, ['Hostname', 'Device Name', 'Host Name', 'Device Hostname', 'Host', 'Subject']) || '',
-      Location:       normLoc,
-      SiteID:         normLoc,
-      DeviceType:     getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Hardware Type']) || '',
-      Rack:           getColVal(row, ['Rack Number', 'Rack', 'Rack No', 'Rack ID']) || '',
-      Priority:       getColVal(row, ['Priority', 'Severity', 'Priority Level']) || '',
-      RCA:            rcaStr || 'Unknown',
-      Status:         getColVal(row, ['Status', 'Ticket Status', 'State', 'Incident Status']) || 'Closed',
-      Category:       cat,
-      Description:    desc,
+      TicketNumber: ticketNo,
+      DeviceID: devId,
+      SerialNo: devId,
+      Hostname: getColVal(row, ['Hostname', 'Device Name', 'Host Name', 'Device Hostname', 'Host', 'Subject']) || '',
+      Location: normLoc,
+      SiteID: normLoc,
+      DeviceType: getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Hardware Type']) || '',
+      Rack: getColVal(row, ['Rack Number', 'Rack', 'Rack No', 'Rack ID']) || '',
+      Priority: getColVal(row, ['Priority', 'Severity', 'Priority Level']) || '',
+      TicketOwner: String(getColVal(row, ['Ticket Owner', 'TicketOwner', 'Owner', 'Assigned To', 'Assignee', 'Engineer']) || '').trim(),
+      HoldReason: String(getColVal(row, ['Hold Reason', 'HoldReason', 'On Hold Reason', 'Hold Notes', 'Hold Note', 'Hold Reason ']) || '').trim(),
+      RCA: rcaStr || 'Unknown',
+      Status: getColVal(row, ['Status', 'Ticket Status', 'State', 'Incident Status']) || 'Closed',
+      Category: cat,
+      Description: desc,
       IsChangeRequest: isCR,
       ResolutionSLAStatusRaw: getColVal(row, ['Resolution SLA Status', 'Resolution SLA', 'SLA Status']) || '',
-      ResponseSLAStatus:      getColVal(row, ['Response SLA Status', 'Response SLA']) || '',
-      CreatedTime:    formatExcelDate(openTimeRaw),
-      OpenTime:       openTimeRaw || null,
-      ResolvedTime:   resolvedTimeRaw || null,
+      ResponseSLAStatus: getColVal(row, ['Response SLA Status', 'Response SLA']) || '',
+      CreatedTime: formatExcelDate(openTimeRaw),
+      OpenTime: openTimeRaw || null,
+      ResolvedTime: resolvedTimeRaw || null,
       ActualResolutionMin: getColVal(row, [
         'Total Proactive Downtime (Mins)- Actual resolution mint',
         'Total Proactive Downtime (Mins)- Actual resolution mint ',
@@ -381,16 +383,16 @@ function parseIncidentSheet(rows) {
         'Hold Time',
         'On Hold Duration (min)'
       ]),
-      DowntimeHours:       getColVal(row, ['Downtime Hours', 'DowntimeHours', 'Outage Hours']),
-      OutageHours:         getColVal(row, ['Outage Hours', 'OutageHours']),
+      DowntimeHours: getColVal(row, ['Downtime Hours', 'DowntimeHours', 'Outage Hours']),
+      OutageHours: getColVal(row, ['Outage Hours', 'OutageHours']),
       ResolutionTimeHours: getColVal(row, ['Resolution Time (Hrs)', 'ResolutionTimeHours', 'Duration Hours']),
       ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Old Serial', 'Replaced Device', 'Replaced Serial No']),
-      NewSerial:      getColVal(row, ['New Serial', 'Replacement Serial', 'New Serial No']),
-      AccountName:    getColVal(row, ['Account Name', 'AccountName', 'Customer Name', 'Customer', 'Account']),
-      ProactiveUptimePct:  getColVal(row, ['Proactive -Uptime%', 'Proactive Uptime %', 'Proactive Uptime', 'Proactive-Uptime%', 'Average of Proactive -Uptime%']),
-      JFLUptimePct:        getColVal(row, ['JFL -Uptime %', 'JFL Uptime %', 'JFL Uptime', 'JFL-Uptime %', 'Average of JFL -Uptime %']),
+      NewSerial: getColVal(row, ['New Serial', 'Replacement Serial', 'New Serial No']),
+      AccountName: getColVal(row, ['Account Name', 'AccountName', 'Customer Name', 'Customer', 'Account']),
+      ProactiveUptimePct: getColVal(row, ['Proactive -Uptime%', 'Proactive Uptime %', 'Proactive Uptime', 'Proactive-Uptime%', 'Average of Proactive -Uptime%']),
+      JFLUptimePct: getColVal(row, ['JFL -Uptime %', 'JFL Uptime %', 'JFL Uptime', 'JFL-Uptime %', 'Average of JFL -Uptime %']),
       AgreedResolutionSLAMin: getColVal(row, ['Agreed Resolution SLA (min)', 'Agreed SLA (min)']),
-      __source:       row.__source,
+      __source: row.__source,
     };
   });
 }
@@ -420,9 +422,9 @@ function parseUptimeSummary(rows) {
     if (serial && typeof serial === 'string' && serial.length > 3) {
       map[serial] = {
         proactiveUptime: normaliseUptimePct(proactive),
-        jflUptime:       normaliseUptimePct(jfl),
-        location:        String(location),
-        deviceType:      String(devType),
+        jflUptime: normaliseUptimePct(jfl),
+        location: String(location),
+        deviceType: String(devType),
       };
     }
   });
