@@ -1141,14 +1141,36 @@ if (require.main === module || !process.env.VERCEL) {
   try {
     const canonicalPath = resolveDataPath('dashboard_data.json');
     const bundledPath = resolveDataPath('bundled_default', 'dashboard_data.json');
-    if (fs.existsSync(bundledPath)) {
-      const raw = fs.existsSync(canonicalPath) ? fs.readFileSync(canonicalPath, 'utf8') : '';
-      const isStale = !fs.existsSync(canonicalPath) ||
-        raw.includes('User Selected Period') ||
-        (!raw.includes('"totalDevices": 444') && !raw.includes('"totalDevices":444'));
-      if (isStale) {
-        console.log('[startup] Syncing data/dashboard_data.json with canonical 444-device bundled default.');
+
+    let isValidCanonical = false;
+    let incidentCount = 0;
+
+    if (fs.existsSync(canonicalPath)) {
+      try {
+        const raw = fs.readFileSync(canonicalPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          parsed.executiveSummary &&
+          typeof parsed.executiveSummary.totalIncidents === 'number' &&
+          parsed.executiveSummary.totalIncidents > 0
+        ) {
+          isValidCanonical = true;
+          incidentCount = parsed.executiveSummary.totalIncidents;
+        }
+      } catch (parseErr) {
+        isValidCanonical = false;
+      }
+    }
+
+    if (isValidCanonical) {
+      console.log(`[startup] Canonical dashboard_data.json exists (${incidentCount} incidents) — skipping bundled-default overwrite.`);
+    } else {
+      if (fs.existsSync(bundledPath)) {
+        console.log('[startup] Canonical dashboard_data.json missing/invalid — writing bundled default.');
         fs.copyFileSync(bundledPath, canonicalPath);
+      } else {
+        console.warn('[startup] Canonical dashboard_data.json missing/invalid and bundled default not found.');
       }
     }
   } catch (err) {
