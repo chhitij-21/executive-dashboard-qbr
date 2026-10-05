@@ -6,12 +6,19 @@
 
 const ruleEngine = require('./ruleEngine');
 
+function getEnvVar(...names) {
+  for (const n of names) {
+    if (process.env[n]) return process.env[n];
+  }
+  return undefined;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // PROVIDER DETECTION
 // ─────────────────────────────────────────────────────────────────────
 function isProviderConfigured(name) {
   switch (name) {
-    case 'groq': return !!process.env.GROQ_API_KEY;
+    case 'groq': return !!getEnvVar('GROQ_API_KEY', 'Api_key', 'GROQ_KEY');
     case 'openai': return !!process.env.OPENAI_API_KEY;
     case 'anthropic': return !!process.env.ANTHROPIC_API_KEY;
     case 'deepseek': return !!process.env.DEEPSEEK_API_KEY;
@@ -51,10 +58,10 @@ async function processChatQuery(prompt, qbrData, options = {}) {
     }
 
     // 1. Groq Free API (Llama 3.3 70B / DeepSeek R1 Distill) — Fast & Free
-    const groqKey = process.env.GROQ_API_KEY;
+    const groqKey = getEnvVar('GROQ_API_KEY', 'Api_key', 'GROQ_KEY');
     if ((preferredProvider === 'groq' || (!preferredProvider && groqKey)) && groqKey) {
       try {
-        const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+        const model = getEnvVar('GROQ_MODEL') || 'qwen/qwen3.8-27b';
         const ans = await queryGroq(query, systemContext, groqKey, model);
         if (ans) return { answer: ans, type: 'llm_groq', model: `Groq (${model})` };
       } catch (e) {
