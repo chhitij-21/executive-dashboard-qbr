@@ -50,13 +50,62 @@ function getColVal(row, candidates) {
 function detectSheets(workbookData) {
   const sheets = workbookData.__sheetNames || [];
 
-  const matchedIncidentSheet = sheets.find((s) => s.trim() === 'Raw')
-    || sheets.find((s) => s.trim() === 'JFL')
-    || sheets.find((s) => s.trim().toLowerCase() === 'raw')
-    || sheets.find((s) => s.trim().toLowerCase().includes('incident'))
-    || sheets.find((s) => s.trim().toLowerCase().includes('compliance'))
-    || sheets.find((s) => s.trim().toLowerCase().includes('sla'))
-    || sheets.find((s) => s.trim().toLowerCase().includes('jfl'));
+  const rankIncidentSheet = (name) => {
+    const s = String(name || '').trim();
+    const lower = s.toLowerCase();
+    if (/^raw\b/i.test(s))          return 1;  // starts with "raw" word
+    if (lower.includes('rollover')) return 2;
+    if (lower.includes('raw'))      return 3;
+    if (lower === 'incident')       return 4;
+    if (lower.includes('incident')) {
+      // skip AP-only and other-only incident sheets unless nothing better
+      if (/^ap[\s-]?incident/i.test(s))    return 90;
+      if (/^other[\s-]?incident/i.test(s)) return 91;
+      return 5;
+    }
+    if (lower.includes('compliance')) return 6;
+    if (lower.includes('sla'))        return 7;
+    if (lower === 'jfl' || lower.includes('jfl')) return 8;
+    return 999;
+  };
+
+  // Also require at least one expected column on the picked sheet.
+  const hasIncidentColumns = (sheetName) => {
+    const rows = workbookData[sheetName] || [];
+    if (!rows.length) return false;
+    const first = rows[0] || {};
+    const keys = Object.keys(first);
+    const want = ['Ticket Owner', 'Device ID', 'DeviceID', 
+                  'Ticket Number', 'TicketNumber', 'Hold Reason',
+                  'Resolution SLA Status'];
+    return want.some(k => keys.includes(k));
+  };
+
+  const ranked = sheets
+    .map(name => ({ name, rank: rankIncidentSheet(name) }))
+    .filter(x => x.rank < 999)
+    .sort((a, b) => a.rank - b.rank);
+
+  console.log('[excelParser] Incident sheet candidates:',
+    ranked.map(x => `${x.name}(rank=${x.rank})`).join(', '));
+
+  let matchedIncidentSheet = null;
+  for (const cand of ranked) {
+    if (hasIncidentColumns(cand.name)) {
+      matchedIncidentSheet = cand.name;
+      break;
+    }
+    console.log('[excelParser] Skipping', cand.name, 
+                '- missing required columns');
+  }
+  // Ultimate fallback: first ranked sheet if any, else first sheet.
+  if (!matchedIncidentSheet) {
+    matchedIncidentSheet = ranked.length > 0 ? ranked[0].name
+      : (sheets.length > 0 ? sheets[0] : null);
+    console.log('[excelParser] Column check failed for all; ' +
+                'falling back to', matchedIncidentSheet);
+  }
+  console.log('[excelParser] Picked incident sheet:', matchedIncidentSheet);
 
   const incidentSheet = matchedIncidentSheet || (sheets.length > 0 ? sheets[0] : null);
 
