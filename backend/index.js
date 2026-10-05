@@ -635,6 +635,7 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
           processingLogPath: updatedJob.processingLogPath,
           error: result?.error || null,
         });
+        historyService.cleanupOldReports(3);
       })
       .catch((err) => {
         console.error('[index] Engine error:', err.message);
@@ -1177,6 +1178,7 @@ if (require.main === module || !process.env.VERCEL) {
     console.warn('[startup] Warning during startup cache validation:', err.message);
   }
 
+  historyService.cleanupOldReports(3);
   startServer(Number(DEFAULT_PORT));
 }
 

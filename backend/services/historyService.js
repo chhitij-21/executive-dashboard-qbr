@@ -222,6 +222,41 @@ function clearAllHistory() {
   }
 }
 
+/**
+ * Clean up older reports keeping only the latest N reports.
+ */
+function cleanupOldReports(maxKeep = 3) {
+  try {
+    const list = loadHistory();
+    if (!Array.isArray(list) || list.length <= maxKeep) {
+      return { removed: 0, kept: Array.isArray(list) ? list.length : 0 };
+    }
+
+    // Sort descending by uploadTimestamp
+    const sorted = list.sort((a, b) => new Date(b.uploadTimestamp || 0) - new Date(a.uploadTimestamp || 0));
+    const toRemove = sorted.slice(maxKeep);
+
+    let removedCount = 0;
+    for (const item of toRemove) {
+      if (item && item.jobId) {
+        try {
+          deleteReport(item.jobId);
+          removedCount++;
+        } catch (err) {
+          console.warn(`[cleanup] Failed to delete report for jobId ${item.jobId}:`, err.message);
+        }
+      }
+    }
+
+    const result = { removed: removedCount, kept: maxKeep };
+    console.log(`[cleanup] Removed: ${result.removed}, Kept: ${result.kept}`);
+    return result;
+  } catch (err) {
+    console.error('[historyService] Error in cleanupOldReports:', err.message);
+    return { removed: 0, kept: 0 };
+  }
+}
+
 module.exports = {
   getHistory,
   getReportByJobId,
@@ -229,4 +264,6 @@ module.exports = {
   cleanupTempFiles,
   deleteReport,
   clearAllHistory,
+  cleanupOldReports,
 };
+
