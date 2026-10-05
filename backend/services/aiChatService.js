@@ -5,6 +5,7 @@
 // PRECISION UPGRADE: SLA target always read live from ruleEngine (rules.yaml). Zero hardcoded fallbacks.
 
 const ruleEngine = require('./ruleEngine');
+const { getToolSchemas, executeTool } = require('./aiTools');
 
 function getEnvVar(...names) {
   for (const n of names) {
@@ -57,12 +58,12 @@ async function processChatQuery(prompt, qbrData, options = {}) {
       global.__aiProvidersLogged = true;
     }
 
-    // 1. Groq Free API (Llama 3.3 70B / DeepSeek R1 Distill) — Fast & Free
+    // 1. Groq Free API (Llama 3.3 70B / Qwen / DeepSeek R1 Distill) — Fast & Free with Function Calling
     const groqKey = getEnvVar('GROQ_API_KEY', 'Api_key', 'GROQ_KEY');
     if ((preferredProvider === 'groq' || (!preferredProvider && groqKey)) && groqKey) {
       try {
         const model = getEnvVar('GROQ_MODEL') || 'qwen/qwen3.8-27b';
-        const ans = await queryGroq(query, systemContext, groqKey, model);
+        const ans = await queryGroq(query, systemContext, groqKey, model, options, qbrData);
         if (ans) return { answer: ans, type: 'llm_groq', model: `Groq (${model})` };
       } catch (e) {
         console.warn(`[aiChatService] Groq API note: ${e.message}`);
@@ -74,7 +75,7 @@ async function processChatQuery(prompt, qbrData, options = {}) {
     if ((preferredProvider === 'openai' || (!preferredProvider && openAiKey)) && openAiKey) {
       try {
         const model = process.env.OPENAI_MODEL || 'gpt-4o';
-        const ans = await queryOpenAI(query, systemContext, openAiKey, model);
+        const ans = await queryOpenAI(query, systemContext, openAiKey, model, options, qbrData);
         if (ans) return { answer: ans, type: 'llm_openai', model: `OpenAI ${model}` };
       } catch (e) {
         console.warn(`[aiChatService] OpenAI API note: ${e.message}`);
@@ -98,7 +99,7 @@ async function processChatQuery(prompt, qbrData, options = {}) {
     if ((preferredProvider === 'deepseek' || (!preferredProvider && deepseekKey)) && deepseekKey) {
       try {
         const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
-        const ans = await queryDeepSeek(query, systemContext, deepseekKey, model);
+        const ans = await queryDeepSeek(query, systemContext, deepseekKey, model, options, qbrData);
         if (ans) return { answer: ans, type: 'llm_deepseek', model: `DeepSeek (${model})` };
       } catch (e) {
         console.warn(`[aiChatService] DeepSeek API note: ${e.message}`);
@@ -138,29 +139,70 @@ async function processChatQuery(prompt, qbrData, options = {}) {
 }
 
 /**
- * OpenAI API (GPT-4o) Integration.
+ * OpenAI API (GPT-4o) Integration with tool calling support.
  */
-async function queryOpenAI(prompt, systemContext, apiKey, model = 'gpt-4o') {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
+async function queryOpenAI(prompt, systemContext, apiKey, model = 'gpt-4o', options = {}, qbrData = null) {
+  const enableTools = !options.isSectionSummary && qbrData;
+  const tools = enableTools ? getToolSchemas() : null;
+
+  const messages = [
+    { role: 'system', content: `You are an Executive AI Analyst for Executive Dashboard QBR. Respond using clear markdown.\nYou have access to tools. ALWAYS use tools to fetch real data. NEVER guess numbers.\n- If tool returns empty → say 'No data found for this filter.'\n- Cite ticket IDs when listing specific incidents.\n- Never fabricate engineer names, sites, or counts.\n- If a question needs data outside the tools → say so clearly.\n\nSYSTEM CONTEXT & SSOT:\n${systemContext}` },
+    { role: 'user', content: prompt }
+  ];
+
+  let turns = 0;
+  const maxTurns = 3;
+
+  while (turns < maxTurns) {
+    turns++;
+    const payload = {
       model: model,
-      messages: [
-        { role: 'system', content: `You are an Executive AI Analyst for Executive Dashboard QBR. Respond using clear markdown.\n\nSYSTEM CONTEXT & SSOT:\n${systemContext}` },
-        { role: 'user', content: prompt }
-      ],
+      messages: messages,
       temperature: 0.2,
       max_tokens: 1000
-    })
-  });
+    };
+    if (tools && tools.length > 0) {
+      payload.tools = tools;
+      payload.tool_choice = 'auto';
+    }
 
-  if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}: ${await response.text()}`);
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content || null;
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}: ${await response.text()}`);
+    const data = await response.json();
+    const choice = data?.choices?.[0];
+    if (!choice) break;
+
+    const message = choice.message;
+    const toolCalls = message?.tool_calls;
+
+    if (!toolCalls || toolCalls.length === 0) {
+      return message?.content || null;
+    }
+
+    messages.push(message);
+
+    for (const tc of toolCalls) {
+      const funcName = tc.function?.name;
+      let funcArgs = {};
+      try { funcArgs = JSON.parse(tc.function?.arguments || '{}'); } catch (e) { }
+      const toolResult = executeTool(funcName, funcArgs, qbrData);
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        name: funcName,
+        content: JSON.stringify(toolResult)
+      });
+    }
+  }
+  return null;
 }
 
 /**
@@ -190,55 +232,175 @@ async function queryAnthropic(prompt, systemContext, apiKey, model = 'claude-3-5
 }
 
 /**
- * DeepSeek API Integration.
+ * DeepSeek API Integration with tool calling support.
  */
-async function queryDeepSeek(prompt, systemContext, apiKey, model = 'deepseek-chat') {
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
+async function queryDeepSeek(prompt, systemContext, apiKey, model = 'deepseek-chat', options = {}, qbrData = null) {
+  const enableTools = !options.isSectionSummary && qbrData;
+  const tools = enableTools ? getToolSchemas() : null;
+
+  const messages = [
+    { role: 'system', content: `You are an Executive AI Analyst for Executive Dashboard QBR. Respond using clear markdown.\nYou have access to tools. ALWAYS use tools to fetch real data. NEVER guess numbers.\n- If tool returns empty → say 'No data found for this filter.'\n- Cite ticket IDs when listing specific incidents.\n- Never fabricate engineer names, sites, or counts.\n- If a question needs data outside the tools → say so clearly.\n\nSYSTEM CONTEXT & SSOT:\n${systemContext}` },
+    { role: 'user', content: prompt }
+  ];
+
+  let turns = 0;
+  const maxTurns = 3;
+
+  while (turns < maxTurns) {
+    turns++;
+    const payload = {
       model: model,
-      messages: [
-        { role: 'system', content: `You are an Executive AI Analyst for Executive Dashboard QBR. Respond using clear markdown.\n\nSYSTEM CONTEXT & SSOT:\n${systemContext}` },
-        { role: 'user', content: prompt }
-      ],
+      messages: messages,
       temperature: 0.2,
       max_tokens: 1000
-    })
-  });
+    };
+    if (tools && tools.length > 0) {
+      payload.tools = tools;
+      payload.tool_choice = 'auto';
+    }
 
-  if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}: ${await response.text()}`);
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content || null;
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}: ${await response.text()}`);
+    const data = await response.json();
+    const choice = data?.choices?.[0];
+    if (!choice) break;
+
+    const message = choice.message;
+    const toolCalls = message?.tool_calls;
+
+    if (!toolCalls || toolCalls.length === 0) {
+      return message?.content || null;
+    }
+
+    messages.push(message);
+
+    for (const tc of toolCalls) {
+      const funcName = tc.function?.name;
+      let funcArgs = {};
+      try { funcArgs = JSON.parse(tc.function?.arguments || '{}'); } catch (e) { }
+      const toolResult = executeTool(funcName, funcArgs, qbrData);
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        name: funcName,
+        content: JSON.stringify(toolResult)
+      });
+    }
+  }
+  return null;
 }
 
 /**
- * Groq Free API Integration (Meta Llama 3.3 70B / DeepSeek R1 Distill).
+ * Groq Free API Integration (Meta Llama 3.3 70B / Qwen 27B / DeepSeek R1 Distill) with Tool Calling.
  */
-async function queryGroq(prompt, systemContext, apiKey, model = 'llama-3.3-70b-versatile') {
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+async function queryGroq(prompt, systemContext, apiKey, model = 'llama-3.3-70b-versatile', options = {}, qbrData = null) {
+  const enableTools = !options.isSectionSummary && qbrData;
+  const tools = enableTools ? getToolSchemas() : null;
+
+  const messages = [
+    {
+      role: 'system',
+      content: `You are an Executive AI Analyst for Executive Dashboard QBR. Respond using clear markdown.
+You have access to tools. ALWAYS use tools to fetch real data. NEVER guess numbers.
+- If tool returns empty → say 'No data found for this filter.'
+- Cite ticket IDs when listing specific incidents.
+- Never fabricate engineer names, sites, or counts.
+- If a question needs data outside the tools → say so clearly.
+
+SYSTEM CONTEXT & SSOT:
+${systemContext}`
     },
-    body: JSON.stringify({
+    { role: 'user', content: prompt }
+  ];
+
+  let turns = 0;
+  const maxTurns = 3;
+
+  while (turns < maxTurns) {
+    turns++;
+    const payload = {
       model: model,
-      messages: [
-        { role: 'system', content: `You are an Executive AI Analyst for Executive Dashboard QBR. Respond using clear markdown.\n\nSYSTEM CONTEXT & SSOT:\n${systemContext}` },
-        { role: 'user', content: prompt }
-      ],
+      messages: messages,
       temperature: 0.2,
       max_tokens: 1000
-    })
-  });
+    };
+    if (tools && tools.length > 0) {
+      payload.tools = tools;
+      payload.tool_choice = 'auto';
+    }
 
-  if (!response.ok) throw new Error(`Groq HTTP ${response.status}: ${await response.text()}`);
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content || null;
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      // If error occurs with tools payload, fall back to standard non-tool query gracefully
+      if (payload.tools && (response.status === 400 || response.status === 404)) {
+        console.warn(`[queryGroq] Tool calling notice (${response.status}): ${errText}. Falling back to context query.`);
+        delete payload.tools;
+        delete payload.tool_choice;
+        const fbRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!fbRes.ok) throw new Error(`Groq HTTP ${fbRes.status}: ${await fbRes.text()}`);
+        const fbData = await fbRes.json();
+        return fbData?.choices?.[0]?.message?.content || null;
+      }
+      throw new Error(`Groq HTTP ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    const choice = data?.choices?.[0];
+    if (!choice) break;
+
+    const message = choice.message;
+    const toolCalls = message?.tool_calls;
+
+    if (!toolCalls || toolCalls.length === 0) {
+      return message?.content || null;
+    }
+
+    // Append assistant tool call message
+    messages.push(message);
+
+    // Execute tool calls and push tool responses
+    for (const tc of toolCalls) {
+      const funcName = tc.function?.name;
+      let funcArgs = {};
+      try { funcArgs = JSON.parse(tc.function?.arguments || '{}'); } catch (e) { }
+
+      console.log(`[aiChatService] Tool Call: ${funcName}`, funcArgs);
+      const toolResult = executeTool(funcName, funcArgs, qbrData);
+
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        name: funcName,
+        content: JSON.stringify(toolResult)
+      });
+    }
+  }
+
+  return null;
 }
 
 /**

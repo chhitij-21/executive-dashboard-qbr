@@ -2,6 +2,7 @@
 import React from 'react';
 import { API_BASE_URL } from '../config/api';
 import AISectionSummary from './AISectionSummary';
+import { ChartsSection } from './ChartsSection';
 
 /**
  * OverviewPage — Executive Operations Landing Page
@@ -20,14 +21,17 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
       {/* Header Banner */}
       <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-main, #0f172a)', margin: 0 }}>
             Executive Operations Overview
           </h2>
-          <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary, #64748b)', margin: '0.25rem 0 0 0' }}>
             {customerName} — Reporting Period: <strong>{periodLabel}</strong>
           </p>
         </div>
       </div>
+
+      {/* Interactive Charts Section */}
+      <ChartsSection qbrData={data} />
 
       <AISectionSummary section="executive" jobId={activeJobId} title="Executive Summary Insight" />
 

@@ -1,9 +1,14 @@
 // frontend/src/components/Navbar.jsx
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../hooks/useTheme';
+import { NotificationBell } from './NotificationBell';
 
 export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSites = [] }) {
+  const { t, i18n } = useTranslation();
   const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const locationsList = React.useMemo(() => {
     const defaultLocs = activeClient?.locations || ['All Locations'];
@@ -14,12 +19,17 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
     return merged;
   }, [activeClient, reportSites]);
 
+  const toggleLanguage = () => {
+    const nextLang = i18n.language === 'hi' ? 'en' : 'hi';
+    i18n.changeLanguage(nextLang);
+  };
+
   return (
     <header className="nav-bar">
       <div className="nav-brand">
         <span className="nav-logo-icon">📊</span>
         <div>
-          <span className="nav-logo">Executive Report Dashboard</span>
+          <span className="nav-logo">{t('app_title')}</span>
           <span className="nav-subtitle">Multi-Client Enterprise Reporting Platform</span>
         </div>
       </div>
@@ -66,7 +76,6 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
             ))}
           </select>
         </div>
-
       </div>
 
       {/* Navigation Tabs */}
@@ -75,28 +84,28 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
           className={activeTab === 'overview' ? 'active' : ''}
           onClick={() => setActiveTab('overview')}
         >
-          🌐 Overview
+          🌐 {t('nav_overview')}
         </button>
 
         <button
           className={activeTab === 'upload' ? 'active' : ''}
           onClick={() => setActiveTab('upload')}
         >
-          📤 Upload & Generate
+          📤 {t('nav_upload')}
         </button>
 
         <button
           className={activeTab === 'dashboard' ? 'active' : ''}
           onClick={() => setActiveTab('dashboard')}
         >
-          📈 Executive Dashboard
+          📈 {t('nav_sites')}
         </button>
 
         <button
           className={activeTab === 'tickets' ? 'active' : ''}
           onClick={() => setActiveTab('tickets')}
         >
-          🎫 Proactive Tickets
+          🎫 {t('nav_tickets')}
         </button>
 
         <button
@@ -115,6 +124,67 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
           </button>
         )}
       </nav>
+
+      {/* Header Controls (Theme, Language, Notifications, Print) */}
+      <div className="nav-controls no-print" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button
+          onClick={toggleTheme}
+          title={theme === 'dark' ? t('theme_light') : t('theme_dark')}
+          style={{
+            background: 'var(--bg-card, #ffffff)',
+            border: '1px solid var(--border-color, #e2e8f0)',
+            borderRadius: '6px',
+            padding: '6px 10px',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            color: 'var(--text-main, #334155)',
+            minHeight: '44px'
+          }}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
+
+        <button
+          onClick={toggleLanguage}
+          title="Toggle Language"
+          style={{
+            background: 'var(--bg-card, #ffffff)',
+            border: '1px solid var(--border-color, #e2e8f0)',
+            borderRadius: '6px',
+            padding: '6px 10px',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: 'bold',
+            color: 'var(--text-main, #334155)',
+            minHeight: '44px'
+          }}
+        >
+          {i18n.language === 'hi' ? 'EN' : 'हि'}
+        </button>
+
+        <NotificationBell />
+
+        <button
+          onClick={() => window.print()}
+          title={t('btn_print_pdf')}
+          style={{
+            background: 'var(--accent-blue, #2563eb)',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '6px 12px',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            minHeight: '44px'
+          }}
+        >
+          🖨️ {t('btn_print_pdf')}
+        </button>
+      </div>
 
       {/* User Profile Pill */}
       <div className="nav-user">
@@ -140,3 +210,4 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
     </header>
   );
 }
+

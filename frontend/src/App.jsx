@@ -21,6 +21,7 @@ import defaultDashboardData from './data/defaultDashboardData.json';
 // FINDING-025 FIX: Import shared utilities instead of duplicating them inline.
 import { normalizeLoc, isGenericLocation } from './utils/siteUtils';
 import { AIChatbot } from './components/AIChatbot';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 /**
  * ErrorBoundary — catches React render errors and shows a clean executive error card.
@@ -76,8 +77,21 @@ function MainPortal() {
   const [isLoading, setIsLoading] = useState(false);
   // Always start with null — never show stale bundled defaultDashboardData.
   // Data is always loaded fresh from the backend API based on the active jobId.
-  const [dashboardData, setDashboardData] = useState(null);
-  const [apiError, setApiError] = useState(null);
+  const [ticketsSubTab, setTicketsSubTab] = useState('engineer');
+
+  useKeyboardShortcuts({
+    onSelectTab: (target) => {
+      setTicketsSubTab(target);
+      setTab('tickets');
+    },
+    onFocusSearch: () => {
+      const searchEl = document.querySelector('input[type="text"], input[type="search"]');
+      if (searchEl) searchEl.focus();
+    },
+    onCloseModal: () => {
+      setIsLoginOpen(false);
+    }
+  });
 
   // Fetch & poll for dashboard data if jobId or site selection changes
   useEffect(() => {
@@ -1031,6 +1045,7 @@ function MainPortal() {
             onJobCompleted={(jid) => {
               setJobId(jid);
               setTab('dashboard');
+              window.dispatchEvent(new Event('qbr-report-uploaded'));
             }}
           />
         )}
@@ -1048,7 +1063,7 @@ function MainPortal() {
         )}
 
         {tab === 'tickets' && (
-          <TicketsDetailPage data={activeDashboardData} />
+          <TicketsDetailPage data={activeDashboardData} initialSubTab={ticketsSubTab} />
         )}
 
         {tab === 'history' && (

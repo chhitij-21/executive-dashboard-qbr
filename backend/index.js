@@ -504,7 +504,7 @@ app.post(['/api/ai/section-summary', '/ai/section-summary'], async (req, res) =>
       prompt = `Provide a concise 2-3 sentence summary for the Hold Reasons section for ${customer} (${period}). Top Hold Reasons: ${reasons || 'No data'}. Highlight main operational bottlenecks causing ticket holds. Do not use titles or headers.`;
     }
 
-    const aiRes = await processChatQuery(prompt, qbrData);
+    const aiRes = await processChatQuery(prompt, qbrData, { isSectionSummary: true });
     let summaryText = aiRes?.answer || 'Operational metrics remain within normal baseline parameters.';
     summaryText = summaryText.replace(/^#+\s*.*$/gm, '').trim();
 

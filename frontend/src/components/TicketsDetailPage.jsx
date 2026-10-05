@@ -5,10 +5,14 @@ import AISectionSummary from './AISectionSummary';
  * TicketsDetailPage — Proactive Ticket Analytics & Operational SLA Portal
  * Consumes canonical SSOT qbrData object passed via `data` prop.
  */
-export default function TicketsDetailPage({ data }) {
-  const [activeTab, setActiveTab] = useState('engineer'); // 'engineer' | 'site' | 'reasons' | 'raw'
+export default function TicketsDetailPage({ data, initialSubTab }) {
+  const [activeTab, setActiveTab] = useState(initialSubTab || 'engineer'); // 'engineer' | 'site' | 'reasons' | 'raw'
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  React.useEffect(() => {
+    if (initialSubTab) setActiveTab(initialSubTab);
+  }, [initialSubTab]);
 
   if (!data || !data.proactiveTicketAnalytics) {
     return (
@@ -191,7 +195,7 @@ export default function TicketsDetailPage({ data }) {
             Ticket Owner & Engineer Workload
           </h3>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+            <table className="mobile-card-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
                   <th style={{ padding: '0.75rem 1rem' }}>Ticket Owner</th>
@@ -214,14 +218,14 @@ export default function TicketsDetailPage({ data }) {
                 ) : (
                   byEngineer.map((eng, idx) => (
                     <tr key={eng.name || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#0f172a' }}>{eng.name}</td>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>{eng.total}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: eng.open > 0 ? '#b45309' : '#64748b' }}>{eng.open}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{eng.onHold}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{eng.assignment}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#15803d' }}>{eng.closed}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#16a34a', fontWeight: 600 }}>{eng.slaMet}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: eng.slaMissed > 0 ? '#dc2626' : '#64748b', fontWeight: 600 }}>{eng.slaMissed}</td>
+                      <td data-label="Ticket Owner" style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#0f172a' }}>{eng.name}</td>
+                      <td data-label="Total Tickets" style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>{eng.total}</td>
+                      <td data-label="Open" style={{ padding: '0.75rem 1rem', color: eng.open > 0 ? '#b45309' : '#64748b' }}>{eng.open}</td>
+                      <td data-label="On Hold" style={{ padding: '0.75rem 1rem' }}>{eng.onHold}</td>
+                      <td data-label="Assignment" style={{ padding: '0.75rem 1rem' }}>{eng.assignment}</td>
+                      <td data-label="Closed" style={{ padding: '0.75rem 1rem', color: '#15803d' }}>{eng.closed}</td>
+                      <td data-label="SLA Met" style={{ padding: '0.75rem 1rem', color: '#16a34a', fontWeight: 600 }}>{eng.slaMet}</td>
+                      <td data-label="SLA Breached" style={{ padding: '0.75rem 1rem', color: eng.slaMissed > 0 ? '#dc2626' : '#64748b', fontWeight: 600 }}>{eng.slaMissed}</td>
                     </tr>
                   ))
                 )}
