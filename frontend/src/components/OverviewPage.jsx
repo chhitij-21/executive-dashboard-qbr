@@ -1,6 +1,7 @@
 // frontend/src/components/OverviewPage.jsx
 import React from 'react';
 import { API_BASE_URL } from '../config/api';
+import AISectionSummary from './AISectionSummary';
 
 /**
  * OverviewPage — Executive Operations Landing Page
@@ -27,6 +28,8 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
           </p>
         </div>
       </div>
+
+      <AISectionSummary section="executive" jobId={activeJobId} title="Executive Summary Insight" />
 
       {/* 2-Column Grid */}
       <div style={{

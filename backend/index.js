@@ -437,6 +437,109 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
   }
 });
 
+// ── AI Section Summary Endpoint ─────────────────────────────────────────────
+app.post(['/api/ai/section-summary', '/ai/section-summary'], async (req, res) => {
+  try {
+    const { section, jobId } = req.body;
+    const validSections = ['executive', 'engineer', 'site', 'holdReason'];
+    if (!section || !validSections.includes(section)) {
+      return res.status(400).json({ error: `Invalid section. Must be one of: ${validSections.join(', ')}` });
+    }
+
+    let job = null;
+    const reqJobId = jobId || 'latest';
+    if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
+      const history = historyService.getHistory();
+      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+    } else {
+      job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+    }
+
+    let dPath = job?.dashboardPath;
+    if (!dPath || !fs.existsSync(dPath)) {
+      const activeJobId = job?.jobId || reqJobId;
+      const candidates = [
+        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
+        resolveDataPath('dashboard_data.json'),
+        resolveDataPath('bundled_default', 'dashboard_data.json'),
+      ];
+      dPath = candidates.find((p) => fs.existsSync(p));
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
+      return res.status(404).json({ error: 'Dashboard dataset not found.' });
+    }
+
+    let qbrData = null;
+    try {
+      qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8'));
+    } catch (e) {
+      return res.status(500).json({ error: 'Failed to read dataset.' });
+    }
+
+    if (qbrData.aiSectionSummaries && qbrData.aiSectionSummaries[section]) {
+      return res.json({
+        success: true,
+        section,
+        summary: qbrData.aiSectionSummaries[section],
+        cached: true,
+      });
+    }
+
+    const { processChatQuery } = require('./services/aiChatService');
+    let prompt = '';
+    const customer = qbrData.customerName || 'Jubilant Foodworks Ltd';
+    const period = qbrData.report_period?.display_label || qbrData.reportingPeriod || 'Selected Period';
+    const exec = qbrData.executiveSummary || {};
+    const pro = qbrData.proactiveTicketAnalytics || {};
+
+    if (section === 'executive') {
+      prompt = `Provide a concise 2-3 sentence executive summary for the Executive Overview of QBR report for ${customer} (${period}). Total Devices: ${exec.totalDevices || 0}, Switch Uptime: ${exec.jflSwitchUptime || exec.overallUptime || '100.00'}%, Health Score: ${exec.healthScore || 100}/100, Total Incidents: ${exec.totalIncidents || 0}, Primary RCA Switches: ${exec.primaryRcaSwitches || 'None'}, Primary RCA APs: ${exec.primaryRcaAPs || 'None'}. Do not use titles or headers.`;
+    } else if (section === 'engineer') {
+      const engs = (pro.byEngineer || []).slice(0, 5).map(e => `${e.name}: ${e.total} tickets, SLA Met: ${e.slaMet}, Breached: ${e.slaMissed}`).join('; ');
+      prompt = `Provide a concise 2-3 sentence summary for the Engineer Workload & SLA section for ${customer} (${period}). Top Engineers: ${engs || 'No data'}. Highlight workload distribution and SLA compliance. Do not use titles or headers.`;
+    } else if (section === 'site') {
+      const sites = (pro.bySite || []).slice(0, 5).map(s => `${s.siteId}: ${s.total} tickets, SLA ${s.slaPercent}%`).join('; ');
+      prompt = `Provide a concise 2-3 sentence summary for the Site Ticket Distribution section for ${customer} (${period}). Top Sites: ${sites || 'No data'}. Highlight site incident concentration. Do not use titles or headers.`;
+    } else if (section === 'holdReason') {
+      const reasons = (pro.holdReasons || []).slice(0, 5).map(h => `${h.reason}: ${h.count} tickets`).join('; ');
+      prompt = `Provide a concise 2-3 sentence summary for the Hold Reasons section for ${customer} (${period}). Top Hold Reasons: ${reasons || 'No data'}. Highlight main operational bottlenecks causing ticket holds. Do not use titles or headers.`;
+    }
+
+    const aiRes = await processChatQuery(prompt, qbrData);
+    let summaryText = aiRes?.answer || 'Operational metrics remain within normal baseline parameters.';
+    summaryText = summaryText.replace(/^#+\s*.*$/gm, '').trim();
+
+    qbrData.aiSectionSummaries = qbrData.aiSectionSummaries || {};
+    qbrData.aiSectionSummaries[section] = summaryText;
+
+    try {
+      fs.writeFileSync(dPath, JSON.stringify(qbrData, null, 2), 'utf8');
+      const canonicalPath = resolveDataPath('dashboard_data.json');
+      if (fs.existsSync(canonicalPath) && dPath !== canonicalPath) {
+        try {
+          const canonObj = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
+          canonObj.aiSectionSummaries = canonObj.aiSectionSummaries || {};
+          canonObj.aiSectionSummaries[section] = summaryText;
+          fs.writeFileSync(canonicalPath, JSON.stringify(canonObj, null, 2), 'utf8');
+        } catch (e) { }
+      }
+    } catch (writeErr) {
+      console.warn('[server] Warning writing AI section summary cache:', writeErr.message);
+    }
+
+    res.json({
+      success: true,
+      section,
+      summary: summaryText,
+      cached: false,
+    });
+  } catch (err) {
+    console.error('[server] Error in /api/ai/section-summary:', err.message);
+    res.status(500).json({ error: `Section summary generation error: ${err.message}` });
+  }
+});
+
 // ── Claudex Loop — Agentic SSE Endpoint ────────────────────────────────────
 // GET /api/chat/loop?prompt=...&jobId=...
 // Streams Think->Act->Observe->Repeat events via Server-Sent Events.

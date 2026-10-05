@@ -1,5 +1,5 @@
-// frontend/src/components/TicketsDetailPage.jsx
 import React, { useState, useMemo } from 'react';
+import AISectionSummary from './AISectionSummary';
 
 /**
  * TicketsDetailPage — Proactive Ticket Analytics & Operational SLA Portal
@@ -186,6 +186,7 @@ export default function TicketsDetailPage({ data }) {
       {/* Tab 1: Engineer Breakdown Table */}
       {activeTab === 'engineer' && (
         <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <AISectionSummary section="engineer" jobId={data?.jobId || 'latest'} title="Engineer Workload AI Summary" />
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', marginBottom: '1rem' }}>
             Ticket Owner & Engineer Workload
           </h3>
@@ -233,6 +234,7 @@ export default function TicketsDetailPage({ data }) {
       {/* Tab 2: Site Breakdown Table */}
       {activeTab === 'site' && (
         <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <AISectionSummary section="site" jobId={data?.jobId || 'latest'} title="Site Performance AI Summary" />
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', marginBottom: '1rem' }}>
             Site-Wise Proactive Ticket Distribution
           </h3>
@@ -282,6 +284,7 @@ export default function TicketsDetailPage({ data }) {
       {/* Tab 3: Hold Reasons Breakdown */}
       {activeTab === 'reasons' && (
         <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <AISectionSummary section="holdReason" jobId={data?.jobId || 'latest'} title="Hold Reasons AI Summary" />
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', marginBottom: '1rem' }}>
             Hold Reason Categorization & Frequency
           </h3>
