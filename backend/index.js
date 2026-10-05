@@ -419,7 +419,6 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
       const candidates = [
         path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
         resolveDataPath('dashboard_data.json'),
-        resolveDataPath('bundled_default', 'dashboard_data.json'),
       ];
       dPath = candidates.find((p) => fs.existsSync(p));
     }
@@ -461,7 +460,6 @@ app.post(['/api/ai/section-summary', '/ai/section-summary'], async (req, res) =>
       const candidates = [
         path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
         resolveDataPath('dashboard_data.json'),
-        resolveDataPath('bundled_default', 'dashboard_data.json'),
       ];
       dPath = candidates.find((p) => fs.existsSync(p));
     }
@@ -585,7 +583,6 @@ app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
     const candidates = [
       path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
       resolveDataPath('dashboard_data.json'),
-      resolveDataPath('bundled_default', 'dashboard_data.json'),
     ];
     dPath = candidates.find((p) => fs.existsSync(p));
   }
@@ -903,7 +900,6 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
         job?.dashboardPath,
         path.join(jobOutputDir, 'dashboard_data.json'),
         resolveDataPath('dashboard_data.json'),
-        resolveDataPath('bundled_default', 'dashboard_data.json'),
       ].filter(Boolean);
 
       const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
@@ -964,7 +960,6 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
         job?.dashboardPath,
         path.join(jobOutputDir, 'dashboard_data.json'),
         resolveDataPath('dashboard_data.json'),
-        resolveDataPath('bundled_default', 'dashboard_data.json'),
       ].filter(Boolean);
 
       const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
@@ -1019,7 +1014,6 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       const activeJobId = job?.jobId || reqJobId;
       const candidates = [
         path.join(REPORTS_DIR, `job_${activeJobId}`, defaultFilename),
-        resolveDataPath('bundled_default', defaultFilename),
         resolveDataPath(defaultFilename),
       ];
       targetPath = candidates.find((p) => fs.existsSync(p));
@@ -1030,7 +1024,6 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
       const activeJobId = job?.jobId || reqJobId;
       const dirsToSearch = [
         activeJobId ? path.join(REPORTS_DIR, `job_${activeJobId}`) : null,
-        resolveDataPath('bundled_default'),
         resolveDataPath(),
       ].filter(Boolean);
 
