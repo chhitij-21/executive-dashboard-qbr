@@ -979,21 +979,24 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── 11. Save dashboard JSON ───────────────────────────────────────────────
   const dashPath = path.join(outputDir, 'dashboard_data.json');
-  fs.writeFileSync(dashPath, JSON.stringify(qbrData, null, 2));
+  const jsonPayloadStr = JSON.stringify(qbrData, null, 2);
+  fs.writeFileSync(dashPath, jsonPayloadStr);
   log('Dashboard JSON saved to job folder');
 
   // Also write to data/dashboard_data.json as canonical latest so the dashboard
   // always shows the correct most-recent run even after a server restart.
-  const isTestRun = options.isTest || process.env.NODE_ENV === 'test' ||
-    (outputDir && (outputDir.includes('Temp') || outputDir.includes('test') || outputDir.includes('tmp') || outputDir === 'data' || outputDir.endsWith('/data') || outputDir.endsWith('\\data')));
+  const isTestRun = options.isTest || process.env.NODE_ENV === 'test';
   if (!isTestRun) {
     try {
-      const canonicalDir = path.resolve('data');
+      const canonicalDir = path.resolve(__dirname, '..', '..', 'data');
       if (!fs.existsSync(canonicalDir)) fs.mkdirSync(canonicalDir, { recursive: true });
       const canonicalPath = path.join(canonicalDir, 'dashboard_data.json');
-      fs.writeFileSync(canonicalPath, JSON.stringify(qbrData, null, 2));
+      fs.writeFileSync(canonicalPath, jsonPayloadStr);
+      const byteCount = Buffer.byteLength(jsonPayloadStr, 'utf8');
+      console.log('[processData] Canonical dashboard_data.json updated:', canonicalPath, `<${byteCount} bytes>`);
       log(`Dashboard JSON also saved to canonical path: ${canonicalPath}`);
     } catch (canonErr) {
+      console.error('[processData] ERROR writing canonical dashboard_data.json:', canonErr.message);
       log(`WARNING: Could not write canonical dashboard_data.json: ${canonErr.message}`);
     }
   }

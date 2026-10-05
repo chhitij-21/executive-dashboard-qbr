@@ -667,13 +667,15 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
   let dPath = null;
 
   if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-    const history = historyService.getHistory(); // history is reverse scan (newest-first)
-    job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
-    if (job && job.dashboardPath && fs.existsSync(job.dashboardPath)) {
-      dPath = job.dashboardPath;
+    const canonicalPath = resolveDataPath('dashboard_data.json');
+    if (fs.existsSync(canonicalPath)) {
+      dPath = canonicalPath;
     } else {
-      const canonicalPath = resolveDataPath('dashboard_data.json');
-      if (fs.existsSync(canonicalPath)) dPath = canonicalPath;
+      const history = historyService.getHistory(); // history is reverse scan (newest-first)
+      job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+      if (job && job.dashboardPath && fs.existsSync(job.dashboardPath)) {
+        dPath = job.dashboardPath;
+      }
     }
   } else {
     job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
