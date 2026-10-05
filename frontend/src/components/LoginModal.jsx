@@ -3,12 +3,22 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/api';
 
-export default function LoginModal({ isOpen, onClose }) {
+export default function LoginModal({ isOpen, onClose, requireLogin = false }) {
   const { login, isBackendOffline } = useAuth();
   const [email, setEmail] = useState(import.meta.env.VITE_ADMIN_EMAIL || 'admin@portal.com');
   const [password, setPassword] = useState(import.meta.env.VITE_ADMIN_PASSWORD || 'admin123');
   const [error, setError] = useState(null);
   const [demoAccounts, setDemoAccounts] = useState([]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !requireLogin && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [requireLogin, onClose]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/auth/demo-accounts`)
@@ -49,11 +59,11 @@ export default function LoginModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={requireLogin ? undefined : onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>🔐 Enterprise Portal Sign In</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          {!requireLogin && <button className="modal-close" onClick={onClose}>✕</button>}
         </div>
 
         {(error || isBackendOffline) && (

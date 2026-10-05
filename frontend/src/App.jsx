@@ -985,6 +985,24 @@ function MainPortal() {
 
   const reportSites = useMemo(() => (dashboardData?.siteSummary || []).map((s) => s.siteId), [dashboardData]);
 
+  if (!user) {
+    return (
+      <div className="app-container">
+        <div style={{ display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', minHeight: '100vh',
+                      background: '#0f172a', color: '#94a3b8',
+                      fontSize: '0.95rem' }}>
+          Please log in to continue…
+        </div>
+        <LoginModal
+          isOpen={true}
+          onClose={() => {}}
+          requireLogin={true}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       <Navbar
@@ -998,6 +1016,7 @@ function MainPortal() {
         {tab === 'overview' && (
           <OverviewPage
             data={activeDashboardData}
+            jobId={jobId}
             onOpenReports={() => setTab('dashboard')}
             onOpenTickets={() => setTab('tickets')}
           />
@@ -1052,7 +1071,11 @@ function MainPortal() {
       </main>
 
       <AIChatbot jobId={jobId} />
-      <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+      <LoginModal
+        isOpen={!user || isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        requireLogin={!user}
+      />
     </div>
   );
 }
