@@ -1007,9 +1007,9 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // Async PDF generation so HTTP response is instant while PDF builds in background
   generatePDF(qbrData, templatePath, pdfPath).then(() => {
-    log(`PDF generated: ${pdfPath}`);
+    try { log(`PDF generated: ${pdfPath}`); } catch (_) {}
   }).catch((e) => {
-    log(`PDF notice: ${e.message}`);
+    try { log(`PDF notice: ${e.message}`); } catch (_) {}
   });
 
   writeFile(outputDir, 'error_report.md', '# Error Report\n\nNo errors.');
