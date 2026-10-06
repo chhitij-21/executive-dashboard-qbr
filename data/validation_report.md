@@ -1,9 +1,9 @@
 # Calculation Engine AI Audit & Validation Report
 
 **Status**: ✅ PASSED
-**Timestamp**: 2026-09-30T11:29:04.945Z
+**Timestamp**: 2026-10-06T09:30:29.674Z
 **Customer**: Jubilant Foodworks Ltd (JFL)
-**Period**: User Selected Period
+**Period**: 1 August 2026 – 31 August 2026
 
 ## Calculation Engine Audit Matrix (SSOT)
 | Audit Check | Status | Verification Detail |
@@ -21,12 +21,12 @@
 **Overall Accuracy**: **100%**
 
 ## Dataset Mapping Summary
-- Inventory devices: 445 (372 active operational, 73 stock excluded from SLA)
-- Incident rows: 363
-- Uptime-mapped devices: 791
+- Inventory devices: 444 (371 active operational, 73 stock excluded from SLA)
+- Incident rows: 1
+- Uptime-mapped devices: 787
 
 ## Warnings
 
-1. 2 device serial(s) in incidents not found in inventory — left as N/A per spec.
+1. 1 device serial(s) in incidents not found in inventory — left as N/A per spec.
 
 All required data located and mapped successfully.

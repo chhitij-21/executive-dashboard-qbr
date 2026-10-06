@@ -1,25 +1,25 @@
 # Processing Log
 
-- `2026-09-30T11:29:03.855Z` JFL pipeline started (Period: User Selected Period, periodType: monthly, startDate: null, endDate: null)
-- `2026-09-30T11:29:03.868Z` Rules loaded from: rules.yaml. Uptime SLA Target: 99.3% | Incident Resolution SLA: 2h
-- `2026-09-30T11:29:04.840Z` Incident file parsed — sheets: Raw, RCA, Device Wise Uptime , All Location , BLR, Grater Noida , Guwahati, Hyd, mohali, Mumbai, Nagpur, Noida
-- `2026-09-30T11:29:04.841Z` Inventory file parsed — sheets: Updated inventory, Gr._Noida, Noida, Nagpur, Mumbai_DC, Mohali, Hyderabad, Guwahati, Bangalore
-- `2026-09-30T11:29:04.842Z` Incident sheets detected: incidentSheet=Raw, uptimeSheet=All Location 
-- `2026-09-30T11:29:04.843Z` Raw incident rows: 363
-- `2026-09-30T11:29:04.844Z` Uptime summary devices: 434
-- `2026-09-30T11:29:04.844Z` All Location sheet rows: 434
-- `2026-09-30T11:29:04.853Z` Inventory devices merged: 445 from 9 sheets
-- `2026-09-30T11:29:04.934Z` Incidents for target customer (excluding Change Requests): 363
-- `2026-09-30T11:29:04.936Z` Auto-derived reporting period from incident timestamps: 7 April 2026 – 6 July 2026
-- `2026-09-30T11:29:04.943Z` Detected 5 hardware replacement swap pair(s). Linking swapped stock devices to primary SLA entries.
-- `2026-09-30T11:29:04.944Z` Devices enriched with uptime. Stock devices: 73. Breaching SLA: 35
-- `2026-09-30T11:29:04.947Z` Incidents enriched with sla_status and display_reference
-- `2026-09-30T11:29:04.948Z` Building analytics sections...
-- `2026-09-30T11:29:04.949Z` Devices — Active: 372, Stock (Excluded from SLA): 73, Switches: 142, APs: 224
-- `2026-09-30T11:29:04.968Z` Analytics complete
-- `2026-09-30T11:29:04.968Z` Data validation passed — all RCA breakdown sums and SLA status counts are consistent.
-- `2026-09-30T11:29:04.969Z` Generating Executive QBR PDF Report...
-- `2026-09-30T11:29:04.971Z` PDF generated: data\JFL_QBR_1790767744969.pdf
-- `2026-09-30T11:29:05.177Z` Dashboard JSON saved to job folder
-- `2026-09-30T11:29:05.184Z` Dashboard JSON also saved to canonical path: C:\Users\Chhitij\Desktop\New folder\Executive-Dashboard-QBR-Generator\data\dashboard_data.json
-- `2026-09-30T11:29:05.185Z` Pipeline complete ✓
+- `2026-10-06T09:30:28.510Z` JFL pipeline started (Period: 1 August 2026 – 31 August 2026, periodType: monthly, startDate: 2026-08-01, endDate: 2026-08-31)
+- `2026-10-06T09:30:28.520Z` Rules loaded from: rules.yaml. Uptime SLA Target: 99.9% | Incident Resolution SLA: 2h
+- `2026-10-06T09:30:29.556Z` Incident file parsed — sheets: Raw, RCA, Device Wise Uptime , All Location , BLR, Grater Noida , Guwahati, Hyd, mohali, Mumbai, Nagpur, Noida
+- `2026-10-06T09:30:29.557Z` Inventory file parsed — sheets: Updated inventory, Gr._Noida, Noida, Nagpur, Mumbai_DC, Mohali, Hyderabad, Guwahati, Bangalore
+- `2026-10-06T09:30:29.558Z` Incident sheets detected: incidentSheet=Raw, uptimeSheet=All Location 
+- `2026-10-06T09:30:29.567Z` Raw incident rows: 363
+- `2026-10-06T09:30:29.569Z` Uptime summary devices: 434
+- `2026-10-06T09:30:29.569Z` All Location sheet rows: 434
+- `2026-10-06T09:30:29.577Z` Inventory devices merged: 444 from 8 sheets
+- `2026-10-06T09:30:29.668Z` Incidents for target customer (excluding Change Requests): 357
+- `2026-10-06T09:30:29.669Z` Other Activity tickets extracted: 6
+- `2026-10-06T09:30:29.670Z` Date-range filter [2026-08-01 → 2026-08-31]: 1 incidents within range (out of 357 total)
+- `2026-10-06T09:30:29.674Z` Devices enriched with uptime. Stock devices: 73. Breaching SLA: 98
+- `2026-10-06T09:30:29.675Z` Incidents enriched with sla_status and display_reference
+- `2026-10-06T09:30:29.675Z` Building analytics sections...
+- `2026-10-06T09:30:29.676Z` Devices — Active: 371, Stock (Excluded from SLA): 73, Switches: 142, APs: 223
+- `2026-10-06T09:30:29.689Z` Analytics complete
+- `2026-10-06T09:30:29.689Z` Data validation passed — all RCA breakdown sums and SLA status counts are consistent.
+- `2026-10-06T09:30:29.693Z` Dashboard JSON saved to job folder
+- `2026-10-06T09:30:29.696Z` Dashboard JSON also saved to canonical path: C:\Users\Chhitij\Desktop\New folder\Executive-Dashboard-QBR-Generator\data\dashboard_data.json
+- `2026-10-06T09:30:29.863Z` PPT generated: C:\Users\Chhitij\Desktop\New folder\Executive-Dashboard-QBR-Generator\data\JFL_QBR_1791279029690.pptx
+- `2026-10-06T09:30:29.867Z` Pipeline complete ✓
+- `2026-10-06T09:30:31.528Z` PDF generated: C:\Users\Chhitij\Desktop\New folder\Executive-Dashboard-QBR-Generator\data\JFL_QBR_1791279029690.pdf

@@ -2,9 +2,9 @@
 
 ## Active Devices vs Stock Inventory
 
-- Active Operational Devices: **372**
+- Active Operational Devices: **371**
 - Stock Inventory (Excluded from SLA): **73**
 
 ## Incidents
 
-- Total Incidents: **363**
+- Total Incidents: **1**
