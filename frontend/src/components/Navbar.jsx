@@ -27,9 +27,11 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
   return (
     <header className="nav-bar">
       <div className="nav-brand">
-        <span className="nav-logo-icon">📊</span>
-        <div>
-          <span className="nav-logo">{t('app_title')}</span>
+        <div className="nav-logo-badge">
+          <span className="nav-logo-icon">📊</span>
+        </div>
+        <div className="nav-brand-text">
+          <span className="nav-logo-title">{t('app_title')}</span>
           <span className="nav-subtitle">Multi-Client Enterprise Reporting Platform</span>
         </div>
       </div>
@@ -81,133 +83,111 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
       {/* Navigation Tabs */}
       <nav className="nav-tabs">
         <button
-          className={activeTab === 'overview' ? 'active' : ''}
+          className={`nav-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
-          🌐 {t('nav_overview')}
+          <span className="nav-tab-icon">🌐</span>
+          <span className="nav-tab-label">{t('nav_overview')}</span>
         </button>
 
         <button
-          className={activeTab === 'upload' ? 'active' : ''}
+          className={`nav-tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
           onClick={() => setActiveTab('upload')}
         >
-          📤 {t('nav_upload')}
+          <span className="nav-tab-icon">📤</span>
+          <span className="nav-tab-label">{t('nav_upload')}</span>
         </button>
 
         <button
-          className={activeTab === 'dashboard' ? 'active' : ''}
+          className={`nav-tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
-          📈 {t('nav_sites')}
+          <span className="nav-tab-icon">📈</span>
+          <span className="nav-tab-label">{t('nav_sites')}</span>
         </button>
 
         <button
-          className={activeTab === 'tickets' ? 'active' : ''}
+          className={`nav-tab-btn ${activeTab === 'tickets' ? 'active' : ''}`}
           onClick={() => setActiveTab('tickets')}
         >
-          🎫 {t('nav_tickets')}
+          <span className="nav-tab-icon">🎫</span>
+          <span className="nav-tab-label">{t('nav_tickets')}</span>
         </button>
 
         <button
-          className={activeTab === 'history' ? 'active' : ''}
+          className={`nav-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
           onClick={() => setActiveTab('history')}
         >
-          📜 Report History
+          <span className="nav-tab-icon">📜</span>
+          <span className="nav-tab-label">Report History</span>
         </button>
 
         {isAdmin && (
           <button
-            className={activeTab === 'clients' ? 'active' : ''}
+            className={`nav-tab-btn ${activeTab === 'clients' ? 'active' : ''}`}
             onClick={() => setActiveTab('clients')}
           >
-            ⚙️ Client Management
+            <span className="nav-tab-icon">⚙️</span>
+            <span className="nav-tab-label">Client Management</span>
           </button>
         )}
       </nav>
 
-      {/* Header Controls (Theme, Language, Notifications, Print) */}
-      <div className="nav-controls no-print" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <button
-          onClick={toggleTheme}
-          title={theme === 'dark' ? t('theme_light') : t('theme_dark')}
-          style={{
-            background: 'var(--bg-card, #ffffff)',
-            border: '1px solid var(--border-color, #e2e8f0)',
-            borderRadius: '6px',
-            padding: '6px 10px',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            color: 'var(--text-main, #334155)',
-            minHeight: '44px'
-          }}
-        >
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
-
-        <button
-          onClick={toggleLanguage}
-          title="Toggle Language"
-          style={{
-            background: 'var(--bg-card, #ffffff)',
-            border: '1px solid var(--border-color, #e2e8f0)',
-            borderRadius: '6px',
-            padding: '6px 10px',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            fontWeight: 'bold',
-            color: 'var(--text-main, #334155)',
-            minHeight: '44px'
-          }}
-        >
-          {i18n.language === 'hi' ? 'EN' : 'हि'}
-        </button>
-
-        <NotificationBell />
-
-        <button
-          onClick={() => window.print()}
-          title={t('btn_print_pdf')}
-          style={{
-            background: 'var(--accent-blue, #2563eb)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            minHeight: '44px'
-          }}
-        >
-          🖨️ {t('btn_print_pdf')}
-        </button>
-      </div>
-
-      {/* User Profile Pill */}
-      <div className="nav-user">
-        {user ? (
-          <div className="user-profile">
-            <span className="user-avatar">{user.avatar || '👨‍💼'}</span>
-            <div className="user-info">
-              <span className="user-name">{user.name}</span>
-              <span className={`user-role-badge ${user.role}`}>
-                {user.role === 'admin' ? 'System Admin' : 'Client User'}
-              </span>
-            </div>
-            <button className="btn-logout" onClick={logout} title="Sign Out">
-              🚪
-            </button>
-          </div>
-        ) : (
-          <button className="btn-login" onClick={onOpenLogin}>
-            🔑 Sign In
+      {/* Cleaner Right Side Controls & Profile */}
+      <div className="nav-right-container">
+        <div className="nav-controls-group no-print">
+          <button
+            className="nav-action-btn nav-theme-btn"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? t('theme_light') : t('theme_dark')}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-        )}
+
+          <button
+            className="nav-action-btn nav-lang-btn"
+            onClick={toggleLanguage}
+            title="Toggle Language"
+          >
+            {i18n.language === 'hi' ? 'EN' : 'हि'}
+          </button>
+
+          <NotificationBell />
+
+          <button
+            className="nav-action-btn nav-print-btn"
+            onClick={() => window.print()}
+            title={t('btn_print_pdf')}
+          >
+            <span className="print-icon">🖨️</span>
+            <span>{t('btn_print_pdf')}</span>
+          </button>
+        </div>
+
+        {/* User Profile Pill */}
+        <div className="nav-user-container">
+          {user ? (
+            <div className="user-profile-pill">
+              <span className="user-avatar-badge">{user.avatar || '👨‍💼'}</span>
+              <div className="user-details">
+                <span className="user-display-name">{user.name}</span>
+                <span className={`user-role-tag ${user.role}`}>
+                  {user.role === 'admin' ? 'System Admin' : 'Client User'}
+                </span>
+              </div>
+              <button className="btn-logout-icon" onClick={logout} title="Sign Out">
+                🚪
+              </button>
+            </div>
+          ) : (
+            <button className="btn-login-action" onClick={onOpenLogin}>
+              🔑 Sign In
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );
 }
+
 
