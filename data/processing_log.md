@@ -1,26 +1,26 @@
 # Processing Log
 
-- `2026-10-06T10:11:12.110Z` JFL pipeline started (Period: 1 August 2026 – 31 August 2026, periodType: monthly, startDate: 2026-08-01, endDate: 2026-08-31)
-- `2026-10-06T10:11:12.118Z` Rules loaded from: rules.yaml. Uptime SLA Target: 99.9% | Incident Resolution SLA: 2h
-- `2026-10-06T10:11:12.172Z` Incident file parsed — sheets: Sheet1
-- `2026-10-06T10:11:12.173Z` Inventory file parsed — sheets: Sheet1
-- `2026-10-06T10:11:12.174Z` Incident sheets detected: incidentSheet=Sheet1, uptimeSheet=null
-- `2026-10-06T10:11:12.174Z` Raw incident rows: 98
-- `2026-10-06T10:11:12.175Z` Uptime summary devices: 0
-- `2026-10-06T10:11:12.175Z` All Location sheet rows: 0
-- `2026-10-06T10:11:12.184Z` Inventory devices merged: 444 from 1 sheets
-- `2026-10-06T10:11:12.205Z` Incidents for target customer (excluding Change Requests): 86
-- `2026-10-06T10:11:12.206Z` Other Activity tickets extracted: 12
-- `2026-10-06T10:11:12.207Z` Date-range filter [2026-08-01 → 2026-08-31]: 86 incidents within range (out of 86 total)
-- `2026-10-06T10:11:12.211Z` Detected 5 hardware replacement swap pair(s). Linking swapped stock devices to primary SLA entries.
-- `2026-10-06T10:11:12.212Z` Devices enriched with uptime. Stock devices: 72. Breaching SLA: 18
-- `2026-10-06T10:11:12.213Z` Incidents enriched with sla_status and display_reference
-- `2026-10-06T10:11:12.214Z` Building analytics sections...
-- `2026-10-06T10:11:12.214Z` Devices — Active: 372, Stock (Excluded from SLA): 72, Switches: 142, APs: 224
-- `2026-10-06T10:11:12.228Z` Analytics complete
-- `2026-10-06T10:11:12.229Z` Data validation passed — all RCA breakdown sums and SLA status counts are consistent.
-- `2026-10-06T10:11:12.233Z` Dashboard JSON saved to job folder
-- `2026-10-06T10:11:12.235Z` Dashboard JSON also saved to canonical path: C:\Users\Chhitij\Desktop\New folder\Executive-Dashboard-QBR-Generator\data\dashboard_data.json
-- `2026-10-06T10:11:12.384Z` PPT generated: data\JFL_QBR_1791281472230.pptx
-- `2026-10-06T10:11:12.387Z` Pipeline complete ✓
-- `2026-10-06T10:11:14.006Z` PDF generated: data\JFL_QBR_1791281472230.pdf
+- `2026-10-06T10:27:46.828Z` JFL pipeline started (Period: 1 August 2026 – 31 August 2026, periodType: monthly, startDate: 2026-08-01, endDate: 2026-08-31)
+- `2026-10-06T10:27:46.836Z` Rules loaded from: rules.yaml. Uptime SLA Target: 99.9% | Incident Resolution SLA: 2h
+- `2026-10-06T10:27:46.894Z` Incident file parsed — sheets: Sheet1
+- `2026-10-06T10:27:46.894Z` Inventory file parsed — sheets: Sheet1
+- `2026-10-06T10:27:46.895Z` Incident sheets detected: incidentSheet=Sheet1, uptimeSheet=null
+- `2026-10-06T10:27:46.895Z` Raw incident rows: 98
+- `2026-10-06T10:27:46.896Z` Uptime summary devices: 0
+- `2026-10-06T10:27:46.896Z` All Location sheet rows: 0
+- `2026-10-06T10:27:46.905Z` Inventory devices merged: 444 from 1 sheets
+- `2026-10-06T10:27:46.927Z` Incidents for target customer (excluding Change Requests): 86
+- `2026-10-06T10:27:46.927Z` Other Activity tickets extracted: 12
+- `2026-10-06T10:27:46.928Z` Date-range filter [2026-08-01 → 2026-08-31]: 86 incidents within range (out of 86 total)
+- `2026-10-06T10:27:46.933Z` Detected 5 hardware replacement swap pair(s). Linking swapped stock devices to primary SLA entries.
+- `2026-10-06T10:27:46.934Z` Devices enriched with uptime. Stock devices: 72. Breaching SLA: 18
+- `2026-10-06T10:27:46.935Z` Incidents enriched with sla_status and display_reference
+- `2026-10-06T10:27:46.935Z` Building analytics sections...
+- `2026-10-06T10:27:46.936Z` Devices — Active: 372, Stock (Excluded from SLA): 72, Switches: 142, APs: 224
+- `2026-10-06T10:27:46.951Z` Analytics complete
+- `2026-10-06T10:27:46.951Z` Data validation passed — all RCA breakdown sums and SLA status counts are consistent.
+- `2026-10-06T10:27:46.956Z` Dashboard JSON saved to job folder
+- `2026-10-06T10:27:46.958Z` Dashboard JSON also saved to canonical path: C:\Users\Chhitij\Desktop\New folder\Executive-Dashboard-QBR-Generator\data\dashboard_data.json
+- `2026-10-06T10:27:47.121Z` PPT generated: data\JFL_QBR_1791282466952.pptx
+- `2026-10-06T10:27:47.125Z` Pipeline complete ✓
+- `2026-10-06T10:27:48.786Z` PDF generated: data\JFL_QBR_1791282466952.pdf

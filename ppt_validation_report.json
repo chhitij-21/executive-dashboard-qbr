@@ -1,6 +1,6 @@
 {
   "reportId": "N/A",
-  "generatedAt": "2026-10-06T10:27:46.959Z",
+  "generatedAt": "2026-10-06T10:04:02.977Z",
   "overallStatus": "PASS",
   "metricsChecked": 92,
   "mismatchesCount": 0,
@@ -257,8 +257,8 @@
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_jflSwitchUptime",
-      "expected": "93.01",
-      "actual": "93.01",
+      "expected": "94.95",
+      "actual": "94.95",
       "path": "siteSummary[Greater Noida].jflSwitchUptime",
       "status": "PASS"
     },
@@ -617,8 +617,8 @@
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_jflSwitchUptime",
-      "expected": "82.84",
-      "actual": "82.84",
+      "expected": "82.83",
+      "actual": "82.83",
       "path": "siteSummary[Nagpur].jflSwitchUptime",
       "status": "PASS"
     },

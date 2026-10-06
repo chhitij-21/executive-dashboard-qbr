@@ -1,0 +1,24 @@
+# Processing Log
+
+- `2026-10-06T10:19:50.199Z` JFL pipeline started (Period: 7 April 2026 – 6 July 2026, periodType: quarterly, startDate: 2026-04-07, endDate: 2026-07-06)
+- `2026-10-06T10:19:50.208Z` Rules loaded from: rules.yaml. Uptime SLA Target: 99.3% | Incident Resolution SLA: 2h
+- `2026-10-06T10:19:50.310Z` Incident file parsed — sheets: Raw, RCA, Device Wise Uptime , All Location , BLR, Grater Noida , Guwahati, Hyd, mohali, Mumbai, Nagpur, Noida
+- `2026-10-06T10:19:50.311Z` Incident sheets detected: incidentSheet=Raw, uptimeSheet=All Location 
+- `2026-10-06T10:19:50.311Z` Raw incident rows: 363
+- `2026-10-06T10:19:50.312Z` Uptime summary devices: 434
+- `2026-10-06T10:19:50.312Z` All Location sheet rows: 434
+- `2026-10-06T10:19:50.313Z` Device list built from All Location sheet: 434
+- `2026-10-06T10:19:50.384Z` Incidents for target customer (excluding Change Requests): 357
+- `2026-10-06T10:19:50.385Z` Other Activity tickets extracted: 6
+- `2026-10-06T10:19:50.386Z` Date-range filter [2026-04-07 → 2026-07-06]: 357 incidents within range (out of 357 total)
+- `2026-10-06T10:19:50.391Z` Devices enriched with uptime. Stock devices: 0. Breaching SLA: 23
+- `2026-10-06T10:19:50.392Z` Incidents enriched with sla_status and display_reference
+- `2026-10-06T10:19:50.393Z` Building analytics sections...
+- `2026-10-06T10:19:50.393Z` Devices — Active: 434, Stock (Excluded from SLA): 0, Switches: 151, APs: 277
+- `2026-10-06T10:19:50.410Z` Analytics complete
+- `2026-10-06T10:19:50.410Z` Data validation passed — all RCA breakdown sums and SLA status counts are consistent.
+- `2026-10-06T10:19:50.417Z` Dashboard JSON saved to job folder
+- `2026-10-06T10:19:50.420Z` Dashboard JSON also saved to canonical path: C:\Users\Chhitij\Desktop\New folder\Executive-Dashboard-QBR-Generator\data\dashboard_data.json
+- `2026-10-06T10:19:50.588Z` PPT generated: tmp_qbr_check\JFL_QBR_1791281990411.pptx
+- `2026-10-06T10:19:50.592Z` Pipeline complete ✓
+- `2026-10-06T10:19:52.414Z` PDF generated: tmp_qbr_check\JFL_QBR_1791281990411.pdf
