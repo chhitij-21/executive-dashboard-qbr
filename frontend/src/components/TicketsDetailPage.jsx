@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import AISectionSummary from './AISectionSummary';
+import { ChartsSection } from './ChartsSection';
 
 /**
  * TicketsDetailPage — Proactive Ticket Analytics & Operational SLA Portal
@@ -119,6 +120,9 @@ export default function TicketsDetailPage({ data, initialSubTab }) {
           <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Met: {overall.slaMet || 0} | Breached: {overall.slaBreached || 0}</div>
         </div>
       </div>
+
+      {/* Interactive Analytics & Trends (Charts Section) */}
+      <ChartsSection qbrData={data} showHeader={false} />
 
       {/* Sub Navigation Tabs */}
       <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', marginBottom: '1.5rem', gap: '0.5rem' }}>

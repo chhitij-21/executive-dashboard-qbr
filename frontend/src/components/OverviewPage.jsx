@@ -2,7 +2,6 @@
 import React from 'react';
 import { API_BASE_URL } from '../config/api';
 import AISectionSummary from './AISectionSummary';
-import { ChartsSection } from './ChartsSection';
 
 /**
  * OverviewPage — Executive Operations Landing Page
@@ -17,7 +16,7 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
   const activeJobId = jobId || 'latest';
 
   return (
-    <div className="overview-page" style={{ padding: '1rem 0', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="overview-page" style={{ padding: '1rem 0', maxWidth: '1680px', margin: '0 auto' }}>
       {/* Header Banner */}
       <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -29,9 +28,6 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
           </p>
         </div>
       </div>
-
-      {/* Interactive Charts Section */}
-      <ChartsSection qbrData={data} />
 
       <AISectionSummary section="executive" jobId={activeJobId} title="Executive Summary Insight" />
 
@@ -92,7 +88,7 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
               <li>
                 <a
                   href={`${API_BASE_URL}/api/ppt/${activeJobId}`}
-                  download
+                  download="JFL_QBR_Executive_Report.pdf"
                   style={{
                     color: '#2563eb',
                     fontWeight: 600,
@@ -103,14 +99,13 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
                     gap: '0.5rem'
                   }}
                 >
-                  <span>•</span> Download PowerPoint QBR
+                  <span>•</span> Download Executive PDF Report
                 </a>
               </li>
               <li>
                 <a
                   href={`${API_BASE_URL}/api/pdf/${activeJobId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  download="JFL_QBR_Executive_Report.pdf"
                   style={{
                     color: '#2563eb',
                     fontWeight: 600,

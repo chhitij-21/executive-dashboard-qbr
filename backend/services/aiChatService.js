@@ -62,7 +62,7 @@ async function processChatQuery(prompt, qbrData, options = {}) {
     const groqKey = getEnvVar('GROQ_API_KEY', 'Api_key', 'GROQ_KEY');
     if ((preferredProvider === 'groq' || (!preferredProvider && groqKey)) && groqKey) {
       try {
-        const model = getEnvVar('GROQ_MODEL') || 'qwen/qwen3.8-27b';
+        const model = getEnvVar('GROQ_MODEL') || 'llama-3.3-70b-versatile';
         const ans = await queryGroq(query, systemContext, groqKey, model, options, qbrData);
         if (ans) return { answer: ans, type: 'llm_groq', model: `Groq (${model})` };
       } catch (e) {
@@ -302,13 +302,13 @@ async function queryDeepSeek(prompt, systemContext, apiKey, model = 'deepseek-ch
  * Groq Free API Integration (Meta Llama 3.3 70B / Qwen 27B / DeepSeek R1 Distill) with Tool Calling.
  */
 async function queryGroq(prompt, systemContext, apiKey, model = 'llama-3.3-70b-versatile', options = {}, qbrData = null) {
-  const enableTools = !options.isSectionSummary && qbrData;
+  const isShortGreeting = /^(hi|hello|hey|greetings|help|who are you)$/i.test(prompt.trim());
+  const enableTools = !options.isSectionSummary && !isShortGreeting && qbrData;
   const tools = enableTools ? getToolSchemas() : null;
 
-  const messages = [
-    {
-      role: 'system',
-      content: `You are an Executive AI Analyst for Executive Dashboard QBR. Respond using clear markdown.
+  const activeSystemPrompt = isShortGreeting
+    ? `You are an Executive AI Assistant for ${qbrData?.customerName || 'Jubilant Foodworks Ltd'}. Respond warmly and concisely in markdown, welcoming the user and introducing your ability to answer questions about Uptime formulas, SLA breaches, site metrics, RCA drivers, and device performance.`
+    : `You are an Executive AI Analyst for Executive Dashboard QBR. Respond using clear markdown.
 You have access to tools. ALWAYS use tools to fetch real data. NEVER guess numbers.
 - If tool returns empty → say 'No data found for this filter.'
 - Cite ticket IDs when listing specific incidents.
@@ -316,8 +316,10 @@ You have access to tools. ALWAYS use tools to fetch real data. NEVER guess numbe
 - If a question needs data outside the tools → say so clearly.
 
 SYSTEM CONTEXT & SSOT:
-${systemContext}`
-    },
+${systemContext}`;
+
+  const messages = [
+    { role: 'system', content: activeSystemPrompt },
     { role: 'user', content: prompt }
   ];
 
@@ -491,6 +493,14 @@ You MUST:
 6. Never guess — only use the SSOT facts provided.
 ` : '';
 
+  const engList = Array.isArray(qbrData?.proactiveTicketAnalytics?.byEngineer)
+    ? qbrData.proactiveTicketAnalytics.byEngineer
+    : (Array.isArray(qbrData?.engineerBreakdown) ? qbrData.engineerBreakdown : []);
+
+  const engTable = engList.slice(0, 8)
+    .map(e => `  ${e.name}: Total ${e.total}, OnHold ${e.onHold}, Open ${e.open}, Closed ${e.closed}, SLA Met ${e.slaMet}, Missed ${e.slaMissed}, TopHold: ${e.topHoldReason || 'None'}`)
+    .join('\n');
+
   return `
 CUSTOMER: ${qbrData.customerName || 'Jubilant Foodworks Ltd'}
 REPORTING PERIOD: ${reportPeriod}
@@ -510,6 +520,9 @@ EXECUTIVE METRICS (SSOT — 100% verified):
 - AP Incidents: ${exec.apIncidents || 0} across ${exec.uniqueAPsWithIncidents || 0} unique APs
 - Primary RCA (Switches): ${exec.primaryRcaSwitches || 'Stable Operations (No Incidents)'}
 - Primary RCA (APs): ${exec.primaryRcaAPs || 'Stable Operations (No Incidents)'}
+
+ENGINEERS WORKLOAD & HOLD BREAKDOWN:
+${engTable || '  No engineer breakdown available'}
 
 RCA BREAKDOWN:
 ${rcaTable}
@@ -532,12 +545,66 @@ FORMULA RULES (apply exactly as written):
  * Built-in Native SSOT Empirical Knowledge & Calculation Engine.
  */
 function generateNativeSSOTAnswer(prompt, qbrData) {
-  const lower = (prompt || '').toLowerCase();
+  let userQuery = prompt || '';
+  if (userQuery.includes('QUESTION:')) {
+    const match = userQuery.match(/QUESTION:\s*(.*?)(?:\n\n|\n[A-Z]+:|$)/s);
+    if (match && match[1]) userQuery = match[1].trim();
+  }
+  const lower = userQuery.toLowerCase();
   const exec = qbrData?.executiveSummary || {};
   const sites = Array.isArray(qbrData?.siteSummary) ? qbrData.siteSummary : [];
   const devices = Array.isArray(qbrData?.devices) ? qbrData.devices : [];
   const incidents = Array.isArray(qbrData?.incidents) ? qbrData.incidents : [];
   const period = qbrData?.report_period?.display_label || qbrData?.reportingPeriod || 'Selected Period';
+  const engList = Array.isArray(qbrData?.proactiveTicketAnalytics?.byEngineer)
+    ? qbrData.proactiveTicketAnalytics.byEngineer
+    : (Array.isArray(qbrData?.engineerBreakdown) ? qbrData.engineerBreakdown : []);
+
+  // Topic 0: Specific Engineer / Ticket Owner Lookup
+  const matchedEng = engList.find(e => {
+    if (!e || !e.name) return false;
+    const nameLower = e.name.toLowerCase();
+    const parts = nameLower.split(' ');
+    return lower.includes(nameLower) || parts.some(part => part.length > 2 && lower.includes(part));
+  });
+
+  if (matchedEng) {
+    const holdBreakdown = matchedEng.holdReasons && Object.keys(matchedEng.holdReasons).length > 0
+      ? Object.entries(matchedEng.holdReasons).map(([r, c]) => `- **${r}**: ${c} ticket(s)`).join('\n')
+      : 'No hold reasons recorded.';
+
+    const slaPct = matchedEng.total > 0 ? ((matchedEng.slaMet / matchedEng.total) * 100).toFixed(2) : '100.00';
+
+    return {
+      topic: 'engineer_detail',
+      text: `### 👨‍💻 Engineer Intelligence: ${matchedEng.name}
+
+- **Total Assigned Tickets**: **${matchedEng.total || 0}**
+- **Tickets On Hold**: **${matchedEng.onHold || 0}** ticket(s)
+- **Active / Open Tickets**: **${matchedEng.open || 0}** ticket(s)
+- **Closed / Resolved Tickets**: **${matchedEng.closed || 0}** ticket(s)
+- **SLA Compliance Rate**: **${slaPct}%** (${matchedEng.slaMet || 0} Met, ${matchedEng.slaMissed || 0} Breached)
+- **Top Hold Driver**: **${matchedEng.topHoldReason || '—'}**
+
+**Hold Reasons Breakdown**:
+${holdBreakdown}`
+    };
+  }
+
+  // Topic 0.5: General Engineer / Hold Ticket queries
+  if (lower.includes('engineer') || lower.includes('hold ticket') || lower.includes('on hold') || lower.includes('ticket owner')) {
+    const topEngs = engList.slice(0, 10).map(e => `- **${e.name}**: Total ${e.total} tickets | **${e.onHold} On Hold** | ${e.slaMet} SLA Met`).join('\n');
+    return {
+      topic: 'engineer_summary',
+      text: `### 👨‍💻 Engineer Workload & Hold Ticket Breakdown
+
+- **Total Monitored Engineers**: **${engList.length}**
+- **Engineers with On-Hold Tickets**: **${engList.filter(e => e.onHold > 0).length}**
+
+**Engineer Breakdown**:
+${topEngs}`
+    };
+  }
 
   // Topic 1: Specific Site Lookup (Check site first so site-specific queries match correctly)
   const matchedSite = sites.find(s => s && s.siteId && typeof s.siteId === 'string' && lower.includes(s.siteId.toLowerCase()));

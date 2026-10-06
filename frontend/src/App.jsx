@@ -77,6 +77,8 @@ function MainPortal() {
   const [isLoading, setIsLoading] = useState(false);
   // Always start with null — never show stale bundled defaultDashboardData.
   // Data is always loaded fresh from the backend API based on the active jobId.
+  const [dashboardData, setDashboardData] = useState(null);
+  const [apiError, setApiError] = useState(null);
   const [ticketsSubTab, setTicketsSubTab] = useState('engineer');
 
   useKeyboardShortcuts({
@@ -354,21 +356,20 @@ function MainPortal() {
             <a
               href={`${API_BASE_URL}/api/pdf/${jobId || 'latest'}`}
               className="btn-primary"
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Opens executive report formatted for print/PDF export. Auto-triggers print dialog (Save as PDF)."
+              download="JFL_QBR_Executive_Report.pdf"
+              title="Download Executive QBR PDF Report"
               style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
             >
-              📄 Download / View PDF
+              📄 Download PDF Report
             </a>
             <a
               href={`${API_BASE_URL}/api/ppt/${jobId || 'latest'}`}
               className="btn-secondary"
-              download
-              title="Download the PowerPoint presentation"
+              download="JFL_QBR_Executive_Report.pdf"
+              title="Download Executive QBR PDF Presentation"
               style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
             >
-              📊 Download PPT
+              📊 Download PDF Presentation
             </a>
           </div>
         </div>
@@ -1028,12 +1029,14 @@ function MainPortal() {
 
       <main className="main-content">
         {tab === 'overview' && (
-          <OverviewPage
-            data={activeDashboardData}
-            jobId={jobId}
-            onOpenReports={() => setTab('dashboard')}
-            onOpenTickets={() => setTab('tickets')}
-          />
+          <ErrorBoundary>
+            <OverviewPage
+              data={activeDashboardData}
+              jobId={jobId}
+              onOpenReports={() => setTab('dashboard')}
+              onOpenTickets={() => setTab('tickets')}
+            />
+          </ErrorBoundary>
         )}
 
         {tab === 'upload' && (
@@ -1063,7 +1066,9 @@ function MainPortal() {
         )}
 
         {tab === 'tickets' && (
-          <TicketsDetailPage data={activeDashboardData} initialSubTab={ticketsSubTab} />
+          <ErrorBoundary>
+            <TicketsDetailPage data={activeDashboardData} initialSubTab={ticketsSubTab} />
+          </ErrorBoundary>
         )}
 
         {tab === 'history' && (

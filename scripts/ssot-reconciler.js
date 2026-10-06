@@ -55,7 +55,14 @@ function parseHumanSummary(text) {
                  'Hyderabad', 'Nagpur', 'Mumbai-DC', 'Guwahati'];
   const out = {};
   for (const site of SITES) {
-    const idx = text.indexOf(site);
+    let idx = -1;
+    if (site === 'Noida') {
+      // Find Noida when NOT preceded by 'Greater '
+      const match = text.match(/(?<!Greater\s)Noida/);
+      if (match) idx = match.index;
+    } else {
+      idx = text.indexOf(site);
+    }
     if (idx === -1) continue;
     const tail = text.slice(idx, idx + 200);
     // numeric fields appear in order: devices, proactive %, jfl %
@@ -110,9 +117,9 @@ async function main() {
     const checks = [
       ['deviceCount', h.deviceCount, d.deviceCount, null],
       ['proactiveSwitchUptime', h.proactiveSwitchUptime,
-        normalizePct(d.proactiveSwitchUptime), 0],
+        normalizePct(d.proactiveTicketAvg ?? d.proactiveSwitchUptime), 0],
       ['jflSwitchUptime', h.jflSwitchUptime,
-        normalizePct(d.jflSwitchUptime), 0],
+        normalizePct(d.jflTicketAvg ?? d.jflSwitchUptime), 0],
     ];
 
     for (const [metric, humanVal, dashVal, tol] of checks) {

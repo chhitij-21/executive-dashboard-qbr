@@ -254,7 +254,8 @@ function observe(answer, ssot, goals, subGoals, iteration, weights, minConf, max
   if (answer && answer.length > 500) { lengthScore += SW.answerLength * 0.2; }
 
   // ── 2. Numeric KPI coverage ──────────────────────────────────────────────
-  var kpiChecks = buildKPIChecks(exec, ssot.slaTarget);
+  var focusArea = detectFocusArea(lower);
+  var kpiChecks = buildKPIChecks(exec, ssot.slaTarget, focusArea, ssot);
   var citedKPIs   = [];
   var missingKPIs = [];
   var numericScore = 0;
@@ -440,19 +441,29 @@ function buildSSOTSnapshot(qbrData, slaTarget) {
     executiveSummaryClean: executiveSummaryClean,
     rcaBreakdown:          (qbrData && qbrData.rcaAnalytics && qbrData.rcaAnalytics.breakdown) ? qbrData.rcaAnalytics.breakdown : [],
     devices:               Array.isArray(qbrData && qbrData.devices) ? qbrData.devices : [],
+    byEngineer:            Array.isArray(qbrData && qbrData.proactiveTicketAnalytics && qbrData.proactiveTicketAnalytics.byEngineer)
+      ? qbrData.proactiveTicketAnalytics.byEngineer
+      : (Array.isArray(qbrData && qbrData.engineerBreakdown) ? qbrData.engineerBreakdown : []),
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KPI check list — used by OBSERVE for numeric citation scoring
 // ─────────────────────────────────────────────────────────────────────────────
-function buildKPIChecks(exec, slaTarget) {
+function buildKPIChecks(exec, slaTarget, focusArea, ssot) {
   var jfl       = String(exec.jflSwitchUptime || exec.overallUptime || '');
   var proactive = String(exec.proactiveSwitchUptime || '');
   var health    = String(exec.healthScore || '');
   var slaComp   = String(exec.slaCompliance || '');
   var slaT      = String(slaTarget || '99.3');
   var totalDev  = String(exec.totalDevices || '');
+
+  if (focusArea === 'Engineer Analysis') {
+    return [
+      { name: 'Engineer / Ticket Breakdown', value: 'ticket', matchLen: 4, weight: 0.16, critical: true },
+      { name: 'On-Hold Ticket Status',        value: 'hold',   matchLen: 4, weight: 0.16, critical: true },
+    ];
+  }
 
   return [
     { name: 'JFL Switch Uptime',       value: jfl,       matchLen: 4, weight: 0.09, critical: true  },
@@ -475,7 +486,10 @@ function buildGoalTree(focusArea, ssot) {
     { label: 'Reporting period',      keyword: ssot.period ? ssot.period.slice(0, 6).toLowerCase() : 'period', required: false },
   ];
 
-  if (focusArea === 'JFL Switch Uptime') {
+  if (focusArea === 'Engineer Analysis') {
+    goals.push({ label: 'Engineer workload info', keyword: 'ticket', required: true });
+    goals.push({ label: 'On-hold ticket status', keyword: 'hold', required: true });
+  } else if (focusArea === 'JFL Switch Uptime') {
     goals.push({ label: 'JFL Uptime value',   keyword: String(exec.jflSwitchUptime || exec.overallUptime || '').slice(0, 4), required: true  });
     goals.push({ label: 'Hold-time concept',  keyword: 'hold',                                                                required: true  });
     goals.push({ label: 'Formula mention',    keyword: 'formula',                                                             required: false });
@@ -557,6 +571,16 @@ function buildSSOTFactList(focusArea, ssot, iteration, previousGaps) {
   facts.push('Infrastructure: ' + (exec.totalDevices || 0) + ' devices across ' + (exec.totalSites || 0) + ' sites (' + (exec.totalSwitches || 0) + ' Switches, ' + (exec.totalAPs || 0) + ' APs)');
   facts.push('Primary RCA (Switches): ' + (exec.primaryRcaSwitches || 'Stable Operations (No Incidents)'));
   facts.push('Primary RCA (APs): ' + (exec.primaryRcaAPs || 'Stable Operations (No Incidents)'));
+
+  if (ssot.byEngineer && ssot.byEngineer.length > 0) {
+    var engLines = ssot.byEngineer.slice(0, 10).map(function(e) {
+      var hStr = e.holdReasons && Object.keys(e.holdReasons).length > 0
+        ? Object.entries(e.holdReasons).map(function(pair) { return pair[0] + ': ' + pair[1]; }).join(', ')
+        : 'None';
+      return e.name + ': Total ' + e.total + ' tickets, OnHold ' + e.onHold + ' (' + hStr + '), Closed ' + e.closed + ', SLA Met ' + e.slaMet;
+    });
+    facts.push('ENGINEER WORKLOAD & HOLD BREAKDOWN: ' + engLines.join(' | '));
+  }
 
   // Tier 2: Focus-area specific
   if (focusArea === 'JFL Switch Uptime' || focusArea === 'SLA Compliance') {
@@ -672,6 +696,7 @@ function buildCompleteSSOTBlock(ssot) {
 // Focus area detector
 // ─────────────────────────────────────────────────────────────────────────────
 function detectFocusArea(lower) {
+  if (lower.indexOf('kartik') !== -1 || lower.indexOf('dheerendra') !== -1 || lower.indexOf('aneesh') !== -1 || lower.indexOf('arvind') !== -1 || lower.indexOf('abhishek') !== -1 || lower.indexOf('engineer') !== -1 || lower.indexOf('ticket owner') !== -1 || lower.indexOf('hold ticket') !== -1) { return 'Engineer Analysis'; }
   if (lower.indexOf('jfl uptime') !== -1 || lower.indexOf('time on hold') !== -1 || lower.indexOf('hold min') !== -1) { return 'JFL Switch Uptime'; }
   if (lower.indexOf('proactive') !== -1 || lower.indexOf('actual resolution') !== -1)                                 { return 'Proactive Uptime'; }
   if (lower.indexOf('health score') !== -1 || lower.indexOf('health label') !== -1 || lower.indexOf('health calc') !== -1) { return 'Health Score'; }

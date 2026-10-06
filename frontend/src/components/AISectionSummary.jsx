@@ -79,8 +79,8 @@ export default function AISectionSummary({ section, jobId, title = 'AI Section S
           </span>
         )}
       </div>
-      <div style={{ color: '#0f172a', lineHeight: 1.55, fontWeight: 450 }}>
-        {summary}
+      <div style={{ color: '#0f172a', lineHeight: 1.55, fontWeight: 450, whiteSpace: 'pre-wrap' }}>
+        {typeof summary === 'string' ? summary : (summary?.text || String(summary || ''))}
       </div>
     </div>
   );

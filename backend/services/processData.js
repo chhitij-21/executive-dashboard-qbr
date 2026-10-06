@@ -957,27 +957,11 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── 9. Data quality report ────────────────────────────────────────────────
   writeDataQualityReport(outputDir, devices, incidents, allLocMap, log);
 
-  // ── 10. PDF Report Generation ─────────────────────────────────────────────
+  // ── 10. Save dashboard JSON (SSOT) FIRST so data is immediately available ─
   const templatePath = path.resolve('templates', 'master_template.pptx');
   const pdfPath = path.join(outputDir, `JFL_QBR_${Date.now()}.pdf`);
   const pptPath = path.join(outputDir, `JFL_QBR_${Date.now()}.pptx`);
-  let pdfGenerated = false, pdfError = null;
-  try {
-    log('Generating Executive QBR PDF Report...');
-    await generatePDF(qbrData, templatePath, pdfPath);
-    pdfGenerated = true;
-    log(`PDF generated: ${pdfPath}`);
-  } catch (e) {
-    pdfError = e.message;
-    log(`PDF error: ${e.message}`);
-  }
 
-  // Also attempt PPT generation for backward compatibility if needed
-  try {
-    await generatePPT(qbrData, templatePath, pptPath).catch(() => { });
-  } catch (e) { }
-
-  // ── 11. Save dashboard JSON ───────────────────────────────────────────────
   const dashPath = path.join(outputDir, 'dashboard_data.json');
   const jsonPayloadStr = JSON.stringify(qbrData, null, 2);
   fs.writeFileSync(dashPath, jsonPayloadStr);
@@ -1015,15 +999,27 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     log('[processData] Canonical write skipped — payload ' + payloadBytes + ' bytes (< 50KB)');
   }
 
-  writeFile(outputDir, 'error_report.md',
-    pdfError ? `# Error Report\n\n## PDF Error\n\n> ${pdfError}` : '# Error Report\n\nNo errors.');
+  // ── 11. PPT & PDF Report Generation ──────────────────────────────────────
+  try {
+    await generatePPT(qbrData, templatePath, pptPath).catch(() => { });
+    log(`PPT generated: ${pptPath}`);
+  } catch (e) { }
+
+  // Async PDF generation so HTTP response is instant while PDF builds in background
+  generatePDF(qbrData, templatePath, pdfPath).then(() => {
+    log(`PDF generated: ${pdfPath}`);
+  }).catch((e) => {
+    log(`PDF notice: ${e.message}`);
+  });
+
+  writeFile(outputDir, 'error_report.md', '# Error Report\n\nNo errors.');
 
   log('Pipeline complete ✓');
   return {
     success: true,
     dashboardPath: dashPath,
-    pdfPath: pdfGenerated ? pdfPath : null,
-    pptPath: fs.existsSync(pptPath) ? pptPath : null,
+    pdfPath: pdfPath,
+    pptPath: pptPath,
     reportPath: path.join(outputDir, 'validation_report.md'),
     errorReportPath: path.join(outputDir, 'error_report.md'),
     dataQualityPath: path.join(outputDir, 'data_quality_report.md'),

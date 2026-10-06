@@ -41,8 +41,9 @@ function _purgeExpiredTokens() {
 function authenticateUser(email, password) {
   if (!email || !password) return null;
 
+  const target = email.toLowerCase().trim();
   const user = USERS.find(
-    (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
+    (u) => (u.email.toLowerCase() === target || (u.username && u.username.toLowerCase() === target)) && u.password === password
   );
   if (!user) return null;
 
