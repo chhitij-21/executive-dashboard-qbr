@@ -881,6 +881,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       __effectiveUptime: jflUptime,
       __jflUptime: jflUptime,
       __proactiveUptime: proactiveUptime,
+      __holdMins: incDown ? Math.max(0, holdMins) : Math.max(0, ((100 - (jflUptime ?? 100)) / 100) * windowMinutes),
+      __proactiveDownMins: incDown ? Math.max(0, proactiveDownMins) : Math.max(0, ((100 - (proactiveUptime ?? 100)) / 100) * windowMinutes),
       __monthlyUptime: jflUptime,
       __quarterlyUptime: jflUptime,
       __isStock: isStock,
@@ -1272,10 +1274,19 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const apRcaBrk = classifyRCALocal(apIncidents);
   const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
-  const swJflUps = switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
-  const swProUps = switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
-  const jflSwitchUptime = swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00';
-  const proactiveSwitchUptime = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
+  let jflSwitchUptime = '100.00';
+  let proactiveSwitchUptime = '100.00';
+  if (switches.length > 0) {
+    const totalAvailMins = switches.length * 44640;
+    const totalHoldMins = switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
+    const totalProactiveMins = switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
+
+    const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalHoldMins)) / totalAvailMins) * 100));
+    const proPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalProactiveMins)) / totalAvailMins) * 100));
+
+    jflSwitchUptime = jflPct.toFixed(2);
+    proactiveSwitchUptime = proPct.toFixed(2);
+  }
 
   const activeSlaTarget = activeDevices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
@@ -1465,8 +1476,20 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
       const swJflUps = s.switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
       const swProUps = s.switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
 
-      const proactiveSwitchUptime = swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00';
-      const jflSwitchUptime = swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00';
+      let proactiveSwitchUptime = '100.00';
+      let jflSwitchUptime = '100.00';
+
+      if (s.switches.length > 0) {
+        const totalAvailMins = s.switches.length * 44640;
+        const totalHoldMins = s.switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
+        const totalProactiveMins = s.switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
+
+        const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalHoldMins)) / totalAvailMins) * 100));
+        const proPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalProactiveMins)) / totalAvailMins) * 100));
+
+        jflSwitchUptime = jflPct.toFixed(2);
+        proactiveSwitchUptime = proPct.toFixed(2);
+      }
 
       const apSerialsAndHosts = new Set([
         ...s.aps.map(d => String(d.DeviceID || '').toLowerCase()),
