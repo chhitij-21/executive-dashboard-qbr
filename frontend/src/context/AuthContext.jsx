@@ -40,23 +40,11 @@ export function AuthProvider({ children }) {
         }
       }
 
-      // Default Admin Session Fallback:
-      // Auto-authenticates as Super Admin so the user lands straight into the Executive Dashboard
-      // without being blocked by a login screen.
-      const defaultAdmin = {
-        id: 'user-super-admin',
-        email: 'admin@portal.com',
-        username: 'admin',
-        name: 'Super Admin',
-        role: 'admin',
-        assignedClient: 'all',
-        avatar: '👑'
-      };
-      const activeTok = storedToken || 'dev_admin_token';
-      localStorage.setItem('portal_token', activeTok);
-      setUser(defaultAdmin);
-      setSession({ user: defaultAdmin, token: activeTok });
-      setToken(activeTok);
+      // Unauthenticated: Strictly clear token and require user login
+      localStorage.removeItem('portal_token');
+      setUser(null);
+      setSession(null);
+      setToken(null);
       setAuthenticating(false);
     };
 
@@ -155,20 +143,7 @@ export function AuthProvider({ children }) {
 
       return { success: true };
     } catch (err) {
-      // Offline fallback: log in as Super Admin if backend server is starting up or offline
-      const defaultAdmin = {
-        id: 'user-super-admin',
-        email: 'admin@portal.com',
-        username: 'admin',
-        name: 'Super Admin',
-        role: 'admin',
-        assignedClient: 'all',
-        avatar: '👑'
-      };
-      setUser(defaultAdmin);
-      setSession({ user: defaultAdmin, token: 'dev_offline_token' });
-      setIsBackendOffline(false);
-      return { success: true };
+      return { success: false, error: 'Connection error — please ensure backend server is running.' };
     }
   };
 
