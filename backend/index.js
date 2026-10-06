@@ -808,6 +808,174 @@ app.get(['/api/status/:jobId', '/status/:jobId'], (req, res) => {
   });
 });
 
+// ── Google Sheets (Apps Script) → JSON upload ───────────────────────────────
+// Additive route: builds temp .xlsx files from sheet rows and feeds the SAME
+// validateUpload + processJFLWorkbooks pipeline used by POST /api/upload.
+// NO calculation logic here. Additive only.
+
+function buildXlsxBufferFromRows(sheetName, rows) {
+  const XLSX = require('xlsx');
+  // Google Sheets can send fully blank rows (formatting only). An Excel file has
+  // no such rows, so drop them (keep header) to avoid phantom incidents/devices.
+  const cleanRows = rows.filter(
+    (r, i) => i === 0 || r.some((c) => c !== '' && c !== null && c !== undefined)
+  );
+  const ws = XLSX.utils.aoa_to_sheet(cleanRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, String(sheetName || 'Sheet1').slice(0, 31));
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+function uploadJsonAuth(req, res, next) {
+  const expectedKey = process.env.UPLOAD_API_KEY;
+  if (!expectedKey) {
+    return res.status(503).json({ error: 'UPLOAD_API_KEY is not configured on the server.' });
+  }
+  const provided = Buffer.from(String(req.headers['x-api-key'] || ''));
+  const expected = Buffer.from(expectedKey);
+  if (provided.length !== expected.length ||
+      !require('crypto').timingSafeEqual(provided, expected)) {
+    return res.status(401).json({ error: 'Unauthorized: invalid API key.' });
+  }
+  next();
+}
+
+app.post('/api/upload-json', uploadJsonAuth, heavyRateLimit, async (req, res) => {
+  const body = req.body || {};
+  const isRows = (s) => s && Array.isArray(s.rows) && s.rows.length >= 2 &&
+                        s.rows.every((r) => Array.isArray(r));
+  const startDate = String(body.start_date || '').trim();
+  const endDate = String(body.end_date || '').trim();
+
+  const dateValidation = validateDateRange(startDate, endDate);
+  if (!dateValidation.valid) {
+    return res.status(400).json({
+      error: 'Invalid date range',
+      validationErrors: dateValidation.errors,
+    });
+  }
+  if (!isRows(body.incidents)) {
+    return res.status(400).json({
+      error: 'incidents.rows must be an array of arrays with a header row and at least one data row.',
+    });
+  }
+  const hasInventory = isRows(body.inventory);
+
+  const clientId = body.clientId || 'client-jfl';
+  const location = 'All Locations';
+  const uploadedBy = String(body.uploadedBy || 'Google Apps Script').slice(0, 120);
+  const client = clientService.getClientById(clientId);
+  const clientName = client ? client.name : 'Executive Client';
+
+  const stamp = `${uuidv4()}_${Date.now()}`;
+  const incidentPath = path.join(tempUploadDir, `${stamp}_incidents.xlsx`);
+  const inventoryPath = hasInventory
+    ? path.join(tempUploadDir, `${stamp}_inventory.xlsx`)
+    : null;
+
+  try {
+    fs.writeFileSync(incidentPath, buildXlsxBufferFromRows(body.incidents.name, body.incidents.rows));
+    if (inventoryPath) {
+      fs.writeFileSync(inventoryPath, buildXlsxBufferFromRows(body.inventory.name, body.inventory.rows));
+    }
+  } catch (e) {
+    historyService.cleanupTempFiles([incidentPath, inventoryPath]);
+    return res.status(400).json({ error: `Could not build workbook from rows: ${e.message}` });
+  }
+
+  const validation = validateUpload(
+    { path: incidentPath, originalname: 'incidents.xlsx' },
+    inventoryPath ? { path: inventoryPath, originalname: 'inventory.xlsx' } : null
+  );
+  if (!validation.valid) {
+    historyService.cleanupTempFiles([incidentPath, inventoryPath]);
+    return res.status(400).json({
+      error: 'Pre-upload validation failed',
+      validationErrors: validation.errors,
+      validationWarnings: validation.warnings,
+    });
+  }
+
+  const jobId = uuidv4();
+  const outputDir = path.join(REPORTS_DIR, `job_${jobId}`);
+  const historyPeriodLabel = `${startDate} to ${endDate}`;
+
+  const initialMeta = historyService.recordReport({
+    jobId, clientId, clientName, location,
+    reportPeriod: historyPeriodLabel, uploadedBy, status: 'processing',
+  });
+  jobs[jobId] = {
+    status: 'processing',
+    startedAt: new Date().toISOString(),
+    outputDir,
+    metadata: initialMeta,
+  };
+
+  setImmediate(() => {
+    processJFLWorkbooks(incidentPath, inventoryPath, outputDir, {
+      clientId,
+      clientName,
+      ruleConfigFile: client?.ruleConfigFile,
+      startDate,
+      endDate,
+      reportingPeriod: historyPeriodLabel,
+      periodMode: 'custom',
+    })
+      .then((result) => {
+        const isSuccess = result && result.success;
+        const status = isSuccess ? 'completed' : 'failed';
+        const dashboardPath = result?.dashboardPath || path.join(outputDir, 'dashboard_data.json');
+        const pptPath = result?.pptPath || path.join(outputDir, 'QBR_Presentation.pptx');
+        const reportPath = result?.reportPath || path.join(outputDir, 'validation_report.md');
+        const dataQualityPath = result?.dataQualityPath || path.join(outputDir, 'data_quality_report.md');
+        const processingLogPath = result?.processingLogPath || path.join(outputDir, 'processing_log.md');
+        const updatedJob = {
+          status,
+          ...result,
+          dashboardPath: (dashboardPath && fs.existsSync(dashboardPath)) ? dashboardPath : null,
+          pptPath: (pptPath && fs.existsSync(pptPath)) ? pptPath : null,
+          reportPath: (reportPath && fs.existsSync(reportPath)) ? reportPath : null,
+          dataQualityPath: (dataQualityPath && fs.existsSync(dataQualityPath)) ? dataQualityPath : null,
+          processingLogPath: (processingLogPath && fs.existsSync(processingLogPath)) ? processingLogPath : null,
+        };
+        jobs[jobId] = updatedJob;
+
+        if (isSuccess && updatedJob.dashboardPath && fs.existsSync(updatedJob.dashboardPath)) {
+          try {
+            fs.copyFileSync(updatedJob.dashboardPath, resolveDataPath('dashboard_data.json'));
+            console.log(`[upload-json] Synchronized data/dashboard_data.json with job: ${jobId}`);
+          } catch (syncErr) {
+            console.error('[upload-json] Failed to sync data/dashboard_data.json:', syncErr.message);
+          }
+        }
+
+        historyService.recordReport({
+          jobId, clientId, clientName, location,
+          reportPeriod: historyPeriodLabel, uploadedBy, status,
+          dashboardPath: updatedJob.dashboardPath,
+          pptPath: updatedJob.pptPath,
+          reportPath: updatedJob.reportPath,
+          dataQualityPath: updatedJob.dataQualityPath,
+          processingLogPath: updatedJob.processingLogPath,
+          error: result?.error || null,
+        });
+      })
+      .catch((err) => {
+        console.error('[upload-json] Engine error:', err.message);
+        jobs[jobId] = { status: 'error', error: err.message };
+        historyService.recordReport({
+          jobId, clientId, clientName, location,
+          reportPeriod: historyPeriodLabel, uploadedBy, status: 'error', error: err.message,
+        });
+      })
+      .finally(() => {
+        historyService.cleanupTempFiles([incidentPath, inventoryPath]);
+      });
+  });
+
+  res.json({ jobId, status: 'processing', metadata: initialMeta });
+});
+
 // ── Dashboard JSON Endpoint ────────────────────────────────────────────────
 app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashboard'], async (req, res) => {
   const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
