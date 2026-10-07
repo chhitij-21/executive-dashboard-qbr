@@ -300,7 +300,7 @@ function parseIncidentSheet(rows) {
     ).trim();
 
     let rawLoc = getColVal(row, ['Location', 'Site', 'SiteID', 'Site ID', 'Site Name', 'Location Name', 'City', 'Branch', 'Store', 'Facility', 'Device Name']);
-    if (rawLoc && (rawLoc.toLowerCase().includes('raw') || rawLoc.toLowerCase().includes('sheet') || rawLoc.toLowerCase().includes('sla_compliance'))) {
+    if (rawLoc && (String(rawLoc).toLowerCase().includes('raw') || String(rawLoc).toLowerCase().includes('sheet') || String(rawLoc).toLowerCase().includes('sla_compliance'))) {
       rawLoc = '';
     }
     const normLoc = normalizeSiteName(rawLoc);
