@@ -855,6 +855,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     if (actMin <= 0 && holdMin > 0) {
       actMin = holdMin;
     }
+    if (totMin <= 0 && actMin > 0) {
+      totMin = actMin + holdMin;
+    }
+    // Enforce invariant: Total Resolution Time must be at least Actual + Hold
+    if (totMin < actMin + holdMin) {
+      totMin = actMin + holdMin;
+    }
 
     const rawStatus = String(inc.Status || '').trim().toLowerCase();
     const isOpenOrOnHold = !rawStatus || /open|pending|on[\s-]?hold|hold|wip|in[\s-]?progress|assigned/i.test(rawStatus);
@@ -954,7 +961,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       const safeHold = Math.max(0, holdMins);
       const safePro = Math.max(0, proactiveDownMins);
 
-      const jflVal = ((windowMinutes - Math.min(windowMinutes, safeHold)) / windowMinutes) * 100;
+      const jflVal = ((windowMinutes - Math.min(windowMinutes, totResMins)) / windowMinutes) * 100;
       dynamicJfl = Math.max(0, Math.min(100, parseFloat(jflVal.toFixed(2))));
 
       const proVal = ((windowMinutes - Math.min(windowMinutes, safePro)) / windowMinutes) * 100;
@@ -996,7 +1003,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       __effectiveUptime: jflUptime,
       __jflUptime: jflUptime,
       __proactiveUptime: proactiveUptime,
-      __holdMins: incDown ? Math.max(0, holdMins) : Math.max(0, ((100 - (jflUptime ?? 100)) / 100) * windowMinutes),
+      __holdMins: incDown ? Math.max(0, holdMins) : 0,
+      __totalResMins: incDown ? Math.max(0, totResMins) : Math.max(0, ((100 - (jflUptime ?? 100)) / 100) * windowMinutes),
       __proactiveDownMins: incDown ? Math.max(0, proactiveDownMins) : Math.max(0, ((100 - (proactiveUptime ?? 100)) / 100) * windowMinutes),
       __monthlyUptime: jflUptime,
       __quarterlyUptime: jflUptime,
@@ -1403,10 +1411,10 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
     // __holdMins / __proactiveDownMins so the denominator stays consistent.
     const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
     const totalAvailMins = switches.length * availMinsPerSwitch;
-    const totalHoldMins = switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
+    const totalResMins = switches.reduce((acc, d) => acc + (d.__totalResMins || 0), 0);
     const totalProactiveMins = switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
 
-    const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalHoldMins)) / totalAvailMins) * 100));
+    const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalResMins)) / totalAvailMins) * 100));
     const proPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalProactiveMins)) / totalAvailMins) * 100));
 
     jflSwitchUptime = jflPct.toFixed(2);
@@ -1609,10 +1617,10 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
         // (AGENTS.md §3) instead of a fixed 31-day denominator.
         const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
         const totalAvailMins = s.switches.length * availMinsPerSwitch;
-        const totalHoldMins = s.switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
+        const totalResMins = s.switches.reduce((acc, d) => acc + (d.__totalResMins || 0), 0);
         const totalProactiveMins = s.switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
 
-        const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalHoldMins)) / totalAvailMins) * 100));
+        const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalResMins)) / totalAvailMins) * 100));
         const proPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalProactiveMins)) / totalAvailMins) * 100));
 
         jflSwitchUptime = jflPct.toFixed(2);
