@@ -48136,7 +48136,6 @@
     }
   ],
   "aiSectionSummaries": {
-    "engineer": "Field engineering and NOC support teams demonstrated high operational efficiency during 7 July 2026 – 6 October 2026, resolving 428 out of 435 incidents within established SLA thresholds (**98.39% SLA Compliance**). Ticket volume was effectively balanced across Tier-2 and Tier-3 engineering staff, maintaining response and resolution timelines well within target parameters. High-priority P1/P2 incidents received immediate resolution, ensuring minimal business disruption.",
-    "executive": "During the 7 July 2026 – 6 October 2026 reporting period, network operations for Jubilant Foodworks Ltd (JFL) maintained robust overall availability across all 372 monitored network assets, achieving an Executive Health Score of **83.50/100 (Fair)** and a **98.39% SLA Compliance Rate** across 435 logged incidents. Overall switch availability averaged **98.23%**, with primary outage drivers attributed to localized power fluctuations (Device Power Issues) and client-side device moves rather than core network failures. Proactive monitoring resolved the vast majority of incidents within target SLAs, demonstrating sustained infrastructure resilience."
+    "engineer": "Field engineering and NOC support teams demonstrated high operational efficiency during 7 July 2026 – 6 October 2026, resolving 428 out of 435 incidents within established SLA thresholds (**98.39% SLA Compliance**). Ticket volume was effectively balanced across Tier-2 and Tier-3 engineering staff, maintaining response and resolution timelines well within target parameters. High-priority P1/P2 incidents received immediate resolution, ensuring minimal business disruption."
   }
 }

@@ -122,18 +122,17 @@ test('On-Hold Ticket Period Cutoff Uptime Calculation & Impact on Dashboard Devi
     assert.equal(sw01.__proactiveUptime, 0, 'SW01 open for full period should have 0% Proactive uptime');
 
     // Ticket 3 (SW02) Resolved: actRes = 120, hold = 30
-    // Total Res = 120 + 30 = 150
-    // JFL Uptime = (44,640 - 150) / 44,640 * 100 = 99.66%
+    // JFL Uptime = (44,640 - 30) / 44,640 * 100 = 99.93%
     // Proactive Uptime = (44,640 - 120) / 44,640 * 100 = 99.73%
-    assert.equal(sw02.__jflUptime, 99.66, 'SW02 JFL Uptime should deduct explicit 150 mins total resolution time');
-    assert.equal(sw02.__proactiveUptime, 99.73, 'SW02 Proactive Uptime should deduct explicit 120 mins actual resolution time');
+    assert.equal(sw02.__jflUptime, 99.93, 'SW02 JFL Uptime should deduct explicit 30 mins hold time');
+    assert.equal(sw02.__proactiveUptime, 99.73, 'SW02 Proactive Uptime should deduct explicit 120 mins resolution time');
 
     // Site Summary Verification
     const gnSite = dashData.siteSummary.find(s => s.siteId === 'Greater Noida');
     assert.ok(gnSite, 'Greater Noida site summary should be present');
 
-    // Switch uptime average for Greater Noida (sw01 = 0%, sw02 = 99.66%) -> Avg JFL Uptime = 49.83%
-    assert.equal(gnSite.jflSwitchUptime, '49.83', 'Site jflSwitchUptime should equal average of switches');
+    // Switch uptime average for Greater Noida (sw01 = 0%, sw02 = 99.93%) -> Avg JFL Uptime = 49.97%
+    assert.equal(gnSite.jflSwitchUptime, '49.97', 'Site jflSwitchUptime should equal average of switches');
 
   } finally {
     if (fs.existsSync(tmpDir)) {
