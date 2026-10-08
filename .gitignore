@@ -10,6 +10,7 @@ build/
 # Generated Reports (runtime output)
 reports/
 tmp/
+tmp_*/
 templates/extracted_media/
 
 # Runtime Uploads (ephemeral)

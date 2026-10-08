@@ -601,7 +601,8 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildActionPlanSlide(pres, exec, siteSummary, incidents);
 
   // Slide 37: Other Activity
-  buildOtherActivitySlide(pres, incidents, displayPeriod);
+  const allIncidents = [...(data.incidents || []), ...(data.otherActivities || [])];
+  buildOtherActivitySlide(pres, allIncidents, displayPeriod);
 
   // Appendix Section (Single Data Reference Notice Slide — Rule 1)
   buildAppendixNoticeSlide(pres, exec);
@@ -2356,8 +2357,8 @@ function buildOtherActivitySlide(pres, incidents, displayPeriod) {
     const s = pres.addSlide();
     s.background = { color: C.BG_LIGHT };
     const subtitle = totalPages > 1
-      ? `Other Activity — Change Requests, Maintenance & Non-Hardware Tickets (Page ${page + 1} of ${totalPages})`
-      : 'Other Activity — Change Requests, Maintenance & Non-Hardware Tickets';
+      ? `Other Activity — Change Requests, Maintenance, Request Fulfillment & Non-Hardware Tickets (Page ${page + 1} of ${totalPages})`
+      : 'Other Activity — Change Requests, Maintenance, Request Fulfillment & Non-Hardware Tickets';
     addHeader(pres, s, 'OVERVIEW', subtitle, _slideNum);
 
     const chunk = displayList.slice(page * pageSize, (page + 1) * pageSize);

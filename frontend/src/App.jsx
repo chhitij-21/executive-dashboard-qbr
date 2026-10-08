@@ -970,7 +970,7 @@ function MainPortal() {
         {/* ── 8. Other Activity ──────────────────────────────────────────── */}
         {dashTab === 'other' && (
           <div className="section-body card pad-md">
-            <h3 className="section-title">Other Activity — Change Requests, Maintenance & Non-Hardware Tickets</h3>
+            <h3 className="section-title">Other Activity — Change Requests, Maintenance, Request Fulfillment & Non-Hardware Tickets</h3>
             <div className="kpi-grid">
               <KpiCard title="Total Other Activity Tickets" value={otherActivityIncidents.length} />
               <KpiCard title="Change Requests & Fulfillment" value={otherActivityIncidents.filter(i => i.IsChangeRequest || /change|fulfillment|license|licence|whitelist|request|configuration/i.test((i.SubCategory || '') + ' ' + (i.Category || '') + ' ' + (i.Description || '') + ' ' + (i.RCA || ''))).length} />

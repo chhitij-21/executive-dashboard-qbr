@@ -1,3 +1,0 @@
-# Error Report
-
-No errors.

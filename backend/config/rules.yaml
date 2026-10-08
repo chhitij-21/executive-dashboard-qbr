@@ -92,6 +92,20 @@ rca_category_mapping:
   "Others":                         "Unknown"
   "Other":                          "Unknown"
 
+  # ── New raw schema (2026) RCA labels → standard categories ──────────────
+  "Hardware Component Failures":     "Hardware Failure"
+  "Device Power or Boot Issues":     "Device Power Issues"
+  "Device Boot Issues":              "Device Power Issues"
+  "Firmware or Software Bugs":       "Configuration Issues"
+  "Configuration Errors":            "Configuration Issues"
+  "New Configuration":               "Configuration Issues"
+  "Authentication and Certificate-Related Failures": "Configuration Issues"
+  "Interface and Connectivity Errors":              "Configuration Issues"
+  "Smart Licensing and Registration Failures":      "Configuration Issues"
+  "Preventive Maintenance (PM) or Planned Upgrade": "Configuration Issues"
+  "Customer Delays or Unresponsiveness":            "Client Side Issues"
+  "Multivendor Compatibility Limitations":          "Hardware Failure"
+
 # ── Standard RCA Categories (display order) ───────────────────────────────────
 rca_standard_categories:
   - "Device Power Issues"

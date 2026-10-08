@@ -36,7 +36,7 @@ export default function TicketsDetailPage({ data, initialSubTab }) {
   const byEngineer = pro.byEngineer || [];
   const bySite = pro.bySite || [];
   const holdReasons = pro.holdReasons || [];
-  const rawIncidents = data.incidents || [];
+  const rawIncidents = [...(data.incidents || []), ...(data.otherActivities || [])];
   const periodLabel = data.report_period?.display_label || data.reportingPeriod || 'Selected Period';
   const customerName = data.customerName || 'Jubilant Foodworks Ltd (JFL)';
 

@@ -55,9 +55,11 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
                 return isNaN(n) ? '100' : (n === 100 ? '100' : n.toFixed(2));
               };
 
-              // Per-ticket averages (matches Excel); fall back to per-device for backward compatibility
-              const proUp = formatPct(site.proactiveTicketAvg ?? site.proactiveSwitchUptime);
-              const jflUp = formatPct(site.jflTicketAvg ?? site.jflSwitchUptime);
+              // SSOT uptime — aggregate over available minutes for the selected period
+              // (AGENTS.md §3). Prefer the per-device switch uptime; the per-ticket
+              // fallback is only used for legacy files where device uptime is absent.
+              const proUp = formatPct(site.proactiveSwitchUptime ?? site.proactiveTicketAvg);
+              const jflUp = formatPct(site.jflSwitchUptime ?? site.jflTicketAvg);
 
               const rawSwRca = site.primaryRcaSwitches || site.primaryRca;
               const rawApRca = site.primaryRcaAPs || site.primaryRcaForAPs;

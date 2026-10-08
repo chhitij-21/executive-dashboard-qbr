@@ -452,19 +452,102 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
   }
 
-  // Extract Other Activity records (Change Requests, Request Fulfillment, IOS Upgradation, Whitelist, MAC Address, Asset Scan, Credentials)
+  // Fallback: If inventory is still 0, extract from incidents or load baseline
+  if (devices.length === 0) {
+    if (incidents.length > 0) {
+      log(`No inventory found. Extracting devices dynamically from ${incidents.length} incidents.`);
+      const extractedDevs = new Map();
+      incidents.forEach(inc => {
+        const id = inc.DeviceID || inc.SerialNo || inc.Hostname;
+        if (!id) return;
+        if (!extractedDevs.has(id)) {
+          extractedDevs.set(id, {
+            DeviceID: id,
+            SerialNo: inc.SerialNo || id,
+            Hostname: inc.Hostname || id,
+            Location: normalizeSiteName(inc.Location || inc.SiteID || 'Unknown'),
+            SiteID: normalizeSiteName(inc.SiteID || inc.Location || 'Unknown'),
+            DeviceType: inc.DeviceType || 'SW',
+            Rack: inc.Rack || '',
+            CoreNonCore: 'Non-Core',
+            Model: '',
+            NetworkName: '',
+            ReplacedSerial: '',
+            __isStock: false,
+          });
+        }
+      });
+      devices = Array.from(extractedDevs.values());
+    } else {
+      try {
+        const baselinePaths = [
+          path.resolve(__dirname, '..', '..', 'data', 'bundled_default', 'dashboard_data.json'),
+          path.resolve(__dirname, '..', '..', 'data', 'dashboard_data.json'),
+        ];
+        for (const p of baselinePaths) {
+          if (fs.existsSync(p)) {
+            const raw = fs.readFileSync(p, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed.devices) && parsed.devices.length > 0) {
+              log(`Loaded ${parsed.devices.length} baseline inventory devices from ${path.basename(p)}`);
+              devices = parsed.devices.map(d => ({
+                DeviceID: d.DeviceID || d.SerialNo || d.Hostname,
+                SerialNo: d.SerialNo || d.DeviceID || d.Hostname,
+                Hostname: d.Hostname || d.DeviceID || d.SerialNo,
+                Location: normalizeSiteName(d.Location || d.SiteID || 'Unknown'),
+                SiteID: normalizeSiteName(d.SiteID || d.Location || 'Unknown'),
+                DeviceType: d.DeviceType || 'SW',
+                Rack: d.Rack || '',
+                CoreNonCore: d.CoreNonCore || 'Non-Core',
+                Model: d.Model || '',
+                NetworkName: d.NetworkName || '',
+                ReplacedSerial: d.ReplacedSerial || '',
+                __isStock: Boolean(d.__isStock),
+              }));
+              break;
+            }
+          }
+        }
+      } catch (err) {
+        log(`WARNING: Could not load baseline inventory: ${err.message}`);
+      }
+    }
+  }
+
+  // Extract Other Activity records (Change Requests, Request Fulfillment, IOS Upgradation, PM Activity)
   const isOtherActivity = (i) => {
-    const cat = String(i.Category || i.SubCategory || '').toLowerCase();
-    const rca = String(i.RCA || '').toLowerCase();
-    const desc = String(i.Description || i.Subject || '').toLowerCase();
-    const devType = String(i.DeviceType || '').toLowerCase();
-    return (
-      i.IsChangeRequest ||
-      /change|request|fulfillment|ios|upgradation|asset|scan|whitelist|mac address|maintenance|credentials|license|ise|wlc/i.test(cat) ||
-      /change|request|fulfillment|ios|upgradation|asset|scan|whitelist|mac address|maintenance|credentials|license|ise|wlc/i.test(desc) ||
-      /change|request|fulfillment/i.test(rca) ||
-      (!/sw|switch|ap|access.?point|cisco[\s-]?ise|catalyst/i.test(devType) && devType.length > 0)
-    );
+    if (i.IsChangeRequest) return true;
+
+    const subCat = String(i.SubCategory || i['Sub Category'] || '').trim().toLowerCase();
+    const cat = String(i.Category || '').trim().toLowerCase();
+    const rca = String(i.RCA || '').trim().toLowerCase();
+    const devType = String(i.DeviceType || '').trim().toLowerCase();
+
+    // 1. Explicit SubCategory check (e.g. Change Request, Request Fulfillment, IOS Upgradation, PM Activity)
+    if (subCat && subCat !== 'software / configuration' && subCat !== 'meraki managed services' && subCat !== 'n/a') {
+      if (/change|fulfillment|ios|upgradation|\bpm\b|pm\s?activity|preventive/i.test(subCat)) {
+        return true;
+      }
+    }
+
+    // 2. Explicit Category check (excluding standard incident categories)
+    if (cat && cat !== 'meraki managed services' && cat !== 'software / configuration' && cat !== 'n/a') {
+      if (/change|fulfillment|ios|upgradation|\bpm\b|pm\s?activity|preventive/i.test(cat)) {
+        return true;
+      }
+    }
+
+    // 3. RCA check (explicit change request or scheduled maintenance RCA)
+    if (rca && /change request|planned maintenance|scheduled maintenance/i.test(rca)) {
+      return true;
+    }
+
+    // 4. Non-network device types (e.g., servers/other non-SW/AP assets)
+    if (devType && devType !== 'n/a' && !/sw|switch|ap|access.?point|cisco[\s-]?ise|catalyst/i.test(devType)) {
+      return true;
+    }
+
+    return false;
   };
 
   function deriveSubCategory(item) {
@@ -562,6 +645,14 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
   }
 
+  const VALID_SITES = ['Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Mumbai-DC', 'Nagpur', 'Noida'];
+  const VALID_SITES_SET = new Set(VALID_SITES);
+  const isSiteOrGeneric = (name) => {
+    if (!name) return true;
+    const s = normalizeSiteName(name);
+    return VALID_SITES_SET.has(s) || isGenericLocation(name);
+  };
+
   // Build Serial Number -> Hostname mapping dictionary across inventory & compliance sheets
   const serialToHostMap = buildSerialToHostnameMap(devices, incidents);
 
@@ -569,7 +660,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   devices = devices.map((d) => {
     const rawSerial = String(d.SerialNo || d.DeviceID || '').trim();
     const mappedHost = serialToHostMap[rawSerial] || String(d.Hostname || '').trim();
-    const displayId = (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown') ? mappedHost : rawSerial;
+    const displayId = (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown' && !isSiteOrGeneric(mappedHost)) ? mappedHost : rawSerial;
 
     let resolvedSite = d.Location || d.SiteID || '';
     if (!resolvedSite || isGenericLocation(resolvedSite)) {
@@ -589,7 +680,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       ...d,
       SerialNo: rawSerial,
       DeviceID: displayId,
-      Hostname: mappedHost || rawSerial,
+      Hostname: (!isSiteOrGeneric(mappedHost) && mappedHost) ? mappedHost : rawSerial,
       Location: normLoc,
       SiteID: normLoc,
     };
@@ -598,33 +689,52 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   incidents = incidents.map((i) => {
     const rawSerial = String(i.SerialNo || i.DeviceID || '').trim();
     const mappedHost = serialToHostMap[rawSerial] || String(i.Hostname || '').trim();
-    const displayId = (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown') ? mappedHost : rawSerial;
+    const displayId = (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown' && !isSiteOrGeneric(mappedHost)) ? mappedHost : rawSerial;
     return {
       ...i,
       SerialNo: rawSerial,
       DeviceID: displayId,
-      Hostname: mappedHost || rawSerial,
+      Hostname: (!isSiteOrGeneric(mappedHost) && mappedHost) ? mappedHost : rawSerial,
     };
   });
 
-  // Build device location map from inventory to enrich incidents missing explicit site locations
+  // Build device location map and device type map from inventory to enrich incidents
   const devLocMap = {};
+  const devTypeMap = {};
   devices.forEach((d) => {
     const site = d.SiteID || d.Location;
+    const type = d.DeviceType;
     if (site) {
       if (d.DeviceID) devLocMap[d.DeviceID] = site;
       if (d.SerialNo) devLocMap[d.SerialNo] = site;
       if (d.Hostname) devLocMap[d.Hostname] = site;
     }
+    if (type) {
+      if (d.DeviceID) devTypeMap[d.DeviceID] = type;
+      if (d.SerialNo) devTypeMap[d.SerialNo] = type;
+      if (d.Hostname) devTypeMap[d.Hostname] = type;
+    }
   });
 
-  const VALID_SITES = ['Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Mumbai-DC', 'Nagpur', 'Noida'];
-
   incidents.forEach((inc) => {
+    // 1. Enrich DeviceType from inventory lookup or infer from incident text
+    const sKey = String(inc.SerialNo || '').trim();
+    const hKey = String(inc.Hostname || '').trim();
+    const dKey = String(inc.DeviceID || '').trim();
+    const matchedType = devTypeMap[sKey] || devTypeMap[hKey] || devTypeMap[dKey];
+
+    let resolvedDeviceType = inc.DeviceType || matchedType || '';
+    if (!resolvedDeviceType || resolvedDeviceType === 'N/A' || resolvedDeviceType === 'Unknown') {
+      const combined = `${inc.Hostname} ${inc.SerialNo} ${inc.DeviceID} ${inc.Description || ''} ${inc.Subject || ''} ${inc.Category || ''}`.toLowerCase();
+      if (/\bap\b|access|ap\d|q5aa/i.test(combined)) resolvedDeviceType = 'AP';
+      else resolvedDeviceType = 'SW';
+    }
+    inc.DeviceType = resolvedDeviceType;
+
     const rawLoc = String(inc.Location || inc.SiteID || '').trim();
     let resolvedSite = null;
 
-    // 1. Check inventory device lookup map (case insensitive)
+    // 2. Check inventory device lookup map (case insensitive)
     const s = String(inc.SerialNo || inc.DeviceID || '').trim().toLowerCase();
     const h = String(inc.Hostname || '').trim().toLowerCase();
 
@@ -633,7 +743,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       resolvedSite = normalizeSiteName(matchedLoc);
     }
 
-    // 2. Fall back to pattern matching in Hostname / DeviceID / Description / Subject
+    // 3. Fall back to pattern matching in Hostname / DeviceID / Description / Subject
     if (!resolvedSite || isGenericLocation(rawLoc)) {
       if (/g.*noida|gr.*noida|gnsc|gnmc|gn/i.test(h)) resolvedSite = 'Greater Noida';
       else if (/blr|bangalore/i.test(h)) resolvedSite = 'Bangalore';
@@ -723,6 +833,11 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   }
 
   const windowMinutes = getAvailableMinutesForPeriod(periodMode, activeReportingPeriod, startDate, endDate);
+  // Propagate the dynamic available-minutes window so the executive summary and
+  // site summary uptime aggregations use the actual calendar-days denominator
+  // (AGENTS.md §3) instead of a hardcoded 31-day window.
+  periodOptions.windowMinutes = windowMinutes;
+  if (reportPeriodMeta) reportPeriodMeta.window_minutes = windowMinutes;
 
   // Aggregate downtime & hold time per device ID/Serial/Hostname from raw incidents
   const incDowntimeMap = {};
@@ -1088,11 +1203,13 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
   const netHoldMin = (!isNaN(holdMin) && holdMin >= 0) ? holdMin : 0;
   const hasHold = !isNaN(holdMin) && holdMin >= 0;
 
-  // ── P1: Actual Resolution Time (min) — primary, already net ─────────────
-  // Do NOT subtract hold here; this column is pre-deducted by ServiceNow.
+  // ── P1: Actual Resolution Time (min) — primary ─────────────
+  // The user explicitly requested to ALWAYS deduct hold time from resolution time,
+  // even if it is mapped from Actual Resolution Time (min).
   const actMin = parseFloat(inc.ActualResolutionMin);
   if (!isNaN(actMin) && actMin >= 0) {
-    resolutionHours = parseFloat((actMin / 60).toFixed(2));
+    const netMin = Math.max(0, actMin - netHoldMin);
+    resolutionHours = parseFloat((netMin / 60).toFixed(2));
   } else {
     // ── P2 / P3: Total Resolution Time (min) ──────────────────────────────
     const totMin = parseFloat(inc.TotalResolutionMin);
@@ -1155,18 +1272,20 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
     rawStatus === 'work in progress' ||
     rawStatus === 'wip';
 
-  if (resolutionHours !== null) {
-    slaStatus = resolutionHours <= slaTargetHours ? 'SLA Met' : 'SLA Breached';
-  } else if (isOpenIncident) {
-    // Incident has not been resolved yet — mark as Open rather than leaving null
-    slaStatus = 'Open';
-  } else if (inc.ResolutionSLAStatusRaw) {
-    // P5 — Fallback: consume the Excel's pre-computed SLA status column.
-    // Normalise to our standard strings.
+  // Priority 1: Consume pre-computed SLA status directly from Excel column (SSOT rule)
+  if (inc.ResolutionSLAStatusRaw && String(inc.ResolutionSLAStatusRaw).trim() !== '') {
     const raw = String(inc.ResolutionSLAStatusRaw).trim().toLowerCase();
     if (raw === 'sla met' || raw === 'met') slaStatus = 'SLA Met';
     else if (raw.includes('breach') || raw === 'sla breached') slaStatus = 'SLA Breached';
-    // If the Excel cell has an unrecognisable value, leave slaStatus = null.
+  }
+
+  // Priority 2: Fallback to calculated duration or open status when Excel column is absent
+  if (!slaStatus) {
+    if (resolutionHours !== null) {
+      slaStatus = resolutionHours <= slaTargetHours ? 'SLA Met' : 'SLA Breached';
+    } else if (isOpenIncident) {
+      slaStatus = 'Open';
+    }
   }
 
   // ── Display Reference (Req 7): Ticket if available, else Incident ID ──────
@@ -1206,8 +1325,8 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
 
   log(`Devices — Active: ${activeDevices.length}, Stock (Excluded from SLA): ${stockDevices.length}, Switches: ${switches.length}, APs: ${aps.length}`);
 
-  const execSummary = buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName);
-  const siteSummary = buildSiteSummary(devices, switches, aps, incidents, reportingPeriod);
+  const execSummary = buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName, periodOptions);
+  const siteSummary = buildSiteSummary(devices, switches, aps, incidents, reportingPeriod, periodOptions);
   const switchAn = buildSwitchAnalytics(switches, incidents, periodOptions);
   const apAn = buildAPAnalytics(aps, incidents, activeDevices);
   const incAn = buildIncidentAnalytics(incidents, activeDevices);
@@ -1244,7 +1363,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
 
 // ── Executive Summary ──────────────────────────────────────────────────────
 
-function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName) {
+function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName, periodOptions = {}) {
   const total = activeDevices.length;
   const uptimes = activeDevices.map(d => d.__effectiveUptime ?? 100);
   const overallUptime = total > 0 ? avg(uptimes).toFixed(2) : '100.00';
@@ -1263,21 +1382,27 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const rcaBrk = classifyRCALocal(incidents);
   const primaryRca = rcaBrk.length > 0 ? rcaBrk[0].rca : 'None';
 
-  const switchIds = new Set(switches.map(d => d.DeviceID));
-  const switchIncidents = incidents.filter(i => switchIds.has(i.DeviceID) || /^sw$/i.test(i.DeviceType) || /switch/i.test(i.DeviceType));
+  const switchIncidents = incidents.filter(i =>
+    /^sw$/i.test(String(i.DeviceType || '').trim()) || /switch/i.test(String(i.DeviceType || '').trim()) || (!/^ap$/i.test(String(i.DeviceType || '').trim()) && !/access/i.test(String(i.DeviceType || '').trim()))
+  );
   const swRcaBrk = classifyRCALocal(switchIncidents);
   const primaryRcaSwitches = swRcaBrk.length > 0 && swRcaBrk[0].rca !== 'Unknown' ? swRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
-  const apIds = new Set(aps.map(d => d.DeviceID));
-  const apIncidents = incidents.filter(i => apIds.has(i.DeviceID) || /^ap$/i.test(i.DeviceType) || /access/i.test(i.DeviceType));
-  const uniqueAPsWithIncidents = new Set(apIncidents.map(i => i.DeviceID)).size;
+  const apIncidents = incidents.filter(i =>
+    /^ap$/i.test(String(i.DeviceType || '').trim()) || /access/i.test(String(i.DeviceType || '').trim())
+  );
+  const uniqueAPsWithIncidents = new Set(apIncidents.map(i => i.DeviceID || i.SerialNo)).size;
   const apRcaBrk = classifyRCALocal(apIncidents);
   const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
   let jflSwitchUptime = '100.00';
   let proactiveSwitchUptime = '100.00';
   if (switches.length > 0) {
-    const totalAvailMins = switches.length * 44640;
+    // Available minutes per switch = actual calendar days in the selected period
+    // (AGENTS.md §3). Derived from the same windowMinutes used for per-device
+    // __holdMins / __proactiveDownMins so the denominator stays consistent.
+    const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
+    const totalAvailMins = switches.length * availMinsPerSwitch;
     const totalHoldMins = switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
     const totalProactiveMins = switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
 
@@ -1421,7 +1546,7 @@ function buildProactiveTicketAnalytics(incidents) {
 
 // ── Site Summary ───────────────────────────────────────────────────────────
 
-function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod) {
+function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod, periodOptions = {}) {
   const sitesMap = {};
 
   allDevices.forEach(d => {
@@ -1480,7 +1605,10 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod)
       let jflSwitchUptime = '100.00';
 
       if (s.switches.length > 0) {
-        const totalAvailMins = s.switches.length * 44640;
+        // Use the same dynamic available-minutes window as the executive summary
+        // (AGENTS.md §3) instead of a fixed 31-day denominator.
+        const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
+        const totalAvailMins = s.switches.length * availMinsPerSwitch;
         const totalHoldMins = s.switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
         const totalProactiveMins = s.switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
 
@@ -1624,8 +1752,9 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
   const nonCoreUptimes = nonCoreSwitches.map(d => d.__effectiveUptime ?? 100);
   const allUptimes = switches.map(d => d.__effectiveUptime ?? 100);
 
-  const swIds = new Set(switches.map(d => d.DeviceID));
-  const switchIncidents = incidents.filter(i => swIds.has(i.DeviceID));
+  const switchIncidents = incidents.filter(i =>
+    /^sw$/i.test(String(i.DeviceType || '').trim()) || /switch/i.test(String(i.DeviceType || '').trim()) || (!/^ap$/i.test(String(i.DeviceType || '').trim()) && !/access/i.test(String(i.DeviceType || '').trim()))
+  );
 
   const rackMap = {};
   switches.forEach(d => {
@@ -1772,19 +1901,9 @@ function buildAPAnalytics(aps, incidents, allDevices) {
     ...aps.map(d => String(d.Hostname || '').toLowerCase()),
   ].filter(Boolean));
 
-  const apIncidents = incidents.filter(i => {
-    const devId = String(i.DeviceID || '').toLowerCase();
-    const serial = String(i.SerialNo || '').toLowerCase();
-    const host = String(i.Hostname || '').toLowerCase();
-    const devType = String(i.DeviceType || '').toLowerCase();
-    return (
-      devType === 'ap' || devType.includes('access') ||
-      /\bap\b/i.test(host) || /\bap\b/i.test(devId) ||
-      (devId && apKeys.has(devId)) ||
-      (serial && apKeys.has(serial)) ||
-      (host && apKeys.has(host))
-    );
-  });
+  const apIncidents = incidents.filter(i =>
+    /^ap$/i.test(String(i.DeviceType || '').trim()) || /access/i.test(String(i.DeviceType || '').trim())
+  );
 
   const apIncidentMap = {};
   apIncidents.forEach(inc => {
@@ -2125,7 +2244,18 @@ function filterDashboardBySite(data, siteFilter) {
 
   const reportingPeriod = data.reportingPeriod || 'Q1 FY2026';
   const customerName = data.customerName || data.executiveSummary?.customerName || 'Jubilant Foodworks Ltd (JFL)';
-  const execSummary = buildExecutiveSummary(activeDevices, switches, aps, enrichedIncidents, stockDevices, reportingPeriod, customerName);
+
+  // Preserve original period options from the full dataset so uptime labels/targets,
+  // the SLA target, and the available-minutes window remain correct for the drill-down.
+  const periodOptions = {
+    periodLabel: data.switchAnalytics?.periodLabel || 'Monthly Uptime %',
+    periodType: data.switchAnalytics?.periodType || 'monthly',
+    startDate: data.report_period?.start_date || null,
+    endDate: data.report_period?.end_date || null,
+    windowMinutes: data.report_period?.window_minutes || 44640,
+  };
+
+  const execSummary = buildExecutiveSummary(activeDevices, switches, aps, enrichedIncidents, stockDevices, reportingPeriod, customerName, periodOptions);
 
   // If site filter yields no filteredDevices directly from devices array, check siteSummary for pre-aggregated site counts
   const targetSiteSummary = (data.siteSummary || []).find((s) => normalizeSiteName(s.siteId).toLowerCase() === normTarget);
@@ -2142,13 +2272,6 @@ function filterDashboardBySite(data, siteFilter) {
   }
   execSummary.totalSites = 1;
 
-  // Preserve original period options from the full dataset so uptime labels/targets remain correct.
-  const periodOptions = {
-    periodLabel: data.switchAnalytics?.periodLabel || 'Monthly Uptime %',
-    periodType: data.switchAnalytics?.periodType || 'monthly',
-    startDate: data.report_period?.start_date || null,
-    endDate: data.report_period?.end_date || null,
-  };
   const switchAn = buildSwitchAnalytics(switches, enrichedIncidents, periodOptions);
   const apAn = buildAPAnalytics(aps, enrichedIncidents, activeDevices);
   const incAn = buildIncidentAnalytics(enrichedIncidents, activeDevices);

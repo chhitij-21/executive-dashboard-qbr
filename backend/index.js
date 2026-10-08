@@ -978,6 +978,9 @@ app.post('/api/upload-json', uploadJsonAuth, heavyRateLimit, async (req, res) =>
 
 // ── Dashboard JSON Endpoint ────────────────────────────────────────────────
 app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashboard'], async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
   const siteFilter = req.query.site || req.query.location || 'ALL';
   let job = null;

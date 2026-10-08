@@ -70,15 +70,20 @@ function detectSheets(workbookData) {
   };
 
   // Also require at least one expected column on the picked sheet.
-  const hasIncidentColumns = (sheetName) => {
+  const countIncidentColumns = (sheetName) => {
     const rows = workbookData[sheetName] || [];
-    if (!rows.length) return false;
+    if (!rows.length) return 0;
     const first = rows[0] || {};
     const keys = Object.keys(first);
     const want = ['Ticket Owner', 'Device ID', 'DeviceID',
       'Ticket Number', 'TicketNumber', 'Hold Reason',
-      'Resolution SLA Status'];
-    return want.some(k => keys.includes(k));
+      'Resolution SLA Status', 'Created Time', 'RCA',
+      'Account Name', 'Device Name', 'Priority', 'Status'];
+    return want.filter(k => keys.includes(k)).length;
+  };
+
+  const hasIncidentColumns = (sheetName) => {
+    return countIncidentColumns(sheetName) > 0;
   };
 
   const ranked = sheets
@@ -98,12 +103,21 @@ function detectSheets(workbookData) {
     console.log('[excelParser] Skipping', cand.name,
       '- missing required columns');
   }
-  // Ultimate fallback: first ranked sheet if any, else first sheet.
+
+  // Fallback: If no sheet matched by name rank, search ALL sheets for the one with the highest incident column count
   if (!matchedIncidentSheet) {
-    matchedIncidentSheet = ranked.length > 0 ? ranked[0].name
-      : (sheets.length > 0 ? sheets[0] : null);
-    console.log('[excelParser] Column check failed for all; ' +
-      'falling back to', matchedIncidentSheet);
+    const candidates = sheets
+      .map(name => ({ name, colCount: countIncidentColumns(name), rowCount: (workbookData[name] || []).length }))
+      .filter(x => x.colCount > 0)
+      .sort((a, b) => b.colCount - a.colCount || b.rowCount - a.rowCount);
+
+    if (candidates.length > 0) {
+      matchedIncidentSheet = candidates[0].name;
+      console.log('[excelParser] Selected sheet with best column match:', matchedIncidentSheet, `(cols=${candidates[0].colCount}, rows=${candidates[0].rowCount})`);
+    } else {
+      matchedIncidentSheet = sheets.length > 0 ? sheets[0] : null;
+      console.log('[excelParser] Column check failed for all; falling back to', matchedIncidentSheet);
+    }
   }
   console.log('[excelParser] Picked incident sheet:', matchedIncidentSheet);
 
@@ -175,7 +189,7 @@ function mergeInventorySheets(workbookData, locationSheets) {
         getColVal(row, [
           'Serial No.', 'Serial No', 'SerialNo', 'Serial Number', 'SerialNumber', 'Serial_No', 'Serial_Number',
           'Device Serial', 'Device Serial Number', 'Device Serial No', 'Device_Serial', 'DeviceID', 'Device ID',
-          'Serial', 'Serial #', 'Asset Tag', 'Asset Serial', 'Service Tag', 'MAC Address', 'Host', 'Hostname'
+          'Serial', 'Serial #', 'Serial/Subscription', 'Asset Tag', 'Asset Serial', 'Service Tag', 'MAC Address', 'Host', 'Hostname'
         ])
       ).trim();
       if (!serial) return;
@@ -207,7 +221,7 @@ function mergeInventorySheets(workbookData, locationSheets) {
           CoreNonCore: core,
           Model: model,
           NetworkName: getColVal(row, ['Network Name', 'NetworkName', 'Network']) || '',
-          ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Old Serial', 'Replaced Device', 'Replaced Serial No']) || '',
+          ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Replaced Serial Number', 'Old Serial', 'Replaced Device', 'Replaced Serial No']) || '',
           __source: row.__source || { file: 'inventory', sheet, row: idx + 2 },
         };
       } else {
@@ -299,13 +313,19 @@ function parseIncidentSheet(rows) {
       ])
     ).trim();
 
-    let rawLoc = getColVal(row, ['Location', 'Site', 'SiteID', 'Site ID', 'Site Name', 'Location Name', 'City', 'Branch', 'Store', 'Facility', 'Device Name']);
+    let rawLoc = getColVal(row, ['Device Name', 'Location', 'Site', 'SiteID', 'Site ID', 'Site Name', 'Location Name', 'City', 'Branch', 'Store', 'Facility']);
+    // New raw schema: location is carried in "Device Name" (a site, e.g. Hyderabad/Nagpur).
+    // Blank out non-site placeholders so they never become bogus locations.
+    if (rawLoc && /not[\s-]?found|unknown|n\/a|null|^sheet\d*$/i.test(String(rawLoc).trim())) {
+      rawLoc = '';
+    }
     if (rawLoc && (String(rawLoc).toLowerCase().includes('raw') || String(rawLoc).toLowerCase().includes('sheet') || String(rawLoc).toLowerCase().includes('sla_compliance'))) {
       rawLoc = '';
     }
     const normLoc = normalizeSiteName(rawLoc);
 
     const cat = String(getColVal(row, ['Category', 'Ticket Category', 'Type', 'Ticket Type', 'Class', 'Category Name'])).trim();
+    const subCat = String(getColVal(row, ['Sub Category', 'SubCategory', 'Sub-Category', 'Ticket Sub Category'])).trim();
     const desc = String(getColVal(row, ['Description', 'Short Description', 'Subject', 'Summary', 'Title', 'Incident Description'])).trim();
     const rcaStr = String(getColVal(row, ['RCA 2', 'RCA', 'Root Cause', 'RCA Category', 'Root Cause Analysis', 'RCA Reason', 'Primary RCA'])).trim();
 
@@ -339,6 +359,7 @@ function parseIncidentSheet(rows) {
       RCA: rcaStr || 'Unknown',
       Status: getColVal(row, ['Status', 'Ticket Status', 'State', 'Incident Status']) || 'Closed',
       Category: cat,
+      SubCategory: subCat,
       Description: desc,
       IsChangeRequest: isCR,
       ResolutionSLAStatusRaw: getColVal(row, ['Resolution SLA Status', 'Resolution SLA', 'SLA Status']) || '',
@@ -361,8 +382,12 @@ function parseIncidentSheet(rows) {
         'Total Resolution Time (min) ',
         'Total Resolution Time(min)',
         'Total Resolution Time',
-        'Resolution Time (min)',
-        'Resolution Time(min)'
+        'Actual Resolution Time (min)',
+        'Actual Resolution Time'
+      ]),
+      ActualResolutionMin: getColVal(row, [
+        'Actual Resolution Time (min)',
+        'Actual Resolution Time'
       ]),
       ResolutionTimeMinRaw: getColVal(row, [
         'Resolution Time (min)',
@@ -371,23 +396,67 @@ function parseIncidentSheet(rows) {
         'Resolution Time (min2)',
         'Duration (min)'
       ]),
-      HoldTimeMin: getColVal(row, [
-        'Total JFL Downtime (Mins)HOLD Minute',
-        'Total JFL Downtime (Mins) HOLD Minute',
-        'Total JFL Downtime (Mins)HOLD Minutes',
-        'Total JFL Downtime (Mins) HOLD Minutes',
-        'Time on Hold (min)',
-        'Time on Hold (Minutes)',
-        'Time on Hold',
-        'Hold Time (min)',
-        'Hold Time',
-        'On Hold Duration (min)'
-      ]),
+      HoldTimeMin: (() => {
+        let h = '';
+        
+        // Priority 1: Always try to calculate exact hold time from First/Last Hold Dates
+        const firstHold = getColVal(row, ['First Hold Time']);
+        const lastHold = getColVal(row, ['Last Hold Time']);
+        if (firstHold && lastHold) {
+          const parseDateRobust = (val) => {
+            if (!val) return null;
+            if (typeof val === 'number') {
+              return val > 10000 ? (val - 25569) * 86400 * 1000 : null;
+            }
+            const s = String(val).trim();
+            const m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+            if (m) {
+              const day = parseInt(m[1], 10);
+              const month = parseInt(m[2], 10) - 1;
+              const year = parseInt(m[3], 10);
+              const hours = m[4] ? parseInt(m[4], 10) : 0;
+              const mins = m[5] ? parseInt(m[5], 10) : 0;
+              const d2 = new Date(year, month, day, hours, mins);
+              if (!isNaN(d2.getTime())) return d2.getTime();
+            }
+            const d = new Date(s);
+            if (!isNaN(d.getTime())) return d.getTime();
+            
+            const num = parseFloat(s);
+            if (!isNaN(num) && num > 10000) return (num - 25569) * 86400 * 1000;
+            return null;
+          };
+
+          const firstDateMs = parseDateRobust(firstHold);
+          const lastDateMs = parseDateRobust(lastHold);
+
+          if (firstDateMs !== null && lastDateMs !== null && lastDateMs >= firstDateMs) {
+             h = (lastDateMs - firstDateMs) / (1000 * 60);
+          }
+        }
+        
+        // Priority 2: If dates are missing or invalid, fallback to the pre-calculated column
+        if (h === '' || h === null || isNaN(h)) {
+          h = getColVal(row, [
+            'Total JFL Downtime (Mins)HOLD Minute',
+            'Total JFL Downtime (Mins) HOLD Minute',
+            'Total JFL Downtime (Mins)HOLD Minutes',
+            'Total JFL Downtime (Mins) HOLD Minutes',
+            'Time on Hold (min)',
+            'Time on Hold (Minutes)',
+            'Time on Hold',
+            'Hold Time (min)',
+            'Hold Time',
+            'On Hold Duration (min)'
+          ]);
+        }
+        return h || '';
+      })(),
       DowntimeHours: getColVal(row, ['Downtime Hours', 'DowntimeHours', 'Outage Hours']),
       OutageHours: getColVal(row, ['Outage Hours', 'OutageHours']),
       ResolutionTimeHours: getColVal(row, ['Resolution Time (Hrs)', 'ResolutionTimeHours', 'Duration Hours']),
-      ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Old Serial', 'Replaced Device', 'Replaced Serial No']),
-      NewSerial: getColVal(row, ['New Serial', 'Replacement Serial', 'New Serial No']),
+      ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Replaced Serial Number', 'Old Serial', 'Replaced Device', 'Replaced Serial No']),
+      NewSerial: getColVal(row, ['New Serial', 'Replacement Serial', 'New Serial No', 'New Serial Number']),
       AccountName: getColVal(row, ['Account Name', 'AccountName', 'Customer Name', 'Customer', 'Account']),
       ProactiveUptimePct: getColVal(row, ['Proactive -Uptime%', 'Proactive Uptime %', 'Proactive Uptime', 'Proactive-Uptime%', 'Average of Proactive -Uptime%']),
       JFLUptimePct: getColVal(row, ['JFL -Uptime %', 'JFL Uptime %', 'JFL Uptime', 'JFL-Uptime %', 'Average of JFL -Uptime %']),
