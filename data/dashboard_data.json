@@ -11233,11 +11233,13 @@
   },
   "proactiveTicketAnalytics": {
     "overall": {
-      "total": 435,
-      "open": 1,
+      "total": 449,
+      "open": 0,
       "onHold": 9,
       "assignment": 1,
-      "closed": 424,
+      "closed": 439,
+      "resolved": 1,
+      "closedOnly": 438,
       "slaMet": 428,
       "slaBreached": 7,
       "slaPercent": "98.39"
@@ -11245,11 +11247,11 @@
     "bySite": [
       {
         "siteId": "Greater Noida",
-        "total": 189,
+        "total": 194,
         "open": 0,
         "onHold": 8,
         "assignment": 0,
-        "closed": 181,
+        "closed": 186,
         "slaMet": 189,
         "slaBreached": 0,
         "slaPercent": "100.00"
@@ -11278,11 +11280,11 @@
       },
       {
         "siteId": "Bangalore",
-        "total": 46,
+        "total": 54,
         "open": 0,
         "onHold": 0,
         "assignment": 0,
-        "closed": 46,
+        "closed": 54,
         "slaMet": 44,
         "slaBreached": 2,
         "slaPercent": "95.65"
@@ -11300,11 +11302,11 @@
       },
       {
         "siteId": "Nagpur",
-        "total": 34,
+        "total": 35,
         "open": 0,
         "onHold": 1,
         "assignment": 0,
-        "closed": 33,
+        "closed": 34,
         "slaMet": 34,
         "slaBreached": 0,
         "slaPercent": "100.00"
@@ -11312,10 +11314,10 @@
       {
         "siteId": "Noida",
         "total": 4,
-        "open": 1,
+        "open": 0,
         "onHold": 0,
         "assignment": 1,
-        "closed": 2,
+        "closed": 3,
         "slaMet": 1,
         "slaBreached": 3,
         "slaPercent": "25.00"
@@ -11325,10 +11327,10 @@
       {
         "name": "Kartik Choudhary",
         "total": 118,
-        "open": 1,
+        "open": 0,
         "onHold": 2,
         "assignment": 1,
-        "closed": 114,
+        "closed": 115,
         "slaMet": 114,
         "slaMissed": 4,
         "holdReasons": {
@@ -11423,6 +11425,18 @@
         "assignment": 0,
         "closed": 14,
         "slaMet": 14,
+        "slaMissed": 0,
+        "holdReasons": {},
+        "topHoldReason": "—"
+      },
+      {
+        "name": "Unassigned",
+        "total": 14,
+        "open": 0,
+        "onHold": 0,
+        "assignment": 0,
+        "closed": 14,
+        "slaMet": 0,
         "slaMissed": 0,
         "holdReasons": {},
         "topHoldReason": "—"

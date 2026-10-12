@@ -54,7 +54,7 @@ export default function TicketsDetailPage({ data, initialSubTab }) {
       const matchesStatus = statusFilter === 'ALL' ||
         (statusFilter === 'open' && (status.includes('open') || status.includes('in progress'))) ||
         (statusFilter === 'onHold' && status.includes('hold')) ||
-        (statusFilter === 'closed' && status.includes('closed'));
+        (statusFilter === 'closed' && (status.includes('closed') || status.includes('resolved')));
 
       return matchesSearch && matchesStatus;
     });
@@ -111,7 +111,9 @@ export default function TicketsDetailPage({ data, initialSubTab }) {
         <div style={{ background: '#ffffff', padding: '1.25rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
           <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Closed</div>
           <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#15803d', margin: '0.2rem 0' }}>{overall.closed || 0}</div>
-          <div style={{ fontSize: '0.75rem', color: '#15803d' }}>Resolved & Closed</div>
+          <div style={{ fontSize: '0.75rem', color: '#15803d' }}>
+            {overall.resolved ? `${overall.closedOnly != null ? overall.closedOnly : (overall.closed - overall.resolved)} Closed · ${overall.resolved} Resolved` : 'Resolved & Closed'}
+          </div>
         </div>
 
         <div style={{ background: '#ffffff', padding: '1.25rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>

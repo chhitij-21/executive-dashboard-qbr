@@ -1280,19 +1280,35 @@ if (require.main === module || !process.env.VERCEL) {
     });
   };
 
-  // ── Startup Cache Validation (read-only) ─────────────────
+  // ── Startup Cache Eviction Guard ─────────────────
   try {
     const canonicalPath = resolveDataPath('dashboard_data.json');
     if (fs.existsSync(canonicalPath)) {
       try {
         const parsed = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
-        const n = parsed?.executiveSummary?.totalIncidents;
-        console.log(`[startup] Canonical dashboard_data.json present (${n ?? 'unknown'} incidents).`);
+        const reportLabel = parsed?.report_period?.display_label || parsed?.reportingPeriod || '';
+        
+        if (reportLabel === 'User Selected Period' || reportLabel === 'Selected Period' || reportLabel === '') {
+          console.warn('[startup] Stale or placeholder dashboard_data.json detected. Evicting cache and copying bundled default.');
+          const bundledPath = resolveDataPath('bundled_default/dashboard_data.json');
+          if (fs.existsSync(bundledPath)) {
+            fs.copyFileSync(bundledPath, canonicalPath);
+            console.log('[startup] Successfully restored bundled default dashboard_data.json');
+          }
+        } else {
+          const n = parsed?.executiveSummary?.totalIncidents;
+          console.log(`[startup] Canonical dashboard_data.json present (${n ?? 'unknown'} incidents).`);
+        }
       } catch (e) {
         console.warn('[startup] Canonical dashboard_data.json exists but is unreadable:', e.message);
       }
     } else {
       console.log('[startup] No canonical dashboard_data.json — empty state until first upload.');
+      const bundledPath = resolveDataPath('bundled_default/dashboard_data.json');
+      if (fs.existsSync(bundledPath)) {
+        fs.copyFileSync(bundledPath, canonicalPath);
+        console.log('[startup] Copied bundled default to canonical path.');
+      }
     }
   } catch (err) {
     console.warn('[startup] Warning during startup cache validation:', err.message);

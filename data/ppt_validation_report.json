@@ -1,6 +1,6 @@
 {
   "reportId": "N/A",
-  "generatedAt": "2026-10-06T10:27:46.959Z",
+  "generatedAt": "2026-10-12T17:49:12.800Z",
   "overallStatus": "PASS",
   "metricsChecked": 92,
   "mismatchesCount": 0,
@@ -49,16 +49,16 @@
     {
       "slide": "Slide 3",
       "metric": "apIncidents",
-      "expected": 62,
-      "actual": 62,
+      "expected": 321,
+      "actual": 321,
       "path": "executiveSummary.apIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 3",
       "metric": "uniqueAPsWithIncidents",
-      "expected": 35,
-      "actual": 35,
+      "expected": 104,
+      "actual": 104,
       "path": "executiveSummary.uniqueAPsWithIncidents",
       "status": "PASS"
     },
@@ -81,40 +81,40 @@
     {
       "slide": "Slide 3",
       "metric": "overallUptime",
-      "expected": "96.87",
-      "actual": "96.87",
+      "expected": "97.05",
+      "actual": "97.05",
       "path": "executiveSummary.overallUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 3",
       "metric": "incidentFreePercent",
-      "expected": "86.83",
-      "actual": "86.83",
+      "expected": "63.17",
+      "actual": "63.17",
       "path": "executiveSummary.incidentFreePercent",
       "status": "PASS"
     },
     {
       "slide": "Slide 3",
       "metric": "healthScore",
-      "expected": "92.85",
-      "actual": "92.85",
+      "expected": "83.50",
+      "actual": "83.50",
       "path": "executiveSummary.healthScore",
       "status": "PASS"
     },
     {
       "slide": "Slide 3",
       "metric": "slaCompliance",
-      "expected": "95.16",
-      "actual": "95.16",
+      "expected": "85.22",
+      "actual": "85.22",
       "path": "executiveSummary.slaCompliance",
       "status": "PASS"
     },
     {
       "slide": "Slide 3",
       "metric": "totalIncidents",
-      "expected": 86,
-      "actual": 86,
+      "expected": 435,
+      "actual": 435,
       "path": "executiveSummary.totalIncidents",
       "status": "PASS"
     },
@@ -129,16 +129,16 @@
     {
       "slide": "Slide 3",
       "metric": "majorIncidents",
-      "expected": 0,
-      "actual": 0,
+      "expected": 2,
+      "actual": 2,
       "path": "executiveSummary.majorIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 3",
       "metric": "minorIncidents",
-      "expected": 86,
-      "actual": 86,
+      "expected": 433,
+      "actual": 433,
       "path": "executiveSummary.minorIncidents",
       "status": "PASS"
     },
@@ -177,48 +177,48 @@
     {
       "slide": "Slide 5",
       "metric": "site_Bangalore_proactiveSwitchUptime",
-      "expected": "99.99",
-      "actual": "99.99",
+      "expected": "99.97",
+      "actual": "99.97",
       "path": "siteSummary[Bangalore].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Bangalore_jflSwitchUptime",
-      "expected": "99.75",
-      "actual": "99.75",
+      "expected": "99.21",
+      "actual": "99.21",
       "path": "siteSummary[Bangalore].jflSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Bangalore_incidentCount",
-      "expected": 9,
-      "actual": 9,
+      "expected": 46,
+      "actual": 46,
       "path": "siteSummary[Bangalore].incidentCount",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Bangalore_apIncidents",
-      "expected": 1,
-      "actual": 1,
+      "expected": 13,
+      "actual": 13,
       "path": "siteSummary[Bangalore].apIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Bangalore_uniqueAPs",
-      "expected": 1,
-      "actual": 1,
+      "expected": 11,
+      "actual": 11,
       "path": "siteSummary[Bangalore].uniqueAPsWithIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Bangalore_healthScore",
-      "expected": "97.73",
-      "actual": "97.73",
+      "expected": "91.03",
+      "actual": "91.03",
       "path": "siteSummary[Bangalore].healthScore",
       "status": "PASS"
     },
@@ -249,48 +249,48 @@
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_proactiveSwitchUptime",
-      "expected": "95.96",
-      "actual": "95.96",
+      "expected": "98.51",
+      "actual": "98.51",
       "path": "siteSummary[Greater Noida].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_jflSwitchUptime",
-      "expected": "93.01",
-      "actual": "93.01",
+      "expected": "97.87",
+      "actual": "97.87",
       "path": "siteSummary[Greater Noida].jflSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_incidentCount",
-      "expected": 54,
-      "actual": 54,
+      "expected": 189,
+      "actual": 189,
       "path": "siteSummary[Greater Noida].incidentCount",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_apIncidents",
-      "expected": 49,
-      "actual": 49,
+      "expected": 179,
+      "actual": 179,
       "path": "siteSummary[Greater Noida].apIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_uniqueAPs",
-      "expected": 23,
-      "actual": 23,
+      "expected": 58,
+      "actual": 58,
       "path": "siteSummary[Greater Noida].uniqueAPsWithIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_healthScore",
-      "expected": "84.86",
-      "actual": "84.86",
+      "expected": "73.04",
+      "actual": "73.04",
       "path": "siteSummary[Greater Noida].healthScore",
       "status": "PASS"
     },
@@ -321,48 +321,48 @@
     {
       "slide": "Slide 5",
       "metric": "site_Guwahati_proactiveSwitchUptime",
-      "expected": "99.99",
-      "actual": "99.99",
+      "expected": "99.86",
+      "actual": "99.86",
       "path": "siteSummary[Guwahati].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Guwahati_jflSwitchUptime",
-      "expected": "100.00",
-      "actual": "100.00",
+      "expected": "89.32",
+      "actual": "89.32",
       "path": "siteSummary[Guwahati].jflSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Guwahati_incidentCount",
-      "expected": 1,
-      "actual": 1,
+      "expected": 56,
+      "actual": 56,
       "path": "siteSummary[Guwahati].incidentCount",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Guwahati_apIncidents",
-      "expected": 0,
-      "actual": 0,
+      "expected": 39,
+      "actual": 39,
       "path": "siteSummary[Guwahati].apIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Guwahati_uniqueAPs",
-      "expected": 0,
-      "actual": 0,
+      "expected": 3,
+      "actual": 3,
       "path": "siteSummary[Guwahati].uniqueAPsWithIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Guwahati_healthScore",
-      "expected": "92.00",
-      "actual": "92.00",
+      "expected": "53.66",
+      "actual": "53.66",
       "path": "siteSummary[Guwahati].healthScore",
       "status": "PASS"
     },
@@ -393,48 +393,48 @@
     {
       "slide": "Slide 5",
       "metric": "site_Hyderabad_proactiveSwitchUptime",
-      "expected": "100.00",
-      "actual": "100.00",
+      "expected": "99.93",
+      "actual": "99.93",
       "path": "siteSummary[Hyderabad].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Hyderabad_jflSwitchUptime",
-      "expected": "100.00",
-      "actual": "100.00",
+      "expected": "94.32",
+      "actual": "94.32",
       "path": "siteSummary[Hyderabad].jflSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Hyderabad_incidentCount",
-      "expected": 7,
-      "actual": 7,
+      "expected": 67,
+      "actual": 67,
       "path": "siteSummary[Hyderabad].incidentCount",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Hyderabad_apIncidents",
-      "expected": 7,
-      "actual": 7,
+      "expected": 46,
+      "actual": 46,
       "path": "siteSummary[Hyderabad].apIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Hyderabad_uniqueAPs",
-      "expected": 6,
-      "actual": 6,
+      "expected": 12,
+      "actual": 12,
       "path": "siteSummary[Hyderabad].uniqueAPsWithIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Hyderabad_healthScore",
-      "expected": "84.13",
-      "actual": "84.13",
+      "expected": "63.85",
+      "actual": "63.85",
       "path": "siteSummary[Hyderabad].healthScore",
       "status": "PASS"
     },
@@ -473,40 +473,40 @@
     {
       "slide": "Slide 5",
       "metric": "site_Mohali_jflSwitchUptime",
-      "expected": "100.00",
-      "actual": "100.00",
+      "expected": "99.46",
+      "actual": "99.46",
       "path": "siteSummary[Mohali].jflSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Mohali_incidentCount",
-      "expected": 5,
-      "actual": 5,
+      "expected": 39,
+      "actual": 39,
       "path": "siteSummary[Mohali].incidentCount",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Mohali_apIncidents",
-      "expected": 5,
-      "actual": 5,
+      "expected": 38,
+      "actual": 38,
       "path": "siteSummary[Mohali].apIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Mohali_uniqueAPs",
-      "expected": 5,
-      "actual": 5,
+      "expected": 14,
+      "actual": 14,
       "path": "siteSummary[Mohali].uniqueAPsWithIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Mohali_healthScore",
-      "expected": "88.77",
-      "actual": "88.77",
+      "expected": "67.75",
+      "actual": "67.75",
       "path": "siteSummary[Mohali].healthScore",
       "status": "PASS"
     },
@@ -609,48 +609,48 @@
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_proactiveSwitchUptime",
-      "expected": "99.90",
-      "actual": "99.90",
+      "expected": "99.27",
+      "actual": "99.27",
       "path": "siteSummary[Nagpur].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_jflSwitchUptime",
-      "expected": "82.84",
-      "actual": "82.84",
+      "expected": "78.39",
+      "actual": "78.39",
       "path": "siteSummary[Nagpur].jflSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_incidentCount",
-      "expected": 9,
-      "actual": 9,
+      "expected": 34,
+      "actual": 34,
       "path": "siteSummary[Nagpur].incidentCount",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_apIncidents",
-      "expected": 0,
-      "actual": 0,
+      "expected": 6,
+      "actual": 6,
       "path": "siteSummary[Nagpur].apIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_uniqueAPs",
-      "expected": 0,
-      "actual": 0,
+      "expected": 6,
+      "actual": 6,
       "path": "siteSummary[Nagpur].uniqueAPsWithIncidents",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_healthScore",
-      "expected": "91.88",
-      "actual": "91.88",
+      "expected": "58.77",
+      "actual": "58.77",
       "path": "siteSummary[Nagpur].healthScore",
       "status": "PASS"
     },
@@ -681,24 +681,24 @@
     {
       "slide": "Slide 5",
       "metric": "site_Noida_proactiveSwitchUptime",
-      "expected": "99.41",
-      "actual": "99.41",
+      "expected": "98.22",
+      "actual": "98.22",
       "path": "siteSummary[Noida].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Noida_jflSwitchUptime",
-      "expected": "99.41",
-      "actual": "99.41",
+      "expected": "100.00",
+      "actual": "100.00",
       "path": "siteSummary[Noida].jflSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Noida_incidentCount",
-      "expected": 1,
-      "actual": 1,
+      "expected": 4,
+      "actual": 4,
       "path": "siteSummary[Noida].incidentCount",
       "status": "PASS"
     },
@@ -721,24 +721,24 @@
     {
       "slide": "Slide 5",
       "metric": "site_Noida_healthScore",
-      "expected": "99.29",
-      "actual": "99.29",
+      "expected": "98.95",
+      "actual": "98.95",
       "path": "siteSummary[Noida].healthScore",
       "status": "PASS"
     },
     {
       "slide": "Phase 10 Identity",
       "metric": "RCA_Total_Equals_TotalIncidents",
-      "expected": 86,
-      "actual": 86,
+      "expected": 435,
+      "actual": 435,
       "path": "rcaAnalytics.sumRcaCounts",
       "status": "PASS"
     },
     {
       "slide": "Phase 10 Identity",
       "metric": "Site_Incidents_Total_Equals_TotalIncidents",
-      "expected": 86,
-      "actual": 86,
+      "expected": 435,
+      "actual": 435,
       "path": "siteSummary.sumSiteIncidents",
       "status": "PASS"
     }

@@ -339,9 +339,10 @@ function parseIncidentSheet(rows) {
       'Resolved', 'Closed', 'Finish Time', 'Completion Date', 'End Time'
     ]);
 
-    const isCR = /change|change\s*request|^cr$|normal\s*change|standard\s*change|emergency\s*change/i.test(cat) ||
-      /change|change\s*request|^cr$/i.test(rcaStr) ||
-      /change\s*request|change\s*management/i.test(desc);
+    const isCR = /change|change\s*request|^cr$|normal\s*change|standard\s*change|emergency\s*change|request\s*fulfillment/i.test(cat) ||
+      /change|change\s*request|^cr$|request\s*fulfillment/i.test(rcaStr) ||
+      /change\s*request|change\s*management|request\s*fulfillment/i.test(desc) ||
+      /request\s*fulfillment/i.test(subCat);
 
     return {
       IncidentNumber: incidentId,

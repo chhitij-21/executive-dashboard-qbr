@@ -573,8 +573,9 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Slide 10: SLA Dashboard
   buildSLASlide(pres, exec, siteSummary, slaAn);
 
-  // Slide 11: Ticket Analytics
-  buildTicketAnalyticsSlide(pres, incidents, siteSummary, exec);
+  // Slide 11: Ticket Analytics (All Monitored Tickets including CRs/Activities)
+  const allIncidents = [...(data.incidents || []), ...(data.otherActivities || [])];
+  buildTicketAnalyticsSlide(pres, allIncidents, siteSummary, exec);
 
   // Slide 12: Site Health Ranking
   buildSiteRankingSlide(pres, siteSummary, incidents);
@@ -601,7 +602,6 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildActionPlanSlide(pres, exec, siteSummary, incidents);
 
   // Slide 37: Other Activity
-  const allIncidents = [...(data.incidents || []), ...(data.otherActivities || [])];
   buildOtherActivitySlide(pres, allIncidents, displayPeriod);
 
   // Appendix Section (Single Data Reference Notice Slide — Rule 1)

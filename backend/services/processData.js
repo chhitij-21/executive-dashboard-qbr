@@ -573,12 +573,16 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       Category: subCat,
       DeviceName: item.Location || item.SiteID || '',
       Location: item.Location || item.SiteID || '',
+      SiteID: item.SiteID || item.Location || '',
       DeviceSerial: item.SerialNo || item.DeviceID || '',
       SerialNo: item.SerialNo || item.DeviceID || '',
       DeviceID: item.SerialNo || item.DeviceID || '',
       DeviceType: item.DeviceType || 'SW',
       Hostname: item.Hostname || '',
       Status: item.Status || 'Closed',
+      RawStatus: item['Status'] || item.RawStatus || item.Status || 'Closed',
+      TicketOwner: item['Ticket Owner'] || item.TicketOwner || item.Owner || 'Unassigned',
+      HoldReason: item['Hold Reason'] || item.HoldReason || '',
       RCA: item.RCA || 'New Configuration',
       display_reference: item.display_reference || `Ticket: ${item.TicketNumber || item.IncidentNumber || 'CR'}`
     };
@@ -1332,7 +1336,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
   const incAn = buildIncidentAnalytics(incidents, activeDevices);
   const rcaAn = buildRCAAnalytics(incidents);
   const slaAn = buildSLAAnalytics(activeDevices, incidents);
-  const proactiveTicketAnalytics = buildProactiveTicketAnalytics(incidents);
+  const proactiveTicketAnalytics = buildProactiveTicketAnalytics(incidents, otherActivities);
 
   const activeLabel = reportPeriodMeta?.display_label || reportingPeriod;
 
@@ -1445,7 +1449,7 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   };
 }
 
-function buildProactiveTicketAnalytics(incidents) {
+function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
   const HOLD_CATEGORIES = [
     { rx: /power|psu|ups/i,                                                                 label: 'Power Issue at Site' },
     { rx: /client[\s-]?side|client[\s-]?site/i,                                             label: 'Client-Side Activity' },
@@ -1467,28 +1471,40 @@ function buildProactiveTicketAnalytics(incidents) {
   const bucketStatus = (s) => {
     const t = String(s || '').trim();
     if (/^closed$/i.test(t))                 return 'closed';
+    if (/^resolved$/i.test(t))               return 'closed';  // Resolved = Closed for KPI counting
     if (/^on[\s-]?hold$/i.test(t))           return 'onHold';
     if (/^ticket[\s-]?assignment$/i.test(t)) return 'assignment';
     return 'open';
   };
 
-  const empty = { total: 0, open: 0, onHold: 0, assignment: 0, closed: 0,
+  const empty = { total: 0, open: 0, onHold: 0, assignment: 0, closed: 0, resolved: 0, closedOnly: 0,
                   slaMet: 0, slaBreached: 0, slaPercent: '0.00' };
-  if (!incidents || incidents.length === 0) {
+  const incList = Array.isArray(incidents) ? incidents : [];
+  const otherList = Array.isArray(otherActivities) ? otherActivities : [];
+  const allTickets = [...incList, ...otherList];
+
+  if (allTickets.length === 0) {
     return { overall: { ...empty }, bySite: [], byEngineer: [], holdReasons: [] };
   }
 
   const engMap = new Map();
   const siteMap = new Map();
   const holdMap = new Map();
-  const overall = { ...empty, total: incidents.length };
+  const overall = { ...empty, total: allTickets.length };
 
   const pct = (met, br) => (met + br) === 0 ? '0.00' : ((met / (met + br)) * 100).toFixed(2);
 
-  for (const inc of incidents) {
-    const eng  = inc.TicketOwner || 'Unassigned';
+  for (const inc of allTickets) {
+    const eng  = inc.TicketOwner || inc['Ticket Owner'] || 'Unassigned';
     const site = inc.SiteID || inc.Location || 'Unknown';
-    const bk   = bucketStatus(inc.RawStatus || inc.Status);
+    const rawSt = String(inc.RawStatus || inc.Status || '').trim();
+    const bk   = bucketStatus(rawSt);
+
+    if (/^closed$/i.test(rawSt)) {
+      overall.closedOnly = (overall.closedOnly || 0) + 1;
+    } else if (/^resolved$/i.test(rawSt)) {
+      overall.resolved = (overall.resolved || 0) + 1;
+    }
 
     // The enriched incidents carry sla_status (already computed).
     // Fall back to Excel column if sla_status missing.
@@ -2278,6 +2294,14 @@ function filterDashboardBySite(data, siteFilter) {
   const rcaAn = buildRCAAnalytics(enrichedIncidents);
   const slaAn = buildSLAAnalytics(activeDevices, enrichedIncidents);
 
+  // Filter otherActivities by site for accurate site-level grand total
+  const filteredOtherActivities = (data.otherActivities || []).filter((oa) => {
+    const rawSite = oa.SiteID || oa.Location || '';
+    if (isGenericLocation(rawSite)) return false;
+    return normalizeSiteName(rawSite).toLowerCase() === normTarget;
+  });
+  const proactiveTicketAnalytics = buildProactiveTicketAnalytics(enrichedIncidents, filteredOtherActivities);
+
   return {
     ...data,
     siteFilterApplied: normalizeSiteName(siteFilter),
@@ -2291,10 +2315,12 @@ function filterDashboardBySite(data, siteFilter) {
     incidentAnalytics: incAn,
     rcaAnalytics: rcaAn,
     slaAnalytics: slaAn,
+    proactiveTicketAnalytics,
     devices: filteredDevices,
     incidents: enrichedIncidents,
+    otherActivities: filteredOtherActivities,
   };
 }
 
-module.exports = { processJFLWorkbooks, filterDashboardBySite };
+module.exports = { processJFLWorkbooks, filterDashboardBySite, buildProactiveTicketAnalytics };
 
