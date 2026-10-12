@@ -12,6 +12,7 @@ const {
 const ruleEngine = require('./ruleEngine');
 const { generatePPT } = require('./pptGenerator');
 const { generatePDF } = require('./pdfGenerator');
+const { continuousPipelineAudit } = require('./ai/iq200Validator');
 
 // Helper for returning structured failure results
 function fail(outputDir, errorCode, message, log) {
@@ -1073,6 +1074,15 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     log(`Data validation warnings (${validationWarnings.length}): ${validationWarnings.join(' | ')}`);
   } else {
     log('Data validation passed — all RCA breakdown sums and SLA status counts are consistent.');
+  }
+
+  // ── 8c. Continuous IQ-200 Hallucination-Free AI Validator & Invariant Checker ──
+  try {
+    const iq200Audit = continuousPipelineAudit(qbrData);
+    qbrData.iq200Audit = iq200Audit;
+    log(`IQ-200 AI Validator: ${iq200Audit.status} (Score: ${iq200Audit.score}%, Invariants: ${iq200Audit.invariants?.passed}/${iq200Audit.invariants?.total}, Hallucinations: ${iq200Audit.hallucinationsDetected})`);
+  } catch (auditErr) {
+    log(`WARNING: IQ-200 continuous validation notice: ${auditErr.message}`);
   }
 
   // ── 9. Data quality report ────────────────────────────────────────────────

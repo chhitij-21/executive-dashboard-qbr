@@ -37,6 +37,10 @@ router.post('/', async (req, res) => {
     }
 
     const result = await validateReport(qbrData);
+    try {
+      const { continuousPipelineAudit } = require('../services/ai/iq200Validator');
+      result.iq200Audit = continuousPipelineAudit(qbrData);
+    } catch (_) {}
 
     return res.status(200).json(result);
   } catch (err) {

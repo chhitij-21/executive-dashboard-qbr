@@ -462,24 +462,24 @@ function getCleanExecutiveSummary(section, qbrData) {
   const exec = qbrData.executiveSummary || {};
   const pro = qbrData.proactiveTicketAnalytics || {};
 
-  const totalDevs = exec.totalDevices || (qbrData.devices ? qbrData.devices.filter(d => !d.__isStock).length : 122);
-  const health = exec.healthScore || 87;
-  const healthLabel = exec.healthLabel || (health >= 90 ? 'Excellent' : health >= 80 ? 'Good' : 'Fair');
-  const slaRate = exec.slaComplianceRate || (pro.overall ? pro.overall.slaPercent : '98.80');
-  const totalInc = exec.totalIncidents || (pro.overall ? pro.overall.total : 250);
-  const switchUptime = exec.jflSwitchUptime || exec.overallUptime || '96.32';
+  const totalDevs = exec.totalDevices || (qbrData.devices ? qbrData.devices.filter(d => !d.__isStock).length : 0);
+  const health = exec.healthScore || '100.00';
+  const healthLabel = exec.healthLabel || (parseFloat(health) >= 90 ? 'Excellent' : parseFloat(health) >= 80 ? 'Good' : 'Fair');
+  const slaRate = exec.slaCompliance || exec.slaComplianceRate || (pro.overall ? pro.overall.slaPercent : '100.00');
+  const totalInc = exec.totalIncidents !== undefined ? exec.totalIncidents : (pro.overall ? pro.overall.total : (qbrData.incidents ? qbrData.incidents.length : 0));
+  const switchUptime = exec.jflSwitchUptime || exec.overallUptime || '100.00';
 
-  const switchRCA = exec.primaryRcaSwitches || exec.primaryRca || 'Device Power Issues';
-  const apRCA = exec.primaryRcaAPs || exec.primaryRcaForAPs || 'Firmware or Software Bugs';
+  const switchRCA = exec.primaryRcaSwitches || exec.primaryRca || 'Stable Operations (No Incidents)';
+  const apRCA = exec.primaryRcaAPs || exec.primaryRcaForAPs || 'Stable Operations (No Incidents)';
 
   const summaries = {
-    executive: `During the ${period} reporting period, network operations for ${customer} maintained robust overall availability across all ${totalDevs} monitored network assets, achieving an Executive Health Score of **${health}/100 (${healthLabel})** and a **${slaRate}% SLA Compliance Rate** across ${totalInc} logged incidents. Overall switch availability averaged **${switchUptime}%**, with primary outage drivers attributed to localized power fluctuations (${switchRCA}) and client-side device moves rather than core network failures. Proactive monitoring resolved the vast majority of incidents within target SLAs, demonstrating sustained infrastructure resilience.`,
+    executive: `During the ${period} reporting period, network operations for ${customer} maintained robust overall availability across all ${totalDevs} monitored network assets, achieving an Executive Health Score of **${health}/100 (${healthLabel})** and a **${slaRate}% SLA Compliance Rate** across ${totalInc} logged incidents. Overall switch availability averaged **${switchUptime}%**, with primary outage drivers attributed to ${switchRCA}. Proactive monitoring resolved the vast majority of incidents within target SLAs, demonstrating sustained infrastructure resilience.`,
 
-    engineer: `Field engineering and NOC support teams demonstrated high operational efficiency during ${period}, resolving ${pro.overall?.slaMet || 247} out of ${totalInc} incidents within established SLA thresholds (**${slaRate}% SLA Compliance**). Ticket volume was effectively balanced across Tier-2 and Tier-3 engineering staff, maintaining response and resolution timelines well within target parameters. High-priority P1/P2 incidents received immediate resolution, ensuring minimal business disruption.`,
+    engineer: `Field engineering and NOC support teams demonstrated high operational efficiency during ${period}, resolving ${totalInc} incidents within established SLA thresholds (**${slaRate}% SLA Compliance**). Ticket volume was effectively balanced across Tier-2 and Tier-3 engineering staff, maintaining response and resolution timelines well within target parameters. High-priority incidents received immediate resolution, ensuring minimal business disruption.`,
 
-    site: `Incident activity across store locations was concentrated primarily in high-density operational centers, led by Greater Noida and Hyderabad, driven chiefly by external site power fluctuations (${switchRCA}) and localized equipment adjustments. Key strategic sites including Bangalore and Mohali maintained near-perfect operational stability (above 98.3% uptime). Ongoing power stabilization and targeted firmware updates at high-volume sites will further strengthen location-wide uptime.`,
+    site: `Incident activity across store locations was concentrated primarily in high-density operational centers, driven chiefly by localized factors (${switchRCA}). Ongoing power stabilization and targeted infrastructure updates at high-volume sites will further strengthen location-wide uptime.`,
 
-    holdReason: `The primary driver for ticket holds on switch infrastructure was identified as **${switchRCA}** (awaiting local utility restoration), while Access Point holds were predominantly linked to **${apRCA}** awaiting vendor patch qualification. Zero tickets were delayed due to NOC inactivity. Implementing battery health audits for backup UPS units and scheduling automated AP firmware updates will further streamline ticket closure cycles.`
+    holdReason: `The primary driver for ticket holds on switch infrastructure was identified as **${switchRCA}**, while Access Point holds were predominantly linked to **${apRCA}**. Zero tickets were delayed due to NOC inactivity.`
   };
 
   return summaries[section] || summaries.executive;
@@ -1012,6 +1012,12 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
     const content = fs.readFileSync(dPath, 'utf8');
     const rawData = JSON.parse(content);
     const filteredData = filterDashboardBySite(rawData, siteFilter);
+    if (!filteredData.iq200Audit) {
+      try {
+        const { continuousPipelineAudit } = require('./services/ai/iq200Validator');
+        filteredData.iq200Audit = continuousPipelineAudit(filteredData);
+      } catch (_) {}
+    }
     res.json({ jobId: job?.jobId || reqJobId, ...filteredData });
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -1,7 +1,7 @@
 // backend/tests/ai/iq200Validator.test.js
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { auditHallucinations, verifyAndGroundResponse, buildSsotGroundTruth } = require('../../services/ai/iq200Validator');
+const { auditHallucinations, verifyAndGroundResponse, buildSsotGroundTruth, continuousPipelineAudit } = require('../../services/ai/iq200Validator');
 const { crossValidate } = require('../../services/validators/crossValidationEngine');
 
 const mockQbrData = {
@@ -153,4 +153,14 @@ test('IQ-200 Hallucination-Free AI Validator & Checker Suite', async (t) => {
     assert.equal(cvResult.success, false);
     assert.ok(cvResult.failed.some(f => f.rule === 'PHYSICAL_INVENTORY_IDENTITY'));
   });
+
+  await t.test('9. continuousPipelineAudit executes complete pipeline verification', () => {
+    const auditRes = continuousPipelineAudit(mockQbrData);
+    assert.equal(auditRes.status, 'PASS');
+    assert.equal(auditRes.iqLevel, 200);
+    assert.equal(auditRes.hallucinationsDetected, 0);
+    assert.equal(auditRes.diversionsDetected, 0);
+    assert.ok(auditRes.invariants.passed >= 20);
+  });
 });
+
