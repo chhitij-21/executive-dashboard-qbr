@@ -6,6 +6,7 @@
 
 const ruleEngine = require('./ruleEngine');
 const { getToolSchemas, executeTool } = require('./aiTools');
+const { verifyAndGroundResponse } = require('./ai/guardrails');
 
 function getEnvVar(...names) {
   for (const n of names) {
@@ -64,7 +65,10 @@ async function processChatQuery(prompt, qbrData, options = {}) {
       try {
         const model = getEnvVar('GROQ_MODEL') || 'llama-3.3-70b-versatile';
         const ans = await queryGroq(query, systemContext, groqKey, model, options, qbrData);
-        if (ans) return { answer: ans, type: 'llm_groq', model: `Groq (${model})` };
+        if (ans) {
+          const verified = verifyAndGroundResponse(ans, qbrData, { systemContext });
+          return { answer: verified.answer, type: 'llm_groq', model: `Groq (${model})`, iq200Audit: { valid: verified.valid, score: verified.score, issues: verified.issues } };
+        }
       } catch (e) {
         console.warn(`[aiChatService] Groq API note: ${e.message}`);
       }
@@ -76,7 +80,10 @@ async function processChatQuery(prompt, qbrData, options = {}) {
       try {
         const model = process.env.OPENAI_MODEL || 'gpt-4o';
         const ans = await queryOpenAI(query, systemContext, openAiKey, model, options, qbrData);
-        if (ans) return { answer: ans, type: 'llm_openai', model: `OpenAI ${model}` };
+        if (ans) {
+          const verified = verifyAndGroundResponse(ans, qbrData, { systemContext });
+          return { answer: verified.answer, type: 'llm_openai', model: `OpenAI ${model}`, iq200Audit: { valid: verified.valid, score: verified.score, issues: verified.issues } };
+        }
       } catch (e) {
         console.warn(`[aiChatService] OpenAI API note: ${e.message}`);
       }
@@ -88,7 +95,10 @@ async function processChatQuery(prompt, qbrData, options = {}) {
       try {
         const model = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
         const ans = await queryAnthropic(query, systemContext, anthropicKey, model);
-        if (ans) return { answer: ans, type: 'llm_anthropic', model: 'Claude 3.5 Sonnet' };
+        if (ans) {
+          const verified = verifyAndGroundResponse(ans, qbrData, { systemContext });
+          return { answer: verified.answer, type: 'llm_anthropic', model: 'Claude 3.5 Sonnet', iq200Audit: { valid: verified.valid, score: verified.score, issues: verified.issues } };
+        }
       } catch (e) {
         console.warn(`[aiChatService] Anthropic API note: ${e.message}`);
       }
@@ -100,7 +110,10 @@ async function processChatQuery(prompt, qbrData, options = {}) {
       try {
         const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
         const ans = await queryDeepSeek(query, systemContext, deepseekKey, model, options, qbrData);
-        if (ans) return { answer: ans, type: 'llm_deepseek', model: `DeepSeek (${model})` };
+        if (ans) {
+          const verified = verifyAndGroundResponse(ans, qbrData, { systemContext });
+          return { answer: verified.answer, type: 'llm_deepseek', model: `DeepSeek (${model})`, iq200Audit: { valid: verified.valid, score: verified.score, issues: verified.issues } };
+        }
       } catch (e) {
         console.warn(`[aiChatService] DeepSeek API note: ${e.message}`);
       }
@@ -112,7 +125,10 @@ async function processChatQuery(prompt, qbrData, options = {}) {
       try {
         const model = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
         const ans = await queryGeminiAPI(query, systemContext, geminiKey, model);
-        if (ans) return { answer: ans, type: 'llm_gemini', model: `Google ${model}` };
+        if (ans) {
+          const verified = verifyAndGroundResponse(ans, qbrData, { systemContext });
+          return { answer: verified.answer, type: 'llm_gemini', model: `Google ${model}`, iq200Audit: { valid: verified.valid, score: verified.score, issues: verified.issues } };
+        }
       } catch (e) {
         console.warn(`[aiChatService] Gemini API note: ${e.message}`);
       }

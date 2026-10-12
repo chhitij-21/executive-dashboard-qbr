@@ -5,7 +5,7 @@ const responseCache = require('./responseCache');
 const { withRetry } = require('./retryHandler');
 const conversationMemory = require('./conversationMemory');
 const { getRoleInstructions } = require('./roleInstructions');
-const { validateAnswer } = require('./guardrails');
+const { validateAnswer, verifyAndGroundResponse } = require('./guardrails');
 const { detectIntent, executeSkill } = require('./skillDispatcher');
 const { formatSkillResponse } = require('./skillFormatters');
 const { executeTool } = require('./toolExecutor');
@@ -194,12 +194,9 @@ async function processChat(prompt, qbrData = {}, options = {}) {
       rawAnswer = buildNativeSsotFallback(promptText, qbrData);
     }
 
-    // 10 & 11. Validate with Guardrails
-    const guardRes = validateAnswer(rawAnswer, systemContextStr);
-    let finalAnswer = rawAnswer;
-    if (!guardRes.valid) {
-      finalAnswer = buildNativeSsotFallback(promptText, qbrData);
-    }
+    // 10 & 11. Validate with IQ-200 Guardrails & Grounding
+    const verified = verifyAndGroundResponse(rawAnswer, qbrData, { systemContext: systemContextStr });
+    let finalAnswer = verified.answer;
 
     // 12. Add assistant message to memory
     conversationMemory.addMessage(sessionId, 'assistant', finalAnswer);

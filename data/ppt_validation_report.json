@@ -1,6 +1,6 @@
 {
   "reportId": "N/A",
-  "generatedAt": "2026-10-12T17:49:12.800Z",
+  "generatedAt": "2026-10-12T18:52:01.729Z",
   "overallStatus": "PASS",
   "metricsChecked": 92,
   "mismatchesCount": 0,
@@ -177,16 +177,16 @@
     {
       "slide": "Slide 5",
       "metric": "site_Bangalore_proactiveSwitchUptime",
-      "expected": "99.97",
-      "actual": "99.97",
+      "expected": "100.00",
+      "actual": "100.00",
       "path": "siteSummary[Bangalore].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Bangalore_jflSwitchUptime",
-      "expected": "99.21",
-      "actual": "99.21",
+      "expected": "98.70",
+      "actual": "98.70",
       "path": "siteSummary[Bangalore].jflSwitchUptime",
       "status": "PASS"
     },
@@ -249,16 +249,16 @@
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_proactiveSwitchUptime",
-      "expected": "98.51",
-      "actual": "98.51",
+      "expected": "100.00",
+      "actual": "100.00",
       "path": "siteSummary[Greater Noida].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Greater Noida_jflSwitchUptime",
-      "expected": "97.87",
-      "actual": "97.87",
+      "expected": "90.94",
+      "actual": "90.94",
       "path": "siteSummary[Greater Noida].jflSwitchUptime",
       "status": "PASS"
     },
@@ -321,16 +321,16 @@
     {
       "slide": "Slide 5",
       "metric": "site_Guwahati_proactiveSwitchUptime",
-      "expected": "99.86",
-      "actual": "99.86",
+      "expected": "100.00",
+      "actual": "100.00",
       "path": "siteSummary[Guwahati].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Guwahati_jflSwitchUptime",
-      "expected": "89.32",
-      "actual": "89.32",
+      "expected": "98.73",
+      "actual": "98.73",
       "path": "siteSummary[Guwahati].jflSwitchUptime",
       "status": "PASS"
     },
@@ -393,16 +393,16 @@
     {
       "slide": "Slide 5",
       "metric": "site_Hyderabad_proactiveSwitchUptime",
-      "expected": "99.93",
-      "actual": "99.93",
+      "expected": "100.00",
+      "actual": "100.00",
       "path": "siteSummary[Hyderabad].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Hyderabad_jflSwitchUptime",
-      "expected": "94.32",
-      "actual": "94.32",
+      "expected": "99.45",
+      "actual": "99.45",
       "path": "siteSummary[Hyderabad].jflSwitchUptime",
       "status": "PASS"
     },
@@ -473,8 +473,8 @@
     {
       "slide": "Slide 5",
       "metric": "site_Mohali_jflSwitchUptime",
-      "expected": "99.46",
-      "actual": "99.46",
+      "expected": "97.82",
+      "actual": "97.82",
       "path": "siteSummary[Mohali].jflSwitchUptime",
       "status": "PASS"
     },
@@ -609,16 +609,16 @@
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_proactiveSwitchUptime",
-      "expected": "99.27",
-      "actual": "99.27",
+      "expected": "100.00",
+      "actual": "100.00",
       "path": "siteSummary[Nagpur].proactiveSwitchUptime",
       "status": "PASS"
     },
     {
       "slide": "Slide 5",
       "metric": "site_Nagpur_jflSwitchUptime",
-      "expected": "78.39",
-      "actual": "78.39",
+      "expected": "96.88",
+      "actual": "96.88",
       "path": "siteSummary[Nagpur].jflSwitchUptime",
       "status": "PASS"
     },
@@ -681,8 +681,8 @@
     {
       "slide": "Slide 5",
       "metric": "site_Noida_proactiveSwitchUptime",
-      "expected": "98.22",
-      "actual": "98.22",
+      "expected": "100.00",
+      "actual": "100.00",
       "path": "siteSummary[Noida].proactiveSwitchUptime",
       "status": "PASS"
     },

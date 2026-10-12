@@ -386,10 +386,6 @@ function parseIncidentSheet(rows) {
         'Actual Resolution Time (min)',
         'Actual Resolution Time'
       ]),
-      ActualResolutionMin: getColVal(row, [
-        'Actual Resolution Time (min)',
-        'Actual Resolution Time'
-      ]),
       ResolutionTimeMinRaw: getColVal(row, [
         'Resolution Time (min)',
         'Resolution Time (min) ',

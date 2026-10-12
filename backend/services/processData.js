@@ -1399,20 +1399,35 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const apRcaBrk = classifyRCALocal(apIncidents);
   const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
+  // ── Ticket-Weighted Incident Uptime (SSOT Executive Level) ──
+  // Matches Excel Pivot Table ('PPT Slide 1') Parity:
+  const swIncRows = incidents.filter(i => {
+    const dt = String(i.DeviceType || '').trim().toUpperCase();
+    const sub = String(i.SubCategory || i.Category || '').trim().toLowerCase();
+    return dt === 'SW' && sub.includes('software');
+  });
+
   let jflSwitchUptime = '100.00';
   let proactiveSwitchUptime = '100.00';
-  if (switches.length > 0) {
-    // Available minutes per switch = actual calendar days in the selected period
-    // (AGENTS.md §3). Derived from the same windowMinutes used for per-device
-    // __holdMins / __proactiveDownMins so the denominator stays consistent.
+  if (swIncRows.length > 0) {
+    const availMins = periodOptions.windowMinutes || 131040;
+    const jflVals = swIncRows.map(i => {
+      const holdMin = Math.max(0, parseFloat(i.HoldTimeMin) || 0);
+      return Math.max(0, Math.min(100, ((availMins - holdMin) / availMins) * 100));
+    });
+    const proVals = swIncRows.map(i => {
+      const actMin = Math.max(0, parseFloat(i.ActualResolutionMin) || 0);
+      return Math.max(0, Math.min(100, ((availMins - actMin) / availMins) * 100));
+    });
+    jflSwitchUptime = avg(jflVals).toFixed(2);
+    proactiveSwitchUptime = avg(proVals).toFixed(2);
+  } else if (switches.length > 0) {
     const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
     const totalAvailMins = switches.length * availMinsPerSwitch;
     const totalHoldMins = switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
     const totalProactiveMins = switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
-
     const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalHoldMins)) / totalAvailMins) * 100));
     const proPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalProactiveMins)) / totalAvailMins) * 100));
-
     jflSwitchUptime = jflPct.toFixed(2);
     proactiveSwitchUptime = proPct.toFixed(2);
   }
@@ -1617,20 +1632,36 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
       const swJflUps = s.switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
       const swProUps = s.switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
 
+      // ── Ticket-Weighted Incident Uptime (Site Summary Level) ──
+      // Matches Excel Pivot Table ('PPT Slide 1') Parity:
+      const swIncRows = s.incidents.filter(i => {
+        const dt = String(i.DeviceType || '').trim().toUpperCase();
+        const sub = String(i.SubCategory || i.Category || '').trim().toLowerCase();
+        return dt === 'SW' && sub.includes('software');
+      });
+
       let proactiveSwitchUptime = '100.00';
       let jflSwitchUptime = '100.00';
 
-      if (s.switches.length > 0) {
-        // Use the same dynamic available-minutes window as the executive summary
-        // (AGENTS.md §3) instead of a fixed 31-day denominator.
+      if (swIncRows.length > 0) {
+        const availMins = periodOptions.windowMinutes || 131040;
+        const jflVals = swIncRows.map(i => {
+          const holdMin = Math.max(0, parseFloat(i.HoldTimeMin) || 0);
+          return Math.max(0, Math.min(100, ((availMins - holdMin) / availMins) * 100));
+        });
+        const proVals = swIncRows.map(i => {
+          const actMin = Math.max(0, parseFloat(i.ActualResolutionMin) || 0);
+          return Math.max(0, Math.min(100, ((availMins - actMin) / availMins) * 100));
+        });
+        jflSwitchUptime = avg(jflVals).toFixed(2);
+        proactiveSwitchUptime = avg(proVals).toFixed(2);
+      } else if (s.switches.length > 0) {
         const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
         const totalAvailMins = s.switches.length * availMinsPerSwitch;
         const totalHoldMins = s.switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
         const totalProactiveMins = s.switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
-
         const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalHoldMins)) / totalAvailMins) * 100));
         const proPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalProactiveMins)) / totalAvailMins) * 100));
-
         jflSwitchUptime = jflPct.toFixed(2);
         proactiveSwitchUptime = proPct.toFixed(2);
       }

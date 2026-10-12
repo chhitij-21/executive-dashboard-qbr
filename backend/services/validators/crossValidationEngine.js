@@ -332,6 +332,108 @@ function crossValidate(qbrData) {
       recordCheck('PERIOD_LABEL_PRESENT', 'CRITICAL', 'No exception', e.message, false, `Rule execution threw: ${e.message}`);
     }
 
+    // R16. PHYSICAL_INVENTORY_IDENTITY (AGENTS.md Rule 7)
+    try {
+      if (siteSummary === null) {
+        recordCheck('PHYSICAL_INVENTORY_IDENTITY', 'CRITICAL', 'Switches + APs + Stock equals total devices for all sites', null, false, null, 'siteSummary');
+      } else {
+        let allValid = true;
+        const failures = [];
+        siteSummary.forEach(s => {
+          const sw = safeNum(s?.switchCount) ?? 0;
+          const ap = safeNum(s?.apCount) ?? 0;
+          const stock = safeNum(s?.stockCount) ?? 0;
+          const total = safeNum(s?.deviceCount) ?? 0;
+          if (sw + ap + stock !== total && (sw > 0 || ap > 0)) {
+            allValid = false;
+            failures.push(`${s.siteId}: (${sw} sw + ${ap} ap + ${stock} stock = ${sw + ap + stock}) != ${total} total`);
+          }
+        });
+        recordCheck('PHYSICAL_INVENTORY_IDENTITY', 'HIGH', 'switches + aps + stock == total devices across all sites', failures.length === 0 ? 'All sites compliant' : failures.join(', '), allValid, `Physical inventory identity violated: ${failures.join(', ')}`);
+      }
+    } catch (e) {
+      recordCheck('PHYSICAL_INVENTORY_IDENTITY', 'CRITICAL', 'No exception', e.message, false, `Rule execution threw: ${e.message}`);
+    }
+
+    // R17. SITE_UPTIME_BOUNDS_AND_PARITY
+    try {
+      if (siteSummary === null) {
+        recordCheck('SITE_UPTIME_BOUNDS_AND_PARITY', 'CRITICAL', 'Site Proactive and JFL switch uptimes bounded in [0, 100]', null, false, null, 'siteSummary');
+      } else {
+        let allValid = true;
+        const failures = [];
+        siteSummary.forEach(s => {
+          const pro = safeNum(s?.proactiveSwitchUptime);
+          const jfl = safeNum(s?.jflSwitchUptime);
+          const proOk = pro !== null && pro >= 0 && pro <= 100;
+          const jflOk = jfl !== null && jfl >= 0 && jfl <= 100;
+          if (!proOk || !jflOk) {
+            allValid = false;
+            failures.push(`${s.siteId}: pro=${pro}, jfl=${jfl}`);
+          }
+        });
+        recordCheck('SITE_UPTIME_BOUNDS_AND_PARITY', 'HIGH', '0 <= proactive, jfl <= 100 for all sites', failures.length === 0 ? 'All site uptimes bounded in [0, 100]' : failures.join(', '), allValid, `Site uptime out of bounds: ${failures.join(', ')}`);
+      }
+    } catch (e) {
+      recordCheck('SITE_UPTIME_BOUNDS_AND_PARITY', 'CRITICAL', 'No exception', e.message, false, `Rule execution threw: ${e.message}`);
+    }
+
+    // R18. ZERO_INCIDENT_PRIMARY_RCA_PARITY (AGENTS.md Rule 4)
+    try {
+      if (siteSummary === null) {
+        recordCheck('ZERO_INCIDENT_PRIMARY_RCA_PARITY', 'CRITICAL', 'Sites with zero incidents display Stable Operations fallback', null, false, null, 'siteSummary');
+      } else {
+        let allValid = true;
+        const failures = [];
+        siteSummary.forEach(s => {
+          const incCount = safeNum(s?.incidentCount) ?? 0;
+          if (incCount === 0) {
+            const swRca = String(s?.primaryRcaSwitches || '').trim();
+            const apRca = String(s?.primaryRcaAPs || '').trim();
+            const expected = 'Stable Operations (No Incidents)';
+            if (swRca !== expected || apRca !== expected) {
+              allValid = false;
+              failures.push(`${s.siteId}: swRca="${swRca}", apRca="${apRca}"`);
+            }
+          }
+        });
+        recordCheck('ZERO_INCIDENT_PRIMARY_RCA_PARITY', 'MEDIUM', 'Stable Operations (No Incidents)', failures.length === 0 ? 'Compliant' : failures.join(', '), allValid, `Sites with 0 incidents missing standard fallback: ${failures.join(', ')}`);
+      }
+    } catch (e) {
+      recordCheck('ZERO_INCIDENT_PRIMARY_RCA_PARITY', 'CRITICAL', 'No exception', e.message, false, `Rule execution threw: ${e.message}`);
+    }
+
+    // R19. EXECUTIVE_HEALTH_SCORE_BOUNDS
+    try {
+      if (!exec) {
+        recordCheck('EXECUTIVE_HEALTH_SCORE_BOUNDS', 'CRITICAL', '0 <= healthScore <= 100', null, false, null, 'executiveSummary');
+      } else {
+        const hs = safeNum(exec.healthScore);
+        const pass = hs !== null && hs >= 0 && hs <= 100;
+        recordCheck('EXECUTIVE_HEALTH_SCORE_BOUNDS', 'HIGH', '0 to 100', hs, pass, `Executive health score (${hs}) is out of [0, 100] bounds.`);
+      }
+    } catch (e) {
+      recordCheck('EXECUTIVE_HEALTH_SCORE_BOUNDS', 'CRITICAL', 'No exception', e.message, false, `Rule execution threw: ${e.message}`);
+    }
+
+    // R20. RESOLUTION_AND_HOLD_TIMING_BOUNDS
+    try {
+      if (incidents === null) {
+        recordCheck('RESOLUTION_AND_HOLD_TIMING_BOUNDS', 'CRITICAL', 'Non-negative timings across incidents', null, false, null, 'incidents');
+      } else {
+        let invalidCount = 0;
+        incidents.forEach(inc => {
+          const act = safeNum(inc?.ActualResolutionMin) ?? 0;
+          const hold = safeNum(inc?.HoldTimeMin) ?? 0;
+          const tot = safeNum(inc?.TotalResolutionMin) ?? 0;
+          if (act < 0 || hold < 0 || tot < 0) invalidCount++;
+        });
+        recordCheck('RESOLUTION_AND_HOLD_TIMING_BOUNDS', 'HIGH', 0, invalidCount, invalidCount === 0, `${invalidCount} incident(s) have negative resolution or hold durations.`);
+      }
+    } catch (e) {
+      recordCheck('RESOLUTION_AND_HOLD_TIMING_BOUNDS', 'CRITICAL', 'No exception', e.message, false, `Rule execution threw: ${e.message}`);
+    }
+
     const failedCount = failed.length;
     const passedCount = passed.length;
     const total = passedCount + failedCount;
