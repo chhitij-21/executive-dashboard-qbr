@@ -1,6 +1,7 @@
 // frontend/src/components/OverviewPage.jsx
 import React from 'react';
 import { API_BASE_URL } from '../config/api';
+import { useAuth } from '../context/AuthContext';
 import AISectionSummary from './AISectionSummary';
 
 /**
@@ -8,8 +9,9 @@ import AISectionSummary from './AISectionSummary';
  * Displays a clean 2-column layout for Reports and Proactive Tickets Summary.
  */
 export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets }) {
+  const { activeClient } = useAuth();
   const periodLabel = data?.report_period?.display_label || data?.reportingPeriod || 'Selected Period';
-  const customerName = data?.customerName || 'Jubilant Foodworks Ltd (JFL)';
+  const customerName = data?.customerName || activeClient?.name || 'Customer';
   const overall = data?.proactiveTicketAnalytics?.overall || {};
   const topEngineers = (data?.proactiveTicketAnalytics?.byEngineer || []).slice(0, 5);
 
@@ -17,9 +19,9 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
 
   const handleDownload = async (e, exportType) => {
     e.preventDefault();
-    const targetClientId = data?.clientId;
+    const targetClientId = activeClient?.id || data?.clientId;
     if (!targetClientId) {
-      alert('Cannot download: customer workspace not identified.');
+      alert('Cannot download: active customer not selected.');
       return;
     }
     const token = localStorage.getItem('portal_token') || localStorage.getItem('token');

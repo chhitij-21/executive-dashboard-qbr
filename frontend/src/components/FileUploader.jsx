@@ -219,7 +219,8 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
     const checkStatus = async () => {
       try {
-        const res = await apiFetch(`${API_BASE_URL}/api/status/${currentJobId}`);
+        const clientQuery = activeClient?.id ? `?clientId=${encodeURIComponent(activeClient.id)}` : '';
+        const res = await apiFetch(`${API_BASE_URL}/api/status/${currentJobId}${clientQuery}`);
         if (!res.ok) {
           if (isSubscribed) {
             pollInterval = Math.min(pollInterval * 2, MAX_INTERVAL);

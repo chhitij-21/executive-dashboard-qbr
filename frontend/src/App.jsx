@@ -1,5 +1,5 @@
 // frontend/src/App.jsx — Executive Report Dashboard
-import React, { useState, useEffect, useMemo, Component } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Component } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import OverviewPage from './components/OverviewPage';
@@ -77,10 +77,22 @@ function MainPortal() {
   const [status, setStatus] = useState('idle');
   const [isLoading, setIsLoading] = useState(false);
   // Always start with null — never show stale bundled defaultDashboardData.
-  // Data is always loaded fresh from the backend API based on the active jobId.
+  // Data is always loaded fresh from the backend API based on the active jobId and activeClient.
   const [dashboardData, setDashboardData] = useState(null);
   const [apiError, setApiError] = useState(null);
   const [ticketsSubTab, setTicketsSubTab] = useState('engineer');
+
+  // Request sequencing guard to eliminate customer race conditions (Defect D5)
+  const requestSeqRef = useRef(0);
+
+  // Invalidate previous customer data immediately when active client changes
+  useEffect(() => {
+    setDashboardData(null);
+    setStatus('idle');
+    setApiError(null);
+    setJobId('latest');
+    setSelectedSite('ALL');
+  }, [activeClient?.id]);
 
   useKeyboardShortcuts({
     onSelectTab: (target) => {
@@ -96,10 +108,17 @@ function MainPortal() {
     }
   });
 
-  // Fetch & poll for dashboard data if jobId or site selection changes
+  // Fetch & poll for dashboard data scoped to active client
   useEffect(() => {
     let isSubscribed = true;
     let pollInterval = null;
+    const currentSeq = ++requestSeqRef.current;
+    const targetClientId = activeClient?.id;
+
+    if (!targetClientId) {
+      setIsLoading(false);
+      return;
+    }
 
     const fetchDashboard = async () => {
       setIsLoading(true);
@@ -109,52 +128,67 @@ function MainPortal() {
           : (selectedSite && selectedSite !== 'ALL' ? selectedSite : 'ALL');
 
         const query = new URLSearchParams({
+          clientId: targetClientId,
           jobId: jobId || 'latest',
           site: siteParam,
         }).toString();
 
         const res = await apiFetch(`${API_BASE_URL}/api/dashboard?${query}`);
+        // If a newer request has started or component unmounted, drop this response
+        if (currentSeq !== requestSeqRef.current || !isSubscribed) return false;
+
         if (res.status === 202) {
           // Still processing — keep polling
-          if (isSubscribed) setStatus('processing');
+          setStatus('processing');
           return false;
         }
         if (!res.ok) {
-          if (isSubscribed) {
-            setApiError('Could not retrieve dashboard data from server.');
-            setStatus('error');
-          }
+          setApiError('Could not retrieve dashboard data from server.');
+          setStatus('error');
           return false;
         }
         const json = await res.json();
+        if (currentSeq !== requestSeqRef.current || !isSubscribed) return false;
+
         if (json.status && json.status !== 'completed') {
+          if (json.status === 'empty') {
+            setDashboardData(null);
+            setStatus('empty');
+            return true; // No dataset yet for this customer; stop polling
+          }
           if (json.status === 'failed' || json.status === 'error') {
-            if (isSubscribed) {
-              setStatus('failed');
-              setApiError(json.error || 'Report processing failed.');
-            }
+            setStatus('failed');
+            setApiError(json.error || 'Report processing failed.');
           }
           return false;
         }
-        if (isSubscribed) {
-          setDashboardData(json);
-          setStatus('completed');
-          setApiError(null);
-          // Clear poll once we have completed data
-          if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+
+        // Customer identity sanity guard on payload
+        if (json.clientId && json.clientId !== targetClientId) {
+          console.warn('[Dashboard] Rejected stale response belonging to different client:', json.clientId);
+          return false;
         }
+
+        setDashboardData(json);
+        setStatus('completed');
+        setApiError(null);
+        // Clear poll once we have completed data
+        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
         return true;
       } catch (e) {
-        if (isSubscribed) setApiError('Network error connecting to backend API.');
+        if (currentSeq === requestSeqRef.current && isSubscribed) {
+          setApiError('Network error connecting to backend API.');
+        }
         return false;
       } finally {
-        if (isSubscribed) setIsLoading(false);
+        if (currentSeq === requestSeqRef.current && isSubscribed) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchDashboard().then((done) => {
-      // If server is processing (HTTP 202 or pending status), poll every 2.5s until completed
-      if (!done && isSubscribed) {
+      if (!done && isSubscribed && currentSeq === requestSeqRef.current) {
         pollInterval = setInterval(() => {
           fetchDashboard().then((complete) => {
             if (complete && pollInterval) { clearInterval(pollInterval); pollInterval = null; }
@@ -167,7 +201,42 @@ function MainPortal() {
       isSubscribed = false;
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [jobId, selectedSite, activeLocation]);
+  }, [activeClient?.id, jobId, selectedSite, activeLocation]);
+
+  const handleDownload = async (e, exportType) => {
+    e.preventDefault();
+    const targetClientId = activeClient?.id || dashboardData?.clientId;
+    if (!targetClientId) {
+      alert('Cannot download: active customer not selected.');
+      return;
+    }
+    const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/download-ticket`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          clientId: targetClientId,
+          jobId: jobId || 'latest',
+          exportType
+        })
+      });
+      if (res.ok) {
+        const ticketData = await res.json();
+        if (ticketData.downloadTicket) {
+          window.location.href = `${API_BASE_URL}/api/${exportType}/${jobId || 'latest'}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[App] Download ticket acquisition failed:', err);
+    }
+    const authQuery = token ? `&downloadToken=${encodeURIComponent(token)}` : '';
+    window.location.href = `${API_BASE_URL}/api/${exportType}/${jobId || 'latest'}?clientId=${encodeURIComponent(targetClientId)}${authQuery}`;
+  };
 
   // Use canonical backend dashboard data directly (SSOT)
   const activeDashboardData = dashboardData;
@@ -295,6 +364,7 @@ function MainPortal() {
 
     const exec = activeDashboardData.executiveSummary || {};
     const siteSummary = activeDashboardData.siteSummary || [];
+    const clientLabel = (activeClient?.code || activeClient?.name || exec.customerName || 'Client').replace(/\s*\(.*\)/, '').trim();
     const _ticketAvg = (field, fallback) => {
       const vals = (siteSummary || [])
         .map(s => parseFloat(s[field]))
@@ -370,22 +440,22 @@ function MainPortal() {
               ✓ IQ-200 Validated Engine (0 Hallucinations)
             </button>
             <a
-              href={`${API_BASE_URL}/api/pdf/${jobId || 'latest'}`}
+              href="#download-pdf"
+              onClick={(e) => handleDownload(e, 'pdf')}
               className="btn-primary"
-              download="JFL_QBR_Executive_Report.pdf"
               title="Download Executive QBR PDF Report"
-              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}
             >
               📄 Download PDF Report
             </a>
             <a
-              href={`${API_BASE_URL}/api/ppt/${jobId || 'latest'}`}
+              href="#download-ppt"
+              onClick={(e) => handleDownload(e, 'ppt')}
               className="btn-secondary"
-              download="JFL_QBR_Executive_Report.pdf"
-              title="Download Executive QBR PDF Presentation"
-              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              title="Download Executive QBR PPT Presentation"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}
             >
-              📊 Download PDF Presentation
+              📊 Download PPT Presentation
             </a>
           </div>
         </div>
@@ -445,16 +515,16 @@ function MainPortal() {
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', fontSize: '0.82rem', lineHeight: '1.6', marginBottom: '1.25rem' }}>
                 <h4 style={{ margin: '0 0 0.5rem', color: '#0f172a', fontSize: '0.88rem' }}>Live Verification Checks (Continuous on Every Step):</h4>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d', marginBottom: '0.35rem' }}>
-                  <span style={{ fontWeight: 800 }}>✓</span> <span><strong>Proactive Switch Uptime Grounding:</strong> Dynamic formula evaluated against actual incident resolution minutes without clamping ({exec.proactiveSwitchUptime || '99.99'}%).</span>
+                  <span style={{ fontWeight: 800 }}>✓</span> <span><strong>Proactive Switch Uptime Grounding:</strong> Dynamic formula evaluated against actual incident resolution minutes without clamping ({exec.proactiveSwitchUptime ?? '-'}%).</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d', marginBottom: '0.35rem' }}>
-                  <span style={{ fontWeight: 800 }}>✓</span> <span><strong>JFL Switch Uptime Grounding:</strong> Formula evaluated deducting contractual hold duration minutes ({exec.jflSwitchUptime || '97.68'}%).</span>
+                  <span style={{ fontWeight: 800 }}>✓</span> <span><strong>{clientLabel} Switch Uptime Grounding:</strong> Formula evaluated deducting contractual hold duration minutes ({exec.jflSwitchUptime ?? '-'}%).</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d', marginBottom: '0.35rem' }}>
                   <span style={{ fontWeight: 800 }}>✓</span> <span><strong>Physical Inventory Identity:</strong> Active Switches ({exec.totalSwitches || 0}) + Active APs ({exec.totalAPs || 0}) + Stock Devices ({exec.totalStockDevices || 0}) = Total Devices ({exec.totalDevices || 0}).</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d', marginBottom: '0.35rem' }}>
-                  <span style={{ fontWeight: 800 }}>✓</span> <span><strong>Zero Entity Fabrication:</strong> Monitored Sites ({exec.totalSites || 8}) verified against official customer locations (0 non-monitored city intrusions).</span>
+                  <span style={{ fontWeight: 800 }}>✓</span> <span><strong>Zero Entity Fabrication:</strong> Monitored Sites ({exec.totalSites ?? '-'}) verified against official customer locations (0 non-monitored city intrusions).</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d' }}>
                   <span style={{ fontWeight: 800 }}>✓</span> <span><strong>SLA Target:</strong> Contractual 99.3% uptime target verified dynamically with zero hardcoded drift.</span>
@@ -503,11 +573,11 @@ function MainPortal() {
             <div className="exec-banner">
               <div className="exec-banner-left">
                 <h3>Executive Performance Overview</h3>
-                <p>Quarterly Business Review (QBR) &amp; SLA Compliance Audit for {exec.customerName || activeClient?.name || 'Jubilant Foodworks Ltd (JFL)'}</p>
+                <p>Quarterly Business Review (QBR) &amp; SLA Compliance Audit for {exec.customerName || activeClient?.name || 'Customer'}</p>
               </div>
               <div className="exec-banner-badges">
-                <span className="exec-badge-item">{exec.totalSites || 8} Monitored Sites</span>
-                <span className="exec-badge-item">{exec.totalDevices || 372} Active Devices</span>
+                <span className="exec-badge-item">{exec.totalSites ?? activeDashboardData?.siteSummary?.length ?? '-'} Monitored Sites</span>
+                <span className="exec-badge-item">{exec.totalDevices ?? activeDashboardData?.devices?.length ?? '-'} Active Devices</span>
                 <span className="exec-badge-item" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>Health: {exec.healthLabel || 'Excellent'}</span>
               </div>
             </div>
@@ -524,8 +594,6 @@ function MainPortal() {
               } />
               <KpiCard title="Total Sites" value={exec.totalSites} />
               <KpiCard title="Active Operational Devices" value={exec.totalDevices} />
-              <KpiCard title="JFL Switch Uptime" value={_jflTicketAvg} unit="%" />
-              <KpiCard title="Proactive Switch Uptime" value={_proTicketAvg} unit="%" />
               <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} />
               <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} />
               <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} />
@@ -533,8 +601,8 @@ function MainPortal() {
               <KpiCard title="Primary RCA Driver (Switches)" value={exec.primaryRcaSwitches || exec.primaryRca || 'Stable Operations (No Incidents)'} />
               {/* Primary RCA Driver (APs) — reads from AP-specific field with fallback */}
               <KpiCard title="Primary RCA Driver (APs)" value={exec.primaryRcaAPs || exec.primaryRcaForAPs || 'Stable Operations (No Incidents)'} />
-              {/* JFL Switch Uptime & Proactive Switch Uptime — key executive KPIs from SSOT */}
-              <KpiCard title="JFL Switch Uptime" value={exec.jflSwitchUptime} unit="%" />
+              {/* Client Switch Uptime & Proactive Switch Uptime — key executive KPIs from SSOT */}
+              <KpiCard title={`${clientLabel} Switch Uptime`} value={exec.jflSwitchUptime} unit="%" />
               <KpiCard title="Proactive Switch Uptime" value={exec.proactiveSwitchUptime} unit="%" />
               <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" />
               <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" />
@@ -551,20 +619,28 @@ function MainPortal() {
                 🛡️ External Site Dependencies &amp; Client-Side Activity Breakdown
               </h4>
               <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.82rem', color: '#475569' }}>
-                Store utility power failures, local store staff actions, and telecom ISP outages are tracked transparently and isolated from MSP operational SLA penalties.
+                Store utility power failures, local site activities, and telecom ISP outages are tracked transparently and isolated from MSP operational SLA penalties.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
                 <div style={{ background: '#ffffff', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                   <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Contractual SLA Compliance</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#059669' }}>95.97%</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#059669' }}>
+                    {exec.slaCompliance !== undefined && exec.slaCompliance !== null ? `${exec.slaCompliance}%` : '100.00%'}
+                  </div>
                 </div>
                 <div style={{ background: '#ffffff', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                   <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Isolated External/Power Devices</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#2563eb' }}>67</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#2563eb' }}>
+                    {(activeDashboardData.devices || []).filter(d => d.__isClientSideOnly).length ||
+                     (activeDashboardData.incidentDetails || activeDashboardData.incidents || []).filter(i => /power|isp|vendor|client|cable|site|third-party/i.test(i.RCA || i.Category || '')).length}
+                  </div>
                 </div>
                 <div style={{ background: '#ffffff', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                   <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>MSP Attributable Breaches</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#dc2626' }}>15</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#dc2626' }}>
+                    {(activeDashboardData.devices || []).filter(d => d.__slaBreach).length ||
+                     (activeDashboardData.incidentDetails || activeDashboardData.incidents || []).filter(i => i.sla_status === 'SLA Breached').length}
+                  </div>
                 </div>
               </div>
             </div>
@@ -643,6 +719,7 @@ function MainPortal() {
             <SiteSummaryTable
               sites={siteSummary}
               selectedSite={selectedSite}
+              clientCode={clientLabel}
               onSelectSite={(siteId) => {
                 setSelectedSite(siteId);
                 setActiveLocation(siteId === 'ALL' ? 'All Locations' : siteId);
@@ -655,6 +732,7 @@ function MainPortal() {
                 siteSummary={siteSummary}
                 devices={activeDashboardData?.devices || []}
                 incidents={activeDashboardData?.incidents || []}
+                clientCode={clientLabel}
                 onClose={() => {
                   setSelectedSite('ALL');
                   setActiveLocation('All Locations');
