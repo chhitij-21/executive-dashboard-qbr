@@ -260,7 +260,7 @@ const upload = multer({
 // In-memory active job cache
 const jobs = {};
 
-const { handleAutoAuthRoute, requireAuth, requireAdmin } = require('./middleware/auth');
+const { handleAutoAuthRoute, requireAuth, requireAdmin, requireClientAccess } = require('./middleware/auth');
 
 // ── Cache-Control: no-store on all /api responses ─────────────────────────
 app.use('/api', (req, res, next) => {
@@ -292,6 +292,106 @@ app.post(['/api/auth/logout', '/auth/logout'], (req, res) => {
 
 app.get('/api/auth/demo-accounts', (req, res) => {
   res.json({ users: authService.getDemoUsers() });
+});
+
+// ── Single-Use Short-Lived Download Ticket Issuance (60-second TTL) ───────────
+app.post(['/api/auth/download-ticket', '/auth/download-ticket'], requireAuth, (req, res) => {
+  const { clientId, jobId, exportType } = req.body || {};
+  if (!clientId || typeof clientId !== 'string' || !clientId.trim()) {
+    return res.status(400).json({ error: 'Customer identifier (clientId) is required.', code: 'MISSING_CLIENT_ID' });
+  }
+
+  const trimmedClientId = clientId.trim();
+  const canonicalClientId = clientService.resolveCanonicalClientId(trimmedClientId);
+  const client = clientService.getClientById(canonicalClientId);
+  if (!client) {
+    return res.status(404).json({ error: `Unknown customer '${trimmedClientId}'.`, code: 'UNKNOWN_CLIENT' });
+  }
+
+  // FAIL-CLOSED Role & Tenant Authorization Check
+  if (!req.user || !req.user.role || !req.user.assignedClient) {
+    return res.status(403).json({ error: 'Invalid authenticated profile.', code: 'ACCESS_DENIED' });
+  }
+
+  if (req.user.role !== 'admin') {
+    const canonicalAssigned = clientService.resolveCanonicalClientId(req.user.assignedClient);
+    if (canonicalAssigned !== canonicalClientId) {
+      return res.status(403).json({
+        error: `Forbidden: You are not authorized to access customer '${client.name || trimmedClientId}'.`,
+        code: 'CUSTOMER_ACCESS_FORBIDDEN',
+      });
+    }
+  }
+
+  // Job ownership verification if jobId provided
+  if (jobId && jobId !== 'latest' && jobId !== 'default') {
+    const job = jobs[jobId] || historyService.getReportByJobId(jobId);
+    if (!job) {
+      return res.status(404).json({ error: `Job '${jobId}' not found.`, code: 'JOB_NOT_FOUND' });
+    }
+    if (job.clientId && clientService.resolveCanonicalClientId(job.clientId) !== canonicalClientId) {
+      return res.status(403).json({
+        error: `Customer isolation violation: Job '${jobId}' belongs to another customer.`,
+        code: 'CUSTOMER_ISOLATION_VIOLATION',
+      });
+    }
+  }
+
+  const ticketData = authService.createDownloadTicket({
+    user: req.user,
+    userId: req.user.id,
+    clientId: canonicalClientId,
+    jobId: jobId || 'latest',
+    exportType: exportType || 'export',
+  });
+
+  res.json({
+    downloadTicket: ticketData.ticket,
+    expiresIn: ticketData.expiresIn,
+    clientId: canonicalClientId,
+  });
+});
+
+// ── Single-Use Short-Lived SSE Ticket Issuance (60-second TTL) ────────────────
+app.post(['/api/auth/sse-ticket', '/auth/sse-ticket'], requireAuth, (req, res) => {
+  const { clientId } = req.body || {};
+  if (!clientId || typeof clientId !== 'string' || !clientId.trim()) {
+    return res.status(400).json({ error: 'Customer identifier (clientId) is required.', code: 'MISSING_CLIENT_ID' });
+  }
+
+  const trimmedClientId = clientId.trim();
+  const canonicalClientId = clientService.resolveCanonicalClientId(trimmedClientId);
+  const client = clientService.getClientById(canonicalClientId);
+  if (!client) {
+    return res.status(404).json({ error: `Unknown customer '${trimmedClientId}'.`, code: 'UNKNOWN_CLIENT' });
+  }
+
+  // FAIL-CLOSED Role & Tenant Authorization Check
+  if (!req.user || !req.user.role || !req.user.assignedClient) {
+    return res.status(403).json({ error: 'Invalid authenticated profile.', code: 'ACCESS_DENIED' });
+  }
+
+  if (req.user.role !== 'admin') {
+    const canonicalAssigned = clientService.resolveCanonicalClientId(req.user.assignedClient);
+    if (canonicalAssigned !== canonicalClientId) {
+      return res.status(403).json({
+        error: `Forbidden: You are not authorized to access customer '${client.name || trimmedClientId}'.`,
+        code: 'CUSTOMER_ACCESS_FORBIDDEN',
+      });
+    }
+  }
+
+  const ticketData = authService.createSSETicket({
+    user: req.user,
+    userId: req.user.id,
+    clientId: canonicalClientId,
+  });
+
+  res.json({
+    sseTicket: ticketData.sseTicket,
+    expiresIn: ticketData.expiresIn,
+    clientId: canonicalClientId,
+  });
 });
 
 // SECURITY FIX (FINDING-019): Added requireAuth to prevent unauthenticated client enumeration.
@@ -356,11 +456,11 @@ app.put(['/api/rules', '/rules'], requireAuth, requireAdmin, (req, res) => {
   }
 });
 
-// SECURITY FIX (FINDING-019): Added requireAuth to prevent unauthenticated history enumeration.
-app.get(['/api/history', '/history'], requireAuth, (req, res) => {
-  const { clientId, location, status } = req.query;
-  const history = historyService.getHistory({ clientId, location, status });
-  res.json({ history });
+// SECURITY FIX: Enforce requireClientAccess on history to prevent cross-tenant enumeration
+app.get(['/api/history', '/history'], requireAuth, requireClientAccess(), (req, res) => {
+  const { location, status } = req.query;
+  const history = historyService.getHistory({ clientId: req.targetClientId, location, status });
+  res.json({ history, clientId: req.targetClientId });
 });
 
 app.delete(['/api/history', '/history'], requireAuth, requireAdmin, (req, res) => {
@@ -379,9 +479,25 @@ app.delete(['/api/history/:jobId', '/history/:jobId'], requireAuth, (req, res) =
   try {
     const { jobId } = req.params;
     console.log(`[server] DELETE request received for report jobId: ${jobId}`);
+    const report = historyService.getReportByJobId(jobId);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found or already deleted', code: 'REPORT_NOT_FOUND' });
+    }
+
+    // Role-based tenant authorization check for deletion
+    if (req.user.role !== 'admin') {
+      const userAssigned = clientService.resolveCanonicalClientId(req.user.assignedClient);
+      const jobClient = clientService.resolveCanonicalClientId(report.clientId);
+      if (userAssigned !== jobClient) {
+        return res.status(403).json({
+          error: "Forbidden: You are not authorized to delete another customer's report.",
+          code: 'CUSTOMER_ACCESS_FORBIDDEN',
+        });
+      }
+    }
+
     const deleted = historyService.deleteReport(jobId);
     if (jobs[jobId]) delete jobs[jobId];
-    if (!deleted) return res.status(404).json({ error: 'Report not found or already deleted' });
     res.json({ success: true, message: 'Report deleted successfully', jobId });
   } catch (err) {
     console.error('[server] Error in DELETE /api/history/:jobId:', err.message);
@@ -414,37 +530,87 @@ app.post(['/api/analyze-excel', '/analyze-excel'], requireAuth, heavyRateLimit, 
   }
 });
 
+/**
+ * Safely resolves the latest completed job strictly belonging to the given customer.
+ * Compares validated epoch timestamps and falls back to deterministic insertion order.
+ */
+function resolveLatestCompletedJob(clientId) {
+  if (!clientId) return null;
+  const inMemoryMatches = Object.values(jobs)
+    .filter((j) => j && j.clientId === clientId && j.status === 'completed');
+  const clientHistory = historyService.getHistory({ clientId, status: 'completed' });
+
+  const allCandidates = [...inMemoryMatches, ...clientHistory];
+  if (allCandidates.length === 0) return null;
+
+  const uniqueMap = new Map();
+  for (const c of allCandidates) {
+    if (c.jobId && !uniqueMap.has(c.jobId)) {
+      uniqueMap.set(c.jobId, c);
+    }
+  }
+
+  const parseSafe = (ts) => {
+    if (!ts) return null;
+    const t = new Date(ts).getTime();
+    return isNaN(t) ? null : t;
+  };
+
+  const sorted = Array.from(uniqueMap.values()).sort((a, b) => {
+    const tb = parseSafe(b.uploadTimestamp);
+    const ta = parseSafe(a.uploadTimestamp);
+    if (tb !== null && ta !== null) return tb - ta;
+    if (tb !== null) return 1;
+    if (ta !== null) return -1;
+    return 0;
+  });
+
+  return sorted[0] || null;
+}
+
 // ── Executive QBR AI Chatbot Assistant Endpoint ────────────────────────────
-app.post(['/api/chat', '/chat'], async (req, res) => {
+app.post(['/api/chat', '/chat'], requireAuth, requireClientAccess((req) => req.body?.clientId || req.query?.clientId || req.headers['x-client-id']), async (req, res) => {
   try {
-    const { prompt, jobId } = req.body;
+    const { prompt, jobId } = req.body || {};
+    const clientId = req.targetClientId;
+    const client = req.targetClient;
+
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Prompt string is required.' });
     }
 
-    // Resolve target job dataset
+    // Resolve target job dataset scoped to client
     let job = null;
     const reqJobId = jobId || 'latest';
     if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-      const history = historyService.getHistory();
-      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+      job = resolveLatestCompletedJob(clientId);
     } else {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+      if (job && job.clientId && clientService.resolveCanonicalClientId(job.clientId) !== clientId) {
+        return res.status(403).json({
+          error: `Customer isolation violation: Job '${reqJobId}' belongs to another customer.`,
+          code: 'CUSTOMER_ISOLATION_VIOLATION',
+        });
+      }
     }
 
     let qbrData = null;
     let dPath = job?.dashboardPath;
     if (!dPath || !fs.existsSync(dPath)) {
-      const activeJobId = job?.jobId || reqJobId;
-      const candidates = [
-        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-        resolveDataPath('dashboard_data.json'),
-      ];
-      dPath = candidates.find((p) => fs.existsSync(p));
+      const activeJobId = job?.jobId || (reqJobId !== 'latest' && reqJobId !== 'default' ? reqJobId : null);
+      if (activeJobId) {
+        const candidate = path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json');
+        if (fs.existsSync(candidate)) dPath = candidate;
+      }
     }
 
     if (dPath && fs.existsSync(dPath)) {
-      try { qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8')); } catch (e) { }
+      try {
+        const parsed = JSON.parse(fs.readFileSync(dPath, 'utf8'));
+        if (!parsed.clientId || parsed.clientId === clientId) {
+          qbrData = parsed;
+        }
+      } catch (e) { }
     }
 
     const { processChatQuery } = require('./services/aiChatService');
@@ -486,9 +652,11 @@ function getCleanExecutiveSummary(section, qbrData) {
 }
 
 // ── AI Section Summary Endpoint ─────────────────────────────────────────────
-app.post(['/api/ai/section-summary', '/ai/section-summary'], async (req, res) => {
+app.post(['/api/ai/section-summary', '/ai/section-summary'], requireAuth, requireClientAccess((req) => req.body?.clientId || req.query?.clientId || req.headers['x-client-id']), async (req, res) => {
   try {
-    const { section, jobId } = req.body;
+    const { section, jobId } = req.body || {};
+    const clientId = req.targetClientId;
+    const client = req.targetClient;
     const validSections = ['executive', 'engineer', 'site', 'holdReason'];
     if (!section || !validSections.includes(section)) {
       return res.status(400).json({ error: `Invalid section. Must be one of: ${validSections.join(', ')}` });
@@ -497,20 +665,24 @@ app.post(['/api/ai/section-summary', '/ai/section-summary'], async (req, res) =>
     let job = null;
     const reqJobId = jobId || 'latest';
     if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-      const history = historyService.getHistory();
-      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+      job = resolveLatestCompletedJob(clientId);
     } else {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+      if (job && job.clientId && clientService.resolveCanonicalClientId(job.clientId) !== clientId) {
+        return res.status(403).json({
+          error: `Customer isolation violation: Job '${reqJobId}' belongs to another customer.`,
+          code: 'CUSTOMER_ISOLATION_VIOLATION',
+        });
+      }
     }
 
     let dPath = job?.dashboardPath;
     if (!dPath || !fs.existsSync(dPath)) {
-      const activeJobId = job?.jobId || reqJobId;
-      const candidates = [
-        path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-        resolveDataPath('dashboard_data.json'),
-      ];
-      dPath = candidates.find((p) => fs.existsSync(p));
+      const activeJobId = job?.jobId || (reqJobId !== 'latest' && reqJobId !== 'default' ? reqJobId : null);
+      if (activeJobId) {
+        const candidate = path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json');
+        if (fs.existsSync(candidate)) dPath = candidate;
+      }
     }
 
     if (!dPath || !fs.existsSync(dPath)) {
@@ -522,6 +694,10 @@ app.post(['/api/ai/section-summary', '/ai/section-summary'], async (req, res) =>
       qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8'));
     } catch (e) {
       return res.status(500).json({ error: 'Failed to read dataset.' });
+    }
+
+    if (qbrData.clientId && qbrData.clientId !== clientId) {
+      return res.status(403).json({ error: 'Customer isolation violation: Data artifact belongs to another customer.' });
     }
 
     const cachedSummary = qbrData.aiSectionSummaries?.[section];
@@ -542,15 +718,6 @@ app.post(['/api/ai/section-summary', '/ai/section-summary'], async (req, res) =>
 
     try {
       fs.writeFileSync(dPath, JSON.stringify(qbrData, null, 2), 'utf8');
-      const canonicalPath = resolveDataPath('dashboard_data.json');
-      if (fs.existsSync(canonicalPath)) {
-        try {
-          const canonObj = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
-          canonObj.aiSectionSummaries = canonObj.aiSectionSummaries || {};
-          canonObj.aiSectionSummaries[section] = summaryText;
-          fs.writeFileSync(canonicalPath, JSON.stringify(canonObj, null, 2), 'utf8');
-        } catch (e) { }
-      }
     } catch (writeErr) {
       console.warn('[server] Warning writing AI section summary cache:', writeErr.message);
     }
@@ -568,10 +735,76 @@ app.post(['/api/ai/section-summary', '/ai/section-summary'], async (req, res) =>
 });
 
 // ── Claudex Loop — Agentic SSE Endpoint ────────────────────────────────────
-// GET /api/chat/loop?prompt=...&jobId=...
+// GET /api/chat/loop?prompt=...&jobId=...&clientId=...&ticket=sse_...
 // Streams Think->Act->Observe->Repeat events via Server-Sent Events.
-// The frontend EventSource consumes these events to render each reasoning step live.
+// Requires single-use short-lived SSE ticket (?ticket=sse_...). Full session tokens in query strings are rejected.
 app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
+  const ticket = req.query.ticket;
+  let authUser = null;
+  let authorizedClientId = null;
+
+  if (ticket) {
+    const ticketData = authService.verifyAndConsumeSSETicket(ticket);
+    if (!ticketData) {
+      return res.status(401).json({ error: 'Invalid or expired SSE ticket.', code: 'INVALID_SSE_TICKET' });
+    }
+    authUser = ticketData.user;
+    authorizedClientId = ticketData.clientId;
+  } else if (req.headers.authorization) {
+    const session = authService.verifyToken(req.headers.authorization);
+    if (!session || !session.user) {
+      return res.status(401).json({ error: 'Authorization required — please log in.', code: 'UNAUTHORIZED' });
+    }
+    authUser = session.user;
+  } else {
+    return res.status(401).json({ error: 'Authorization required — valid SSE ticket must be provided.', code: 'INVALID_SSE_TICKET' });
+  }
+
+  const rawClientId = String(req.query.clientId || req.headers['x-client-id'] || authorizedClientId || '').trim();
+  if (!rawClientId) {
+    return res.status(400).json({ error: 'Customer identifier (clientId) is required.', code: 'MISSING_CLIENT_ID' });
+  }
+
+  const canonicalClientId = clientService.resolveCanonicalClientId(rawClientId);
+  const client = clientService.getClientById(canonicalClientId);
+  if (!client) {
+    return res.status(404).json({ error: `Unknown customer '${rawClientId}'.`, code: 'UNKNOWN_CLIENT' });
+  }
+
+  // Confirm ticket.clientId matches requested clientId
+  if (authorizedClientId && authorizedClientId !== canonicalClientId) {
+    return res.status(403).json({
+      error: 'Forbidden: SSE ticket is not valid for requested customer.',
+      code: 'CUSTOMER_ACCESS_FORBIDDEN',
+    });
+  }
+
+  // FAIL-CLOSED Role & Tenant Authorization Check
+  if (!authUser || !authUser.role || !authUser.assignedClient) {
+    return res.status(403).json({ error: 'Invalid user role on authenticated profile.', code: 'INVALID_USER_ROLE' });
+  }
+
+  if (!['admin', 'client_user'].includes(authUser.role)) {
+    return res.status(403).json({ error: 'Unrecognized user role on authenticated profile.', code: 'UNRECOGNIZED_USER_ROLE' });
+  }
+
+  if (authUser.role === 'client_user') {
+    const canonicalAssigned = clientService.resolveCanonicalClientId(authUser.assignedClient);
+    if (!canonicalAssigned) {
+      return res.status(403).json({ error: 'Unknown assigned customer on user profile.', code: 'UNKNOWN_ASSIGNED_CLIENT' });
+    }
+    if (canonicalAssigned !== canonicalClientId) {
+      return res.status(403).json({
+        error: `Forbidden: You are not authorized to access customer '${client.name || rawClientId}'.`,
+        code: 'CUSTOMER_ACCESS_FORBIDDEN',
+      });
+    }
+  }
+
+  req.user = authUser;
+  req.targetClientId = canonicalClientId;
+  req.targetClient = client;
+
   const prompt = req.query.prompt || '';
   const jobId = req.query.jobId || 'latest';
   const maxIter = parseInt(req.query.maxIterations, 10) || 4;
@@ -594,29 +827,40 @@ app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
     res.write(`event: ${eventName}\ndata: ${data}\n\n`);
   }
 
-  // Resolve QBR SSOT data (same logic as /api/chat)
+  const clientId = canonicalClientId;
+
+  // Resolve QBR SSOT data scoped to customer
   let job = null;
   const reqJobId = jobId;
   if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-    const history = historyService.getHistory();
-    job = history.find((h) => h.status === 'completed') ||
-      Object.values(jobs).reverse().find((j) => j.status === 'completed');
+    job = resolveLatestCompletedJob(clientId);
   } else {
     job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+    if (job && job.clientId && clientService.resolveCanonicalClientId(job.clientId) !== clientId) {
+      emit('error', {
+        message: `Customer isolation violation: Job '${reqJobId}' belongs to another customer.`,
+        code: 'CUSTOMER_ISOLATION_VIOLATION',
+      });
+      return res.end();
+    }
   }
 
   let qbrData = null;
   let dPath = job && job.dashboardPath ? job.dashboardPath : null;
   if (!dPath || !fs.existsSync(dPath)) {
-    const activeJobId = (job && job.jobId) ? job.jobId : reqJobId;
-    const candidates = [
-      path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json'),
-      resolveDataPath('dashboard_data.json'),
-    ];
-    dPath = candidates.find((p) => fs.existsSync(p));
+    const activeJobId = (job && job.jobId) ? job.jobId : (reqJobId !== 'latest' && reqJobId !== 'default' ? reqJobId : null);
+    if (activeJobId) {
+      const candidate = path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json');
+      if (fs.existsSync(candidate)) dPath = candidate;
+    }
   }
   if (dPath && fs.existsSync(dPath)) {
-    try { qbrData = JSON.parse(fs.readFileSync(dPath, 'utf8')); } catch (e) { }
+    try {
+      const parsed = JSON.parse(fs.readFileSync(dPath, 'utf8'));
+      if (!parsed.clientId || parsed.clientId === clientId) {
+        qbrData = parsed;
+      }
+    } catch (e) { }
   }
 
   try {
@@ -639,7 +883,32 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
   const incidentFile = req.files?.incidents?.[0] || req.files?.excel?.[0] || null;
   const inventoryFile = req.files?.inventory?.[0] || null;
 
-  const clientId = req.body.clientId || 'client-jfl';
+  const rawClientId = String(req.body.clientId || '').trim();
+  if (!rawClientId) {
+    historyService.cleanupTempFiles([incidentFile?.path, inventoryFile?.path]);
+    return res.status(400).json({ error: 'Customer identifier (clientId) is required for report generation.' });
+  }
+
+  const client = clientService.getClientById(rawClientId);
+  if (!client) {
+    historyService.cleanupTempFiles([incidentFile?.path, inventoryFile?.path]);
+    return res.status(404).json({ error: `Unknown customer identifier: "${rawClientId}". Upload rejected.`, code: 'UNKNOWN_CLIENT' });
+  }
+
+  // FAIL-CLOSED Role-based client authorization check
+  if (req.user && req.user.role !== 'admin') {
+    const canonicalAssigned = clientService.resolveCanonicalClientId(req.user.assignedClient);
+    if (canonicalAssigned !== client.id) {
+      historyService.cleanupTempFiles([incidentFile?.path, inventoryFile?.path]);
+      return res.status(403).json({
+        error: `Forbidden: You are not authorized to upload datasets for customer '${client.name || rawClientId}'.`,
+        code: 'CUSTOMER_ACCESS_FORBIDDEN',
+      });
+    }
+  }
+
+  const clientId = client.id;
+  const clientName = client.name;
   const location = req.body.location || 'All Locations';
   const uploadedBy = req.body.uploadedBy || 'System User';
 
@@ -653,14 +922,12 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
   // Server-side date validation (Requirement 2 — enforced independently of frontend)
   const dateValidation = validateDateRange(startDate, endDate);
   if (!dateValidation.valid) {
+    historyService.cleanupTempFiles([incidentFile?.path, inventoryFile?.path]);
     return res.status(400).json({
       error: 'Invalid date range',
       validationErrors: dateValidation.errors,
     });
   }
-
-  const client = clientService.getClientById(clientId);
-  const clientName = client ? client.name : 'Executive Client';
 
   if (!incidentFile) {
     return res.status(400).json({ error: 'No mandatory Incidents file uploaded.' });
@@ -696,6 +963,8 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
   });
 
   jobs[jobId] = {
+    jobId,
+    clientId,
     status: 'processing',
     startedAt: new Date().toISOString(),
     outputDir,
@@ -713,17 +982,47 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
       periodMode,
     });
 
-    const isSuccess = result && result.success;
-    const status = isSuccess ? 'completed' : 'failed';
+    const isSuccess = Boolean(result && result.success);
+
+    if (!isSuccess) {
+      const failError = result?.error || 'Report processing failed validation.';
+      jobs[jobId] = {
+        jobId,
+        clientId,
+        status: 'failed',
+        error: failError,
+        errorCode: result?.errorCode || 'processing_failed',
+      };
+      historyService.recordReport({
+        jobId,
+        clientId,
+        clientName,
+        location,
+        reportPeriod: historyPeriodLabel,
+        uploadedBy,
+        status: 'failed',
+        error: failError,
+      });
+      historyService.cleanupTempFiles([incidentFile.path, inventoryFile?.path]);
+      return res.status(400).json({
+        success: false,
+        jobId,
+        status: 'failed',
+        error: failError,
+        errorCode: result?.errorCode || 'processing_failed',
+      });
+    }
 
     const dashboardPath = result?.dashboardPath || path.join(outputDir, 'dashboard_data.json');
-    const pptPath = result?.pptPath || path.join(outputDir, 'QBR_Presentation.pptx');
+    const pptPath = result?.pptPath || path.join(outputDir, `${client.code || 'CLIENT'}_QBR_Report.pptx`);
     const reportPath = result?.reportPath || path.join(outputDir, 'validation_report.md');
     const dataQualityPath = result?.dataQualityPath || path.join(outputDir, 'data_quality_report.md');
     const processingLogPath = result?.processingLogPath || path.join(outputDir, 'processing_log.md');
 
     const updatedJob = {
-      status,
+      jobId,
+      clientId,
+      status: 'completed',
       ...result,
       dashboardPath: (dashboardPath && fs.existsSync(dashboardPath)) ? dashboardPath : null,
       pptPath: (pptPath && fs.existsSync(pptPath)) ? pptPath : null,
@@ -734,17 +1033,7 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
 
     jobs[jobId] = updatedJob;
 
-    // Synchronize canonical dataset with the latest upload job
-    if (isSuccess && updatedJob.dashboardPath && fs.existsSync(updatedJob.dashboardPath)) {
-      try {
-        fs.copyFileSync(updatedJob.dashboardPath, resolveDataPath('dashboard_data.json'));
-        console.log(`[server] Synchronized data/dashboard_data.json with latest upload job: ${jobId}`);
-      } catch (syncErr) {
-        console.error('[server] Failed to sync data/dashboard_data.json:', syncErr.message);
-      }
-    }
-
-    // Update persistent metadata history
+    // Update persistent metadata history with verified artifacts
     historyService.recordReport({
       jobId,
       clientId,
@@ -752,13 +1041,13 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
       location,
       reportPeriod: historyPeriodLabel,
       uploadedBy,
-      status,
+      status: 'completed',
       dashboardPath: updatedJob.dashboardPath,
       pptPath: updatedJob.pptPath,
       reportPath: updatedJob.reportPath,
       dataQualityPath: updatedJob.dataQualityPath,
       processingLogPath: updatedJob.processingLogPath,
-      error: result?.error || null,
+      error: null,
     });
     historyService.cleanupOldReports(3);
 
@@ -768,6 +1057,7 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
     res.json({
       success: true,
       jobId,
+      clientId,
       status: 'completed',
       metadata: updatedJob,
       dashboardPath: updatedJob.dashboardPath,
@@ -792,14 +1082,22 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
 });
 
 // ── Job Status Endpoint (for frontend polling) ─────────────────────────────
-app.get(['/api/status/:jobId', '/status/:jobId'], (req, res) => {
+app.get(['/api/status/:jobId', '/status/:jobId'], requireAuth, requireClientAccess(), (req, res) => {
   const { jobId } = req.params;
+  const clientId = req.targetClientId;
   const job = jobs[jobId] || historyService.getReportByJobId(jobId);
   if (!job) {
-    return res.status(404).json({ error: 'Job not found', status: 'not_found' });
+    return res.status(404).json({ error: 'Job not found', status: 'not_found', code: 'JOB_NOT_FOUND' });
+  }
+  if (job.clientId && clientService.resolveCanonicalClientId(job.clientId) !== clientId) {
+    return res.status(403).json({
+      error: `Customer isolation violation: Job '${jobId}' belongs to another customer.`,
+      code: 'CUSTOMER_ISOLATION_VIOLATION',
+    });
   }
   res.json({
     jobId,
+    clientId: job.clientId,
     status: job.status || 'completed',
     error: job.error || null,
     dashboardPath: job.dashboardPath || null,
@@ -861,11 +1159,19 @@ app.post('/api/upload-json', uploadJsonAuth, heavyRateLimit, async (req, res) =>
   }
   const hasInventory = isRows(body.inventory);
 
-  const clientId = body.clientId || 'client-jfl';
+  const rawClientId = String(body.clientId || '').trim();
+  if (!rawClientId) {
+    return res.status(400).json({ error: 'Customer identifier (clientId) is required for upload-json.' });
+  }
+  const client = clientService.getClientById(rawClientId);
+  if (!client) {
+    return res.status(400).json({ error: `Unknown customer identifier: "${rawClientId}". Upload rejected.` });
+  }
+
+  const clientId = client.id;
+  const clientName = client.name;
   const location = 'All Locations';
   const uploadedBy = String(body.uploadedBy || 'Google Apps Script').slice(0, 120);
-  const client = clientService.getClientById(clientId);
-  const clientName = client ? client.name : 'Executive Client';
 
   const stamp = `${uuidv4()}_${Date.now()}`;
   const incidentPath = path.join(tempUploadDir, `${stamp}_incidents.xlsx`);
@@ -905,6 +1211,8 @@ app.post('/api/upload-json', uploadJsonAuth, heavyRateLimit, async (req, res) =>
     reportPeriod: historyPeriodLabel, uploadedBy, status: 'processing',
   });
   jobs[jobId] = {
+    jobId,
+    clientId,
     status: 'processing',
     startedAt: new Date().toISOString(),
     outputDir,
@@ -922,14 +1230,16 @@ app.post('/api/upload-json', uploadJsonAuth, heavyRateLimit, async (req, res) =>
       periodMode: 'custom',
     })
       .then((result) => {
-        const isSuccess = result && result.success;
+        const isSuccess = Boolean(result && result.success);
         const status = isSuccess ? 'completed' : 'failed';
         const dashboardPath = result?.dashboardPath || path.join(outputDir, 'dashboard_data.json');
-        const pptPath = result?.pptPath || path.join(outputDir, 'QBR_Presentation.pptx');
+        const pptPath = result?.pptPath || path.join(outputDir, `${client.code || 'CLIENT'}_QBR_Report.pptx`);
         const reportPath = result?.reportPath || path.join(outputDir, 'validation_report.md');
         const dataQualityPath = result?.dataQualityPath || path.join(outputDir, 'data_quality_report.md');
         const processingLogPath = result?.processingLogPath || path.join(outputDir, 'processing_log.md');
         const updatedJob = {
+          jobId,
+          clientId,
           status,
           ...result,
           dashboardPath: (dashboardPath && fs.existsSync(dashboardPath)) ? dashboardPath : null,
@@ -939,15 +1249,6 @@ app.post('/api/upload-json', uploadJsonAuth, heavyRateLimit, async (req, res) =>
           processingLogPath: (processingLogPath && fs.existsSync(processingLogPath)) ? processingLogPath : null,
         };
         jobs[jobId] = updatedJob;
-
-        if (isSuccess && updatedJob.dashboardPath && fs.existsSync(updatedJob.dashboardPath)) {
-          try {
-            fs.copyFileSync(updatedJob.dashboardPath, resolveDataPath('dashboard_data.json'));
-            console.log(`[upload-json] Synchronized data/dashboard_data.json with job: ${jobId}`);
-          } catch (syncErr) {
-            console.error('[upload-json] Failed to sync data/dashboard_data.json:', syncErr.message);
-          }
-        }
 
         historyService.recordReport({
           jobId, clientId, clientName, location,
@@ -977,40 +1278,87 @@ app.post('/api/upload-json', uploadJsonAuth, heavyRateLimit, async (req, res) =>
 });
 
 // ── Dashboard JSON Endpoint ────────────────────────────────────────────────
-app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashboard'], async (req, res) => {
+app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashboard'], requireAuth, requireClientAccess(), async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
+
+  const clientId = req.targetClientId;
+  const client = req.targetClient;
+
   const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
   const siteFilter = req.query.site || req.query.location || 'ALL';
   let job = null;
   let dPath = null;
 
   if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-    const canonicalPath = resolveDataPath('dashboard_data.json');
-    if (fs.existsSync(canonicalPath)) {
-      dPath = canonicalPath;
-    } else {
-      const history = historyService.getHistory(); // history is reverse scan (newest-first)
-      job = history.slice().reverse().find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
-      if (job && job.dashboardPath && fs.existsSync(job.dashboardPath)) {
-        dPath = job.dashboardPath;
+    // Select newest completed job strictly belonging to requested customer
+    job = resolveLatestCompletedJob(clientId);
+    if (job) {
+      const jobClientId = clientService.resolveCanonicalClientId(job.clientId);
+      if (jobClientId !== clientId) {
+        return res.status(403).json({ error: 'Customer isolation violation: Job does not belong to requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+      }
+      dPath = job.dashboardPath;
+    } else if (clientId === 'client-jfl') {
+      const canonicalPath = path.resolve('data', 'dashboard_data.json');
+      const bundledPath = path.resolve('data', 'bundled_default', 'dashboard_data.json');
+      if (fs.existsSync(canonicalPath)) {
+        dPath = canonicalPath;
+      } else if (fs.existsSync(bundledPath)) {
+        dPath = bundledPath;
       }
     }
   } else {
+    // Explicit jobId provided
     job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
-    if (job && job.status === 'processing') {
+    if (!job) {
+      return res.status(404).json({ error: `Job '${reqJobId}' not found.`, code: 'JOB_NOT_FOUND' });
+    }
+    const jobClientId = clientService.resolveCanonicalClientId(job.clientId);
+    if (jobClientId && jobClientId !== clientId) {
+      return res.status(403).json({
+        error: `Customer isolation violation: Job '${reqJobId}' belongs to customer '${job.clientId}', not '${clientId}'.`,
+        code: 'CUSTOMER_ISOLATION_VIOLATION',
+      });
+    }
+    if (job.status === 'processing') {
       return res.status(202).json({ status: 'processing', message: 'Report is generating...' });
     }
-    dPath = job?.dashboardPath;
+    if (job.status === 'error' || job.status === 'failed') {
+      return res.status(500).json({ status: 'error', error: job.error || 'Job failed during processing.' });
+    }
+    dPath = job.dashboardPath;
   }
 
   try {
     if (!dPath || !fs.existsSync(dPath)) {
-      return res.status(200).json({ status: 'empty', message: 'No dataset uploaded yet.' });
+      return res.status(200).json({
+        status: 'empty',
+        message: `No completed dataset available for ${client.name || clientId}. Please upload files first.`,
+        clientId
+      });
     }
+
+    // Verify artifact ownership if job-scoped
+    if (job && job.jobId) {
+      const expectedJobDir = path.resolve(REPORTS_DIR, `job_${job.jobId}`);
+      const resolvedArtifact = path.resolve(dPath);
+      const isUnderJobDir = resolvedArtifact.startsWith(expectedJobDir + path.sep) || resolvedArtifact === expectedJobDir;
+      if (!isUnderJobDir) {
+        return res.status(403).json({ error: 'Artifact ownership mismatch for requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+      }
+    }
+
     const content = fs.readFileSync(dPath, 'utf8');
     const rawData = JSON.parse(content);
+
+    // Cross-verify customer identifier in payload
+    const rawDataClientId = rawData.clientId ? clientService.resolveCanonicalClientId(rawData.clientId) : null;
+    if (rawDataClientId && rawDataClientId !== clientId) {
+      return res.status(403).json({ error: 'Customer isolation violation: Dashboard payload belongs to another customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+    }
+
     const filteredData = filterDashboardBySite(rawData, siteFilter);
     if (!filteredData.iq200Audit) {
       try {
@@ -1018,7 +1366,7 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
         filteredData.iq200Audit = continuousPipelineAudit(filteredData);
       } catch (_) {}
     }
-    res.json({ jobId: job?.jobId || reqJobId, ...filteredData });
+    res.json({ jobId: job?.jobId || reqJobId, clientId, ...filteredData });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1103,150 +1451,301 @@ app.all(['/api/switch-mode', '/switch-mode'], async (req, res) => {
 const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
   try {
     let targetPath = null;
+    let authUser = null;
+    let authorizedClientId = null;
+    let authorizedJobId = null;
+
+    // 1. Authenticate via Single-Use Download Ticket OR Bearer Token
+    const ticket = req.query.ticket || req.query.downloadToken;
+    if (ticket) {
+      const ticketData = authService.verifyAndConsumeDownloadTicket(ticket);
+      if (ticketData && ticketData.user) {
+        authUser = ticketData.user;
+        authorizedClientId = ticketData.clientId;
+        authorizedJobId = ticketData.jobId;
+      } else {
+        const session = authService.verifyToken(ticket);
+        if (session && session.user) {
+          authUser = session.user;
+        } else {
+          return res.status(401).json({
+            error: 'Invalid or expired download ticket.',
+            code: 'INVALID_DOWNLOAD_TICKET',
+          });
+        }
+      }
+    } else {
+      const session = authService.verifyToken(req.headers.authorization);
+      if (!session || !session.user) {
+        return res.status(401).json({
+          error: 'Authorization required — please log in or provide a download ticket.',
+          code: 'UNAUTHORIZED',
+        });
+      }
+      authUser = session.user;
+    }
+
+    // 2. Client ID extraction & resolution
+    const rawClientId = String(req.query.clientId || req.headers['x-client-id'] || authorizedClientId || '').trim();
+    if (!rawClientId) {
+      return res.status(400).json({ error: 'Customer identifier (clientId) is required for report download.', code: 'MISSING_CLIENT_ID' });
+    }
+
+    const client = clientService.getClientById(rawClientId);
+    if (!client) {
+      return res.status(404).json({ error: `Unknown customer '${rawClientId}'.`, code: 'UNKNOWN_CLIENT' });
+    }
+    const clientId = client.id;
+
+    // If ticket was used, verify client matches ticket
+    if (authorizedClientId && authorizedClientId !== clientId) {
+      return res.status(403).json({
+        error: 'Forbidden: Download ticket is not valid for requested customer.',
+        code: 'CUSTOMER_ACCESS_FORBIDDEN',
+      });
+    }
+
+    // 3. FAIL-CLOSED Role & Tenant Authorization Check
+    if (!authUser || !authUser.role || !authUser.assignedClient) {
+      return res.status(403).json({ error: 'Access denied: missing or invalid user profile.', code: 'INVALID_USER_ROLE' });
+    }
+    if (authUser.role !== 'admin' && authUser.role !== 'client_user') {
+      return res.status(403).json({ error: 'Access denied: unrecognized user role.', code: 'UNRECOGNIZED_USER_ROLE' });
+    }
+    if (authUser.role !== 'admin') {
+      const canonicalAssigned = clientService.resolveCanonicalClientId(authUser.assignedClient);
+      if (!canonicalAssigned) {
+        return res.status(403).json({ error: 'Access denied: unknown assigned customer.', code: 'UNKNOWN_ASSIGNED_CLIENT' });
+      }
+      if (canonicalAssigned !== clientId) {
+        return res.status(403).json({
+          error: `Forbidden: You are not authorized to download reports for customer '${client.name || rawClientId}'.`,
+          code: 'CUSTOMER_ACCESS_FORBIDDEN',
+        });
+      }
+    }
+
     const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
+    if (authorizedJobId && authorizedJobId !== 'latest' && reqJobId !== 'latest' && authorizedJobId !== reqJobId) {
+      return res.status(403).json({
+        error: 'Forbidden: Download ticket is not valid for requested job.',
+        code: 'CUSTOMER_ACCESS_FORBIDDEN',
+      });
+    }
+
     let job = null;
 
     if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-      const history = historyService.getHistory(); // history is sorted newest-first
-      job = history.find((h) => h.status === 'completed') || Object.values(jobs).reverse().find((j) => j.status === 'completed');
+      job = resolveLatestCompletedJob(clientId);
+      if (!job && clientId === 'client-jfl') {
+        const canonicalPath = path.resolve('data', 'dashboard_data.json');
+        if (fs.existsSync(canonicalPath)) {
+          job = {
+            jobId: 'canonical-jfl',
+            clientId: 'client-jfl',
+            dashboardPath: canonicalPath,
+            status: 'completed'
+          };
+        }
+      }
     } else {
       job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+      if (!job) {
+        return res.status(404).json({ error: `Job '${reqJobId}' not found.`, code: 'JOB_NOT_FOUND' });
+      }
+      const jobClientId = clientService.resolveCanonicalClientId(job.clientId);
+      if (jobClientId && jobClientId !== clientId) {
+        return res.status(403).json({
+          error: `Customer isolation violation: Job '${reqJobId}' belongs to customer '${job.clientId}', not '${clientId}'.`,
+          code: 'CUSTOMER_ISOLATION_VIOLATION',
+        });
+      }
     }
 
     if (!job) {
-      return res.status(404).json({ error: 'File not available. Please upload a dataset first.' });
+      return res.status(404).json({
+        error: `No report available for ${client.name || clientId}. Please upload and process a dataset first.`,
+        code: 'REPORT_NOT_FOUND',
+      });
     }
 
-    // ── PDF: Generate fresh PDF on-the-fly from dashboard_data.json (SSOT guarantee) ────
-    if (pathKey === 'pdfPath' || pathKey === 'pptPath') {
-      const activeJobId = job?.jobId || reqJobId;
-      const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
+    if (job.clientId && clientService.resolveCanonicalClientId(job.clientId) !== clientId) {
+      return res.status(403).json({
+        error: `Customer isolation violation: Job belongs to customer '${job.clientId}', not '${clientId}'.`,
+        code: 'CUSTOMER_ISOLATION_VIOLATION',
+      });
+    }
+
+    const activeJobId = job?.jobId || reqJobId;
+    const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
+    const clientCode = (client.code || client.id || 'REPORT').toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+
+    // ── PDF: Generate fresh PDF on-the-fly from job's own dashboard_data.json (SSOT guarantee) ────
+    if (pathKey === 'pdfPath') {
       const dashCandidates = [
         job?.dashboardPath,
         path.join(jobOutputDir, 'dashboard_data.json'),
-        resolveDataPath('dashboard_data.json'),
       ].filter(Boolean);
 
       const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
 
       if (dashPath) {
         try {
-          console.log(`[server] Generating fresh Executive PDF Report on-the-fly from SSOT: ${dashPath}`);
+          console.log(`[server] Generating fresh Executive PDF Report on-the-fly from SSOT for ${client.name}: ${dashPath}`);
           if (!fs.existsSync(jobOutputDir)) fs.mkdirSync(jobOutputDir, { recursive: true });
-          const freshPdfPath = path.join(jobOutputDir, `JFL_QBR_${Date.now()}.pdf`);
+          const freshPdfPath = path.join(jobOutputDir, `${clientCode}_QBR_${Date.now()}.pdf`);
           const qbrData = JSON.parse(fs.readFileSync(dashPath, 'utf8'));
+
+          const qbrDataClientId = qbrData.clientId ? clientService.resolveCanonicalClientId(qbrData.clientId) : null;
+          if (qbrDataClientId && qbrDataClientId !== clientId) {
+            return res.status(403).json({ error: 'Customer isolation violation: Data artifact belongs to another customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+          }
+
           await generatePDF(qbrData, null, freshPdfPath);
 
-          // Update job record with fresh PDF path
           job.pdfPath = freshPdfPath;
           jobs[activeJobId] = { ...jobs[activeJobId], pdfPath: freshPdfPath };
           historyService.recordReport({
             ...job,
             jobId: activeJobId,
+            clientId,
             status: 'completed',
             pdfPath: freshPdfPath,
           });
 
-          console.log(`[server] Fresh Executive PDF Report generated & served: ${freshPdfPath}`);
           targetPath = freshPdfPath;
         } catch (genErr) {
           console.error('[server] On-the-fly Executive PDF Report generation failed:', genErr.message);
           return res.status(500).json({ error: `Report generation failed: ${genErr.message}` });
         }
       } else {
-        return res.status(404).json({ error: 'Dashboard data not found for report generation. Please re-upload your files.' });
+        return res.status(404).json({ error: 'Dashboard data not found for report generation. Please re-upload your files.', code: 'DATASET_NOT_FOUND' });
       }
 
       const resolvedTarget = path.resolve(targetPath);
-      const resolvedReports = path.resolve(REPORTS_DIR);
-      const resolvedData = path.resolve(__dirname, '..', 'data');
-      const isUnderReports = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
-      const isUnderData = resolvedTarget.startsWith(resolvedData + path.sep) || resolvedTarget === resolvedData;
+      const resolvedJobDir = path.resolve(jobOutputDir);
+      const isUnderJobDir = resolvedTarget.startsWith(resolvedJobDir + path.sep) || resolvedTarget === resolvedJobDir;
 
-      if (!isUnderReports && !isUnderData) {
-        console.error(`[server] SECURITY: Path traversal attempt blocked. Requested: ${resolvedTarget}`);
-        return res.status(403).json({ error: 'Access denied.' });
+      if (!isUnderJobDir) {
+        console.error(`[server] SECURITY: Path traversal / job ownership violation. Requested: ${resolvedTarget}`);
+        return res.status(403).json({ error: 'Artifact ownership mismatch for requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
       }
 
       console.log(`[server] Serving Executive PDF Report download: ${resolvedTarget}`);
       const fileHeader = fs.readFileSync(resolvedTarget, { encoding: null }).slice(0, 4).toString();
+      const downloadPdfName = `${clientCode}_QBR_Executive_Report.pdf`;
+      const downloadHtmlName = `${clientCode}_QBR_Executive_Report.html`;
       if (fileHeader === '%PDF') {
-        return res.download(resolvedTarget, 'JFL_QBR_Executive_Report.pdf');
+        return res.download(resolvedTarget, downloadPdfName);
       }
-
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.download(resolvedTarget, 'JFL_QBR_Executive_Report.html');
+      return res.download(resolvedTarget, downloadHtmlName);
     }
 
-    // ── Non-PPT/PDF files: existing logic (reports, logs, etc.) ──────────────────
+    // ── PPT: Serve existing PPT or generate on-the-fly from job's own dashboard_data.json ──
+    if (pathKey === 'pptPath') {
+      if (job?.pptPath && fs.existsSync(job.pptPath)) {
+        targetPath = job.pptPath;
+      } else {
+        const dashCandidates = [
+          job?.dashboardPath,
+          path.join(jobOutputDir, 'dashboard_data.json'),
+        ].filter(Boolean);
+
+        const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
+        if (dashPath) {
+          try {
+            console.log(`[server] Generating fresh Executive PPT Report on-the-fly from SSOT for ${client.name}: ${dashPath}`);
+            if (!fs.existsSync(jobOutputDir)) fs.mkdirSync(jobOutputDir, { recursive: true });
+            const freshPptPath = path.join(jobOutputDir, `${clientCode}_QBR_${Date.now()}.pptx`);
+            const templatePath = path.resolve('templates', 'master_template.pptx');
+            const qbrData = JSON.parse(fs.readFileSync(dashPath, 'utf8'));
+
+            const qbrDataClientId = qbrData.clientId ? clientService.resolveCanonicalClientId(qbrData.clientId) : null;
+            if (qbrDataClientId && qbrDataClientId !== clientId) {
+              return res.status(403).json({ error: 'Customer isolation violation: Data artifact belongs to another customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+            }
+
+            await generatePPT(qbrData, templatePath, freshPptPath);
+            job.pptPath = freshPptPath;
+            jobs[activeJobId] = { ...jobs[activeJobId], pptPath: freshPptPath };
+            historyService.recordReport({
+              ...job,
+              jobId: activeJobId,
+              clientId,
+              status: 'completed',
+              pptPath: freshPptPath,
+            });
+            targetPath = freshPptPath;
+          } catch (pptGenErr) {
+            console.error('[server] On-the-fly Executive PPT Report generation failed:', pptGenErr.message);
+            return res.status(500).json({ error: `PPT generation failed: ${pptGenErr.message}` });
+          }
+        } else {
+          return res.status(404).json({ error: 'Dashboard data not found for PPT generation. Please re-upload your files.', code: 'DATASET_NOT_FOUND' });
+        }
+      }
+
+      const resolvedTarget = path.resolve(targetPath);
+      const resolvedJobDir = path.resolve(jobOutputDir);
+      const isUnderJobDir = resolvedTarget.startsWith(resolvedJobDir + path.sep) || resolvedTarget === resolvedJobDir;
+      if (!isUnderJobDir) {
+        console.error(`[server] SECURITY: Path traversal / job ownership violation. Requested: ${resolvedTarget}`);
+        return res.status(403).json({ error: 'Artifact ownership mismatch for requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+      }
+
+      console.log(`[server] Serving Executive PPT Report download: ${resolvedTarget}`);
+      const downloadPptName = `${clientCode}_QBR_Report.pptx`;
+      return res.download(resolvedTarget, downloadPptName);
+    }
+
+    // ── Non-PPT/PDF files: reports, logs, etc. ──────────────────
     targetPath = job?.[pathKey];
     if (!targetPath || !fs.existsSync(targetPath)) {
-      const activeJobId = job?.jobId || reqJobId;
       const candidates = [
-        path.join(REPORTS_DIR, `job_${activeJobId}`, defaultFilename),
-        resolveDataPath(defaultFilename),
+        path.join(jobOutputDir, defaultFilename),
+        path.join(jobOutputDir, `${defaultFilename}`),
       ];
       targetPath = candidates.find((p) => fs.existsSync(p));
     }
 
-    // Search directory for matching file extension if targetPath not directly found
     if (!targetPath || !fs.existsSync(targetPath)) {
-      const activeJobId = job?.jobId || reqJobId;
-      const dirsToSearch = [
-        activeJobId ? path.join(REPORTS_DIR, `job_${activeJobId}`) : null,
-        resolveDataPath(),
-      ].filter(Boolean);
-
-      for (const d of dirsToSearch) {
-        if (fs.existsSync(d)) {
-          const files = fs.readdirSync(d);
-          const match = files.find(f => f.toLowerCase().endsWith('.md') && pathKey === 'reportPath');
-          if (match) {
-            targetPath = path.join(d, match);
-            break;
-          }
+      if (fs.existsSync(jobOutputDir)) {
+        const files = fs.readdirSync(jobOutputDir);
+        const match = files.find(f => f.toLowerCase().endsWith('.md') && pathKey === 'reportPath');
+        if (match) {
+          targetPath = path.join(jobOutputDir, match);
         }
       }
     }
 
     if (!targetPath || !fs.existsSync(targetPath)) {
-      return res.status(404).json({ error: `${pathKey} file not available on server` });
+      return res.status(404).json({ error: `${pathKey} file not available for job ${activeJobId}`, code: 'FILE_NOT_FOUND' });
     }
 
-    // SECURITY FIX (FINDING-007): Path traversal guard.
     const resolvedTarget = path.resolve(targetPath);
-    const resolvedReports = path.resolve(REPORTS_DIR);
-    const resolvedData = path.resolve(__dirname, '..', 'data');
-    const isUnderReports = resolvedTarget.startsWith(resolvedReports + path.sep) || resolvedTarget === resolvedReports;
-    const isUnderData = resolvedTarget.startsWith(resolvedData + path.sep) || resolvedTarget === resolvedData;
+    const resolvedJobDir = path.resolve(jobOutputDir);
+    const isUnderJobDir = resolvedTarget.startsWith(resolvedJobDir + path.sep) || resolvedTarget === resolvedJobDir;
 
-    if (!isUnderReports && !isUnderData) {
-      console.error(`[server] SECURITY: Path traversal attempt blocked. Requested: ${resolvedTarget}`);
-      return res.status(403).json({ error: 'Access denied.' });
+    if (!isUnderJobDir) {
+      console.error(`[server] SECURITY: Artifact does not belong to job directory: ${resolvedTarget}`);
+      return res.status(403).json({ error: 'Artifact ownership mismatch for requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
     }
 
     console.log(`[server] Serving file download: ${resolvedTarget}`);
-    res.download(resolvedTarget);
+    res.download(resolvedTarget, `${clientCode}_${defaultFilename}`);
   } catch (err) {
     console.error('[server] Download error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
 
-app.get(['/api/pdf/:jobId', '/pdf/:jobId', '/api/pdf', '/pdf'], sendFileHelper('pdfPath', 'JFL_QBR_Report.pdf'));
-app.get(['/api/ppt/:jobId', '/ppt/:jobId', '/api/ppt', '/ppt'], sendFileHelper('pptPath', 'JFL_QBR_Report.pptx'));
+app.get(['/api/pdf/:jobId', '/pdf/:jobId', '/api/pdf', '/pdf'], sendFileHelper('pdfPath', 'QBR_Report.pdf'));
+app.get(['/api/ppt/:jobId', '/ppt/:jobId', '/api/ppt', '/ppt'], sendFileHelper('pptPath', 'QBR_Report.pptx'));
 app.get(['/api/report/:jobId', '/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
 app.get(['/api/error-report/:jobId', '/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
 app.get(['/api/data-quality/:jobId', '/data-quality/:jobId'], sendFileHelper('dataQualityPath', 'data_quality_report.md'));
 app.get(['/api/processing-log/:jobId', '/processing-log/:jobId'], sendFileHelper('processingLogPath', 'processing_log.md'));
-
-// ── Job Status Route ────────────────────────────────────────────────────────
-app.get(['/api/status/:jobId', '/status/:jobId'], (req, res) => {
-  const jobId = req.params.jobId;
-  const job = jobs[jobId] || historyService.getReportByJobId(jobId);
-  if (!job) return res.status(404).json({ error: 'Job not found' });
-  res.json({ jobId, ...job });
-});
 
 // ── Static Frontend Assets (Production / Render) ──────────────────────────────
 const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
@@ -1267,7 +1766,7 @@ app.get('*', (req, res) => {
   res.json({ message: 'Executive Dashboard & Multi-Client QBR Portal API running.' });
 });
 
-if (require.main === module || !process.env.VERCEL) {
+if ((require.main === module || !process.env.VERCEL) && process.env.NODE_ENV !== 'test') {
   const DEFAULT_PORT = process.env.PORT || 3000;
 
   const startServer = (port) => {

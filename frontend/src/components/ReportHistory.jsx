@@ -7,15 +7,56 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingJobId, setDeletingJobId] = useState(null);
-  const [clientFilter, setClientFilter] = useState(activeClient?.id || 'all');
+  const [clientFilter, setClientFilter] = useState(activeClient?.id || (clients[0]?.id || ''));
   const [locationFilter, setLocationFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleDownload = async (e, endpoint, jobId, itemClientId) => {
+    e.preventDefault();
+    const targetClientId = itemClientId || clientFilter || activeClient?.id;
+    if (!targetClientId) {
+      alert('Cannot download: customer identifier missing.');
+      return;
+    }
+    const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/download-ticket`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          clientId: targetClientId,
+          jobId,
+          exportType: endpoint
+        })
+      });
+      if (res.ok) {
+        const ticketData = await res.json();
+        if (ticketData.downloadTicket) {
+          window.location.href = `${API_BASE_URL}/api/${endpoint}/${jobId}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[ReportHistory] Download ticket acquisition failed:', err);
+    }
+    const authQuery = token ? `&downloadToken=${encodeURIComponent(token)}` : '';
+    window.location.href = `${API_BASE_URL}/api/${endpoint}/${jobId}?clientId=${encodeURIComponent(targetClientId)}${authQuery}`;
+  };
 
   const fetchHistory = async () => {
     try {
       setLoading(true);
       const queryParams = new URLSearchParams();
-      if (clientFilter && clientFilter !== 'all') queryParams.append('clientId', clientFilter);
+      const targetClientId = (clientFilter && clientFilter !== 'all') ? clientFilter : (activeClient?.id || clients[0]?.id);
+      if (!targetClientId) {
+        setHistory([]);
+        setLoading(false);
+        return;
+      }
+      queryParams.append('clientId', targetClientId);
       if (locationFilter && locationFilter !== 'ALL' && locationFilter !== 'All Locations') {
         queryParams.append('location', locationFilter);
       }
@@ -31,6 +72,12 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeClient?.id) {
+      setClientFilter(activeClient.id);
+    }
+  }, [activeClient?.id]);
 
   useEffect(() => {
     fetchHistory();
@@ -229,33 +276,33 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
                               📈 Dashboard
                             </button>
                             <a
-                              href={`${API_BASE_URL}/api/pdf/${item.jobId}`}
+                              href="#download-pdf"
+                              onClick={(e) => handleDownload(e, 'pdf', item.jobId, item.clientId)}
                               className="btn-action btn-ppt"
-                              download
                               title="Download Executive PDF Report"
                             >
                               📄 PDF
                             </a>
                             <a
-                              href={`${API_BASE_URL}/api/report/${item.jobId}`}
+                              href="#download-report"
+                              onClick={(e) => handleDownload(e, 'report', item.jobId, item.clientId)}
                               className="btn-action btn-log"
-                              download
                               title="Download Validation Report"
                             >
                               📝 Report
                             </a>
                             <a
-                              href={`${API_BASE_URL}/api/processing-log/${item.jobId}`}
+                              href="#download-log"
+                              onClick={(e) => handleDownload(e, 'processing-log', item.jobId, item.clientId)}
                               className="btn-action btn-log"
-                              download
                               title="Download Processing Log"
                             >
                               📋 Log
                             </a>
                             <a
-                              href={`${API_BASE_URL}/api/data-quality/${item.jobId}`}
+                              href="#download-quality"
+                              onClick={(e) => handleDownload(e, 'data-quality', item.jobId, item.clientId)}
                               className="btn-action btn-log"
-                              download
                               title="Download Data Quality Report"
                             >
                               🔍 Quality

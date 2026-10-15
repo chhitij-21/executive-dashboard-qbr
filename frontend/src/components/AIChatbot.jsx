@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../config/api';
+import { useAuth } from '../context/AuthContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AIChatbot — Executive QBR AI Assistant with Claudex Loop (Precision Edition)
@@ -69,6 +70,7 @@ function KPIBadge({ name, cited }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function AIChatbot({ jobId }) {
+  const { activeClient } = useAuth();
   const [isOpen,      setIsOpen]      = useState(false);
   const [prompt,      setPrompt]      = useState('');
   const [loading,     setLoading]     = useState(false);
@@ -98,12 +100,21 @@ export function AIChatbot({ jobId }) {
   // ── Standard single-shot chat ─────────────────────────────────────────────
   const handleStandardSend = useCallback(async (text) => {
     if (!text.trim() || loading) { return; }
+    if (!activeClient?.id) {
+      setMessages((p) => [...p, { sender: 'ai', text: '⚠️ **Error**: Please select a customer before asking questions.' }]);
+      return;
+    }
     setMessages((p) => [...p, { sender: 'user', text }]);
     setLoading(true);
+    const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
     try {
       const res  = await fetch(`${API_BASE_URL}/api/chat`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, jobId }),
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ prompt: text, jobId, clientId: activeClient.id }),
       });
       if (!res.ok) { throw new Error('HTTP ' + res.status); }
       const data = await res.json();
@@ -113,11 +124,15 @@ export function AIChatbot({ jobId }) {
     } finally {
       setLoading(false);
     }
-  }, [loading, jobId]);
+  }, [loading, jobId, activeClient?.id]);
 
   // ── Claudex Loop SSE chat ─────────────────────────────────────────────────
-  const handleClaudexSend = useCallback((text) => {
+  const handleClaudexSend = useCallback(async (text) => {
     if (!text.trim() || loading) { return; }
+    if (!activeClient?.id) {
+      setMessages((p) => [...p, { sender: 'ai', text: '⚠️ **Error**: Please select a customer before starting the reasoning loop.' }]);
+      return;
+    }
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -134,7 +149,36 @@ export function AIChatbot({ jobId }) {
       traceLog: [], model: 'Claudex Loop Engine (Precision Edition)',
     }]);
 
-    const params = new URLSearchParams({ prompt: text, jobId: jobId || 'latest', maxIterations: 4 });
+    const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
+    let sseTicket = null;
+    try {
+      const ticketRes = await fetch(`${API_BASE_URL}/api/auth/sse-ticket`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ clientId: activeClient.id }),
+      });
+      if (!ticketRes.ok) {
+        const errJson = await ticketRes.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to authenticate real-time chat connection.');
+      }
+      const ticketData = await ticketRes.json();
+      sseTicket = ticketData.sseTicket;
+    } catch (err) {
+      setLoading(false);
+      setMessages((p) => [...p, { sender: 'ai', text: `Authentication error: ${err.message}` }]);
+      return;
+    }
+
+    const params = new URLSearchParams({
+      prompt: text,
+      jobId: jobId || 'latest',
+      clientId: activeClient.id,
+      maxIterations: 4,
+      ticket: sseTicket,
+    });
     const es     = new EventSource(`${API_BASE_URL}/api/chat/loop?${params}`);
     eventSourceRef.current = es;
 

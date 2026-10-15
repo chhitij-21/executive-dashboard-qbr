@@ -58,9 +58,25 @@ function getAllClients() {
   return loadClients();
 }
 
+const CLIENT_ALIASES = {
+  'client-mmtc': 'client-mmtcpamp',
+  'mmtc': 'client-mmtcpamp',
+  'mmtcpamp': 'client-mmtcpamp',
+  'jfl': 'client-jfl',
+  'client-jfl': 'client-jfl',
+};
+
+function resolveCanonicalClientId(id) {
+  if (!id || typeof id !== 'string') return null;
+  const normalized = id.trim().toLowerCase();
+  return CLIENT_ALIASES[normalized] || id.trim();
+}
+
 function getClientById(id) {
+  if (!id || typeof id !== 'string') return null;
+  const canonicalId = resolveCanonicalClientId(id);
   const clients = loadClients();
-  return clients.find((c) => c.id === id) || null;
+  return clients.find((c) => c.id.toLowerCase() === canonicalId.toLowerCase()) || null;
 }
 
 function createClient(clientData) {
@@ -146,6 +162,7 @@ function addLocation(clientId, locationName) {
 module.exports = {
   getAllClients,
   getClientById,
+  resolveCanonicalClientId,
   createClient,
   updateClient,
   addLocation,

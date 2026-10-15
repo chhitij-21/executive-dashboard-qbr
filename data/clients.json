@@ -19,5 +19,39 @@
     ],
     "createdAt": "2026-01-01T00:00:00.000Z",
     "description": "Master QBR client for Jubilant Foodworks Ltd ecosystem."
+  },
+  {
+    "id": "client-mmtcpamp",
+    "name": "MMTC",
+    "code": "MMTCPAMP",
+    "logo": "🏭",
+    "status": "active",
+    "ruleConfigFile": "rules.yaml",
+    "locations": [
+      "All Locations",
+      "Gurgaon Plant",
+      "Gurgaon Head Office",
+      "Bhubaneswar",
+      "Okhla",
+      "Guwahati",
+      "Vijaywada",
+      "Vizag",
+      "Lajpat Nagar",
+      "Thrissur",
+      "Ludhiana",
+      "Chennai",
+      "Bangalore",
+      "Noida",
+      "Karolbagh",
+      "Kolkata",
+      "Ahmedabad",
+      "Mumbai",
+      "Coimbatore",
+      "Hyderabad",
+      "Nagpur",
+      "Rohini Delhi"
+    ],
+    "createdAt": "2026-10-13T00:00:00.000Z",
+    "description": "MMTC-PAMP India - LBMA-accredited gold and silver refinery. Managed Meraki services."
   }
 ]

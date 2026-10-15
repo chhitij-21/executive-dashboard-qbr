@@ -138,10 +138,16 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       localStorage.setItem('portal_token', storedTok);
     }
 
+    if (!activeClient?.id) {
+      setError('Please select an active customer before uploading.');
+      setUploading(false);
+      return;
+    }
+
     const form = new FormData();
     form.append('incidents', incidentFile);
     if (inventoryFile) form.append('inventory', inventoryFile);
-    form.append('clientId', activeClient?.id || 'client-jfl');
+    form.append('clientId', activeClient.id);
     form.append('location', activeLocation || 'All Locations');
     // Requirement 2: Send start_date / end_date instead of periodMode/reportPeriod
     form.append('start_date', startDate);
@@ -297,22 +303,23 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               <label>CLIENT TARGET</label>
               {isAdmin ? (
                 <select
-                  value={activeClient?.id || 'client-jfl'}
+                  value={activeClient?.id || ''}
                   onChange={(e) => {
                     const c = clients.find((item) => item.id === e.target.value);
                     if (c) setActiveClient(c);
                   }}
                   className="select-field"
                 >
-                  {(clients.length > 0 ? clients : [{ id: 'client-jfl', name: 'Jubilant Foodworks Ltd (JFL)', logo: '🍔' }]).map((c) => (
+                  <option value="" disabled>Select customer...</option>
+                  {clients.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.logo} {c.name}
+                      {c.logo || '🏢'} {c.name}
                     </option>
                   ))}
                 </select>
               ) : (
                 <div className="context-value">
-                  {activeClient?.logo || '🍔'} {activeClient?.name || 'Jubilant Foodworks Ltd (JFL)'}
+                  {activeClient ? `${activeClient.logo || '🏢'} ${activeClient.name}` : 'No Customer Assigned'}
                 </div>
               )}
             </div>

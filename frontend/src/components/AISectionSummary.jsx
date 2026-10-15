@@ -1,20 +1,30 @@
 // frontend/src/components/AISectionSummary.jsx
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function AISectionSummary({ section, jobId, title = 'AI Section Summary' }) {
+  const { activeClient } = useAuth();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cached, setCached] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
+    if (!activeClient?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
+    const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
     fetch(`${API_BASE_URL}/api/ai/section-summary`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ section, jobId }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ section, jobId, clientId: activeClient.id }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -33,7 +43,7 @@ export default function AISectionSummary({ section, jobId, title = 'AI Section S
       });
 
     return () => { isMounted = false; };
-  }, [section, jobId]);
+  }, [section, jobId, activeClient?.id]);
 
   if (loading) {
     return (

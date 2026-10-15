@@ -60,7 +60,13 @@ export function AuthProvider({ children }) {
         const json = await res.json();
         setClients(json.clients || []);
         setIsBackendOffline(false);
-        if (!activeClient && json.clients && json.clients.length > 0) {
+        // Restore previously selected client or fallback based on user role
+        const savedClientId = localStorage.getItem('portal_active_client_id');
+        const savedClient = savedClientId ? json.clients.find(c => c.id === savedClientId) : null;
+
+        if (savedClient) {
+          setActiveClientState(savedClient);
+        } else if (!activeClient && json.clients && json.clients.length > 0) {
           if (user?.role === 'client_user' && user?.assignedClient !== 'all') {
             const assigned = json.clients.find((c) => c.id === user.assignedClient) || json.clients[0];
             setActiveClientState(assigned);
@@ -93,12 +99,17 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!activeClient && clients && clients.length > 0) {
-      setActiveClientState(clients[0]);
+      const savedClientId = localStorage.getItem('portal_active_client_id');
+      const savedClient = savedClientId ? clients.find(c => c.id === savedClientId) : null;
+      setActiveClientState(savedClient || clients[0]);
     }
   }, [clients, activeClient]);
 
   const setActiveClient = (client) => {
     setActiveClientState(client);
+    if (client?.id) {
+      localStorage.setItem('portal_active_client_id', client.id);
+    }
     setActiveLocation('All Locations');
   };
 

@@ -15,6 +15,41 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
 
   const activeJobId = jobId || 'latest';
 
+  const handleDownload = async (e, exportType) => {
+    e.preventDefault();
+    const targetClientId = data?.clientId;
+    if (!targetClientId) {
+      alert('Cannot download: customer workspace not identified.');
+      return;
+    }
+    const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/download-ticket`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          clientId: targetClientId,
+          jobId: activeJobId,
+          exportType
+        })
+      });
+      if (res.ok) {
+        const ticketData = await res.json();
+        if (ticketData.downloadTicket) {
+          window.location.href = `${API_BASE_URL}/api/${exportType}/${activeJobId}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[OverviewPage] Download ticket acquisition failed:', err);
+    }
+    const authQuery = token ? `&downloadToken=${encodeURIComponent(token)}` : '';
+    window.location.href = `${API_BASE_URL}/api/${exportType}/${activeJobId}?clientId=${encodeURIComponent(targetClientId)}${authQuery}`;
+  };
+
   return (
     <div className="overview-page" style={{ padding: '1rem 0', maxWidth: '1680px', margin: '0 auto' }}>
       {/* Header Banner */}
@@ -87,8 +122,8 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
               </li>
               <li>
                 <a
-                  href={`${API_BASE_URL}/api/ppt/${activeJobId}`}
-                  download="JFL_QBR_Executive_Report.pdf"
+                  href="#download-ppt"
+                  onClick={(e) => handleDownload(e, 'ppt')}
                   style={{
                     color: '#2563eb',
                     fontWeight: 600,
@@ -96,16 +131,17 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
                     textDecoration: 'none',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.5rem'
+                    gap: '0.5rem',
+                    cursor: 'pointer'
                   }}
                 >
-                  <span>•</span> Download Executive PDF Report
+                  <span>•</span> Download Executive PPT Report
                 </a>
               </li>
               <li>
                 <a
-                  href={`${API_BASE_URL}/api/pdf/${activeJobId}`}
-                  download="JFL_QBR_Executive_Report.pdf"
+                  href="#download-pdf"
+                  onClick={(e) => handleDownload(e, 'pdf')}
                   style={{
                     color: '#2563eb',
                     fontWeight: 600,
@@ -113,7 +149,8 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
                     textDecoration: 'none',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.5rem'
+                    gap: '0.5rem',
+                    cursor: 'pointer'
                   }}
                 >
                   <span>•</span> Download PDF Report
