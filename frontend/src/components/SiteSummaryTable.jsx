@@ -1,22 +1,11 @@
 import React from 'react';
+import { isGenericLocation } from '../utils/siteUtils';
 
 /**
  * SiteSummaryTable — Executive overview table displaying high-level operational KPIs.
  * Features 100% responsive column width without horizontal scrolling.
  */
-export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) {
-  const isGenericLocation = (loc) => {
-    if (!loc) return true;
-    const str = String(loc).trim().toLowerCase();
-    if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
-    if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
-    if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
-    const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'mumbai-dc', 'nagpur', 'noida'];
-    const norm = str.replace(/[^a-z0-9]/g, '');
-    const isMatched = validSites.some(v => v.replace(/[^a-z0-9]/g, '') === norm || norm.includes(v.replace(/[^a-z0-9]/g, '')));
-    return !isMatched;
-  };
-
+export default function SiteSummaryTable({ sites, selectedSite, onSelectSite, clientCode }) {
   const filteredSites = (sites || []).filter(site => {
     const name = String(site.siteId || '').trim();
     return !isGenericLocation(name);
@@ -30,6 +19,8 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
     );
   }
 
+  const uptimeColLabel = clientCode ? `${clientCode} Switch Uptime` : 'Client Switch Uptime';
+
   return (
     <div className="data-table-container" style={{ overflow: 'visible' }}>
       <div className="table-scroll-wrapper" style={{ overflowX: 'auto', overflowY: 'visible', width: '100%' }}>
@@ -39,7 +30,7 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite }) 
               <th style={{ width: '14%', minWidth: '130px', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Site</th>
               <th style={{ width: '10%', padding: '0.6rem 0.4rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">No of devices</th>
               <th style={{ width: '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Proactive Switch Uptime</th>
-              <th style={{ width: '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">JFL Switch Uptime</th>
+              <th style={{ width: '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">{uptimeColLabel}</th>
               <th style={{ width: '18%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA Driver (Switches)</th>
               <th style={{ width: '12%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">AP Incidents (Unique)</th>
               <th style={{ width: '18%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA Driver (AP)</th>

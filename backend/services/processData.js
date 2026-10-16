@@ -7,8 +7,31 @@ const fs = require('fs');
 const {
   loadWorkbook, detectSheets,
   mergeInventorySheets, parseIncidentSheet, parseUptimeSummary,
-  buildSerialToHostnameMap, normalizeSiteName, isGenericLocation,
+  buildSerialToHostnameMap, normalizeSiteName: rawNormalizeSiteName, isGenericLocation,
 } = require('./excelParser');
+
+function normalizeSiteName(site) {
+  if (!site) return 'Unknown';
+  const str = String(site).trim();
+  const lower = str.toLowerCase();
+  if (/ggn[\s_-]?plant|gurgaon[\s_-]?plant/i.test(lower)) return 'Gurgaon Plant';
+  if (/ggn[\s_-]?(head[\s_-]?office|ho)|gurgaon[\s_-]?(head[\s_-]?office|ho)|sec70|ind-pvc-sec70/i.test(lower)) return 'Gurgaon Head Office';
+  if (/lajpat/i.test(lower)) return 'Lajpat Nagar';
+  if (/bhbaneshwar|bhubaneswar|bbsr/i.test(lower)) return 'Bhubaneswar';
+  if (/okhla/i.test(lower)) return 'Okhla';
+  if (/vijaywada|vijayawada/i.test(lower)) return 'Vijaywada';
+  if (/vizag|visakhapatnam/i.test(lower)) return 'Vizag';
+  if (/thrissur|trichur/i.test(lower)) return 'Thrissur';
+  if (/ludhiana/i.test(lower)) return 'Ludhiana';
+  if (/chennai|madras/i.test(lower)) return 'Chennai';
+  if (/karol[\s_-]?bagh/i.test(lower)) return 'Karolbagh';
+  if (/kolkata|calcutta/i.test(lower)) return 'Kolkata';
+  if (/ahmedabad/i.test(lower)) return 'Ahmedabad';
+  if (/coimbatore/i.test(lower)) return 'Coimbatore';
+  if (/pune/i.test(lower)) return 'Pune';
+  if (/rohini/i.test(lower)) return 'Rohini Delhi';
+  return rawNormalizeSiteName(str);
+}
 const ruleEngine = require('./ruleEngine');
 const { generatePPT } = require('./pptGenerator');
 const { generatePDF } = require('./pdfGenerator');
@@ -34,13 +57,20 @@ function isStockDevice(d) {
   const rack = String(d.Rack || '').trim().toLowerCase();
   const hostname = String(d.Hostname || '').trim().toLowerCase();
   const devType = String(d.DeviceType || '').trim().toLowerCase();
+  const status = String(d.Status || '').trim().toLowerCase();
+
+  // A location is only stock if it explicitly designates a storage/spare/unassigned warehouse,
+  // NOT a country/client name like 'MMTC Inventory INDIA' or physical plant/office.
+  const isLocStock = /^(stock|spare|warehouse|unassigned)$/i.test(loc) ||
+    (/stock|spare|warehouse|unassigned/i.test(loc) && !/india|mmtc|plant|office|store\s*\d|branch/i.test(loc));
 
   return (
-    /stock|inventory|spare|warehouse|unassigned/i.test(loc) ||
+    isLocStock ||
     /stock|spare/i.test(devId) ||
     /stock|spare/i.test(rack) ||
     /stock|spare/i.test(hostname) ||
-    /stock|spare/i.test(devType)
+    /stock|spare/i.test(devType) ||
+    /^(stock|spare|stock inventory)$/i.test(status)
   );
 }
 
@@ -441,17 +471,159 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── 5. Parse incidents ────────────────────────────────────────────────────
   let incidents = parseIncidentSheet(rawIncidentRows);
-  const hasAccountCol = rawIncidentRows.some(r => r['Account Name'] || r['AccountName'] || r['Customer Name'] || r['Customer']);
-  if (hasAccountCol) {
-    const accFiltered = incidents.filter(i => {
-      const acc = String(i.AccountName || '').trim();
-      return !acc || /jubilant|jfl/i.test(acc);
-    });
-    // Only apply account filter if it keeps at least 1 incident
-    if (accFiltered.length > 0) {
-      incidents = accFiltered;
+
+  // Normalize site names on raw incidents to avoid premature Nagpur / Unknown misattribution
+  incidents.forEach((inc) => {
+    const combined = `${inc.Hostname || ''} ${inc.DeviceID || ''} ${inc.Location || ''} ${inc.SiteID || ''} ${inc.Description || ''}`.toLowerCase();
+    if (/lajpat/i.test(combined)) {
+      inc.Location = 'Lajpat Nagar';
+      inc.SiteID = 'Lajpat Nagar';
+    } else if (/bhbaneshwar|bhubaneswar|bbsr/i.test(combined)) {
+      inc.Location = 'Bhubaneswar';
+      inc.SiteID = 'Bhubaneswar';
+    }
+  });
+
+  const targetClientId = options.clientId || 'client-jfl';
+
+  // Strict Account Name column presence check using sheet headers
+  const firstRawRow = rawIncidentRows[0] || {};
+  const headerKeys = Object.keys(firstRawRow).filter(k => k !== '__source');
+  const ACCOUNT_COL_ALIASES = ['account name', 'accountname', 'customer name', 'customer', 'account'];
+  const hasAccountHeader = headerKeys.some(h => {
+    const norm = String(h).trim().toLowerCase().replace(/[\s_\.#-]/g, '');
+    return ACCOUNT_COL_ALIASES.some(cand => cand.replace(/[\s_\.#-]/g, '') === norm);
+  });
+
+  if (!hasAccountHeader) {
+    return fail(
+      outputDir,
+      'missing_account_column',
+      `Incident worksheet "${incSheetMap.incidentSheet || 'main'}" is missing mandatory Account Name column. Customer-scoped isolation cannot be verified.`,
+      log
+    );
+  }
+
+  // Build explicit verified customer alias index from customer registry
+  // Exact normalized match, collision detection, no substring matching
+  const aliasToClientId = new Map();
+  const VERIFIED_CLIENT_ALIASES = {
+    'client-jfl': [
+      'client-jfl',
+      'jfl',
+      'jubilant foodworks ltd (jfl)',
+      'jubilant foodworks limited',
+      'jubilant foodworks ltd',
+      'jubilant foodworks',
+      'jubilant foodworks limited (jfl)',
+      'jubilant foodworks ltd.',
+    ],
+    'client-mmtcpamp': [
+      'client-mmtcpamp',
+      'client-mmtc',
+      'mmtc',
+      'mmtcpamp',
+      'mmtc-pamp',
+      'mmtc-pamp india',
+      'mmtc pamp',
+      'mmtc pamp india',
+      'mmtc-pamp india pvt ltd',
+      'mmtc-pamp india private limited',
+    ],
+  };
+
+  for (const [cId, aliases] of Object.entries(VERIFIED_CLIENT_ALIASES)) {
+    for (const alias of aliases) {
+      const normAlias = alias.trim().toLowerCase();
+      if (aliasToClientId.has(normAlias) && aliasToClientId.get(normAlias) !== cId) {
+        return fail(
+          outputDir,
+          'alias_collision',
+          `Customer alias collision detected: "${normAlias}" is mapped to both ${aliasToClientId.get(normAlias)} and ${cId}.`,
+          log
+        );
+      }
+      aliasToClientId.set(normAlias, cId);
     }
   }
+
+  // Register client names and codes from clients.json dynamically
+  try {
+    const clientsFile = path.resolve(__dirname, '..', '..', 'data', 'clients.json');
+    if (fs.existsSync(clientsFile)) {
+      const allClients = JSON.parse(fs.readFileSync(clientsFile, 'utf8'));
+      if (Array.isArray(allClients)) {
+        allClients.forEach(c => {
+          if (c && c.id) {
+            const names = [c.name, c.code, c.id].filter(Boolean);
+            names.forEach(n => {
+              const norm = String(n).trim().toLowerCase();
+              if (norm) {
+                if (aliasToClientId.has(norm) && aliasToClientId.get(norm) !== c.id) {
+                  throw new Error(`Customer alias collision on "${norm}" between ${aliasToClientId.get(norm)} and ${c.id}`);
+                }
+                aliasToClientId.set(norm, c.id);
+              }
+            });
+          }
+        });
+      }
+    }
+  } catch (aliasErr) {
+    log(`WARNING: Alias registry notice: ${aliasErr.message}`);
+  }
+
+  const matchingIncidents = [];
+  const otherCustomerIncidents = [];
+  const blankAccountIncidents = [];
+  const unknownAccounts = new Set();
+
+  for (const inc of incidents) {
+    const rawAcc = String(inc.AccountName || '').trim();
+    const normAcc = rawAcc.toLowerCase();
+
+    if (!normAcc) {
+      blankAccountIncidents.push(inc);
+      continue;
+    }
+
+    if (aliasToClientId.has(normAcc)) {
+      const mappedId = aliasToClientId.get(normAcc);
+      if (mappedId === targetClientId) {
+        matchingIncidents.push(inc);
+      } else {
+        otherCustomerIncidents.push(inc);
+      }
+    } else {
+      unknownAccounts.add(rawAcc);
+      otherCustomerIncidents.push(inc);
+    }
+  }
+
+  if (blankAccountIncidents.length > 0) {
+    log(`Customer isolation: Quarantined ${blankAccountIncidents.length} incident(s) with blank/missing Account Name.`);
+  }
+
+  if (otherCustomerIncidents.length > 0) {
+    log(`Customer isolation: Excluded ${otherCustomerIncidents.length} incident(s) recognized as belonging to other customer(s).`);
+  }
+
+  if (unknownAccounts.size > 0) {
+    const unkList = Array.from(unknownAccounts).map(u => `"${u}"`).join(', ');
+    log(`Customer isolation: Quarantined incident(s) with non-target Account Name(s): [${unkList}].`);
+  }
+
+  if (matchingIncidents.length === 0) {
+    return fail(
+      outputDir,
+      'no_matching_records',
+      `No incident records matched the selected customer "${CUSTOMER_NAME}" (${targetClientId}). Processing rejected.`,
+      log
+    );
+  }
+
+  incidents = matchingIncidents;
+  log(`Strict customer isolation: validated ${incidents.length} incidents for ${CUSTOMER_NAME} (${targetClientId}).`);
 
   // Fallback: If inventory is still 0, extract from incidents or load baseline
   if (devices.length === 0) {
@@ -489,7 +661,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
           if (fs.existsSync(p)) {
             const raw = fs.readFileSync(p, 'utf8');
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed.devices) && parsed.devices.length > 0) {
+            if (Array.isArray(parsed.devices) && parsed.devices.length > 0 && (!parsed.clientId || parsed.clientId === targetClientId)) {
               log(`Loaded ${parsed.devices.length} baseline inventory devices from ${path.basename(p)}`);
               devices = parsed.devices.map(d => ({
                 DeviceID: d.DeviceID || d.SerialNo || d.Hostname,
@@ -565,34 +737,11 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     return 'Change Request';
   }
 
-  const otherActivities = incidents.filter(isOtherActivity).map(item => {
-    const subCat = deriveSubCategory(item);
-    return {
-      Subject: item.Description || item.Subject || '',
-      Description: item.Description || item.Subject || '',
-      SubCategory: subCat,
-      Category: subCat,
-      DeviceName: item.Location || item.SiteID || '',
-      Location: item.Location || item.SiteID || '',
-      SiteID: item.SiteID || item.Location || '',
-      DeviceSerial: item.SerialNo || item.DeviceID || '',
-      SerialNo: item.SerialNo || item.DeviceID || '',
-      DeviceID: item.SerialNo || item.DeviceID || '',
-      DeviceType: item.DeviceType || 'SW',
-      Hostname: item.Hostname || '',
-      Status: item.Status || 'Closed',
-      RawStatus: item['Status'] || item.RawStatus || item.Status || 'Closed',
-      TicketOwner: item['Ticket Owner'] || item.TicketOwner || item.Owner || 'Unassigned',
-      HoldReason: item['Hold Reason'] || item.HoldReason || '',
-      RCA: item.RCA || 'New Configuration',
-      display_reference: item.display_reference || `Ticket: ${item.TicketNumber || item.IncidentNumber || 'CR'}`
-    };
-  });
-
-  // Change Requests are NOT part of hardware Incidents per business spec
+  // Change Requests and non-hardware tasks are segregated from hardware Incidents per business spec
+  const rawOtherActivities = incidents.filter(isOtherActivity);
   incidents = incidents.filter(i => !isOtherActivity(i));
   log(`Incidents for target customer (excluding Change Requests): ${incidents.length}`);
-  log(`Other Activity tickets extracted: ${otherActivities.length}`);
+  log(`Other Activity tickets extracted for enrichment: ${rawOtherActivities.length}`);
 
   // ── 5b. Date-range filtering (Requirement 2 & 3) ─────────────────────────
   // Only filter when explicit startDate / endDate are provided.
@@ -650,7 +799,21 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
   }
 
-  const VALID_SITES = ['Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Mumbai-DC', 'Nagpur', 'Noida'];
+  // Load valid sites dynamically from client configuration
+  let clientLocations = [];
+  try {
+    const clientsFile = path.resolve(__dirname, '..', '..', 'data', 'clients.json');
+    if (fs.existsSync(clientsFile)) {
+      const allClients = JSON.parse(fs.readFileSync(clientsFile, 'utf8'));
+      const activeC = allClients.find(c => c.id === options.clientId || c.code === options.clientId || (c.name && c.name.toLowerCase() === String(CUSTOMER_NAME).toLowerCase()));
+      if (activeC && Array.isArray(activeC.locations)) {
+        clientLocations = activeC.locations.filter(l => l && l !== 'All Locations');
+      }
+    }
+  } catch (_) {}
+
+  const DEFAULT_VALID_SITES = ['Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Mumbai-DC', 'Nagpur', 'Noida'];
+  const VALID_SITES = clientLocations.length > 0 ? clientLocations : DEFAULT_VALID_SITES;
   const VALID_SITES_SET = new Set(VALID_SITES);
   const isSiteOrGeneric = (name) => {
     if (!name) return true;
@@ -668,16 +831,42 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const displayId = (mappedHost && mappedHost.toLowerCase() !== 'n/a' && mappedHost.toLowerCase() !== 'unknown' && !isSiteOrGeneric(mappedHost)) ? mappedHost : rawSerial;
 
     let resolvedSite = d.Location || d.SiteID || '';
-    if (!resolvedSite || isGenericLocation(resolvedSite)) {
-      const h = (mappedHost || displayId || '').toLowerCase();
-      if (/g.*noida|gr.*noida|gnsc|gnmc|gn/i.test(h)) resolvedSite = 'Greater Noida';
-      else if (/blr|bangalore/i.test(h)) resolvedSite = 'Bangalore';
-      else if (/guwahati|gau/i.test(h)) resolvedSite = 'Guwahati';
-      else if (/hyd|hyderabad/i.test(h)) resolvedSite = 'Hyderabad';
-      else if (/mohali|moh/i.test(h)) resolvedSite = 'Mohali';
-      else if (/mumbai|mumd/i.test(h)) resolvedSite = 'Mumbai';
-      else if (/nagpur|nag/i.test(h)) resolvedSite = 'Nagpur';
-      else if (/noida/i.test(h)) resolvedSite = 'Noida';
+    const h = (mappedHost || displayId || '').toLowerCase();
+    if (/sec70|ggn[\s_-]?(head[\s_-]?office|ho)|gurgaon[\s_-]?(head[\s_-]?office|ho)/i.test(h) || /sec70|ggn[\s_-]?(head[\s_-]?office|ho)|gurgaon[\s_-]?(head[\s_-]?office|ho)/i.test(resolvedSite)) {
+      if (VALID_SITES_SET.has('Gurgaon Head Office')) resolvedSite = 'Gurgaon Head Office';
+    } else if (/ggn[\s_-]?plant|gurgaon[\s_-]?plant/i.test(h) || /ggn[\s_-]?plant|gurgaon[\s_-]?plant/i.test(resolvedSite)) {
+      if (VALID_SITES_SET.has('Gurgaon Plant')) resolvedSite = 'Gurgaon Plant';
+    } else if (/lajpat/i.test(h) || /lajpat/i.test(resolvedSite)) {
+      resolvedSite = 'Lajpat Nagar';
+    } else if (/bhbaneshwar|bhubaneswar|bbsr/i.test(h) || /bhbaneshwar|bhubaneswar|bbsr/i.test(resolvedSite)) {
+      resolvedSite = 'Bhubaneswar';
+    } else if (!resolvedSite || isGenericLocation(resolvedSite)) {
+      const normH = normalizeSiteName(h);
+      if (VALID_SITES_SET.has(normH)) {
+        resolvedSite = normH;
+      } else if (VALID_SITES_SET.has('Greater Noida') && /g(r|reater)[\s._-]?noida|\bgnsc\b|\bgnmc\b/i.test(h)) {
+        resolvedSite = 'Greater Noida';
+      } else if (/blr|bangalore/i.test(h) && VALID_SITES_SET.has('Bangalore')) {
+        resolvedSite = 'Bangalore';
+      } else if (/guwahati|gau/i.test(h) && VALID_SITES_SET.has('Guwahati')) {
+        resolvedSite = 'Guwahati';
+      } else if (/hyd|hyderabad/i.test(h) && VALID_SITES_SET.has('Hyderabad')) {
+        resolvedSite = 'Hyderabad';
+      } else if (/mohali|moh/i.test(h) && VALID_SITES_SET.has('Mohali')) {
+        resolvedSite = 'Mohali';
+      } else if (/mumbai[\s_-]?dc/i.test(h) && VALID_SITES_SET.has('Mumbai-DC')) {
+        resolvedSite = 'Mumbai-DC';
+      } else if (/mumbai|mumd/i.test(h) && VALID_SITES_SET.has('Mumbai')) {
+        resolvedSite = 'Mumbai';
+      } else if (/nagpur|nag/i.test(h) && VALID_SITES_SET.has('Nagpur')) {
+        resolvedSite = 'Nagpur';
+      } else if (/noida/i.test(h) && VALID_SITES_SET.has('Noida')) {
+        resolvedSite = 'Noida';
+      } else if (/ggn[\s_-]?plant|gurgaon[\s_-]?plant/i.test(h) && VALID_SITES_SET.has('Gurgaon Plant')) {
+        resolvedSite = 'Gurgaon Plant';
+      } else if (/ggn|gurgaon|sec70/i.test(h) && VALID_SITES_SET.has('Gurgaon Head Office')) {
+        resolvedSite = 'Gurgaon Head Office';
+      }
     }
     const normLoc = resolvedSite ? normalizeSiteName(resolvedSite) : 'Unknown';
 
@@ -721,6 +910,115 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
   });
 
+  const isMmtc = targetClientId === 'client-mmtcpamp' || /mmtc/i.test(CUSTOMER_NAME);
+  const defaultCentralSite = isMmtc ? 'Gurgaon Head Office' : 'Greater Noida';
+
+  function resolveTicketSite(inc, clientDefaultSite = null) {
+    const rawLoc = String(inc.Location || inc.SiteID || '').trim();
+    const s = String(inc.SerialNo || inc.DeviceID || '').trim().toLowerCase();
+    const h = String(inc.Hostname || '').trim().toLowerCase();
+    const dName = String(inc['Device Name'] || inc.DeviceName || '').trim().toLowerCase();
+    const subj = String(inc.Subject || '').trim().toLowerCase();
+    const desc = String(inc.Description || '').trim().toLowerCase();
+    const combined = `${h} ${s} ${dName} ${rawLoc} ${subj} ${desc}`;
+
+    // 1. Direct pattern matching across all 22 MMTC and 8 JFL customer sites
+    if (/ggn[\s_-]?plant|gurgaon[\s_-]?plant|nuh[\s_-]?plant|\bplant\b/i.test(combined)) {
+      if (VALID_SITES_SET.has('Gurgaon Plant')) return 'Gurgaon Plant';
+    }
+    if (/sec70|ind-pvc-sec70|ggn[\s_-]?(head[\s_-]?office|ho)|gurgaon[\s_-]?(head[\s_-]?office|ho)|\bho\b|head[\s_-]?office/i.test(combined)) {
+      if (VALID_SITES_SET.has('Gurgaon Head Office')) return 'Gurgaon Head Office';
+    }
+    if (/g(r|reater)[\s._-]?noida|\bgnsc\b|\bgnmc\b/i.test(combined)) {
+      if (VALID_SITES_SET.has('Greater Noida')) return 'Greater Noida';
+    }
+    if (/lajpat|south[\s_-]?ex/i.test(combined)) {
+      if (VALID_SITES_SET.has('Lajpat Nagar')) return 'Lajpat Nagar';
+    }
+    if (/bhbaneshwar|bhubaneswar|\bbbsr\b/i.test(combined)) {
+      if (VALID_SITES_SET.has('Bhubaneswar')) return 'Bhubaneswar';
+    }
+    if (/okhla/i.test(combined)) {
+      if (VALID_SITES_SET.has('Okhla')) return 'Okhla';
+    }
+    if (/vijaywada|vijayawada/i.test(combined)) {
+      if (VALID_SITES_SET.has('Vijaywada')) return 'Vijaywada';
+    }
+    if (/vizag|visakhapatnam/i.test(combined)) {
+      if (VALID_SITES_SET.has('Vizag')) return 'Vizag';
+    }
+    if (/thrissur|trichur/i.test(combined)) {
+      if (VALID_SITES_SET.has('Thrissur')) return 'Thrissur';
+    }
+    if (/ludhiana/i.test(combined)) {
+      if (VALID_SITES_SET.has('Ludhiana')) return 'Ludhiana';
+    }
+    if (/chennai|madras/i.test(combined)) {
+      if (VALID_SITES_SET.has('Chennai')) return 'Chennai';
+    }
+    if (/karol[\s_-]?bagh/i.test(combined)) {
+      if (VALID_SITES_SET.has('Karolbagh')) return 'Karolbagh';
+    }
+    if (/kolkata|calcutta/i.test(combined)) {
+      if (VALID_SITES_SET.has('Kolkata')) return 'Kolkata';
+    }
+    if (/ahmedabad/i.test(combined)) {
+      if (VALID_SITES_SET.has('Ahmedabad')) return 'Ahmedabad';
+    }
+    if (/coimbatore/i.test(combined)) {
+      if (VALID_SITES_SET.has('Coimbatore')) return 'Coimbatore';
+    }
+    if (/pune/i.test(combined)) {
+      if (VALID_SITES_SET.has('Pune')) return 'Pune';
+    }
+    if (/rohini/i.test(combined)) {
+      if (VALID_SITES_SET.has('Rohini Delhi')) return 'Rohini Delhi';
+    }
+    if (/blr|bangalore|bengaluru/i.test(combined)) {
+      if (VALID_SITES_SET.has('Bangalore')) return 'Bangalore';
+    }
+    if (/guwahati|gau/i.test(combined)) {
+      if (VALID_SITES_SET.has('Guwahati')) return 'Guwahati';
+    }
+    if (/hyd|hyderabad/i.test(combined)) {
+      if (VALID_SITES_SET.has('Hyderabad')) return 'Hyderabad';
+    }
+    if (/mohali|moh/i.test(combined)) {
+      if (VALID_SITES_SET.has('Mohali')) return 'Mohali';
+    }
+    if (/mumbai[\s_-]?dc|mumd[\s_-]?dc/i.test(combined)) {
+      if (VALID_SITES_SET.has('Mumbai-DC')) return 'Mumbai-DC';
+    }
+    if (/mumbai|mumd/i.test(combined)) {
+      if (VALID_SITES_SET.has('Mumbai')) return 'Mumbai';
+    }
+    if (/nagpur|nag/i.test(combined)) {
+      if (VALID_SITES_SET.has('Nagpur')) return 'Nagpur';
+    }
+    if (/noida/i.test(combined)) {
+      if (VALID_SITES_SET.has('Noida')) return 'Noida';
+    }
+
+    // 2. Check inventory device lookup map
+    const matchedLoc = devLocMap[s] || devLocMap[h] || devLocMap[inc.DeviceID] || devLocMap[inc.SerialNo] || devLocMap[inc.Hostname];
+    if (matchedLoc && VALID_SITES.includes(normalizeSiteName(matchedLoc))) {
+      return normalizeSiteName(matchedLoc);
+    }
+
+    // 3. Raw Location if not generic
+    if (rawLoc && !isGenericLocation(rawLoc)) {
+      const normRaw = normalizeSiteName(rawLoc);
+      if (VALID_SITES_SET.has(normRaw)) return normRaw;
+    }
+
+    // 4. Default fallback if provided
+    if (clientDefaultSite && VALID_SITES_SET.has(clientDefaultSite)) {
+      return clientDefaultSite;
+    }
+
+    return 'Unknown';
+  }
+
   incidents.forEach((inc) => {
     // 1. Enrich DeviceType from inventory lookup or infer from incident text
     const sKey = String(inc.SerialNo || '').trim();
@@ -736,42 +1034,63 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
     inc.DeviceType = resolvedDeviceType;
 
-    const rawLoc = String(inc.Location || inc.SiteID || '').trim();
-    let resolvedSite = null;
-
-    // 2. Check inventory device lookup map (case insensitive)
-    const s = String(inc.SerialNo || inc.DeviceID || '').trim().toLowerCase();
-    const h = String(inc.Hostname || '').trim().toLowerCase();
-
-    const matchedLoc = devLocMap[s] || devLocMap[h] || devLocMap[inc.DeviceID] || devLocMap[inc.SerialNo] || devLocMap[inc.Hostname];
-    if (matchedLoc && VALID_SITES.includes(normalizeSiteName(matchedLoc))) {
-      resolvedSite = normalizeSiteName(matchedLoc);
-    }
-
-    // 3. Fall back to pattern matching in Hostname / DeviceID / Description / Subject
-    if (!resolvedSite || isGenericLocation(rawLoc)) {
-      if (/g.*noida|gr.*noida|gnsc|gnmc|gn/i.test(h)) resolvedSite = 'Greater Noida';
-      else if (/blr|bangalore/i.test(h)) resolvedSite = 'Bangalore';
-      else if (/guwahati|gau/i.test(h)) resolvedSite = 'Guwahati';
-      else if (/hyd|hyderabad/i.test(h)) resolvedSite = 'Hyderabad';
-      else if (/mohali|moh/i.test(h)) resolvedSite = 'Mohali';
-      else if (/mumbai|mumd/i.test(h)) resolvedSite = 'Mumbai';
-      else if (/nagpur|nag/i.test(h)) resolvedSite = 'Nagpur';
-      else if (/noida/i.test(h)) resolvedSite = 'Noida';
-      else {
-        const candidateDesc = normalizeSiteName(inc.Description || inc.Subject || '');
-        if (VALID_SITES.includes(candidateDesc)) resolvedSite = candidateDesc;
-      }
-    }
-
-    if (!resolvedSite && !isGenericLocation(rawLoc)) {
-      const normRaw = normalizeSiteName(rawLoc);
-      if (VALID_SITES.includes(normRaw)) resolvedSite = normRaw;
-    }
-
-    inc.Location = resolvedSite || 'Unknown';
-    inc.SiteID = resolvedSite || 'Unknown';
+    const resolvedSite = resolveTicketSite(inc, null);
+    inc.Location = resolvedSite;
+    inc.SiteID = resolvedSite;
   });
+
+  // Enrich and build otherActivities using device lookup maps and comprehensive site patterns
+  const otherActivities = rawOtherActivities.map((item) => {
+    const subCat = deriveSubCategory(item);
+    const resolvedSite = resolveTicketSite(item, defaultCentralSite);
+
+    // Determine clean, non-generic device name
+    let devName = '';
+    const h = String(item.Hostname || '').trim();
+    const dName = String(item['Device Name'] || item.DeviceName || '').trim();
+    if (h && !isGenericLocation(h) && h.toLowerCase() !== 'unknown' && h.toLowerCase() !== 'n/a') {
+      devName = h;
+    } else if (dName && !isGenericLocation(dName) && dName.toLowerCase() !== 'unknown' && dName.toLowerCase() !== 'n/a') {
+      devName = dName;
+    } else if (item.SerialNo && item.SerialNo.toLowerCase() !== 'unknown' && item.SerialNo.toLowerCase() !== 'n/a') {
+      devName = item.SerialNo;
+    } else {
+      devName = `${resolvedSite} Device`;
+    }
+
+    const sKey = String(item.SerialNo || '').trim();
+    const hKey = String(item.Hostname || '').trim();
+    const dKey = String(item.DeviceID || '').trim();
+    const matchedType = devTypeMap[sKey] || devTypeMap[hKey] || devTypeMap[dKey];
+    let resolvedDevType = item.DeviceType || matchedType || '';
+    if (!resolvedDevType || resolvedDevType === 'N/A' || resolvedDevType === 'Unknown') {
+      const combined = `${item.Hostname || ''} ${item.SerialNo || ''} ${item.DeviceID || ''} ${item.Description || ''} ${item.Subject || ''} ${item.Category || ''}`.toLowerCase();
+      if (/\bap\b|access|ap\d|q5aa/i.test(combined)) resolvedDevType = 'AP';
+      else resolvedDevType = 'SW';
+    }
+
+    return {
+      Subject: item.Description || item.Subject || '',
+      Description: item.Description || item.Subject || '',
+      SubCategory: subCat,
+      Category: subCat,
+      DeviceName: devName,
+      Location: resolvedSite,
+      SiteID: resolvedSite,
+      DeviceSerial: item.SerialNo || item.DeviceID || '',
+      SerialNo: item.SerialNo || item.DeviceID || '',
+      DeviceID: item.SerialNo || item.DeviceID || '',
+      DeviceType: resolvedDevType,
+      Hostname: item.Hostname || '',
+      Status: item.Status || 'Closed',
+      RawStatus: item['Status'] || item.RawStatus || item.Status || 'Closed',
+      TicketOwner: item['Ticket Owner'] || item.TicketOwner || item.Owner || 'Unassigned',
+      HoldReason: item['Hold Reason'] || item.HoldReason || '',
+      RCA: item.RCA || 'New Configuration',
+      display_reference: item.display_reference || `Ticket: ${item.TicketNumber || item.IncidentNumber || 'CR'}`
+    };
+  });
+  log(`Enriched ${otherActivities.length} Other Activity tickets with resolved location & device metadata.`);
 
   // ── 6. Attach uptime to each device from summary map ─────────────────────
   const allLocMap = {};
@@ -1065,6 +1384,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── 8. Build all analytics ────────────────────────────────────────────────
   log('Building analytics sections...');
   const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta, periodOptions, otherActivities);
+  qbrData.clientId = targetClientId;
+  if (qbrData.executiveSummary) {
+    qbrData.executiveSummary.clientId = targetClientId;
+  }
   log('Analytics complete');
 
   // ── 8b. PART 4: Strict data validation ── attach any warnings to SSOT output ──
@@ -1090,45 +1413,14 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── 10. Save dashboard JSON (SSOT) FIRST so data is immediately available ─
   const templatePath = path.resolve('templates', 'master_template.pptx');
-  const pdfPath = path.join(outputDir, `JFL_QBR_${Date.now()}.pdf`);
-  const pptPath = path.join(outputDir, `JFL_QBR_${Date.now()}.pptx`);
+  const clientPrefix = (targetClientId === 'client-mmtcpamp' || /mmtc/i.test(CUSTOMER_NAME)) ? 'MMTC' : 'JFL';
+  const pdfPath = path.join(outputDir, `${clientPrefix}_QBR_${Date.now()}.pdf`);
+  const pptPath = path.join(outputDir, `${clientPrefix}_QBR_${Date.now()}.pptx`);
 
   const dashPath = path.join(outputDir, 'dashboard_data.json');
   const jsonPayloadStr = JSON.stringify(qbrData, null, 2);
   fs.writeFileSync(dashPath, jsonPayloadStr);
   log('Dashboard JSON saved to job folder');
-
-  // Also write to data/dashboard_data.json as canonical latest so the dashboard
-  // always shows the correct most-recent run even after a server restart.
-  const isTestRun = Boolean(
-    options.isTest ||
-    process.env.NODE_ENV === 'test' ||
-    process.env.npm_lifecycle_event === 'test' ||
-    process.argv.some(a => /jest|mocha|vitest|_mocha|\btest\b/i.test(a))
-  );
-
-  const CANONICAL_MIN_BYTES = 50 * 1024; // 50 KB
-  const payloadBytes = Buffer.byteLength(jsonPayloadStr, 'utf8');
-  const tooSmallForCanonical = payloadBytes < CANONICAL_MIN_BYTES;
-
-  if (!isTestRun && !tooSmallForCanonical) {
-    try {
-      const canonicalDir = path.resolve(__dirname, '..', '..', 'data');
-      if (!fs.existsSync(canonicalDir)) fs.mkdirSync(canonicalDir, { recursive: true });
-      const canonicalPath = path.join(canonicalDir, 'dashboard_data.json');
-      fs.writeFileSync(canonicalPath, jsonPayloadStr);
-      const byteCount = Buffer.byteLength(jsonPayloadStr, 'utf8');
-      console.log('[processData] Canonical dashboard_data.json updated:', canonicalPath, `<${byteCount} bytes>`);
-      log(`Dashboard JSON also saved to canonical path: ${canonicalPath}`);
-    } catch (canonErr) {
-      console.error('[processData] ERROR writing canonical dashboard_data.json:', canonErr.message);
-      log(`WARNING: Could not write canonical dashboard_data.json: ${canonErr.message}`);
-    }
-  } else if (tooSmallForCanonical) {
-    console.warn('[processData] Canonical write SKIPPED — payload too small (' 
-                 + payloadBytes + ' bytes < ' + CANONICAL_MIN_BYTES + '). This looks like a test fixture.');
-    log('[processData] Canonical write skipped — payload ' + payloadBytes + ' bytes (< 50KB)');
-  }
 
   // ── 11. PPT & PDF Report Generation ──────────────────────────────────────
   try {
@@ -1195,6 +1487,10 @@ function validateJFL(devices, incidents, log) {
  * @param {number} slaTargetHours - from ruleEngine.getIncidentSLATargetHours()
  */
 function computeIncidentEnrichment(inc, slaTargetHours) {
+  const excelSlaMin = parseFloat(inc.AgreedResolutionSLAMin);
+  if (!isNaN(excelSlaMin) && excelSlaMin > 0) {
+    slaTargetHours = parseFloat((excelSlaMin / 60).toFixed(2));
+  }
   inc.TicketOwner = String(inc['Ticket Owner'] || inc.TicketOwner || '').trim() || 'Unassigned';
   inc.HoldReason  = String(inc['Hold Reason']  || inc.HoldReason  || '').trim();
   inc.RawStatus   = String(inc['Status']       || inc.RawStatus   || inc.Status || '').trim();
@@ -2363,5 +2659,5 @@ function filterDashboardBySite(data, siteFilter) {
   };
 }
 
-module.exports = { processJFLWorkbooks, filterDashboardBySite, buildProactiveTicketAnalytics };
+module.exports = { processJFLWorkbooks, filterDashboardBySite, buildProactiveTicketAnalytics, normalizeSiteName };
 

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import KpiCard from './KpiCard';
 import DataTable from './DataTable';
+import { normalizeLoc, isGenericLocation, normalizeSiteName } from '../utils/siteUtils';
 
 function formatExcelDate(val) {
   if (!val && val !== 0) return 'N/A';
@@ -33,7 +34,8 @@ export default function SiteInspector({
   siteSummary = [],
   devices = [],
   incidents = [],
-  onClose
+  onClose,
+  clientCode = 'Client'
 }) {
   const [ticketSearch, setTicketSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
@@ -43,33 +45,6 @@ export default function SiteInspector({
   const [activeSubTab, setActiveSubTab] = useState('tickets'); // 'tickets' | 'incidents' | 'active_devs' | 'stock_devs'
 
   const PAGE_SIZE = 10;
-
-  const normalizeLoc = (loc) => {
-    if (!loc) return '';
-    const str = String(loc).trim().toLowerCase();
-    if (str.includes('blr') || str.includes('bangalore')) return 'bangalore';
-    if ((str.includes('gr') && str.includes('noida')) || str.includes('greater noida') || str.includes('gnsc')) return 'greater noida';
-    if (str.includes('guwahati') || str.includes('gau')) return 'guwahati';
-    if (str.includes('hyd') || str.includes('hyderabad')) return 'hyderabad';
-    if (str.includes('mohali') || str.includes('moh')) return 'mohali';
-    if (str.includes('mumbai-dc') || str.includes('mumbai_dc') || str.includes('mumd-dc') || str.includes('mumd_dc')) return 'mumbai-dc';
-    if (str.includes('mumbai') || str.includes('mumd')) return 'mumbai';
-    if (str.includes('nagpur') || str.includes('nag')) return 'nagpur';
-    if (str.includes('noida')) return 'noida';
-    return str;
-  };
-
-  const isGenericLocation = (loc) => {
-    if (!loc) return true;
-    const str = String(loc).trim().toLowerCase();
-    if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
-    if (/^raw/i.test(str) || /^sheet/i.test(str) || /^sla/i.test(str) || /^jfl/i.test(str) || /^incident/i.test(str)) return true;
-    if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
-    const norm = normalizeLoc(str);
-    const validSites = ['bangalore', 'greater noida', 'guwahati', 'hyderabad', 'mohali', 'mumbai', 'mumbai-dc', 'nagpur', 'noida'];
-    if (!validSites.includes(norm)) return true;
-    return false;
-  };
 
   const currentSiteData = useMemo(() => {
     return siteSummary.find((s) => s.siteId === siteId) || {};
@@ -568,8 +543,11 @@ export default function SiteInspector({
         <div>
           <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>Registered Production Active Devices ({siteActiveDevices.length})</h4>
           <DataTable
-            columns={['DeviceID', 'SerialNo', 'DeviceType', 'Location', 'Rack', 'JFL Uptime %']}
-            rows={siteActiveDevices}
+            columns={['DeviceID', 'SerialNo', 'DeviceType', 'Location', 'Rack', clientCode ? `${clientCode} Uptime %` : 'Uptime %']}
+            rows={siteActiveDevices.map(d => ({
+              ...d,
+              [clientCode ? `${clientCode} Uptime %` : 'Uptime %']: d['JFL Uptime %'] || d['Monthly Uptime %'] || `${d.__effectiveUptime || 100}%`
+            }))}
           />
         </div>
       )}

@@ -79,7 +79,7 @@ function mapSnapshotToPPTData(qbrData) {
         siteId:            s.siteId,
         healthScore:       s.healthScore,
         healthLabel:       s.healthLabel,
-        activeDeviceCount: s.activeDeviceCount || s.deviceCount,
+        activeDeviceCount: s.activeDeviceCount ?? s.deviceCount,
         incidentCount:     s.incidentCount,
         path:              `siteSummary[${idx}].healthScore`,
       })),
@@ -92,7 +92,7 @@ function mapSnapshotToPPTData(qbrData) {
       sites: sites.map((s, idx) => ({
         siteId:                 s.siteId,
         deviceCount:            s.deviceCount,
-        activeDeviceCount:      s.activeDeviceCount || s.deviceCount,
+        activeDeviceCount:      s.activeDeviceCount ?? s.deviceCount,
         stockCount:             s.stockCount || 0,
         proactiveSwitchUptime:  s.proactiveSwitchUptime || s.switchUptime,
         jflSwitchUptime:        s.jflSwitchUptime       || s.switchUptime,
@@ -193,7 +193,7 @@ function mapSnapshotToPPTData(qbrData) {
     siteSlides: sites.map((s, idx) => ({
       siteId:                 s.siteId,
       deviceCount:            s.deviceCount,
-      activeDeviceCount:      s.activeDeviceCount || s.deviceCount,
+      activeDeviceCount:      s.activeDeviceCount ?? s.deviceCount,
       stockCount:             s.stockCount || 0,
       stockDevices:           s.stockDevices || [],
       switchCount:            s.switchCount,

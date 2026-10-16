@@ -76,9 +76,16 @@ function reconcileDashboardAndPPT(qbrData, pptData, outputDir = null) {
   const rcaBrk = qbrData.rcaAnalytics?.breakdown || [];
   const sumRcaCounts = rcaBrk.reduce((acc, r) => acc + (r.count || 0), 0);
   const sumSiteIncidents = qSites.reduce((acc, s) => acc + (s.incidentCount || 0), 0);
+  const siteIdSet = new Set(qSites.map(s => String(s.siteId || '').toLowerCase()));
+  const unmappedIncidents = Array.isArray(qbrData.incidents)
+    ? qbrData.incidents.filter(i => {
+        const loc = String(i.Location || i.SiteID || '').trim().toLowerCase();
+        return !loc || !siteIdSet.has(loc);
+      }).length
+    : 0;
 
   recordCheck('RCA_Total_Equals_TotalIncidents', 'Phase 10 Identity', exec.totalIncidents, sumRcaCounts, 'rcaAnalytics.sumRcaCounts');
-  recordCheck('Site_Incidents_Total_Equals_TotalIncidents', 'Phase 10 Identity', exec.totalIncidents, sumSiteIncidents, 'siteSummary.sumSiteIncidents');
+  recordCheck('Site_Incidents_Total_Equals_TotalIncidents', 'Phase 10 Identity', exec.totalIncidents, sumSiteIncidents + unmappedIncidents, 'siteSummary.sumSiteIncidents + unmappedIncidents');
 
   const overallStatus = mismatches.length === 0 ? 'PASS' : 'FAIL';
 

@@ -67,6 +67,12 @@ function saveHistory(history) {
   fs.writeFileSync(METADATA_FILE, JSON.stringify(history, null, 2), 'utf8');
 }
 
+function parseSafeTimestamp(ts) {
+  if (!ts) return null;
+  const t = new Date(ts).getTime();
+  return isNaN(t) ? null : t;
+}
+
 function getHistory(filters = {}) {
   let list = loadHistory();
 
@@ -82,8 +88,15 @@ function getHistory(filters = {}) {
     list = list.filter((item) => item.status === filters.status);
   }
 
-  // Sort descending by timestamp
-  return list.sort((a, b) => new Date(b.uploadTimestamp) - new Date(a.uploadTimestamp));
+  // Sort descending by validated timestamp; fallback to natural insertion order
+  return list.sort((a, b) => {
+    const tb = parseSafeTimestamp(b.uploadTimestamp);
+    const ta = parseSafeTimestamp(a.uploadTimestamp);
+    if (tb !== null && ta !== null) return tb - ta;
+    if (tb !== null) return 1;
+    if (ta !== null) return -1;
+    return 0;
+  });
 }
 
 function getReportByJobId(jobId) {
@@ -223,34 +236,53 @@ function clearAllHistory() {
 }
 
 /**
- * Clean up older reports keeping only the latest N reports.
+ * Clean up older reports keeping only the latest N reports PER CLIENT.
+ * Preserves multi-client isolation so that uploads for one client never
+ * purge reports belonging to another client.
  */
 function cleanupOldReports(maxKeep = 3) {
   try {
     const list = loadHistory();
-    if (!Array.isArray(list) || list.length <= maxKeep) {
-      return { removed: 0, kept: Array.isArray(list) ? list.length : 0 };
+    if (!Array.isArray(list) || list.length === 0) {
+      return { removed: 0, kept: 0 };
     }
 
-    // Sort descending by uploadTimestamp
-    const sorted = list.sort((a, b) => new Date(b.uploadTimestamp || 0) - new Date(a.uploadTimestamp || 0));
-    const toRemove = sorted.slice(maxKeep);
+    // Group history by clientId
+    const byClient = {};
+    list.forEach(item => {
+      const cid = item.clientId || 'unknown';
+      if (!byClient[cid]) byClient[cid] = [];
+      byClient[cid].push(item);
+    });
 
     let removedCount = 0;
-    for (const item of toRemove) {
-      if (item && item.jobId) {
-        try {
-          deleteReport(item.jobId);
-          removedCount++;
-        } catch (err) {
-          console.warn(`[cleanup] Failed to delete report for jobId ${item.jobId}:`, err.message);
+    Object.keys(byClient).forEach(cid => {
+      const clientReports = byClient[cid].sort((a, b) => {
+        const tb = parseSafeTimestamp(b.uploadTimestamp);
+        const ta = parseSafeTimestamp(a.uploadTimestamp);
+        if (tb !== null && ta !== null) return tb - ta;
+        if (tb !== null) return 1;
+        if (ta !== null) return -1;
+        return 0;
+      });
+      if (clientReports.length > maxKeep) {
+        const toRemove = clientReports.slice(maxKeep);
+        for (const item of toRemove) {
+          if (item && item.jobId) {
+            try {
+              deleteReport(item.jobId);
+              removedCount++;
+            } catch (err) {
+              console.warn(`[cleanup] Failed to delete report for jobId ${item.jobId}:`, err.message);
+            }
+          }
         }
       }
-    }
+    });
 
-    const result = { removed: removedCount, kept: maxKeep };
-    console.log(`[cleanup] Removed: ${result.removed}, Kept: ${result.kept}`);
-    return result;
+    const keptCount = list.length - removedCount;
+    console.log(`[cleanup] Per-client cleanup complete. Removed: ${removedCount}, Kept: ${keptCount}`);
+    return { removed: removedCount, kept: keptCount };
   } catch (err) {
     console.error('[historyService] Error in cleanupOldReports:', err.message);
     return { removed: 0, kept: 0 };

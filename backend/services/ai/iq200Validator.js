@@ -7,6 +7,9 @@
 
 'use strict';
 
+const path = require('path');
+const fs = require('fs');
+
 const FORBIDDEN_PATTERNS = [
   /medical advice|prescription|diagnosis/i,
   /legal opinion|lawsuit|attorney advice/i,
@@ -477,8 +480,37 @@ function continuousPipelineAudit(qbrData, options = {}) {
   const gt = buildSsotGroundTruth(qbrData);
 
   // 3. Check for any synthetic / non-monitored city infiltration
+  let clientLocations = [];
+  try {
+    const clientsFile = path.resolve(__dirname, '..', '..', '..', 'data', 'clients.json');
+    if (fs.existsSync(clientsFile)) {
+      const allClients = JSON.parse(fs.readFileSync(clientsFile, 'utf8'));
+      const cId = options.clientId || qbrData.clientId || qbrData.executiveSummary?.clientId;
+      const cName = qbrData.customerName || qbrData.executiveSummary?.customerName || '';
+      const activeC = allClients.find(c => 
+        (cId && (c.id === cId || c.code === cId)) ||
+        (cName && c.name && (c.name.toLowerCase() === cName.toLowerCase() || cName.toLowerCase().includes(c.code.toLowerCase()) || c.name.toLowerCase().includes(cName.toLowerCase())))
+      );
+      if (activeC && Array.isArray(activeC.locations)) {
+        clientLocations = activeC.locations.map(l => String(l).toLowerCase().trim());
+      }
+    }
+  } catch (_) {}
+
+  const inventorySites = new Set(
+    (qbrData.devices || [])
+      .map(d => String(d.SiteID || d.Location || '').toLowerCase().trim())
+      .filter(Boolean)
+  );
+
   const detectedSites = Array.isArray(qbrData.siteSummary) ? qbrData.siteSummary.map(s => String(s.siteId || '').toLowerCase()) : [];
-  const nonMonitoredViolations = detectedSites.filter(s => NON_MONITORED_CITIES.includes(s));
+  const nonMonitoredViolations = detectedSites.filter(s => {
+    if (inventorySites.has(s)) return false;
+    if (clientLocations.length > 0) {
+      return !clientLocations.includes(s) && NON_MONITORED_CITIES.includes(s);
+    }
+    return NON_MONITORED_CITIES.includes(s);
+  });
 
   // 4. Verify proactive uptime bounds & absence of artificial 100% clamping when resolution minutes exist
   const issues = [];

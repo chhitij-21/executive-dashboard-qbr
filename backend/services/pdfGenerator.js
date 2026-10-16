@@ -83,7 +83,9 @@ async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
  * @param {string} outputPath - Target file path (.pdf extension)
  */
 async function generatePDF(qbrData, templatePath, outputPath) {
-  const targetPath = outputPath || path.join(process.env.VERCEL ? os.tmpdir() : 'reports', `JFL_QBR_${Date.now()}.pdf`);
+  const customerName = qbrData?.customerName || qbrData?.executiveSummary?.customerName || 'Customer';
+  const clientShort = (/mmtc/i.test(customerName) || qbrData?.clientId === 'client-mmtcpamp') ? 'MMTC' : ((/jfl/i.test(customerName) || qbrData?.clientId === 'client-jfl') ? 'JFL' : 'Report');
+  const targetPath = outputPath || path.join(process.env.VERCEL ? os.tmpdir() : 'reports', `${clientShort}_QBR_${Date.now()}.pdf`);
   const targetDir = path.dirname(targetPath);
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
@@ -122,7 +124,8 @@ function buildHTMLReport(data) {
   const apAn = data.apAnalytics || {};
   const rcaAn = data.rcaAnalytics || {};
   const pro = data.proactiveTicketAnalytics || {};
-  const customerName = data.customerName || exec.customerName || 'Jubilant Foodworks Ltd (JFL)';
+  const customerName = data.customerName || exec.customerName || 'Customer';
+  const clientShort = (/mmtc/i.test(customerName) || data.clientId === 'client-mmtcpamp') ? 'MMTC' : ((/jfl/i.test(customerName) || data.clientId === 'client-jfl') ? 'JFL' : customerName);
   const reportingPeriod = data.reportingPeriod || data.report_period?.display_label || exec.reportingPeriod || 'User Selected Period';
   
   // Contractual SLA Uptime Target is 99.30%
@@ -183,7 +186,7 @@ function buildHTMLReport(data) {
         </div>
         <div class="site-card-body">
           <div class="site-stat-col">
-            <div class="stat-label">JFL Switch Uptime</div>
+            <div class="stat-label">${clientShort} Switch Uptime</div>
             <div class="stat-val"><span class="${getSlaClass(jflVal)}">${fmtPct(jflVal)}</span></div>
           </div>
           <div class="site-stat-col">
@@ -203,17 +206,18 @@ function buildHTMLReport(data) {
     `;
   }).join('');
 
-  // 2. Per-Site Reviews (8 Monitored Sites with Paginated Tables)
-  const TARGET_SITES = [
-    'Bangalore', 'Greater Noida', 'Noida', 'Mohali',
-    'Hyderabad', 'Nagpur', 'Mumbai-DC', 'Guwahati'
-  ];
+  // 2. Per-Site Reviews (Dynamic Monitored Sites with Paginated Tables)
+  let targetSites = siteSummary.map(s => s.siteId).filter(Boolean);
+  if (!targetSites.length) {
+    const devicesList = data.devices || [];
+    targetSites = [...new Set(devicesList.map(d => d.Location || d.SiteID).filter(Boolean))];
+  }
   const devicesList = data.devices || [];
   const incidentsList = data.incidents || data.incidentDetails || [];
 
   let perSiteSuitesHtml = '';
 
-  TARGET_SITES.forEach((siteName, siteIdx) => {
+  targetSites.forEach((siteName, siteIdx) => {
     const sData = siteSummary.find(s => s.siteId === siteName) || {};
     const proVal = sData.proactiveTicketAvg ?? sData.proactiveSwitchUptime ?? '100.00';
     const jflVal = sData.jflTicketAvg ?? sData.jflSwitchUptime ?? '100.00';
@@ -244,7 +248,7 @@ function buildHTMLReport(data) {
     <div class="page">
       <div class="header">
         <div>
-          <h1>SITE REVIEW &bull; ${siteIdx + 1} OF 8 &bull; ${siteName} – AP and Switch statistical analytics</h1>
+          <h1>SITE REVIEW &bull; ${siteIdx + 1} OF ${targetSites.length} &bull; ${siteName} – AP and Switch statistical analytics</h1>
           <div class="subtitle">Access Point RCA Breakdown &amp; Rack-Wise Switch Uptime %</div>
         </div>
         <div class="period-badge">${reportingPeriod}</div>
@@ -275,7 +279,7 @@ function buildHTMLReport(data) {
         </div>
       </div>
       <div class="footer">
-        <div>JFL – Proactive Monthly Review</div>
+        <div>${clientShort} – Proactive Monthly Review</div>
         <div>Page ${pageCounter++}</div>
       </div>
     </div>
@@ -350,7 +354,7 @@ function buildHTMLReport(data) {
           </tbody>
         </table>
         <div class="footer">
-          <div>JFL – Proactive Monthly Review</div>
+          <div>${clientShort} – Proactive Monthly Review</div>
           <div>Page ${pageCounter++}</div>
         </div>
       </div>
@@ -428,7 +432,7 @@ function buildHTMLReport(data) {
           </tbody>
         </table>
         <div class="footer">
-          <div>JFL – Proactive Monthly Review</div>
+          <div>${clientShort} – Proactive Monthly Review</div>
           <div>Page ${pageCounter++}</div>
         </div>
       </div>
@@ -511,7 +515,7 @@ function buildHTMLReport(data) {
             <th style="width: 16%; text-align: left;">Serial Number</th>
             <th style="width: 18%; text-align: left;">Hostname / Device ID</th>
             <th style="width: 13%; text-align: center;">Proactive Uptime %</th>
-            <th style="width: 12%; text-align: center;">JFL Uptime %</th>
+            <th style="width: 12%; text-align: center;">${clientShort} Uptime %</th>
             <th style="width: 12%; text-align: center;">Operating Status</th>
           </tr>
         </thead>
@@ -900,7 +904,7 @@ function buildHTMLReport(data) {
           </div>
           <div>
             <div class="cover-stat-val">${fmtPct(exec.jflSwitchUptime)}</div>
-            <div class="cover-stat-lbl">JFL Switch Uptime</div>
+            <div class="cover-stat-lbl">${clientShort} Switch Uptime</div>
           </div>
           <div>
             <div class="cover-stat-val">${fmtNum(exec.healthScore, '100')}/100</div>
@@ -936,7 +940,7 @@ function buildHTMLReport(data) {
         <div class="kpi-sub">${fmtNum(exec.totalSites)} Sites (${fmtNum(exec.totalSwitches)} Switches / ${fmtNum(exec.totalAPs)} APs / ${fmtNum(exec.totalStockDevices || exec.stockDevices)} Stock)</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">JFL Switch Uptime %</div>
+        <div class="kpi-title">${clientShort} Switch Uptime %</div>
         <div class="kpi-value"><span class="${getSlaClass(exec.jflSwitchUptime)}">${fmtPct(exec.jflSwitchUptime)}</span></div>
         <div class="kpi-sub">Target SLA: ${slaTargetNum.toFixed(2)}%</div>
       </div>
@@ -991,7 +995,7 @@ function buildHTMLReport(data) {
           <th style="width: 15%; text-align: left;">Site Location</th>
           <th style="width: 11%; text-align: center;">No of Devices</th>
           <th style="width: 16%; text-align: center;">Proactive Switch Uptime</th>
-          <th style="width: 16%; text-align: center;">JFL Switch Uptime</th>
+          <th style="width: 16%; text-align: center;">${clientShort} Switch Uptime</th>
           <th style="width: 17%; text-align: left;">Primary RCA Driver (Switches)</th>
           <th style="width: 10%; text-align: center;">AP Incidents (Unique)</th>
           <th style="width: 15%; text-align: left;">Primary RCA Driver (APs)</th>

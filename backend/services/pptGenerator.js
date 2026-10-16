@@ -49,7 +49,7 @@ const SLA_TARGET_FALLBACK = 99.3;
 let SLA_TARGET = SLA_TARGET_FALLBACK;
 
 
-const TARGET_SITES = [
+const TARGET_SITES_FALLBACK = [
   'Bangalore',
   'Greater Noida',
   'Guwahati',
@@ -59,6 +59,23 @@ const TARGET_SITES = [
   'Nagpur',
   'Noida',
 ];
+const TARGET_SITES = TARGET_SITES_FALLBACK;
+
+function getValidSites(siteSummary) {
+  if (!Array.isArray(siteSummary)) return [];
+  return siteSummary.filter(st => {
+    const n = String(st.siteId || '').toLowerCase().trim();
+    return !['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report'].includes(n) && !n.includes('sla_compliance') && n.length > 0;
+  });
+}
+
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
 
 // Corporate colour palette — McKinsey / Bain Executive Standard Palette
 const C = {
@@ -324,7 +341,7 @@ function generateRCARecommendations(rcaBreakdown) {
   return recommendations;
 }
 
-function generateActionPlan(exec, siteSummary, incidents) {
+function generateActionPlan(exec, siteSummary, incidents, clientShort = 'Client') {
   const actions = [];
   const sorted = [...siteSummary].sort((a, b) => parseFloat(a.healthScore || 0) - parseFloat(b.healthScore || 0));
 
@@ -359,8 +376,8 @@ function generateActionPlan(exec, siteSummary, incidents) {
   // Standard actions
   actions.push({ priority: 'Medium', action: 'Quarterly firmware update across all network switches', owner: 'Network Ops', timeline: 'Q2 FY2026', status: 'Planned' });
   actions.push({ priority: 'Medium', action: 'AP placement review at sites with >30% AP incident rate', owner: 'Wireless Team', timeline: '60 days', status: 'Planned' });
-  actions.push({ priority: 'Low',    action: 'Documentation update — network topology diagrams for all 8 sites', owner: 'Documentation', timeline: '90 days', status: 'Planned' });
-  actions.push({ priority: 'Low',    action: 'Monthly proactive health check cadence review with JFL stakeholders', owner: 'Account Manager', timeline: 'Ongoing', status: 'Active' });
+  actions.push({ priority: 'Low',    action: `Documentation update — network topology diagrams for all ${siteSummary?.length || 'monitored'} sites`, owner: 'Documentation', timeline: '90 days', status: 'Planned' });
+  actions.push({ priority: 'Low',    action: `Monthly proactive health check cadence review with ${clientShort} stakeholders`, owner: 'Account Manager', timeline: 'Ongoing', status: 'Active' });
 
   return actions.slice(0, 10);
 }
@@ -517,12 +534,18 @@ async function buildPresentation(data, outputPath, options = {}) {
   // eslint-disable-next-line no-global-assign
   SLA_TARGET = parseFloat(slaAn.slaTarget || exec.slaTarget) || SLA_TARGET_FALLBACK;
 
+  const customerName = data.customerName || exec.customerName || 'Client';
+  const clientShort = (/mmtc/i.test(customerName) || data.clientId === 'client-mmtcpamp') ? 'MMTC' : ((/jfl/i.test(customerName) || data.clientId === 'client-jfl') ? 'JFL' : customerName);
+
+  const validSiteObjects = getValidSites(siteSummary);
+  const targetSites = validSiteObjects.length > 0 ? validSiteObjects.map(s => s.siteId) : TARGET_SITES;
+
   // Pre-build site-level index maps
   const siteSwsMap  = {};
   const siteIncsMap = {};
   const siteApsMap  = {};
 
-  TARGET_SITES.forEach((siteKey) => {
+  targetSites.forEach((siteKey) => {
     const keyNorm = normalizeSiteName(siteKey);
     siteSwsMap[siteKey] = devices.filter(d =>
       !d.__isStock &&
@@ -550,7 +573,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildCoverSlide(pres, exec, displayPeriod);
 
   // Slide 2: Executive Summary Table — All Sites (Reference PDF Structure)
-  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents);
+  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents, clientShort);
 
   // Slide 3: Executive Summary Overview
   buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown);
@@ -562,7 +585,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildInventorySlide(pres, exec, siteSummary, devices);
 
   // Slide 7: Incident Overview
-  buildIncidentOverviewSlide(pres, incidents, siteSummary, exec);
+  buildIncidentOverviewSlide(pres, incidents, siteSummary, exec, targetSites);
 
   // Slide 8: RCA Pareto Analysis
   buildRCASlide(pres, rcaBreakdown, incidents, exec);
@@ -571,7 +594,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildRCAHeatmapSlide(pres, siteSummary, incidents, rcaBreakdown);
 
   // Slide 10: SLA Dashboard
-  buildSLASlide(pres, exec, siteSummary, slaAn);
+  buildSLASlide(pres, exec, siteSummary, slaAn, clientShort);
 
   // Slide 11: Ticket Analytics (All Monitored Tickets including CRs/Activities)
   const allIncidents = [...(data.incidents || []), ...(data.otherActivities || [])];
@@ -584,22 +607,22 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown);
 
   // Per-site 3-slide suite for ALL sites (Overview, Operations, Tickets & RCA)
-  TARGET_SITES.forEach((siteKey, siteIdx) => {
+  targetSites.forEach((siteKey, siteIdx) => {
     const siteData = findSite(siteSummary, siteKey);
     const siteSws  = siteSwsMap[siteKey]  || [];
     const siteIncs = siteIncsMap[siteKey] || [];
     const siteAps  = siteApsMap[siteKey]  || [];
 
-    buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1);
-    buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1);
-    buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1);
+    buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1, targetSites.length, clientShort);
+    buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1, targetSites.length, clientShort);
+    buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1, targetSites.length, clientShort);
   });
 
   // AI Recommendations
-  buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakdown);
+  buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakdown, clientShort);
 
   // Action Plan
-  buildActionPlanSlide(pres, exec, siteSummary, incidents);
+  buildActionPlanSlide(pres, exec, siteSummary, incidents, clientShort);
 
   // Slide 37: Other Activity
   buildOtherActivitySlide(pres, allIncidents, displayPeriod);
@@ -667,7 +690,7 @@ function buildCoverSlide(pres, exec, displayPeriod) {
   const isMonthly = /july|august|september|october|november|december|january|february|march|april|may|june|month/i.test(periodForCheck);
   const reportTitle = isMonthly ? 'Proactive Monthly Business Review' : 'Proactive Quarterly Business Review';
 
-  s.addText(fmt(exec.customerName || 'Jubilant FoodWorks Limited'), {
+  s.addText(fmt(exec.customerName || 'Enterprise Client'), {
     x: 0.95, y: 2.0, w: panelW - 0.5, h: 0.75,
     fontSize: 24, bold: true, color: C.TEXT_LIGHT, fontFace: 'Calibri',
   });
@@ -720,7 +743,7 @@ function buildTOCSlide(pres, exec, displayPeriod) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
-  addHeader(pres, s, 'TABLE OF CONTENTS', `${exec.customerName || 'JFL'} QBR Report  ·  ${displayPeriod || exec.reportingPeriod || 'Q1 FY2026'}`, _slideNum);
+  addHeader(pres, s, 'TABLE OF CONTENTS', `${exec.customerName || 'Executive'} QBR Report  ·  ${displayPeriod || exec.reportingPeriod || 'Q1 FY2026'}`, _slideNum);
 
   const sections = [
     { num: '01', title: 'Executive Summary', desc: 'KPIs, overall health, and AI-generated executive narrative', slide: '3' },
@@ -728,7 +751,7 @@ function buildTOCSlide(pres, exec, displayPeriod) {
     { num: '03', title: 'Incident & RCA Analysis', desc: 'Incident trends, root cause Pareto analysis, and site-RCA heatmap', slide: '7–9' },
     { num: '04', title: 'SLA & Ticket Analytics', desc: 'SLA compliance and ticket management summary', slide: '10–11' },
     { num: '05', title: 'Site Health & Risk Assessment', desc: 'Site health ranking and traffic-light risk assessment', slide: '12–13' },
-    { num: '06', title: 'Site Reviews (8 Sites)', desc: 'Detailed per-site operational review, analytics, and incident tickets', slide: '14–37' },
+    { num: '06', title: 'Site Reviews & Analytics', desc: 'Detailed per-site operational review, analytics, and incident tickets', slide: '14+' },
     { num: '07', title: 'Recommendations & Action Plan', desc: 'AI-generated recommendations and prioritized action tracker', slide: '38–39' },
     { num: '08', title: 'Appendix & Raw Data Logs', desc: 'Complete device inventories, switch/AP logs, and master incident audit trail', slide: '40–44' },
   ];
@@ -769,7 +792,7 @@ function buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown)
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
   // Use SLA_TARGET (resolved from SSOT in buildPresentation) — not hardcoded
-  addHeader(pres, s, 'EXECUTIVE SUMMARY', `${exec.customerName || 'JFL'}  ·  ${exec.reportingPeriod || 'Q1 FY2026'}  ·  Quarterly Business Review`, _slideNum);
+  addHeader(pres, s, 'EXECUTIVE SUMMARY', `${exec.customerName || 'Executive'}  ·  ${exec.reportingPeriod || 'Q1 FY2026'}  ·  Quarterly Business Review`, _slideNum);
 
   // 8 KPI cards in 2 rows of 4
   const kpis = [
@@ -868,17 +891,17 @@ function buildNetworkHealthSlide(pres, exec, siteSummary, incidents) {
 
 // ── Slide 5: Infrastructure Summary & Executive Overview ───────────────────
 // displayPeriod: canonical period string from report_period.display_label (passed from buildPresentation)
-function buildAIInsightsBullets(validSites, incidents, displayPeriod, slaTarget = 99.30) {
+function buildAIInsightsBullets(validSites, incidents, displayPeriod, slaTarget = 99.30, clientShort = 'Client') {
   const bullets = [];
 
-  // 1. Top sites by JFL Switch Uptime
+  // 1. Top sites by Client Switch Uptime
   const sortedByJfl = [...validSites].sort((a, b) => parseFloat(b.jflSwitchUptime || b.switchUptime || 100) - parseFloat(a.jflSwitchUptime || a.switchUptime || 100));
   if (sortedByJfl.length > 0) {
     const top3 = sortedByJfl.slice(0, 3).map(s => `${s.siteId} (${s.jflSwitchUptime || s.switchUptime || '100.00'}%)`).join(', ');
-    bullets.push(`Top sites by JFL Switch Uptime: ${top3}.`);
+    bullets.push(`Top sites by ${clientShort} Switch Uptime: ${top3}.`);
   }
 
-  // 2. Bottom sites by JFL Switch Uptime (flag breaches)
+  // 2. Bottom sites by Client Switch Uptime (flag breaches)
   const sortedAsc = [...validSites].sort((a, b) => parseFloat(a.jflSwitchUptime || a.switchUptime || 0) - parseFloat(b.jflSwitchUptime || b.switchUptime || 0));
   if (sortedAsc.length > 0) {
     const bottom3 = sortedAsc.slice(0, 3).map(s => {
@@ -886,7 +909,7 @@ function buildAIInsightsBullets(validSites, incidents, displayPeriod, slaTarget 
       const breachFlag = val < slaTarget ? ' BREACH' : '';
       return `${s.siteId} (${val.toFixed(2)}%${breachFlag})`;
     }).join(', ');
-    bullets.push(`Bottom sites by JFL Switch Uptime: ${bottom3}.`);
+    bullets.push(`Bottom sites by ${clientShort} Switch Uptime: ${bottom3}.`);
   }
 
   // 3. Largest RCA driver across all sites
@@ -926,28 +949,23 @@ function buildAIInsightsBullets(validSites, incidents, displayPeriod, slaTarget 
     bullets.push(`Site with the most On Hold tickets: ${topHoldPairs[0][0]} (${topHoldPairs[0][1]} tickets).`);
   }
 
-  // 6. Proactive vs JFL Switch Uptime variance > 5%
+  // 6. Proactive vs Client Switch Uptime variance > 5%
   const varianceList = validSites.filter(s => {
     const pro = parseFloat(s.proactiveSwitchUptime || s.switchUptime || 100);
     const jfl = parseFloat(s.jflSwitchUptime || s.switchUptime || 100);
     return Math.abs(pro - jfl) > 5.0;
-  }).map(s => `${s.siteId} (Proactive: ${s.proactiveSwitchUptime}%, JFL: ${s.jflSwitchUptime}%)`);
+  }).map(s => `${s.siteId} (Proactive: ${s.proactiveSwitchUptime}%, ${clientShort}: ${s.jflSwitchUptime}%)`);
   if (varianceList.length > 0) {
-    bullets.push(`Sites with Proactive and JFL Switch Uptime variance > 5%: ${varianceList.join('; ')}.`);
+    bullets.push(`Sites with Proactive and ${clientShort} Switch Uptime variance > 5%: ${varianceList.join('; ')}.`);
   }
 
   return bullets.slice(0, 6);
 }
 
-function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents = []) {
-  _slideNum++;
-  const s = pres.addSlide();
-  s.background = { color: C.BG_LIGHT };
-  addHeader(pres, s, 'EXECUTIVE SUMMARY — ALL SITES', 'Consolidated SLA Performance & RCA Driver Summary Across Monitored Sites', _slideNum);
-
+function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents = [], clientShort = 'Client') {
   const validSites = siteSummary.filter(st => {
     const n = String(st.siteId || '').toLowerCase();
-    return !['unknown', 'raw', 'sheet1', 'jfl'].includes(n) && !n.includes('sla_compliance');
+    return !['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report'].includes(n) && !n.includes('sla_compliance');
   });
 
   const COL_W = [1.7, 1.3, 1.8, 1.8, 2.2, 1.6, 2.03];
@@ -957,60 +975,72 @@ function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incide
     th('Site', 'left'),
     th('No of devices', 'center'),
     th('Proactive Switch Uptime', 'center'),
-    th('JFL Switch Uptime', 'center'),
+    th(`${clientShort} Switch Uptime`, 'center'),
     th('Primary RCA Driver (Switches)', 'left'),
     th('AP Incidents (Unique)', 'center'),
     th('Primary RCA Driver (AP)', 'left'),
   ];
 
-  const rows = validSites.slice(0, 9).map((site, idx) => {
-    const fill   = rowFill(idx);
-    const proUp  = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
-    const jflUp  = site.jflSwitchUptime       ? `${site.jflSwitchUptime}`       : `${site.switchUptime || '100.00'}`;
-    const noIncidentStr = 'Stable Operations (No Incidents)';
-    const badVals = ['None', 'Not case received', 'N/A', '', 'Unknown'];
-    const swRcaRaw = site.primaryRcaSwitches || site.primaryRca || '';
-    const apRcaRaw = site.primaryRcaAPs      || site.primaryRcaForAPs || '';
-    const swRca = swRcaRaw && !badVals.includes(swRcaRaw) ? swRcaRaw : noIncidentStr;
-    const apRca = apRcaRaw && !badVals.includes(apRcaRaw) ? apRcaRaw : noIncidentStr;
-    const apIncStr = `${site.apIncidents ?? 0} / ${site.uniqueAPsWithIncidents ?? 0}`;
-
-    return [
-      td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
-      td(fmt(site.deviceCount), fill, { align: 'center', color: C.TEXT_DARK }),
-      td(proUp, fill, { align: 'center', bold: true, color: C.BLUE }),
-      td(jflUp, fill, { align: 'center', bold: true, color: parseFloat(jflUp) >= SLA_TARGET ? C.GREEN : C.RED }),
-      td(swRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 }),
-      td(apIncStr, fill, { align: 'center', color: C.AMBER, bold: true }),
-      td(apRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 }),
-    ];
-  });
-
-  s.addTable([headers, ...rows], {
-    x: 0.45, y: 1.15, w: W_TOTAL,
-    colW: COL_W, fontSize: 11, rowH: 0.42,
-    border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
-  });
-
   const periodStr = displayPeriod || exec.reportingPeriod || 'User Selected Period';
+  const siteChunks = chunkArray(validSites, 9);
+  if (siteChunks.length === 0) siteChunks.push([]);
 
-  // AI Insights Block (placed immediately below the All-Sites table)
-  const aiBullets = buildAIInsightsBullets(validSites, incidents, periodStr, SLA_TARGET);
-  if (aiBullets.length > 0) {
-    s.addText('AI Insights', {
-      x: 0.45, y: 5.6, w: 12.43, h: 0.28,
-      fontSize: 11, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY,
-    });
-    const bulletText = aiBullets.map(b => `• ${b}`).join('\n');
-    s.addText(bulletText, {
-      x: 0.45, y: 5.88, w: 12.43, h: 0.9,
-      fontSize: 9, color: C.TEXT_DARK, fontFace: 'Calibri', lineSpacing: 12,
-    });
-  }
+  siteChunks.forEach((chunk, chunkIdx) => {
+    _slideNum++;
+    const s = pres.addSlide();
+    s.background = { color: C.BG_LIGHT };
+    const pageLabel = siteChunks.length > 1 ? ` (Part ${chunkIdx + 1} of ${siteChunks.length})` : '';
+    addHeader(pres, s, `EXECUTIVE SUMMARY — ALL SITES${pageLabel}`, 'Consolidated SLA Performance & RCA Driver Summary Across Monitored Sites', _slideNum);
 
-  s.addText(`This review consolidates SLA performance, rack and switch uptime, and access-point incident RCA for all ${validSites.length} monitored JFL sites for the period ${periodStr}.`, {
-    x: 0.45, y: 6.85, w: 12.43, h: 0.3,
-    fontSize: 8.5, italic: true, color: C.TEXT_MUTED, fontFace: 'Calibri',
+    const rows = chunk.map((site, idx) => {
+      const fill   = rowFill(idx);
+      const proUp  = site.proactiveSwitchUptime ? `${site.proactiveSwitchUptime}` : `${site.switchUptime || '100.00'}`;
+      const jflUp  = site.jflSwitchUptime       ? `${site.jflSwitchUptime}`       : `${site.switchUptime || '100.00'}`;
+      const noIncidentStr = 'Stable Operations (No Incidents)';
+      const badVals = ['None', 'Not case received', 'N/A', '', 'Unknown'];
+      const swRcaRaw = site.primaryRcaSwitches || site.primaryRca || '';
+      const apRcaRaw = site.primaryRcaAPs      || site.primaryRcaForAPs || '';
+      const swRca = swRcaRaw && !badVals.includes(swRcaRaw) ? swRcaRaw : noIncidentStr;
+      const apRca = apRcaRaw && !badVals.includes(apRcaRaw) ? apRcaRaw : noIncidentStr;
+      const apIncStr = `${site.apIncidents ?? 0} / ${site.uniqueAPsWithIncidents ?? 0}`;
+
+      return [
+        td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
+        td(fmt(site.deviceCount), fill, { align: 'center', color: C.TEXT_DARK }),
+        td(proUp, fill, { align: 'center', bold: true, color: C.BLUE }),
+        td(jflUp, fill, { align: 'center', bold: true, color: parseFloat(jflUp) >= SLA_TARGET ? C.GREEN : C.RED }),
+        td(swRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 }),
+        td(apIncStr, fill, { align: 'center', color: C.AMBER, bold: true }),
+        td(apRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 }),
+      ];
+    });
+
+    s.addTable([headers, ...rows], {
+      x: 0.45, y: 1.15, w: W_TOTAL,
+      colW: COL_W, fontSize: 11, rowH: 0.42,
+      border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
+    });
+
+    // AI Insights Block (placed immediately below the All-Sites table on Part 1)
+    if (chunkIdx === 0) {
+      const aiBullets = buildAIInsightsBullets(validSites, incidents, periodStr, SLA_TARGET, clientShort);
+      if (aiBullets.length > 0) {
+        s.addText('AI Insights', {
+          x: 0.45, y: 5.6, w: 12.43, h: 0.28,
+          fontSize: 11, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY,
+        });
+        const bulletText = aiBullets.map(b => `• ${b}`).join('\n');
+        s.addText(bulletText, {
+          x: 0.45, y: 5.88, w: 12.43, h: 0.9,
+          fontSize: 9, color: C.TEXT_DARK, fontFace: 'Calibri', lineSpacing: 12,
+        });
+      }
+    }
+
+    s.addText(`This review consolidates SLA performance, rack and switch uptime, and access-point incident RCA for all ${validSites.length} monitored ${clientShort} sites for the period ${periodStr}.`, {
+      x: 0.45, y: 6.85, w: 12.43, h: 0.3,
+      fontSize: 8.5, italic: true, color: C.TEXT_MUTED, fontFace: 'Calibri',
+    });
   });
 }
 
@@ -1074,7 +1104,7 @@ function buildInventorySlide(pres, exec, siteSummary, devices) {
 }
 
 // ── Slide 7: Incident Overview ─────────────────────────────────────────────
-function buildIncidentOverviewSlide(pres, incidents, siteSummary, exec) {
+function buildIncidentOverviewSlide(pres, incidents, siteSummary, exec, targetSites = TARGET_SITES) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -1095,7 +1125,7 @@ function buildIncidentOverviewSlide(pres, incidents, siteSummary, exec) {
 
   // Incidents by site bar chart
   const incBySite = {};
-  TARGET_SITES.forEach(key => { incBySite[key] = 0; });
+  targetSites.forEach(key => { incBySite[key] = 0; });
   incidents.forEach(i => {
     const rawLoc = String(i.SiteID || i.Location || '').trim();
     const isGeneric = !rawLoc || rawLoc.toLowerCase().includes('sla_compliance') || ['raw', 'sheet1', 'jfl', 'unknown'].includes(rawLoc.toLowerCase());
@@ -1103,8 +1133,9 @@ function buildIncidentOverviewSlide(pres, incidents, siteSummary, exec) {
     if (site && incBySite.hasOwnProperty(site)) incBySite[site]++;
   });
 
-  const siteLabels = TARGET_SITES.map(s => s.substring(0, 10));
-  const siteVals   = TARGET_SITES.map(s => incBySite[s] || 0);
+  const chartSites = targetSites.slice(0, 12);
+  const siteLabels = chartSites.map(s => s.substring(0, 10));
+  const siteVals   = chartSites.map(s => incBySite[s] || 0);
 
   addSectionDivider(s, 2.22, 'Incidents by Site');
 
@@ -1313,7 +1344,7 @@ function buildRCAHeatmapSlide(pres, siteSummary, incidents, rcaBreakdown) {
 }
 
 // ── Slide 10: SLA Dashboard ────────────────────────────────────────────────
-function buildSLASlide(pres, exec, siteSummary, slaAn) {
+function buildSLASlide(pres, exec, siteSummary, slaAn, clientShort = 'Client') {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -1352,15 +1383,15 @@ function buildSLASlide(pres, exec, siteSummary, slaAn) {
 
   const validSites = siteSummary.filter(st => {
     const n = String(st.siteId || '').toLowerCase();
-    return !['unknown', 'raw', 'sheet1', 'jfl'].includes(n) && !n.includes('sla_compliance');
+    return !['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report'].includes(n) && !n.includes('sla_compliance');
   });
 
   const COL_W = [2.2, 1.3, 2.1, 2.1, 1.8, 1.83];
   const headers = [
     th('Site', 'left'), th('Devices', 'center'), th('Proactive Switch Uptime', 'center'),
-    th('JFL Switch Uptime', 'center'), th('Incident-Free %', 'center'), th('SLA Status', 'center'),
+    th(`${clientShort} Switch Uptime`, 'center'), th('Incident-Free %', 'center'), th('SLA Status', 'center'),
   ];
-  const rows = validSites.slice(0, 8).map((site, idx) => {
+  const rows = validSites.slice(0, 9).map((site, idx) => {
     const fill    = rowFill(idx);
     const jflVal  = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
     const slaOk   = jflVal >= SLA_TARGET;
@@ -1597,13 +1628,13 @@ function buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown) {
 
 // ── Site Slides A, B, C ────────────────────────────────────────────────────
 
-function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum) {
+function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSites = 8, clientShort = 'Client') {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s,
     `${site.siteId || siteKey}  —  SITE OVERVIEW`,
-    `Site Review ${siteNum} of 8  ·  Operational KPIs, Health Assessment & AI Insights`,
+    `Site Review ${siteNum} of ${totalSites}  ·  Operational KPIs, Health Assessment & AI Insights`,
     _slideNum
   );
 
@@ -1613,7 +1644,7 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum) {
     { label: 'Active Devices', value: fmt(site.deviceCount),                                         color: C.NAVY  },
     { label: 'Switches',       value: fmt(site.switchCount),                                          color: C.BLUE  },
     { label: 'Access Points',  value: fmt(site.apCount),                                              color: C.STEEL },
-    { label: 'JFL Uptime',     value: pct(site.jflSwitchUptime || site.switchUptime),                 color: siteJflUptime >= SLA_TARGET ? C.GREEN : C.RED },
+    { label: `${clientShort} Uptime`, value: pct(site.jflSwitchUptime || site.switchUptime),         color: siteJflUptime >= SLA_TARGET ? C.GREEN : C.RED },
     { label: 'Incident-Free %',value: pct(site.incidentFreePercent),                                  color: parseFloat(site.incidentFreePercent) >= 90 ? C.GREEN : C.AMBER },
     { label: 'Health Score',   value: `${fmt(site.healthScore)} (${healthLabel(site.healthScore)})`, color: healthColor(site.healthScore) },
     { label: 'SLA Status',     value: siteJflUptime >= SLA_TARGET ? 'MET' : 'BREACH',                 color: siteJflUptime >= SLA_TARGET ? C.GREEN : C.RED },
@@ -1652,19 +1683,19 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum) {
   const topRcaAp = site.primaryRcaAPs || 'Stable Operations (No Incidents)';
   const aiSummary = [
     `${site.siteId || siteKey} operates ${fmt(site.deviceCount)} active devices (${fmt(site.switchCount)} switches, ${fmt(site.apCount)} APs).`,
-    `JFL Switch Uptime: ${pct(site.jflSwitchUptime || site.switchUptime)} | Proactive Switch Uptime: ${pct(site.proactiveSwitchUptime || site.switchUptime)} — ${siteJflUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
+    `${clientShort} Switch Uptime: ${pct(site.jflSwitchUptime || site.switchUptime)} | Proactive Switch Uptime: ${pct(site.proactiveSwitchUptime || site.switchUptime)} — ${siteJflUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
     `Primary RCA Drivers: Switches [${topRcaSw}] | APs [${topRcaAp}].`,
   ];
   addNarrativeBox(s, 5.4, aiSummary, `AI Site Summary — ${site.siteId || siteKey}`);
 }
 
-function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAps, siteNum) {
+function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAps, siteNum, totalSites = 8, clientShort = 'Client') {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s,
     `${site.siteId || siteKey}  —  OPERATIONAL ANALYTICS`,
-    `Site Review ${siteNum} of 8  ·  Expanded Switch Uptime Summary & RCA Drivers`,
+    `Site Review ${siteNum} of ${totalSites}  ·  Expanded Switch Uptime Summary & RCA Drivers`,
     _slideNum
   );
 
@@ -1745,13 +1776,13 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   s.addText(`Primary RCA (APs): ${topRcaAp}`, { x: 6.98, y: 6.46, w: 5.8, h: 0.26, fontSize: 8.5, bold: true, color: C.NAVY, fontFace: C.FONT_PRIMARY, wrap: true });
 }
 
-function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteNum) {
+function buildSiteTicketSlide(pres, siteKey, site, siteIncs, rcaBreakdown, siteNum, totalSites = 8, clientShort = 'Client') {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s,
     `${site.siteId || siteKey}  —  INCIDENT & TICKET REVIEW`,
-    `Site Review ${siteNum} of 8  ·  Top Tickets, RCA Breakdown & Recommended Actions`,
+    `Site Review ${siteNum} of ${totalSites}  ·  Top Tickets, RCA Breakdown & Recommended Actions`,
     _slideNum
   );
 
@@ -1932,7 +1963,7 @@ function buildCriticalSiteDeepDiveSlide(pres, siteKey, site, siteIncs, rcaBreakd
 }
 
 // ── Slide 38: Recommendations ─────────────────────────────────────────────
-function buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakdown) {
+function buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakdown, clientShort = 'Client') {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -1976,8 +2007,8 @@ function buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakd
 
   addSectionDivider(s, 4.75, 'Low Priority — Standard Practice (60-90 Days)');
   const lowRecs = [
-    { action: 'Update network topology documentation for all 8 sites including current device serial inventories.' },
-    { action: 'Conduct quarterly stakeholder review meetings with JFL IT leadership to align on operational priorities.' },
+    { action: `Update network topology documentation for all ${siteSummary?.length || 'monitored'} sites including current device serial inventories.` },
+    { action: `Conduct quarterly stakeholder review meetings with ${clientShort} IT leadership to align on operational priorities.` },
     { action: 'Evaluate proactive monitoring alert threshold tuning to reduce noise and improve incident detection accuracy.' },
   ];
   lowRecs.forEach((r, i) => {
@@ -1990,13 +2021,13 @@ function buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakd
 }
 
 // ── Slide 39: Action Plan ─────────────────────────────────────────────────
-function buildActionPlanSlide(pres, exec, siteSummary, incidents) {
+function buildActionPlanSlide(pres, exec, siteSummary, incidents, clientShort = 'Client') {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s, 'ACTION PLAN TRACKER', 'Prioritized Action Items with Ownership, Timeline & Status', _slideNum);
 
-  const actions = generateActionPlan(exec, siteSummary, incidents);
+  const actions = generateActionPlan(exec, siteSummary, incidents, clientShort);
 
   const COL_W = [1.1, 4.3, 2.0, 1.4, 1.5, 2.13];
   const headers = [
@@ -2029,7 +2060,7 @@ function buildActionPlanSlide(pres, exec, siteSummary, incidents) {
   const narrative = [
     `${actions.filter(a => a.priority === 'High' || a.priority === 'Critical').length} high-priority actions require completion within 30-45 days to prevent SLA degradation.`,
     `Action ownership has been assigned to respective operational teams. Regular follow-up recommended.`,
-    `This action plan should be reviewed and updated monthly with JFL IT leadership.`,
+    `This action plan should be reviewed and updated monthly with ${clientShort} IT leadership.`,
   ];
   addNarrativeBox(s, 6.45, narrative, 'Action Plan — Executive Note');
 }
@@ -2366,7 +2397,7 @@ function buildOtherActivitySlide(pres, incidents, displayPeriod) {
       const fill = rowFill(idx);
       const sub = String(t.Subject || t.Description || 'Operational Activity').substring(0, 50);
       const subCat = String(t.SubCategory || t['Sub Category'] || t.Category || 'Change Request').substring(0, 22);
-      const devName = String(t.Location || t.SiteID || 'JFL Site').substring(0, 18);
+      const devName = String(t.DeviceName || t.Location || t.SiteID || 'Monitored Site').substring(0, 18);
       const serial = String(t.SerialNo || t.DeviceID || 'N/A').substring(0, 18);
       const dType = String(t.DeviceType || 'SW').substring(0, 10);
       const host = String(t.Hostname || t.DeviceID || 'N/A').substring(0, 20);

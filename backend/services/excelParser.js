@@ -153,6 +153,7 @@ function normalizeSiteName(site) {
   const str = String(site).trim();
   const lower = str.toLowerCase();
 
+  // Standard / JFL Sites
   if (/blr|bangalore/i.test(lower)) return 'Bangalore';
   if (/g.*noida|gr.*noida|greater.*noida|grater.*noida|gnsc/i.test(lower)) return 'Greater Noida';
   if (/guwahati|gau/i.test(lower)) return 'Guwahati';
@@ -163,6 +164,24 @@ function normalizeSiteName(site) {
   if (/nagpur|nag/i.test(lower)) return 'Nagpur';
   if (/noida/i.test(lower)) return 'Noida';
 
+  // MMTC Sites
+  if (/ggn[\s_-]?plant|gurgaon[\s_-]?plant/i.test(lower)) return 'Gurgaon Plant';
+  if (/ggn[\s_-]?(head[\s_-]?office|ho)|gurgaon[\s_-]?(head[\s_-]?office|ho)/i.test(lower)) return 'Gurgaon Head Office';
+  if (/bhubaneswar|bbsr/i.test(lower)) return 'Bhubaneswar';
+  if (/okhla/i.test(lower)) return 'Okhla';
+  if (/vijaywada|vijayawada/i.test(lower)) return 'Vijaywada';
+  if (/vizag|visakhapatnam/i.test(lower)) return 'Vizag';
+  if (/lajpat[\s_-]?nagar/i.test(lower)) return 'Lajpat Nagar';
+  if (/thrissur|trichur/i.test(lower)) return 'Thrissur';
+  if (/ludhiana/i.test(lower)) return 'Ludhiana';
+  if (/chennai|madras/i.test(lower)) return 'Chennai';
+  if (/karol[\s_-]?bagh/i.test(lower)) return 'Karolbagh';
+  if (/kolkata|calcutta/i.test(lower)) return 'Kolkata';
+  if (/ahmedabad/i.test(lower)) return 'Ahmedabad';
+  if (/coimbatore/i.test(lower)) return 'Coimbatore';
+  if (/pune/i.test(lower)) return 'Pune';
+  if (/rohini/i.test(lower)) return 'Rohini Delhi';
+
   return str;
 }
 
@@ -172,6 +191,9 @@ function isGenericLocation(loc) {
   if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
   if (/raw/i.test(str) || /^sheet\d*$/i.test(str) || /sla/i.test(str) || /jfl/i.test(str) || /incident/i.test(str) || /july|august|september|october|november|december|january|february|march|april|may|june/i.test(str)) return true;
   if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
+  if (str.includes('inventory india') || str === 'mmtc inventory india' || str === 'inventory') return true;
+  // Hardware models, chassis, and appliances are device specifications, not geographic site locations
+  if (/catalyst|chassis|firepower|firewall|appliance|switch\b|meraki|mx68|mx75|ms425|ms250|ms120|mr\d|model\b/i.test(str) && !/plant|office|head[\s_-]?office|ho|sec70|delhi|mumbai|bangalore/i.test(str)) return true;
 
   return false;
 }
@@ -187,6 +209,7 @@ function mergeInventorySheets(workbookData, locationSheets) {
     rows.forEach((row, idx) => {
       const serial = String(
         getColVal(row, [
+          'Cloud ID', 'CloudID', 'Cloud_ID', 'Cloud-ID',
           'Serial No.', 'Serial No', 'SerialNo', 'Serial Number', 'SerialNumber', 'Serial_No', 'Serial_Number',
           'Device Serial', 'Device Serial Number', 'Device Serial No', 'Device_Serial', 'DeviceID', 'Device ID',
           'Serial', 'Serial #', 'Serial/Subscription', 'Asset Tag', 'Asset Serial', 'Service Tag', 'MAC Address', 'Host', 'Hostname'
@@ -194,7 +217,7 @@ function mergeInventorySheets(workbookData, locationSheets) {
       ).trim();
       if (!serial) return;
 
-      const rawLoc = getColVal(row, ['Location', 'Site', 'Site Name', 'SiteID', 'Site ID', 'Location Name', 'City', 'Branch', 'Store', 'Facility']);
+      const rawLoc = getColVal(row, ['Location', 'Site', 'Site Name', 'SiteID', 'Site ID', 'Location Name', 'City', 'Branch', 'Store', 'Facility', 'Network', 'Network Name']);
       const normLoc = rawLoc ? normalizeSiteName(rawLoc) : (isGenericLocation(sheet) ? 'Unknown' : normalizeSiteName(sheet));
 
       const host = String(getColVal(row, ['Hostname', 'Host Name', 'Device Hostname', 'Host', 'Device Host', 'Device Name', 'Node Name', 'Name'])).trim();
@@ -204,8 +227,8 @@ function mergeInventorySheets(workbookData, locationSheets) {
       let devType = String(getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Device_Type', 'Hardware Type', 'Model Type'])).trim();
       if (!devType || devType === 'Meraki Managed Services' || devType === 'N/A' || devType === 'Unknown') {
         const combined = `${host} ${serial} ${model} ${getColVal(row, ['Subject', 'Category', 'Sub Category'])}`.toLowerCase();
-        if (/\bap\b|access|ap\d|q5aa/i.test(combined)) devType = 'AP';
-        else if (/\bsw\b|switch|sw\d|fvh/i.test(combined)) devType = 'SW';
+        if (/\bap\b|access|ap\d|q5aa|\bmr\d*|\bmr-?\d+/i.test(combined)) devType = 'AP';
+        else if (/\bsw\b|switch|sw\d|fvh|\bms\d*|\bms-?\d+|\bc9\d+/i.test(combined)) devType = 'SW';
         else devType = 'SW';
       }
 
@@ -313,8 +336,13 @@ function parseIncidentSheet(rows) {
       ])
     ).trim();
 
-    let rawLoc = getColVal(row, ['Device Name', 'Location', 'Site', 'SiteID', 'Site ID', 'Site Name', 'Location Name', 'City', 'Branch', 'Store', 'Facility']);
-    // New raw schema: location is carried in "Device Name" (a site, e.g. Hyderabad/Nagpur).
+    let rawLoc = getColVal(row, ['Location', 'Site', 'SiteID', 'Site ID', 'Site Name', 'Location Name', 'City', 'Branch', 'Store', 'Facility']);
+    if (!rawLoc || isGenericLocation(rawLoc)) {
+      const devNameVal = getColVal(row, ['Device Name']);
+      if (devNameVal && !isGenericLocation(devNameVal)) {
+        rawLoc = devNameVal;
+      }
+    }
     // Blank out non-site placeholders so they never become bogus locations.
     if (rawLoc && /not[\s-]?found|unknown|n\/a|null|^sheet\d*$/i.test(String(rawLoc).trim())) {
       rawLoc = '';
