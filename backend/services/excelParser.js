@@ -161,17 +161,17 @@ function normalizeSiteName(site) {
   if (/mohali|moh/i.test(lower)) return 'Mohali';
   if (/mumbai[\s_-]?dc|mumd[\s_-]?dc/i.test(lower)) return 'Mumbai-DC';
   if (/mumbai|mumd/i.test(lower)) return 'Mumbai';
+  if (/lajpat[\s_-]?nagar/i.test(lower)) return 'Lajpat Nagar';
   if (/nagpur|nag/i.test(lower)) return 'Nagpur';
   if (/noida/i.test(lower)) return 'Noida';
 
   // MMTC Sites
   if (/ggn[\s_-]?plant|gurgaon[\s_-]?plant/i.test(lower)) return 'Gurgaon Plant';
   if (/ggn[\s_-]?(head[\s_-]?office|ho)|gurgaon[\s_-]?(head[\s_-]?office|ho)/i.test(lower)) return 'Gurgaon Head Office';
-  if (/bhubaneswar|bbsr/i.test(lower)) return 'Bhubaneswar';
+  if (/bhubaneswar|bbsr|bhbaneshwar/i.test(lower)) return 'Bhubaneswar';
   if (/okhla/i.test(lower)) return 'Okhla';
   if (/vijaywada|vijayawada/i.test(lower)) return 'Vijaywada';
   if (/vizag|visakhapatnam/i.test(lower)) return 'Vizag';
-  if (/lajpat[\s_-]?nagar/i.test(lower)) return 'Lajpat Nagar';
   if (/thrissur|trichur/i.test(lower)) return 'Thrissur';
   if (/ludhiana/i.test(lower)) return 'Ludhiana';
   if (/chennai|madras/i.test(lower)) return 'Chennai';

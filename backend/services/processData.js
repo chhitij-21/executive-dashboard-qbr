@@ -1919,13 +1919,8 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
       || devToSiteMap[inc.Hostname]
       || null;
 
-    const VALID_SITES_SET = new Set(Object.keys(sitesMap));
-    const targetSite = (site && !isGenericLocation(site) && VALID_SITES_SET.has(site)) ? site
-      : (site && !isGenericLocation(site)) ? site
-        : null;
-
+    const targetSite = (site && !isGenericLocation(site) && sitesMap[site]) ? site : null;
     if (targetSite) {
-      if (!sitesMap[targetSite]) sitesMap[targetSite] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
       sitesMap[targetSite].incidents.push(inc);
     }
   });
