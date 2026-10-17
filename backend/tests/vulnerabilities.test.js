@@ -89,6 +89,23 @@ describe('Cisco PSIRT openVuln Integration Suite', () => {
     await ciscoPsirtClient.throttle(250);
     const interval = Date.now() - t1;
     assert.ok(interval >= 200, `Expected throttle delay >= 200ms, got ${interval}ms`);
+
+    // 3. Verify Graceful Failure when credentials are missing
+    const origId = process.env.CISCO_CLIENT_ID;
+    const origSecret = process.env.CISCO_CLIENT_SECRET;
+    delete process.env.CISCO_CLIENT_ID;
+    delete process.env.CISCO_CLIENT_SECRET;
+
+    await assert.rejects(
+      () => ciscoPsirtClient.getAccessToken({ clientId: null, clientSecret: null, forceRefresh: true }),
+      (err) => {
+        assert.match(err.message, /Missing Cisco credentials in environment variables/);
+        return true;
+      }
+    );
+
+    if (origId) process.env.CISCO_CLIENT_ID = origId;
+    if (origSecret) process.env.CISCO_CLIENT_SECRET = origSecret;
   });
 
   test('Part 2: CVRF data transformation & GET /api/vulnerabilities endpoint response', async () => {

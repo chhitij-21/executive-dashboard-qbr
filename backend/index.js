@@ -1,25 +1,8 @@
 // backend/index.js — Executive Report Dashboard API
-const fs = require('fs');
 const path = require('path');
-
-// Auto-load project root .env file at startup if process.env variables are missing
-const envPath = path.resolve(__dirname, '..', '.env');
-if (fs.existsSync(envPath)) {
-  try {
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    envContent.split(/\r?\n/).forEach(line => {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
-        const [k, ...v] = trimmed.split('=');
-        const key = k.trim();
-        const val = v.join('=').trim().replace(/^["']|["']$/g, '');
-        if (key && !process.env[key]) {
-          process.env[key] = val;
-        }
-      }
-    });
-  } catch (e) { }
-}
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+require('dotenv').config();
+const fs = require('fs');
 
 const express = require('express');
 const cors = require('cors');

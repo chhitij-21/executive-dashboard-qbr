@@ -6,10 +6,6 @@
 const TOKEN_URL = 'https://id.cisco.com/oauth2/default/v1/token';
 const API_BASE = 'https://apix.cisco.com';
 
-// Fallback credentials if environment variables are not set
-const DEFAULT_CLIENT_ID = 'cgbs33f582vsvcxddrs3k9k4';
-const DEFAULT_CLIENT_SECRET = '2HCNgV5KRjyxDTEXCBJxX7Te';
-
 // In-memory token cache
 let cachedToken = null; // { access_token, expiresAt }
 let lastCallTime = 0;
@@ -40,8 +36,12 @@ async function throttle(minInterval = MIN_CALL_INTERVAL_MS) {
  */
 async function getAccessToken(options = {}) {
   const { clientId, clientSecret, forceRefresh = false } = options;
-  const id = process.env.CISCO_CLIENT_ID || clientId || DEFAULT_CLIENT_ID;
-  const secret = process.env.CISCO_CLIENT_SECRET || clientSecret || DEFAULT_CLIENT_SECRET;
+  const id = clientId || process.env.CISCO_CLIENT_ID;
+  const secret = clientSecret || process.env.CISCO_CLIENT_SECRET;
+
+  if (!id || !secret) {
+    throw new Error('[ciscoPsirtClient] Missing Cisco credentials in environment variables (CISCO_CLIENT_ID / CISCO_CLIENT_SECRET).');
+  }
 
   const now = Date.now();
   if (!forceRefresh && cachedToken && cachedToken.access_token && cachedToken.expiresAt > now + 60000) {
