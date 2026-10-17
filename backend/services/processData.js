@@ -1090,7 +1090,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     if (!resolvedDevType || resolvedDevType === 'N/A' || resolvedDevType === 'Unknown') {
       const combined = `${item.Hostname || ''} ${item.SerialNo || ''} ${item.DeviceID || ''} ${item.Description || ''} ${item.Subject || ''} ${item.Category || ''}`.toLowerCase();
       if (/\bap\b|access|ap\d|q5aa/i.test(combined)) resolvedDevType = 'AP';
-      else resolvedDevType = 'SW';
+      else resolvedDevType = '';
     }
 
     return {

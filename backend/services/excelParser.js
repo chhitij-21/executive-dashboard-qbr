@@ -377,7 +377,7 @@ function parseIncidentSheet(rows) {
       TicketNumber: ticketNo,
       DeviceID: devId,
       SerialNo: devId,
-      Hostname: getColVal(row, ['Hostname', 'Device Name', 'Host Name', 'Device Hostname', 'Host', 'Subject']) || '',
+      Hostname: getColVal(row, ['Hostname', 'Device Name', 'Host Name', 'Device Hostname', 'Host']) || '',
       Location: normLoc,
       SiteID: normLoc,
       DeviceType: getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Hardware Type']) || '',
