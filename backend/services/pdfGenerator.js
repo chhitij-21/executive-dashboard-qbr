@@ -11,8 +11,20 @@ let puppeteer, puppeteerCore, sparticuzChromium;
 try { puppeteer = require('puppeteer'); } catch (_) { puppeteer = null; }
 try {
   puppeteerCore = require('puppeteer-core');
-  sparticuzChromium = require('@sparticuz/chromium');
-} catch (_) { puppeteerCore = null; sparticuzChromium = null; }
+  const chromiumRaw = require('@sparticuz/chromium');
+  // Safe unwrap for ESM/CJS interop: use .default if present
+  sparticuzChromium = chromiumRaw?.default || chromiumRaw;
+  // Validate args is actually an array at load time
+  if (sparticuzChromium && !Array.isArray(sparticuzChromium.args)) {
+    console.warn('[pdfGenerator] @sparticuz/chromium.args is not an array, will use fallback');
+  } else if (sparticuzChromium) {
+    console.log(`[pdfGenerator] @sparticuz loaded: args=${sparticuzChromium.args ? sparticuzChromium.args.length : 0}, execPath=${process.platform === 'linux' ? 'linux' : 'platform:' + process.platform}`);
+  }
+} catch (err) {
+  console.warn('[pdfGenerator] Failed to load @sparticuz/chromium:', err.message);
+  puppeteerCore = null; 
+  sparticuzChromium = null;
+}
 
 /**
  * Resolves browser launch configuration.
@@ -25,18 +37,43 @@ async function getBrowserLaunchConfig() {
   const isLinux = process.platform === 'linux';
 
   if (isLinux && sparticuzChromium && puppeteerCore) {
-    return {
-      mode: 'sparticuz',
-      puppeteer: puppeteerCore,
-      options: {
-        args: [...sparticuzChromium.args, '--no-sandbox',
-               '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-               '--single-process'],
-        defaultViewport: sparticuzChromium.defaultViewport,
-        executablePath: await sparticuzChromium.executablePath(),
-        headless: 'shell',
-      },
-    };
+    // Defensive: args may be undefined if module structure differs
+    const sparticuzArgs = Array.isArray(sparticuzChromium.args)
+      ? sparticuzChromium.args
+      : [];
+
+    let executablePath;
+    try {
+      executablePath = await sparticuzChromium.executablePath();
+    } catch (err) {
+      console.warn('[pdfGenerator] executablePath() failed:', err.message);
+      executablePath = null;
+    }
+
+    console.log(`[pdfGenerator] @sparticuz loaded: args=${sparticuzArgs.length}, execPath=${executablePath ? 'resolved' : 'NULL'}`);
+
+    if (!executablePath) {
+      console.warn('[pdfGenerator] No executable path from @sparticuz, falling back to local puppeteer if available');
+      // Do not return here — let the local branch below try
+    } else {
+      return {
+        mode: 'sparticuz',
+        puppeteer: puppeteerCore,
+        options: {
+          args: [
+            ...sparticuzArgs,
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--single-process',
+            '--disable-gpu',
+          ],
+          defaultViewport: sparticuzChromium.defaultViewport || { width: 1920, height: 1080 },
+          executablePath,
+          headless: 'shell',
+        },
+      };
+    }
   }
 
   if (process.env.PUPPETEER_EXECUTABLE_PATH && puppeteerCore) {
