@@ -738,7 +738,18 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   }
 
   // Change Requests and non-hardware tasks are segregated from hardware Incidents per business spec
-  const rawOtherActivities = incidents.filter(isOtherActivity);
+  const rawOtherActivities = incidents
+    .filter(isOtherActivity)
+    .filter(inc => {
+      if (!startDate || !endDate) return true;
+      const raw = inc.CreatedDate || inc.OpenedAt || inc.ReportedDate || inc['Open Time'] || inc.CreatedTime || inc.OpenTime || inc['Created Date'] || inc['Open Date'];
+      if (!raw || raw === 'N/A') return true;
+      const sDate = new Date(startDate.includes('T') ? startDate : startDate + 'T00:00:00Z');
+      const eDate = new Date(endDate.includes('T') ? endDate : endDate + 'T23:59:59.999Z');
+      const d = parseAnyDate(raw) || new Date(raw);
+      if (!d || isNaN(d.getTime())) return true; // Keep if no date available
+      return d >= sDate && d <= eDate;
+    });
   incidents = incidents.filter(i => !isOtherActivity(i));
   log(`Incidents for target customer (excluding Change Requests): ${incidents.length}`);
   log(`Other Activity tickets extracted for enrichment: ${rawOtherActivities.length}`);
