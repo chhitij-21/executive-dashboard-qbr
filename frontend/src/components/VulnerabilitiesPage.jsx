@@ -1,11 +1,10 @@
 // frontend/src/components/VulnerabilitiesPage.jsx
 // Automated Vulnerabilities Dashboard powered by official Cisco PSIRT openVuln API (v2).
-// Real-time advisories, CVSS sorting, pagination, date range filtering, per-product grouping, tracking & operational checklist.
+// Flat, printable, dense table layout sorted by CVSS & Date with client-side pagination, severity pills, truncation & tracking.
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE_URL, apiFetch } from '../config/api';
 import { useAuth } from '../context/AuthContext';
-import KpiCard from './KpiCard';
 
 const STORAGE_KEY_TRACKER = 'cisco_psirt_tracker_status';
 const STORAGE_KEY_CHECKLIST = 'cisco_psirt_checklist_state';
@@ -33,11 +32,10 @@ export default function VulnerabilitiesPage() {
   const [selectedSeverity, setSelectedSeverity] = useState('ALL'); // 'ALL', 'CRITICAL', 'HIGH', 'MEDIUM'
   const [showInformational, setShowInformational] = useState(false); // Default: UNCHECKED (hides NA / Informational)
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedProduct, setExpandedProduct] = useState(null);
 
-  // Pagination for flat table
+  // Pagination for flat table (default 15 rows per page)
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15); // Default 15 rows per page
+  const [pageSize, setPageSize] = useState(15);
 
   // Local storage states for remediation tracker & validation checklist
   const [trackerStatus, setTrackerStatus] = useState(() => {
@@ -153,7 +151,7 @@ export default function VulnerabilitiesPage() {
     const all = vulnData?.cveList || [];
     return all
       .filter((item) => {
-        // Task 5: Hide "NA" or "Informational" clutter (if toggle is unchecked)
+        // Task: Hide "NA" or "Informational" clutter (if toggle is unchecked)
         if (!showInformational) {
           const sev = (item.severity || '').toLowerCase();
           const cve = (item.cveId || '').toUpperCase();
@@ -166,7 +164,7 @@ export default function VulnerabilitiesPage() {
         if (effectiveDateRange.start && item.advisoryDate < effectiveDateRange.start) return false;
         if (effectiveDateRange.end && item.advisoryDate > effectiveDateRange.end) return false;
 
-        // Task 4: Quick Severity filter
+        // Quick Severity filter
         if (selectedSeverity !== 'ALL') {
           if ((item.severity || '').toUpperCase() !== selectedSeverity) return false;
         }
@@ -183,7 +181,7 @@ export default function VulnerabilitiesPage() {
         return true;
       })
       .sort((a, b) => {
-        // Task 1: Default sorting
+        // Default sorting:
         // 1. CVSS Score (Descending) — highest first
         const cvssA = parseFloat(a.cvss) || 0;
         const cvssB = parseFloat(b.cvss) || 0;
@@ -202,44 +200,14 @@ export default function VulnerabilitiesPage() {
     setCurrentPage(1);
   }, [datePreset, startDate, endDate, selectedSeverity, showInformational, searchQuery, pageSize]);
 
-  // Grouped by Product Family for Executive Summary & Accordions
-  const productGroups = useMemo(() => {
-    const map = new Map();
-    for (const cve of filteredCves) {
-      const prod = cve.product || 'Other Cisco Hardware';
-      if (!map.has(prod)) {
-        map.set(prod, {
-          product: prod,
-          cves: [],
-          maxCvss: 0,
-          p1Count: 0,
-          criticalCount: 0,
-          highCount: 0,
-          mediumCount: 0,
-          lowCount: 0,
-        });
-      }
-      const entry = map.get(prod);
-      entry.cves.push(cve);
-      if (cve.cvss > entry.maxCvss) entry.maxCvss = cve.cvss;
-      if (cve.priority === 'P1') entry.p1Count++;
-      const s = (cve.severity || '').toLowerCase();
-      if (s === 'critical') entry.criticalCount++;
-      else if (s === 'high') entry.highCount++;
-      else if (s === 'medium') entry.mediumCount++;
-      else if (s === 'low') entry.lowCount++;
-    }
-    return Array.from(map.values()).sort((a, b) => b.cves.length - a.cves.length);
-  }, [filteredCves]);
-
-  // Overall KPI metrics
+  // Overall KPI metrics (compact summary)
   const kpis = useMemo(() => {
     const total = filteredCves.length;
     const p1Count = filteredCves.filter((c) => c.priority === 'P1').length;
     const p2Count = total - p1Count;
     const criticalCount = filteredCves.filter((c) => (c.severity || '').toLowerCase() === 'critical').length;
     const highCount = filteredCves.filter((c) => (c.severity || '').toLowerCase() === 'high').length;
-    const distinctProducts = productGroups.length;
+    const distinctProducts = new Set(filteredCves.map((c) => c.product).filter(Boolean)).size;
 
     let patchedCount = 0;
     for (const c of filteredCves) {
@@ -247,9 +215,9 @@ export default function VulnerabilitiesPage() {
     }
 
     return { total, p1Count, p2Count, criticalCount, highCount, distinctProducts, patchedCount };
-  }, [filteredCves, productGroups, trackerStatus]);
+  }, [filteredCves, trackerStatus]);
 
-  // Task 3: Paginated flat table records
+  // Paginated flat table records
   const totalEntries = filteredCves.length;
   const totalPages = Math.ceil(totalEntries / pageSize) || 1;
   const startEntry = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize + 1;
@@ -267,12 +235,20 @@ export default function VulnerabilitiesPage() {
     return Math.round((doneCount / checklist.length) * 100);
   }, [checklist]);
 
-  // Task 2: Truncate long product strings (> 60 characters)
+  // Truncate product strings (> 60 characters)
   const formatProductDisplay = (prod) => {
     if (!prod) return 'Cisco Networking Equipment';
     const clean = String(prod).trim();
     if (clean.length <= 60) return clean;
     return clean.slice(0, 60) + '...';
+  };
+
+  // Truncate vulnerability / impact strings (> 150 characters)
+  const formatImpactDisplay = (impact) => {
+    if (!impact) return 'Impact details in Cisco advisory bulletin.';
+    const clean = String(impact).trim();
+    if (clean.length <= 150) return clean;
+    return clean.slice(0, 150) + '...';
   };
 
   const getSeverityBadgeClass = (sev) => {
@@ -294,22 +270,22 @@ export default function VulnerabilitiesPage() {
   return (
     <div className="vulnerabilities-page" style={{ paddingBottom: '3rem' }}>
       {/* Header & Source Attribution */}
-      <div className="section-header" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="section-header" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '1.8rem' }}>🛡️</span>
-            <h2 style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            <span style={{ fontSize: '1.6rem' }}>🛡️</span>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
               Cisco PSIRT openVuln Security Intelligence
             </h2>
           </div>
-          <p style={{ margin: '0.35rem 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <p style={{ margin: '0.25rem 0 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
             Official Cisco Security Advisories & Common Vulnerabilities (v2 API). Real-time telemetry, zero fabrication.
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {vulnData?.lastFetched && (
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'right' }}>
               <div>Last Synced: <strong>{new Date(vulnData.lastFetched).toLocaleString()}</strong></div>
               <div>Source: <a href="https://developer.cisco.com/psirt/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-blue)', textDecoration: 'underline' }}>Cisco openVuln API</a></div>
             </div>
@@ -320,7 +296,7 @@ export default function VulnerabilitiesPage() {
               onClick={handleManualRefresh}
               disabled={refreshing || loading}
               className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
               title="Admin trigger: pull latest advisories from Cisco PSIRT API"
             >
               {refreshing ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <span>🔄</span>}
@@ -330,41 +306,45 @@ export default function VulnerabilitiesPage() {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="kpi-grid" style={{ marginBottom: '1.75rem' }}>
-        <KpiCard
-          title="TOTAL CVE ADVISORIES"
-          value={kpis.total}
-          status="normal"
-        />
-        <KpiCard
-          title="P1 CRITICAL / HIGH"
-          value={kpis.p1Count}
-          status={kpis.p1Count > 0 ? 'breached' : 'met'}
-        />
-        <KpiCard
-          title="P2 MEDIUM / LOW"
-          value={kpis.p2Count}
-          status="normal"
-        />
-        <KpiCard
-          title="AFFECTED PRODUCTS"
-          value={kpis.distinctProducts}
-          status="normal"
-        />
-        <KpiCard
-          title="REMEDIATION PROGRESS"
-          value={`${kpis.patchedCount} / ${kpis.total}`}
-          status={kpis.patchedCount === kpis.total && kpis.total > 0 ? 'met' : 'normal'}
-        />
+      {/* Task 1: Compact KPI Strip (Takes minimal vertical space so Flat Table is immediately visible) */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '0.75rem',
+          marginBottom: '1rem',
+        }}
+      >
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Total Advisories</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.total}</span>
+        </div>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#dc2626', textTransform: 'uppercase' }}>P1 Critical / High</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#dc2626' }}>{kpis.p1Count}</span>
+        </div>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>P2 Medium / Low</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.p2Count}</span>
+        </div>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Affected Products</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.distinctProducts}</span>
+        </div>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Remediation Progress</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: kpis.patchedCount === kpis.total && kpis.total > 0 ? 'var(--accent-green)' : 'var(--text-primary)' }}>
+            {kpis.patchedCount} / {kpis.total}
+          </span>
+        </div>
       </div>
 
-      {/* Filter Toolbar with Quick Pills & Informational Toggle */}
-      <div className="card pad-md" style={{ marginBottom: '1.5rem', background: 'var(--bg-card)' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* Filter Toolbar with Quick Pills, Informational Toggle, and Search */}
+      <div className="card pad-md" style={{ marginBottom: '1.25rem', background: 'var(--bg-card)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.9rem', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Preset Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>TIME:</span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>TIME:</span>
             {[
               { id: 'ALL', label: 'All' },
               { id: 'WEEK', label: 'Last 7 Days' },
@@ -375,16 +355,16 @@ export default function VulnerabilitiesPage() {
                 key={p.id}
                 onClick={() => setDatePreset(p.id)}
                 className={`btn ${datePreset === p.id ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ padding: '0.3rem 0.65rem', fontSize: '0.8rem', borderRadius: '6px' }}
+                style={{ padding: '0.28rem 0.65rem', fontSize: '0.8rem', borderRadius: '6px' }}
               >
                 {p.label}
               </button>
             ))}
           </div>
 
-          {/* Task 4: Quick Severity Pills */}
+          {/* Quick Severity Pills */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>SEVERITY:</span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>SEVERITY:</span>
             {[
               { id: 'ALL', label: 'All', color: 'var(--accent-blue)', bg: 'rgba(37, 99, 235, 0.12)' },
               { id: 'CRITICAL', label: 'Critical', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.15)' },
@@ -398,7 +378,7 @@ export default function VulnerabilitiesPage() {
                   onClick={() => setSelectedSeverity(s.id)}
                   type="button"
                   style={{
-                    padding: '0.28rem 0.75rem',
+                    padding: '0.25rem 0.7rem',
                     fontSize: '0.8rem',
                     borderRadius: '9999px',
                     fontWeight: isActive ? 700 : 500,
@@ -415,7 +395,7 @@ export default function VulnerabilitiesPage() {
             })}
           </div>
 
-          {/* Task 5: Show Informational Advisories Toggle */}
+          {/* Show Informational Advisories Toggle */}
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', fontSize: '0.82rem', userSelect: 'none' }}>
             <input
               type="checkbox"
@@ -481,241 +461,143 @@ export default function VulnerabilitiesPage() {
 
       {!loading && !error && (
         <>
-          {/* Executive Summary & Product Accordions */}
+          {/* Task 2: Rebuilt Flat Table (Print-ready report style, exactly 8 columns, zebra striped, visible immediately) */}
           <div className="card pad-md" style={{ marginBottom: '1.75rem' }}>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>📦</span> Executive Product Summary & Breakdown ({productGroups.length} Product Families)
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Click on any product group below to expand and view specific CVE entries and remediation guidance.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              {productGroups.map((group) => {
-                const isExpanded = expandedProduct === group.product;
-                return (
-                  <div
-                    key={group.product}
-                    style={{
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      overflow: 'hidden',
-                      background: 'var(--bg-secondary)',
-                      transition: 'border-color 0.2s',
-                    }}
-                  >
-                    <div
-                      onClick={() => setExpandedProduct(isExpanded ? null : group.product)}
-                      style={{
-                        padding: '0.75rem 1rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '1rem',
-                        background: isExpanded ? 'var(--bg-card-hover)' : 'transparent',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{isExpanded ? '▼' : '▶'}</span>
-                        <span
-                          style={{
-                            fontWeight: 600,
-                            color: 'var(--text-primary)',
-                            fontSize: '0.92rem',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                          title={group.product}
-                        >
-                          {group.product}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                        {group.criticalCount > 0 && (
-                          <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', background: '#fee2e2', color: '#991b1b', fontSize: '0.75rem', fontWeight: 600 }}>
-                            {group.criticalCount} Critical
-                          </span>
-                        )}
-                        {group.highCount > 0 && (
-                          <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', background: '#ffedd5', color: '#9a3412', fontSize: '0.75rem', fontWeight: 600 }}>
-                            {group.highCount} High
-                          </span>
-                        )}
-                        <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', background: 'var(--border)', color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 600 }}>
-                          Max CVSS: <span style={{ color: getCvssColor(group.maxCvss) }}>{group.maxCvss.toFixed(1)}</span>
-                        </span>
-                        <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', background: 'var(--border-accent)', color: '#fff', fontSize: '0.75rem', fontWeight: 600 }}>
-                          {group.cves.length} CVE{group.cves.length > 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div style={{ padding: '1rem', borderTop: '1px solid var(--border)', background: 'var(--bg-card)' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                          <thead>
-                            <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left' }}>
-                              <th style={{ padding: '0.4rem 0.6rem' }}>CVE ID</th>
-                              <th style={{ padding: '0.4rem 0.6rem' }}>Severity</th>
-                              <th style={{ padding: '0.4rem 0.6rem' }}>CVSS</th>
-                              <th style={{ padding: '0.4rem 0.6rem' }}>Date</th>
-                              <th style={{ padding: '0.4rem 0.6rem' }}>Advisory Title / Impact</th>
-                              <th style={{ padding: '0.4rem 0.6rem' }}>Remediation Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.cves.map((c) => (
-                              <tr key={c.cveId} style={{ borderBottom: '1px solid var(--border)' }}>
-                                <td style={{ padding: '0.5rem 0.6rem', fontWeight: 600, color: 'var(--accent-blue)' }}>
-                                  <a href={c.advisoryLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
-                                    {c.cveId} ↗
-                                  </a>
-                                </td>
-                                <td style={{ padding: '0.5rem 0.6rem' }}>
-                                  <span className={`badge ${getSeverityBadgeClass(c.severity)}`}>
-                                    {c.severity}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '0.5rem 0.6rem', fontWeight: 700, color: getCvssColor(c.cvss) }}>
-                                  {c.cvss.toFixed(1)}
-                                </td>
-                                <td style={{ padding: '0.5rem 0.6rem', color: 'var(--text-muted)' }}>
-                                  {c.advisoryDate}
-                                </td>
-                                <td style={{ padding: '0.5rem 0.6rem', color: 'var(--text-primary)', maxWidth: '380px' }}>
-                                  {c.vulnerabilityImpact}
-                                </td>
-                                <td style={{ padding: '0.5rem 0.6rem' }}>
-                                  <select
-                                    value={trackerStatus[c.cveId] || 'Pending Assessment'}
-                                    onChange={(e) => updateTracker(c.cveId, e.target.value)}
-                                    style={{ fontSize: '0.78rem', padding: '0.2rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border)' }}
-                                  >
-                                    <option value="Pending Assessment">Pending Assessment</option>
-                                    <option value="Scheduled for Maintenance">Scheduled for Maintenance</option>
-                                    <option value="Patch Applied">Patch Applied</option>
-                                    <option value="Workaround In Place">Workaround In Place</option>
-                                    <option value="Not Applicable">Not Applicable</option>
-                                  </select>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Flat CVE Records Table */}
-          <div className="card pad-md" style={{ marginBottom: '1.75rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
                   Active CVE Advisories Register ({totalEntries} Records)
                 </h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Sorted by CVSS Score (descending) & Advisory Date. Detailed impact disclosures and targets.
+                  Sorted by CVSS Score (descending) & Advisory Date. Dense printable format with active telemetry links.
                 </span>
               </div>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+              <table
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  border: '1px solid var(--border)',
+                  fontSize: '0.82rem',
+                }}
+              >
                 <thead>
-                  <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--bg-card-hover)', textAlign: 'left', color: 'var(--text-secondary)' }}>
-                    <th style={{ padding: '0.6rem 0.5rem', width: '50px' }}>S.No</th>
-                    <th style={{ padding: '0.6rem 0.6rem', width: '95px' }}>Date</th>
-                    <th style={{ padding: '0.6rem 0.6rem', minWidth: '160px', maxWidth: '240px' }}>Product</th>
-                    <th style={{ padding: '0.6rem 0.6rem', width: '135px' }}>CVE ID</th>
-                    <th style={{ padding: '0.6rem 0.5rem', width: '90px' }}>Severity</th>
-                    <th style={{ padding: '0.6rem 0.5rem', width: '70px' }}>CVSS</th>
-                    <th style={{ padding: '0.6rem 0.5rem', width: '70px' }}>Priority</th>
-                    <th style={{ padding: '0.6rem 0.6rem', minWidth: '220px' }}>Vulnerability Impact</th>
-                    <th style={{ padding: '0.6rem 0.6rem', width: '130px' }}>Fixed Release</th>
-                    <th style={{ padding: '0.6rem 0.6rem', width: '90px' }}>Advisory</th>
+                  <tr
+                    style={{
+                      background: '#0f172a',
+                      color: '#ffffff',
+                      textAlign: 'left',
+                      borderBottom: '2px solid #334155',
+                    }}
+                  >
+                    <th style={{ padding: '0.65rem 0.5rem', color: '#ffffff', fontWeight: 600, width: '50px', textAlign: 'center', borderRight: '1px solid #334155' }}>
+                      S.No.
+                    </th>
+                    <th style={{ padding: '0.65rem 0.6rem', color: '#ffffff', fontWeight: 600, width: '105px', whiteSpace: 'nowrap', borderRight: '1px solid #334155' }}>
+                      Advisory Date
+                    </th>
+                    <th style={{ padding: '0.65rem 0.6rem', color: '#ffffff', fontWeight: 600, minWidth: '150px', maxWidth: '220px', borderRight: '1px solid #334155' }}>
+                      Product
+                    </th>
+                    <th style={{ padding: '0.65rem 0.6rem', color: '#ffffff', fontWeight: 600, width: '135px', whiteSpace: 'nowrap', borderRight: '1px solid #334155' }}>
+                      CVE ID
+                    </th>
+                    <th style={{ padding: '0.65rem 0.5rem', color: '#ffffff', fontWeight: 600, width: '90px', borderRight: '1px solid #334155' }}>
+                      Severity
+                    </th>
+                    <th style={{ padding: '0.65rem 0.5rem', color: '#ffffff', fontWeight: 600, width: '70px', borderRight: '1px solid #334155' }}>
+                      CVSS
+                    </th>
+                    <th style={{ padding: '0.65rem 0.6rem', color: '#ffffff', fontWeight: 600, minWidth: '220px', maxWidth: '340px', borderRight: '1px solid #334155' }}>
+                      Vulnerability / Impact
+                    </th>
+                    <th style={{ padding: '0.65rem 0.6rem', color: '#ffffff', fontWeight: 600, minWidth: '160px' }}>
+                      Fixed Release / Recommended Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={10} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <td colSpan={8} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                         No advisories found matching the selected filters.
                       </td>
                     </tr>
                   ) : (
                     paginatedRows.map((row, idx) => {
                       const sNo = (currentPage - 1) * pageSize + idx + 1;
+                      const isEven = idx % 2 === 0;
                       return (
                         <tr
                           key={`${row.cveId}-${idx}`}
                           style={{
+                            background: isEven ? 'var(--bg-card)' : 'var(--bg-card-hover)',
                             borderBottom: '1px solid var(--border)',
                             transition: 'background 0.15s',
                           }}
                         >
-                          <td style={{ padding: '0.6rem 0.5rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                          <td style={{ padding: '0.55rem 0.5rem', color: 'var(--text-muted)', fontWeight: 500, textAlign: 'center', borderRight: '1px solid var(--border)' }}>
                             {sNo}
                           </td>
-                          <td style={{ padding: '0.6rem 0.6rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                          <td style={{ padding: '0.55rem 0.6rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', borderRight: '1px solid var(--border)' }}>
                             {row.advisoryDate}
                           </td>
-                          {/* Task 2: Truncated product display with title tooltip on hover */}
+                          {/* Truncated product display with hover tooltip */}
                           <td
-                            style={{ padding: '0.6rem 0.6rem', color: 'var(--text-primary)', fontWeight: 500, maxWidth: '240px' }}
+                            style={{ padding: '0.55rem 0.6rem', color: 'var(--text-primary)', fontWeight: 500, maxWidth: '220px', borderRight: '1px solid var(--border)' }}
                             title={row.product}
                           >
                             {formatProductDisplay(row.product)}
                           </td>
-                          <td style={{ padding: '0.6rem 0.6rem', fontWeight: 600, color: 'var(--accent-blue)', whiteSpace: 'nowrap' }}>
-                            <a href={row.advisoryLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
-                              {row.cveId}
-                            </a>
+                          {/* CVE ID with clickable link to Cisco advisory */}
+                          <td style={{ padding: '0.55rem 0.6rem', fontWeight: 600, color: 'var(--accent-blue)', whiteSpace: 'nowrap', borderRight: '1px solid var(--border)' }}>
+                            {row.advisoryLink ? (
+                              <a
+                                href={row.advisoryLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ textDecoration: 'none', color: 'inherit' }}
+                                title={`Open official Cisco Advisory for ${row.cveId}`}
+                              >
+                                {row.cveId} ↗
+                              </a>
+                            ) : (
+                              row.cveId
+                            )}
                           </td>
-                          <td style={{ padding: '0.6rem 0.5rem' }}>
+                          <td style={{ padding: '0.55rem 0.5rem', borderRight: '1px solid var(--border)' }}>
                             <span className={`badge ${getSeverityBadgeClass(row.severity)}`}>
                               {row.severity}
                             </span>
                           </td>
-                          <td style={{ padding: '0.6rem 0.5rem', fontWeight: 700, color: getCvssColor(row.cvss) }}>
+                          <td style={{ padding: '0.55rem 0.5rem', fontWeight: 700, color: getCvssColor(row.cvss), borderRight: '1px solid var(--border)' }}>
                             {row.cvss.toFixed(1)}
                           </td>
-                          <td style={{ padding: '0.6rem 0.5rem' }}>
-                            <span
-                              style={{
-                                padding: '0.15rem 0.45rem',
-                                borderRadius: '4px',
-                                fontSize: '0.74rem',
-                                fontWeight: 700,
-                                background: row.priority === 'P1' ? 'rgba(220, 38, 38, 0.15)' : 'rgba(100, 116, 139, 0.15)',
-                                color: row.priority === 'P1' ? '#dc2626' : '#64748b',
-                              }}
-                            >
-                              {row.priority}
-                            </span>
+                          {/* Truncated Impact with hover tooltip */}
+                          <td
+                            style={{
+                              padding: '0.55rem 0.6rem',
+                              color: 'var(--text-primary)',
+                              lineHeight: 1.4,
+                              maxWidth: '340px',
+                              borderRight: '1px solid var(--border)',
+                            }}
+                            title={row.vulnerabilityImpact}
+                          >
+                            {formatImpactDisplay(row.vulnerabilityImpact)}
                           </td>
-                          <td style={{ padding: '0.6rem 0.6rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                            {row.vulnerabilityImpact}
-                          </td>
-                          <td style={{ padding: '0.6rem 0.6rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                            {row.fixedRelease}
-                          </td>
-                          <td style={{ padding: '0.6rem 0.6rem', whiteSpace: 'nowrap' }}>
-                            <a
-                              href={row.advisoryLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-ghost"
-                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem', color: 'var(--accent-blue)' }}
-                            >
-                              View ↗
-                            </a>
+                          {/* Fixed Release / Recommended Action */}
+                          <td
+                            style={{
+                              padding: '0.55rem 0.6rem',
+                              color: 'var(--text-secondary)',
+                              fontSize: '0.8rem',
+                            }}
+                            title={row.fixedRelease}
+                          >
+                            {row.fixedRelease || 'Refer to Cisco Advisory bulletin'}
                           </td>
                         </tr>
                       );
@@ -725,7 +607,7 @@ export default function VulnerabilitiesPage() {
               </table>
             </div>
 
-            {/* Task 3: Bottom Pagination Controls */}
+            {/* Pagination Controls */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
                 Showing <strong>{startEntry}</strong> to <strong>{endEntry}</strong> of <strong>{totalEntries}</strong> entries
