@@ -7,6 +7,27 @@ const path = require('path');
 const os = require('os');
 const ruleEngine = require('./ruleEngine');
 
+const PDF_COMPRESSION = {
+  // Multi-site clients (>10 sites) — compress per-site reviews
+  MULTI_SITE_THRESHOLD: 10,
+  MULTI_SITE_PAGES_PER_SITE: 1,      // was 3 → 1 (massive saving)
+  SINGLE_SITE_PAGES_PER_SITE: 3,     // small clients (JFL 8 sites) keep 3
+  
+  // Appendix C (raw incidents audit trail)
+  APPENDIX_C_MAX_ROWS: 100,          // was 435 → 100 for JFL, 337 → 100 MMTC
+  APPENDIX_C_ENABLED: true,          // Set to false to fully remove
+  
+  // Skip empty AP incident pages
+  SKIP_EMPTY_AP_PAGES: true,
+  
+  // Slightly higher row density (safe — Wave 4 used 15)
+  ROWS_PER_PAGE: 18,
+  
+  // Tighter CSS
+  REDUCE_MARGINS: true,              // 6mm → 4mm
+  REDUCE_FONT_SIZE: true,            // 9.5px → 8.5px
+};
+
 let puppeteer, puppeteerCore, sparticuzChromium;
 try { puppeteer = require('puppeteer'); } catch (_) { puppeteer = null; }
 try {
@@ -139,9 +160,10 @@ async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
     const tSet = Date.now() - tSetStart;
 
     const tPdfStart = Date.now();
+    const marginMm = PDF_COMPRESSION.REDUCE_MARGINS ? '4mm' : '6mm';
     const pdfBuffer = await page.pdf({
       format: 'A4', landscape: true, printBackground: true,
-      margin: { top: '6mm', bottom: '6mm', left: '6mm', right: '6mm' },
+      margin: { top: marginMm, bottom: marginMm, left: marginMm, right: marginMm },
     });
     const tPdf = Date.now() - tPdfStart;
     console.log(`[pdfGenerator] Timings: launch=${tLaunch}ms, setContent=${tSet}ms, pdfRender=${tPdf}ms`);
@@ -231,7 +253,11 @@ function buildHTMLReport(data) {
   
   // Contractual SLA Uptime Target is 99.30%
   const slaTargetNum = 99.30;
-  const ROWS_PER_PAGE = 15;
+  const ROWS_PER_PAGE = PDF_COMPRESSION.ROWS_PER_PAGE || 18;
+  const isMultiSite = siteSummary.length > PDF_COMPRESSION.MULTI_SITE_THRESHOLD;
+  const pagesPerSite = isMultiSite 
+    ? PDF_COMPRESSION.MULTI_SITE_PAGES_PER_SITE 
+    : PDF_COMPRESSION.SINGLE_SITE_PAGES_PER_SITE;
   let pageCounter = 1;
 
   const fmtNum = (val, def = '0') => (val !== undefined && val !== null ? String(val) : def);
@@ -391,6 +417,169 @@ function buildHTMLReport(data) {
     const siteIncs = incidentsList.filter(i => (i.SiteID === siteName || i.Location === siteName));
     const siteApIncs = siteIncs.filter(i => (i.DeviceType || '').toLowerCase().includes('ap') || (i.DeviceID && i.DeviceID.includes('-AP-')));
 
+    if (pagesPerSite === 1) {
+      // Multi-Site Compact: 1 page per site (switches table, chunked only if >ROWS_PER_PAGE switches)
+      const swAt100Count = siteSws.filter(d => (d.__proactiveUptime ?? 100) >= 100).length;
+      const swChunks = chunkArray(siteSws, ROWS_PER_PAGE);
+      if (swChunks.length === 0) swChunks.push([]);
+
+      swChunks.forEach((swChunk, chunkIdx) => {
+        const pageLabel = swChunks.length > 1 ? ` (Part ${chunkIdx + 1} of ${swChunks.length})` : '';
+        const swReportRows = swChunk.map((s, idx) => {
+          const globalIndex = chunkIdx * ROWS_PER_PAGE + idx + 1;
+          let rackName = s.Rack || 'Main Rack';
+          if (rackName === 'NA' || rackName.includes('Not Cover') || rackName.length > 25) rackName = 'Main Rack';
+          return `
+            <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
+              <td class="center">${globalIndex}</td>
+              <td class="text-left">${siteName}</td>
+              <td class="bold text-left">${s.Hostname || s.DeviceID || 'N/A'}</td>
+              <td class="font-mono text-left">${s.SerialNo || s.DeviceID || 'N/A'}</td>
+              <td class="center">${s.DeviceType || 'SW'}</td>
+              <td class="text-left">${rackName}</td>
+              <td class="center"><span class="${getSlaClass(s.__proactiveUptime ?? 100)}">${fmtPct(s.__proactiveUptime ?? 100)}</span></td>
+            </tr>
+          `;
+        }).join('');
+
+        perSiteSuitesHtml += `
+        <!-- SITE REVIEW: Multi-Site Compact -->
+        <div class="page">
+          <div class="header">
+            <div>
+              <h1>SITE REVIEW &bull; ${siteIdx + 1} OF ${targetSites.length} &bull; ${siteName} — Site Performance &amp; Device Status${pageLabel}</h1>
+              <div class="subtitle">Operational Availability, Monitored Assets &amp; Status</div>
+            </div>
+            <div class="period-badge">${reportingPeriod}</div>
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-title">Aggregated Switch Uptime</div>
+              <div class="kpi-value text-primary">${fmtPct(proVal)}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">Switches Monitored</div>
+              <div class="kpi-value">${siteSws.length}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">Primary RCA Driver</div>
+              <div style="font-size: 13px; font-weight: 700; color: #0284c7; margin-top: 4px;">${swRca}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">Switch at 100% uptime</div>
+              <div class="kpi-value text-green">${swAt100Count}</div>
+            </div>
+          </div>
+          <div style="page-break-inside: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 6%; text-align: center;">S.N</th>
+                  <th style="width: 14%; text-align: left;">Location</th>
+                  <th style="width: 22%; text-align: left;">Hostname</th>
+                  <th style="width: 20%; text-align: left;">Serial No.</th>
+                  <th style="width: 10%; text-align: center;">Device Type</th>
+                  <th style="width: 14%; text-align: left;">Rack no.</th>
+                  <th style="width: 14%; text-align: center;">Proactive -Uptime%</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${swReportRows || '<tr><td colspan="7" class="center">No switches monitored at this location.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+          <div class="footer">
+            <div>${clientShort} – Proactive Monthly Review</div>
+            <div>Page ${pageCounter++}</div>
+          </div>
+        </div>
+        `;
+      });
+
+      // If site has AP incidents, also render AP incidents table for this site
+      if (siteApIncs.length > 0) {
+        const apIncMetCount = siteApIncs.filter(i => i.sla_status !== 'SLA Breached').length;
+        const apIncBreachCount = siteApIncs.filter(i => i.sla_status === 'SLA Breached').length;
+        const apChunks = chunkArray(siteAps.length ? siteAps : siteApIncs, ROWS_PER_PAGE);
+        if (apChunks.length === 0) apChunks.push([]);
+
+        apChunks.forEach((apChunk, chunkIdx) => {
+          const pageLabel = apChunks.length > 1 ? ` (Page ${chunkIdx + 1} of ${apChunks.length})` : '';
+          const apReportRows = apChunk.map((a, idx) => {
+            const globalIndex = chunkIdx * ROWS_PER_PAGE + idx + 1;
+            const incs = siteApIncs.filter(i => i.DeviceID === a.DeviceID || i.SerialNo === a.SerialNo);
+            const incCount = incs.length || 1;
+            const rca = (incs.length > 0 && incs[0].RCA) ? incs[0].RCA : (a.RCA || apRca);
+            return `
+              <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
+                <td class="center">${globalIndex}</td>
+                <td class="text-left">${siteName}</td>
+                <td class="bold text-left">${a.Hostname || a.DeviceID || 'N/A'}</td>
+                <td class="font-mono text-left">${a.SerialNo || a.DeviceID || 'N/A'}</td>
+                <td class="center">${a.DeviceType || 'AP'}</td>
+                <td class="center bold text-primary">${incCount}</td>
+                <td class="text-left">${rca}</td>
+              </tr>
+            `;
+          }).join('');
+
+          perSiteSuitesHtml += `
+          <!-- SITE REVIEW: Multi-Site AP Incidents -->
+          <div class="page">
+            <div class="header">
+              <div>
+                <h1>SITE REVIEW &bull; ${siteName} — AP Incidents &amp; RCA${pageLabel}</h1>
+                <div class="subtitle">Access Point Incident Log &amp; Root Cause Analysis</div>
+              </div>
+              <div class="period-badge">${reportingPeriod}</div>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-title">Total number of incidents</div>
+                <div class="kpi-value text-primary">${siteApIncs.length}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-title">Met Cases</div>
+                <div class="kpi-value text-green">${apIncMetCount}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-title">Breach Cases</div>
+                <div class="kpi-value text-danger">${apIncBreachCount}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-title">Primary RCA Driver</div>
+                <div style="font-size: 13px; font-weight: 700; color: #7c3aed; margin-top: 4px;">${apRca}</div>
+              </div>
+            </div>
+            <div style="page-break-inside: auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 6%; text-align: center;">S NO</th>
+                    <th style="width: 14%; text-align: left;">Location</th>
+                    <th style="width: 22%; text-align: left;">Hostname</th>
+                    <th style="width: 20%; text-align: left;">Serial No.</th>
+                    <th style="width: 10%; text-align: center;">Device Type</th>
+                    <th style="width: 12%; text-align: center;">No of Incidents</th>
+                    <th style="width: 16%; text-align: left;">Primary RCA Driver</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${apReportRows}
+                </tbody>
+              </table>
+            </div>
+            <div class="footer">
+              <div>${clientShort} – Proactive Monthly Review</div>
+              <div>Page ${pageCounter++}</div>
+            </div>
+          </div>
+          `;
+        });
+      }
+      return;
+    }
+
     // Page A: Statistical Analytics Page
     const rackMap = {};
     siteSws.forEach(d => {
@@ -525,6 +714,12 @@ function buildHTMLReport(data) {
     });
 
     // Page C: AP Incidents & RCA Table (Paginated in ROWS_PER_PAGE rows per page)
+    const hasApIncidents = siteApIncs.length > 0;
+    if (!hasApIncidents && PDF_COMPRESSION.SKIP_EMPTY_AP_PAGES) {
+      // Skip empty AP incident page entirely — don't render filler page (Task 5.3)
+      return;
+    }
+
     const apIncMetCount = siteApIncs.filter(i => i.sla_status !== 'SLA Breached').length;
     const apIncBreachCount = siteApIncs.filter(i => i.sla_status === 'SLA Breached').length;
     const apChunks = chunkArray(siteAps, ROWS_PER_PAGE);
@@ -603,6 +798,7 @@ function buildHTMLReport(data) {
       </div>
       `;
     });
+
   });
 
   // 3. Engineer Breakdown Table Rows
@@ -770,77 +966,107 @@ function buildHTMLReport(data) {
     `;
   }).join('');
 
-  // 6. Appendix C: All Incident Audit Trail Records (Paginated in ROWS_PER_PAGE rows per page — Task 4.1)
-  const allIncidents = data.incidents || data.incidentDetails || data.incidentList || [];
-  const appIncChunks = chunkArray(allIncidents, ROWS_PER_PAGE);
-  if (appIncChunks.length === 0) appIncChunks.push([]);
+  // 6. Appendix C: All Incident Audit Trail Records (Paginated in ROWS_PER_PAGE rows per page — Task 4.1 & 5.2)
+  let appendixCPagesHtml = '';
+  if (PDF_COMPRESSION.APPENDIX_C_ENABLED) {
+    const allIncidents = data.incidents || data.incidentDetails || data.incidentList || [];
+    let incidentsToShow = allIncidents;
+    let truncationNotice = null;
 
-  const appendixCPagesHtml = appIncChunks.map((chunk, chunkIdx) => {
-    const pageLabel = appIncChunks.length > 1 ? ` (Page ${chunkIdx + 1} of ${appIncChunks.length})` : '';
-    const rowsHtml = chunk.map((inc, idx) => {
-      if (!inc) return '';
-      const ref = inc.display_reference ? `${inc.display_reference.type}: ${inc.display_reference.value}` : (inc.TicketNumber || inc.IncidentNumber || inc.IncidentID || (idx >= 0 ? `INC-${chunkIdx * ROWS_PER_PAGE + idx + 1}` : 'N/A'));
-      const slaBadge = inc.sla_status === 'SLA Breached' 
-        ? '<span class="badge-danger">SLA Breached</span>'
-        : '<span class="badge-success">SLA Met</span>';
-      const loc = inc.Location || inc.SiteID || inc.Site || 'N/A';
-      const dev = inc.DeviceID || inc.SerialNo || inc.Hostname || 'N/A';
-      const type = inc.DeviceType || (inc.DeviceID?.includes('-AP-') ? 'AP' : (inc.DeviceID?.includes('-SW-') ? 'Switch' : 'N/A'));
-      const rawHold = inc.HoldTimeMin !== undefined && inc.HoldTimeMin !== '' ? inc.HoldTimeMin : inc.HoldDurationMin;
-      const rawFix = inc.ActualResolutionMin !== undefined && inc.ActualResolutionMin !== '' ? inc.ActualResolutionMin : inc.ResolutionMin;
-      const holdTime = fmtMin(rawHold);
-      const fixTime = fmtMin(rawFix);
-      const rca = inc.RCA || inc.Category || 'Operational Fault';
+    if (PDF_COMPRESSION.APPENDIX_C_MAX_ROWS && allIncidents.length > PDF_COMPRESSION.APPENDIX_C_MAX_ROWS) {
+      const sortedIncidents = [...allIncidents].sort((a, b) => {
+        const da = new Date(b.CreatedDate || b.OpenedAt || b.OpenDate || b.Date || 0).getTime() || 0;
+        const db = new Date(a.CreatedDate || a.OpenedAt || a.OpenDate || a.Date || 0).getTime() || 0;
+        return da - db;
+      });
+      incidentsToShow = sortedIncidents.slice(0, PDF_COMPRESSION.APPENDIX_C_MAX_ROWS);
+      truncationNotice = `Showing ${incidentsToShow.length} of ${allIncidents.length} incidents (top ${incidentsToShow.length} most recent). Full audit trail available in JSON export.`;
+    }
+
+    const appIncChunks = chunkArray(incidentsToShow, ROWS_PER_PAGE);
+    if (appIncChunks.length === 0) appIncChunks.push([]);
+
+    appendixCPagesHtml = appIncChunks.map((chunk, chunkIdx) => {
+      const pageLabel = appIncChunks.length > 1 ? ` (Page ${chunkIdx + 1} of ${appIncChunks.length})` : '';
+      const rowsHtml = chunk.map((inc, idx) => {
+        if (!inc) return '';
+        const ref = inc.display_reference ? `${inc.display_reference.type}: ${inc.display_reference.value}` : (inc.TicketNumber || inc.IncidentNumber || inc.IncidentID || (idx >= 0 ? `INC-${chunkIdx * ROWS_PER_PAGE + idx + 1}` : 'N/A'));
+        const slaBadge = inc.sla_status === 'SLA Breached' 
+          ? '<span class="badge-danger">SLA Breached</span>'
+          : '<span class="badge-success">SLA Met</span>';
+        const loc = inc.Location || inc.SiteID || inc.Site || 'N/A';
+        const dev = inc.DeviceID || inc.SerialNo || inc.Hostname || 'N/A';
+        const type = inc.DeviceType || (inc.DeviceID?.includes('-AP-') ? 'AP' : (inc.DeviceID?.includes('-SW-') ? 'Switch' : 'N/A'));
+        const rawHold = inc.HoldTimeMin !== undefined && inc.HoldTimeMin !== '' ? inc.HoldTimeMin : inc.HoldDurationMin;
+        const rawFix = inc.ActualResolutionMin !== undefined && inc.ActualResolutionMin !== '' ? inc.ActualResolutionMin : inc.ResolutionMin;
+        const holdTime = fmtMin(rawHold);
+        const fixTime = fmtMin(rawFix);
+        const rca = inc.RCA || inc.Category || 'Operational Fault';
+
+        return `
+          <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
+            <td class="bold font-mono text-left">${ref}</td>
+            <td class="text-left">${loc}</td>
+            <td class="text-left">${dev}</td>
+            <td class="center bold">${type}</td>
+            <td class="center nowrap">${holdTime}</td>
+            <td class="center nowrap">${fixTime}</td>
+            <td class="text-left">${rca}</td>
+            <td class="center">${slaBadge}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const noticeRow = (chunkIdx === 0 && truncationNotice) ? `
+        <tr>
+          <td colspan="8" class="center bold" style="background: #eff6ff; color: #1e40af; padding: 6px 8px; border-bottom: 2px solid #93c5fd;">
+            ℹ ${truncationNotice}
+          </td>
+        </tr>
+      ` : '';
+
+      const countLabel = truncationNotice 
+        ? `${incidentsToShow.length} of ${allIncidents.length} Tickets` 
+        : `${allIncidents.length} Tickets`;
 
       return `
-        <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-          <td class="bold font-mono text-left">${ref}</td>
-          <td class="text-left">${loc}</td>
-          <td class="text-left">${dev}</td>
-          <td class="center bold">${type}</td>
-          <td class="center nowrap">${holdTime}</td>
-          <td class="center nowrap">${fixTime}</td>
-          <td class="text-left">${rca}</td>
-          <td class="center">${slaBadge}</td>
-        </tr>
+      <div class="page">
+        <div class="header">
+          <div>
+            <h1>Appendix: Raw Incidents Audit Trail (${countLabel})${pageLabel}</h1>
+            <div class="subtitle">Complete Monitored Incidents Log with Hold Time, Resolution &amp; SLA Status</div>
+          </div>
+          <div class="period-badge">${reportingPeriod}</div>
+        </div>
+        <div style="page-break-inside: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 16%; text-align: left;">Reference (Ticket / Incident ID)</th>
+                <th style="width: 12%; text-align: left;">Location</th>
+                <th style="width: 15%; text-align: left;">Device ID / Serial</th>
+                <th style="width: 6%; text-align: center;">Type</th>
+                <th style="width: 10%; text-align: center;">Hold Time</th>
+                <th style="width: 10%; text-align: center;">Fix Time</th>
+                <th style="width: 18%; text-align: left;">RCA Driver</th>
+                <th style="width: 13%; text-align: center;">SLA Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${noticeRow}
+              ${rowsHtml || '<tr><td colspan="8" class="center">No incident records found. Operations 100% Stable.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+        <div class="footer">
+          <div>Appendix C: Incidents Audit Trail — SSOT Engine</div>
+          <div>Page ${pageCounter++}</div>
+        </div>
+      </div>
       `;
     }).join('');
+  }
 
-    return `
-    <div class="page">
-      <div class="header">
-        <div>
-          <h1>Appendix: Raw Incidents Audit Trail (${allIncidents.length} Tickets)${pageLabel}</h1>
-          <div class="subtitle">Complete Monitored Incidents Log with Hold Time, Resolution &amp; SLA Status</div>
-        </div>
-        <div class="period-badge">${reportingPeriod}</div>
-      </div>
-      <div style="page-break-inside: auto;">
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 16%; text-align: left;">Reference (Ticket / Incident ID)</th>
-              <th style="width: 12%; text-align: left;">Location</th>
-              <th style="width: 15%; text-align: left;">Device ID / Serial</th>
-              <th style="width: 6%; text-align: center;">Type</th>
-              <th style="width: 10%; text-align: center;">Hold Time</th>
-              <th style="width: 10%; text-align: center;">Fix Time</th>
-              <th style="width: 18%; text-align: left;">RCA Driver</th>
-              <th style="width: 13%; text-align: center;">SLA Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml || '<tr><td colspan="8" class="center">No incident records found. Operations 100% Stable.</td></tr>'}
-          </tbody>
-        </table>
-      </div>
-      <div class="footer">
-        <div>Appendix C: Incidents Audit Trail — SSOT Engine</div>
-        <div>Page ${pageCounter++}</div>
-      </div>
-    </div>
-    `;
-  }).join('');
 
   return `
 <!DOCTYPE html>
@@ -851,18 +1077,18 @@ function buildHTMLReport(data) {
   ${chartJsScriptTag}
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    body { margin: 0; padding: 0; background: #ffffff; color: #0f172a; font-size: 11px; line-height: 1.4; }
+    body { margin: 0; padding: 0; background: #ffffff; color: #0f172a; font-size: 10px; line-height: 1.35; }
     
     @page {
       size: A4 landscape;
-      margin: 6mm;
+      margin: 4mm;
     }
 
     .page {
       page-break-after: always;
       page-break-inside: auto;
       box-sizing: border-box;
-      padding: 16px 20px;
+      padding: 12px 16px;
       position: relative;
       background: #ffffff;
       min-height: 0;
@@ -879,12 +1105,12 @@ function buildHTMLReport(data) {
       justify-content: space-between;
       align-items: center;
       border-bottom: 3px solid #2563eb;
-      padding-bottom: 8px;
-      margin-bottom: 12px;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
     }
-    .header h1 { margin: 0; font-size: 18px; color: #0f172a; font-weight: 800; letter-spacing: -0.3px; }
-    .header .subtitle { font-size: 11px; color: #64748b; margin-top: 2px; font-weight: 500; }
-    .header .period-badge { background: #eff6ff; color: #1d4ed8; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 11px; border: 1px solid #bfdbfe; }
+    .header h1 { margin: 0; font-size: 16px; color: #0f172a; font-weight: 800; letter-spacing: -0.3px; }
+    .header .subtitle { font-size: 10px; color: #64748b; margin-top: 2px; font-weight: 500; }
+    .header .period-badge { background: #eff6ff; color: #1d4ed8; font-weight: 700; padding: 4px 12px; border-radius: 20px; font-size: 10px; border: 1px solid #bfdbfe; }
 
     .cover-page {
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1e3a5f 100%);
@@ -905,11 +1131,11 @@ function buildHTMLReport(data) {
 
     .footer {
       border-top: 1px solid #e2e8f0;
-      padding-top: 6px;
-      margin-top: 12px;
+      padding-top: 4px;
+      margin-top: 8px;
       display: flex;
       justify-content: space-between;
-      font-size: 9px;
+      font-size: 8.5px;
       color: #94a3b8;
       font-weight: 500;
     }
@@ -917,18 +1143,18 @@ function buildHTMLReport(data) {
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 12px;
+      gap: 10px;
+      margin-bottom: 10px;
     }
     .kpi-card {
       background: #f8fafc;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 8px 10px;
     }
-    .kpi-title { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
-    .kpi-value { font-size: 20px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0; }
-    .kpi-sub { font-size: 9px; color: #64748b; }
+    .kpi-title { font-size: 9.5px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 18px; font-weight: 800; color: #0f172a; margin: 3px 0 2px 0; }
+    .kpi-sub { font-size: 8.5px; color: #64748b; }
 
     .badge { padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; display: inline-block; text-align: center; }
     .badge-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
@@ -940,30 +1166,31 @@ function buildHTMLReport(data) {
       width: 100%;
       border-collapse: collapse;
       margin-top: 6px;
-      margin-bottom: 10px;
-      font-size: 9.5px;
+      margin-bottom: 8px;
+      font-size: 8.5px;
       table-layout: auto;
     }
     thead { display: table-header-group; }
     th {
       background: #1e293b;
       color: #ffffff;
-      padding: 6px 8px;
+      padding: 5px 6px;
       font-weight: 700;
-      font-size: 9.5px;
+      font-size: 8.5px;
       text-transform: uppercase;
       letter-spacing: 0.4px;
       border: 1px solid #0f172a;
       vertical-align: middle;
     }
     td {
-      padding: 5px 8px;
+      padding: 4px 6px;
       border-bottom: 1px solid #e2e8f0;
       border-right: 1px solid #f1f5f9;
       vertical-align: middle;
-      height: 20px;
+      height: 18px;
       word-wrap: break-word;
       overflow-wrap: break-word;
+      font-size: 8.5px;
     }
     td.wrap-cell {
       word-wrap: break-word;
@@ -982,7 +1209,7 @@ function buildHTMLReport(data) {
     .text-right { text-align: right !important; }
     .center { text-align: center !important; }
     .bold { font-weight: 700; }
-    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 8.5px; }
     .text-primary { color: #2563eb; }
     .text-blue { color: #0284c7; }
     .text-purple { color: #7c3aed; }
@@ -1022,9 +1249,10 @@ function buildHTMLReport(data) {
       border: 1px solid #cbd5e1;
       border-top: 3px solid #2563eb;
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.03);
     }
+
     .site-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
     .site-card-title { font-weight: 800; font-size: 12px; color: #0f172a; display: block; }
     .site-card-sub { font-size: 9px; color: #64748b; font-weight: 500; }
