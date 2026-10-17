@@ -583,6 +583,9 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Slide 4: Overall Network Health
   buildNetworkHealthSlide(pres, exec, siteSummary, incidents);
 
+  // Slide 5: Site Switch Uptime Bar Chart (PPT-3)
+  buildSiteUptimeChartSlide(pres, siteSummary, displayPeriod, clientShort, isJFL);
+
   // Slide 6: Inventory Summary
   buildInventorySlide(pres, exec, siteSummary, devices);
 
@@ -608,7 +611,9 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Slide 13: Risk Assessment
   buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown);
 
-  // Per-site 3-slide suite for ALL sites (Overview, Operations, Tickets & RCA)
+  // Per-site suite for ALL sites (Overview, Operations, Tickets & RCA)
+  // PPT-4 Fix: If >10 sites (e.g. MMTC), generate 1 Overview slide per site to prevent slide bloat (<50 slides)
+  const isMultiSiteBloat = targetSites.length > 10;
   targetSites.forEach((siteKey, siteIdx) => {
     const siteData = findSite(siteSummary, siteKey);
     const siteSws  = siteSwsMap[siteKey]  || [];
@@ -616,8 +621,10 @@ async function buildPresentation(data, outputPath, options = {}) {
     const siteAps  = siteApsMap[siteKey]  || [];
 
     buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1, targetSites.length, clientShort, isJFL);
-    buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1, targetSites.length, clientShort, isJFL);
-    buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1, targetSites.length, clientShort);
+    if (!isMultiSiteBloat) {
+      buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1, targetSites.length, clientShort, isJFL);
+      buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1, targetSites.length, clientShort);
+    }
   });
 
   // AI Recommendations
@@ -1059,6 +1066,59 @@ function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incide
   });
 }
 
+// ── Slide 5: Site Switch Uptime Bar Chart (PPT-3) ──────────────────────────
+function buildSiteUptimeChartSlide(pres, siteSummary, displayPeriod, clientShort = 'Client', isJFL = true) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'SITE AVAILABILITY — SWITCH UPTIME %', 'Consolidated Operational Availability Across All Monitored Sites', _slideNum);
+
+  const validSites = siteSummary.filter(st => {
+    const n = String(st.siteId || '').toLowerCase().trim();
+    return !['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report'].includes(n) && !n.includes('sla_compliance') && n.length > 0;
+  });
+
+  const siteLabels = validSites.map(st => st.siteId);
+  const proVals = validSites.map(st => {
+    const v = parseFloat(st.proactiveSwitchUptime || st.switchUptime || 100);
+    return isNaN(v) ? 100 : parseFloat(v.toFixed(2));
+  });
+
+  const chartData = [
+    { name: 'Proactive Switch Uptime %', labels: siteLabels, values: proVals },
+  ];
+  if (isJFL) {
+    const jflVals = validSites.map(st => {
+      const v = parseFloat(st.jflSwitchUptime || st.switchUptime || 100);
+      return isNaN(v) ? 100 : parseFloat(v.toFixed(2));
+    });
+    chartData.push({ name: `${clientShort} Switch Uptime %`, labels: siteLabels, values: jflVals });
+  }
+
+  s.addChart(pres.ChartType.bar, chartData, {
+    x: 0.45, y: 1.15, w: 12.43, h: 4.8,
+    barDir: 'col',
+    chartColors: isJFL ? [C.BLUE_ACCENT, C.GREEN] : [C.BLUE_ACCENT],
+    showValue: true,
+    dataLabelFontSize: 8.5,
+    dataLabelColor: C.TEXT_DARK,
+    valAxisMaxVal: 100,
+    valAxisMinVal: 90,
+    showLegend: isJFL,
+    legendPos: 't',
+    catAxisLabelFontSize: 8.5,
+    valAxisLabelFontSize: 8.5,
+    valAxisLabelColor: C.TEXT_MUTED,
+    catAxisLabelColor: C.TEXT_DARK,
+    valGridLine: { style: 'solid', color: C.DIVIDER },
+  });
+
+  s.addText(`Contractual SLA Target: ${SLA_TARGET.toFixed(2)}% | Availability reflects net operational minutes during period: ${displayPeriod}.`, {
+    x: 0.45, y: 6.2, w: 12.43, h: 0.35,
+    fontSize: 9, italic: true, color: C.TEXT_MUTED, fontFace: 'Calibri',
+  });
+}
+
 // ── Slide 6: Inventory Summary ─────────────────────────────────────────────
 function buildInventorySlide(pres, exec, siteSummary, devices) {
   _slideNum++;
@@ -1086,26 +1146,54 @@ function buildInventorySlide(pres, exec, siteSummary, devices) {
 
   if (stockDevices.length > 0) {
     const stockEntries = Object.entries(stockBySite).sort((a, b) => b[1] - a[1]);
-    const COL_W = [4.5, 2.5, 5.43];
+    const COL_W = [2.6, 1.5, 2.7];
     const headers = [th('Site', 'left'), th('Stock Devices', 'center'), th('Note', 'left')];
-    const rows = stockEntries.slice(0, 10).map(([site, count], idx) => {
+    const rows = stockEntries.slice(0, 7).map(([site, count], idx) => {
       const fill = rowFill(idx);
       return [
-        td(site, fill, { bold: true, color: C.NAVY, align: 'left' }),
-        td(String(count), fill, { align: 'center', bold: true, color: C.AMBER }),
-        td('Excluded from SLA calculations per business specification', fill, { color: C.TEXT_MUTED, fontSize: 9 }),
+        td(site, fill, { bold: true, color: C.NAVY, align: 'left', fontSize: 9 }),
+        td(String(count), fill, { align: 'center', bold: true, color: C.AMBER, fontSize: 9 }),
+        td('Excluded from SLA per spec', fill, { color: C.TEXT_MUTED, fontSize: 8.5 }),
       ];
     });
     s.addTable([headers, ...rows], {
-      x: 0.45, y: 2.78, w: 12.43, colW: COL_W,
-      fontSize: 9.5, rowH: 0.4, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
+      x: 0.45, y: 2.78, w: 6.8, colW: COL_W,
+      fontSize: 9, rowH: 0.38, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: 'Calibri',
     });
   } else {
-    s.addText('No stock inventory devices registered in this reporting period.', {
-      x: 0.45, y: 2.9, w: 12.43, h: 0.4,
-      fontSize: 11, color: C.TEXT_MUTED, align: 'center', fontFace: 'Calibri',
+    s.addText('No stock inventory devices registered in this reporting period.\nAll monitored devices are active production hardware subject to contractual SLA.', {
+      x: 0.45, y: 3.2, w: 6.8, h: 1.2,
+      fontSize: 11, color: C.TEXT_MUTED, align: 'left', fontFace: 'Calibri',
     });
   }
+
+  // Inventory Doughnut Chart (PPT-3)
+  const swCount = exec.totalSwitches || devices.filter(d => /^sw$/i.test(d.DeviceType || '') || (d.DeviceType || '').toLowerCase().includes('switch')).length;
+  const apCount = exec.totalAPs || devices.filter(d => /^ap$/i.test(d.DeviceType || '') || (d.DeviceType || '').toLowerCase().includes('access')).length;
+  const stockCount = stockDevices.length;
+
+  const invChartLabels = stockCount > 0 
+    ? ['Active Switches', 'Active APs', 'Stock Spares']
+    : ['Active Switches', 'Active APs'];
+  const invChartVals = stockCount > 0
+    ? [swCount, apCount, stockCount]
+    : [swCount, apCount];
+  const invChartColors = stockCount > 0
+    ? [C.BLUE_ACCENT, C.TEAL, C.AMBER]
+    : [C.BLUE_ACCENT, C.TEAL];
+
+  s.addChart(pres.ChartType.doughnut, [
+    { name: 'Estate Distribution', labels: invChartLabels, values: invChartVals }
+  ], {
+    x: 7.55, y: 2.55, w: 5.3, h: 3.6,
+    chartColors: invChartColors,
+    holeSize: 55,
+    showLegend: true,
+    legendPos: 'b',
+    dataLabelFontSize: 9.5,
+    dataLabelColor: C.TEXT_DARK,
+    showValue: true,
+  });
 
   const narrative = [
     `Total monitored device estate: ${devices.length} devices across ${exec.totalSites || 8} sites.`,
@@ -1115,7 +1203,7 @@ function buildInventorySlide(pres, exec, siteSummary, devices) {
       ? `Stock devices represent spare/replacement capacity. Utilization should be reviewed quarterly.`
       : `Zero stock device inventory indicates full deployment — procure buffer stock for rapid incident recovery.`,
   ];
-  addNarrativeBox(s, 6.6, narrative, 'Inventory Insight');
+  addNarrativeBox(s, 6.35, narrative, 'Inventory Insight');
 }
 
 // ── Slide 7: Incident Overview ─────────────────────────────────────────────
@@ -1212,7 +1300,7 @@ function buildRCASlide(pres, rcaBreakdown, incidents, exec) {
   const rcaLabels = top8.map(r => r.rca.substring(0, 22));
   const rcaVals   = top8.map(r => r.count);
 
-  s.addChart('barH', [{ name: 'Incidents', labels: rcaLabels, values: rcaVals }], {
+  s.addChart(pres.ChartType?.bar || 'bar', [{ name: 'Incidents', labels: rcaLabels, values: rcaVals }], {
     x: 0.45, y: 1.05, w: 7.8, h: 4.0,
     barDir: 'bar',
     chartColors: [C.BLUE_ACCENT],

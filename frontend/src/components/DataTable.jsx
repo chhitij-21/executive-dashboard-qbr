@@ -22,7 +22,7 @@ const COLUMN_HEADER_MAP = {
   SerialNo: 'Serial Number',
   serialNumbers: 'Serial Number',
   ReplacedSerial: 'Faulty / Replaced Serial',
-  Location: 'Site Location',
+  Location: 'Location',
   CoreNonCore: 'Switch Type',
   uptime: 'Effective Uptime %',
   incCount: 'Incidents',
@@ -35,7 +35,7 @@ const COLUMN_HEADER_MAP = {
   slaTarget: 'SLA Target %',
   gap: 'Gap %',
   siteId: 'Site',
-  display_reference: 'Reference',
+  display_reference: 'Ticket / Reference',
   TicketNumber: 'Ticket Number',
   IncidentNumber: 'Incident ID',
   Category: 'Category / Type',
@@ -118,7 +118,17 @@ export default function DataTable({ columns, rows, title, noScroll = false, colu
                 <tr key={i} className={row.__slaBreach ? 'row-breach' : ''}>
                   {columns.map((col) => {
                     let val = row[col];
-                    if (val === null || val === undefined) {
+                    if (col === 'display_reference') {
+                      if (val && typeof val === 'object' && val.value) {
+                        val = `${val.type ? val.type + ': ' : ''}${val.value}`;
+                      } else if (!val) {
+                        val = row.TicketNumber || row.IncidentNumber || row.IncidentID || '—';
+                      }
+                    } else if (col === 'Location' || col === 'siteId') {
+                      if (!val || String(val).trim() === '' || val === 'Unknown') {
+                        val = '—';
+                      }
+                    } else if (val === null || val === undefined) {
                       if (col === 'periodUptime') {
                         val = row.periodUptime ?? row.monthlyUptime ?? row.quarterlyUptime ?? row.avgUptime ?? row.uptime;
                       } else if (col === 'status') {

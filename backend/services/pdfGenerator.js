@@ -204,6 +204,14 @@ function buildHTMLReport(data) {
     return isNaN(n) ? def : `${n.toFixed(2)}%`;
   };
 
+  const fmtMin = (val) => {
+    if (val === undefined || val === null || val === '' || val === 'NA' || val === 'N/A') return '0 min';
+    const s = String(val).replace(/mins?|minutes?/gi, '').trim();
+    const n = parseFloat(s);
+    if (isNaN(n) || n === 0) return '0 min';
+    return n < 1 ? `${n.toFixed(1)} min` : `${Math.round(n)} min`;
+  };
+
   const getSlaClass = (val, target = slaTargetNum) => {
     if (val === undefined || val === null) return 'badge-success';
     const n = parseFloat(String(val).replace('%', ''));
@@ -230,45 +238,96 @@ function buildHTMLReport(data) {
   `;
   }).join('');
 
-  // 1b. Site Inspector Summary Cards (Slide 4 Overview Cards)
-  const siteInspectorCardsHtml = siteSummary.map((s) => {
-    const proVal = s.proactiveTicketAvg ?? s.proactiveSwitchUptime ?? 100;
-    const jflVal = s.jflTicketAvg ?? s.jflSwitchUptime ?? 100;
-    const swRca = s.primaryRcaSwitches || s.primaryRca || 'Stable Operations (No Incidents)';
-    const apRca = s.primaryRcaAPs || s.primaryRcaForAPs || 'Stable Operations (No Incidents)';
-    const totalDevs = s.deviceCount || (s.switchCount + s.apCount) || 0;
-    const stockDevs = s.stockCount !== undefined ? s.stockCount : Math.max(0, totalDevs - ((s.switchCount || 0) + (s.apCount || 0)));
+  // 1b. Site Inspector Summary Cards (Paginated in chunks of 6 to prevent multi-site spillage — B3)
+  const siteInspectorChunks = chunkArray(siteSummary, 6);
+  if (siteInspectorChunks.length === 0) siteInspectorChunks.push([]);
+
+  const siteInspectorPagesHtml = siteInspectorChunks.map((chunk, chunkIdx) => {
+    const chunkLabel = siteInspectorChunks.length > 1 ? ` (Part ${chunkIdx + 1} of ${siteInspectorChunks.length})` : '';
+    const cardsHtml = chunk.map((s) => {
+      const proVal = s.proactiveTicketAvg ?? s.proactiveSwitchUptime ?? 100;
+      const jflVal = s.jflTicketAvg ?? s.jflSwitchUptime ?? 100;
+      const swRca = s.primaryRcaSwitches || s.primaryRca || 'Stable Operations (No Incidents)';
+      const apRca = s.primaryRcaAPs || s.primaryRcaForAPs || 'Stable Operations (No Incidents)';
+      const totalDevs = s.deviceCount || (s.switchCount + s.apCount) || 0;
+      const stockDevs = s.stockCount !== undefined ? s.stockCount : Math.max(0, totalDevs - ((s.switchCount || 0) + (s.apCount || 0)));
+
+      return `
+        <div class="site-inspector-card">
+          <div class="site-card-header">
+            <div>
+              <span class="site-card-title">${s.siteId}</span>
+              <span class="site-card-sub">${totalDevs} Monitored Assets (${s.switchCount || 0} SW / ${s.apCount || 0} AP / ${stockDevs} Stock)</span>
+            </div>
+            <span class="${getSlaClass(proVal)}">${fmtPct(proVal)}</span>
+          </div>
+          <div class="site-card-body">
+            <div class="site-stat-col">
+              <div class="stat-label">${isJFL ? `${clientShort} Switch Uptime` : 'Proactive Switch Uptime'}</div>
+              <div class="stat-val"><span class="${getSlaClass(isJFL ? jflVal : proVal)}">${fmtPct(isJFL ? jflVal : proVal)}</span></div>
+            </div>
+            <div class="site-stat-col">
+              <div class="stat-label">AP Incidents (Unique)</div>
+              <div class="stat-val text-primary">${s.apIncidents || 0} / ${s.uniqueAPsWithIncidents || 0}</div>
+            </div>
+            <div class="site-stat-col" style="grid-column: span 2;">
+              <div class="stat-label">Primary RCA (Switches)</div>
+              <div class="stat-val text-blue" style="font-size: 10px; font-weight: 600;">${swRca}</div>
+            </div>
+            <div class="site-stat-col" style="grid-column: span 2;">
+              <div class="stat-label">Primary RCA (APs)</div>
+              <div class="stat-val text-purple" style="font-size: 10px; font-weight: 600;">${apRca}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
 
     return `
-      <div class="site-inspector-card">
-        <div class="site-card-header">
-          <div>
-            <span class="site-card-title">${s.siteId}</span>
-            <span class="site-card-sub">${totalDevs} Monitored Assets (${s.switchCount || 0} SW / ${s.apCount || 0} AP / ${stockDevs} Stock)</span>
-          </div>
-          <span class="${getSlaClass(proVal)}">${fmtPct(proVal)}</span>
+    <!-- SLIDE 4: SITE INSPECTOR BREAKDOWN PART ${chunkIdx + 1} -->
+    <div class="page">
+      <div class="header">
+        <div>
+          <h1>Site Operational Inspection (${siteSummary.length} Monitored Sites)${chunkLabel}</h1>
+          <div class="subtitle">Location-Specific Breakdown of Switches, APs, Stock Inventory &amp; Incident Metrics</div>
         </div>
-        <div class="site-card-body">
-          <div class="site-stat-col">
-            <div class="stat-label">${isJFL ? `${clientShort} Switch Uptime` : 'Proactive Switch Uptime'}</div>
-            <div class="stat-val"><span class="${getSlaClass(isJFL ? jflVal : proVal)}">${fmtPct(isJFL ? jflVal : proVal)}</span></div>
-          </div>
-          <div class="site-stat-col">
-            <div class="stat-label">AP Incidents (Unique)</div>
-            <div class="stat-val text-primary">${s.apIncidents || 0} / ${s.uniqueAPsWithIncidents || 0}</div>
-          </div>
-          <div class="site-stat-col" style="grid-column: span 2;">
-            <div class="stat-label">Primary RCA (Switches)</div>
-            <div class="stat-val text-blue" style="font-size: 10px; font-weight: 600;">${swRca}</div>
-          </div>
-          <div class="site-stat-col" style="grid-column: span 2;">
-            <div class="stat-label">Primary RCA (APs)</div>
-            <div class="stat-val text-purple" style="font-size: 10px; font-weight: 600;">${apRca}</div>
-          </div>
-        </div>
+        <div class="period-badge">${reportingPeriod}</div>
       </div>
+
+      <div class="site-inspector-grid">
+        ${cardsHtml}
+      </div>
+
+      <div class="footer">
+        <div>Site Inspector Breakdown — SSOT Engine</div>
+        <div>Page ${pageCounter++}</div>
+      </div>
+    </div>
     `;
   }).join('');
+
+  // Extract chart data for in-page Chart.js (B2)
+  const validSiteEntries = siteSummary.filter(s => s.siteId && !['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report'].includes(s.siteId.toLowerCase()) && !s.siteId.toLowerCase().includes('sla_compliance'));
+  const chartSiteLabelsJson = JSON.stringify(validSiteEntries.map(s => s.siteId));
+  const chartSiteUptimesJson = JSON.stringify(validSiteEntries.map(s => {
+    const val = isJFL ? (s.jflSwitchUptime ?? s.switchUptime ?? 100) : (s.proactiveSwitchUptime ?? s.switchUptime ?? 100);
+    const n = parseFloat(String(val).replace('%', ''));
+    return isNaN(n) ? 100 : parseFloat(n.toFixed(2));
+  }));
+  const rcaSource = (rcaAn.rawBreakdown && rcaAn.rawBreakdown.length > 0) ? rcaAn.rawBreakdown : (rcaAn.standardBreakdown || []);
+  const topRcas = rcaSource.slice(0, 6);
+  const chartRcaLabelsJson = JSON.stringify(topRcas.map(r => (r.rca || r.category || 'Other').substring(0, 22)));
+  const chartRcaCountsJson = JSON.stringify(topRcas.map(r => parseInt(r.count, 10) || 0));
+
+  // Determine Chart.js bundle source (local if available, else CDN)
+  let chartJsScriptTag = '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>';
+  const localChartUmd = path.resolve(__dirname, '../../frontend/node_modules/chart.js/dist/chart.umd.js');
+  if (fs.existsSync(localChartUmd)) {
+    try {
+      const code = fs.readFileSync(localChartUmd, 'utf8');
+      chartJsScriptTag = `<script>${code}</script>`;
+    } catch (_) {}
+  }
 
   // 2. Per-Site Reviews (Dynamic Monitored Sites with Paginated Tables)
   let targetSites = siteSummary.map(s => s.siteId).filter(Boolean);
@@ -665,28 +724,37 @@ function buildHTMLReport(data) {
     `;
   }).join('');
 
-  // 6. Appendix C: All Incident Audit Trail Records (Paginated 22 rows per page)
+  // 6. Appendix C: All Incident Audit Trail Records (Paginated 20 rows per page to prevent page overflow — Task 3.1)
   const allIncidents = data.incidents || data.incidentDetails || data.incidentList || [];
-  const appIncChunks = chunkArray(allIncidents, 22);
+  const appIncChunks = chunkArray(allIncidents, 20);
   if (appIncChunks.length === 0) appIncChunks.push([]);
 
   const appendixCPagesHtml = appIncChunks.map((chunk, chunkIdx) => {
     const pageLabel = appIncChunks.length > 1 ? ` (Page ${chunkIdx + 1} of ${appIncChunks.length})` : '';
     const rowsHtml = chunk.map((inc, idx) => {
-      const ref = inc.display_reference ? `${inc.display_reference.type}: ${inc.display_reference.value}` : (inc.TicketNumber || inc.IncidentNumber || inc.IncidentID || `INC-${idx+1}`);
+      if (!inc) return '';
+      const ref = inc.display_reference ? `${inc.display_reference.type}: ${inc.display_reference.value}` : (inc.TicketNumber || inc.IncidentNumber || inc.IncidentID || (idx >= 0 ? `INC-${chunkIdx * 20 + idx + 1}` : 'N/A'));
       const slaBadge = inc.sla_status === 'SLA Breached' 
         ? '<span class="badge-danger">SLA Breached</span>'
         : '<span class="badge-success">SLA Met</span>';
+      const loc = inc.Location || inc.SiteID || inc.Site || 'N/A';
+      const dev = inc.DeviceID || inc.SerialNo || inc.Hostname || 'N/A';
+      const type = inc.DeviceType || (inc.DeviceID?.includes('-AP-') ? 'AP' : (inc.DeviceID?.includes('-SW-') ? 'Switch' : 'N/A'));
+      const rawHold = inc.HoldTimeMin !== undefined && inc.HoldTimeMin !== '' ? inc.HoldTimeMin : inc.HoldDurationMin;
+      const rawFix = inc.ActualResolutionMin !== undefined && inc.ActualResolutionMin !== '' ? inc.ActualResolutionMin : inc.ResolutionMin;
+      const holdTime = fmtMin(rawHold);
+      const fixTime = fmtMin(rawFix);
+      const rca = inc.RCA || inc.Category || 'Operational Fault';
 
       return `
         <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
           <td class="bold font-mono text-left">${ref}</td>
-          <td class="text-left">${inc.Location || inc.SiteID || inc.Site || 'N/A'}</td>
-          <td class="text-left">${inc.DeviceID || inc.SerialNo || 'N/A'}</td>
-          <td class="center bold">${inc.DeviceType || (inc.DeviceID?.includes('-AP-') ? 'AP' : 'Switch')}</td>
-          <td class="center">${inc.HoldTimeMin !== undefined ? inc.HoldTimeMin : (inc.HoldDurationMin || 0)} min</td>
-          <td class="center">${inc.ActualResolutionMin !== undefined ? inc.ActualResolutionMin : (inc.ResolutionMin || 0)} min</td>
-          <td class="text-left">${inc.RCA || inc.Category || 'Operational Fault'}</td>
+          <td class="text-left">${loc}</td>
+          <td class="text-left">${dev}</td>
+          <td class="center bold">${type}</td>
+          <td class="center nowrap">${holdTime}</td>
+          <td class="center nowrap">${fixTime}</td>
+          <td class="text-left">${rca}</td>
           <td class="center">${slaBadge}</td>
         </tr>
       `;
@@ -704,14 +772,14 @@ function buildHTMLReport(data) {
       <table>
         <thead>
           <tr>
-            <th style="width: 18%; text-align: left;">Reference (Ticket / Incident ID)</th>
-            <th style="width: 13%; text-align: left;">Location</th>
-            <th style="width: 16%; text-align: left;">Device ID / Serial</th>
-            <th style="width: 7%; text-align: center;">Type</th>
-            <th style="width: 9%; text-align: center;">Hold Time</th>
-            <th style="width: 9%; text-align: center;">Fix Time</th>
-            <th style="width: 16%; text-align: left;">RCA Driver</th>
-            <th style="width: 12%; text-align: center;">SLA Status</th>
+            <th style="width: 16%; text-align: left;">Reference (Ticket / Incident ID)</th>
+            <th style="width: 12%; text-align: left;">Location</th>
+            <th style="width: 15%; text-align: left;">Device ID / Serial</th>
+            <th style="width: 6%; text-align: center;">Type</th>
+            <th style="width: 10%; text-align: center;">Hold Time</th>
+            <th style="width: 10%; text-align: center;">Fix Time</th>
+            <th style="width: 18%; text-align: left;">RCA Driver</th>
+            <th style="width: 13%; text-align: center;">SLA Status</th>
           </tr>
         </thead>
         <tbody>
@@ -732,6 +800,7 @@ function buildHTMLReport(data) {
 <head>
   <meta charset="UTF-8">
   <title>Executive QBR Summary &amp; Presentation Report - ${customerName}</title>
+  ${chartJsScriptTag}
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     body { margin: 0; padding: 0; background: #ffffff; color: #0f172a; font-size: 11px; line-height: 1.4; }
@@ -884,6 +953,7 @@ function buildHTMLReport(data) {
       border-radius: 2px;
     }
 
+    .nowrap { white-space: nowrap !important; }
     .site-inspector-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -891,6 +961,8 @@ function buildHTMLReport(data) {
       margin-top: 6px;
     }
     .site-inspector-card {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
       background: #ffffff;
       border: 1px solid #cbd5e1;
       border-top: 3px solid #2563eb;
@@ -1043,6 +1115,23 @@ function buildHTMLReport(data) {
       </div>
     </div>
 
+    <!-- B2: Operational Visual Analytics & RCA Trends (Chart.js) -->
+    <div class="section-title">Operational Visual Analytics &amp; RCA Trends</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+      <div class="kpi-card" style="padding: 10px;">
+        <div class="kpi-title" style="margin-bottom: 6px;">Site Availability (Switch Uptime %)</div>
+        <div style="height: 140px; position: relative;">
+          <canvas id="siteUptimeChart"></canvas>
+        </div>
+      </div>
+      <div class="kpi-card" style="padding: 10px;">
+        <div class="kpi-title" style="margin-bottom: 6px;">Root Cause Analysis (RCA) Drivers Frequency</div>
+        <div style="height: 140px; position: relative;">
+          <canvas id="rcaDriversChart"></canvas>
+        </div>
+      </div>
+    </div>
+
     <div class="section-title">Executive Operational Narrative</div>
     <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; font-size: 11px; line-height: 1.5; color: #334155;">
       During the <strong>${reportingPeriod}</strong> reporting period, network operations for <strong>${customerName}</strong> maintained robust availability across all <strong>${fmtNum(exec.totalDevices)}</strong> monitored network assets, achieving an Executive Health Score of <strong>${fmtNum(exec.healthScore, '100')}/100 (${exec.healthLabel || 'Good'})</strong> and a <strong>${fmtPct(exec.slaCompliance)} SLA Compliance Rate</strong> across incident resolution records. Switch infrastructure availability averaged <strong>${fmtPct(isJFL ? exec.jflSwitchUptime : exec.proactiveSwitchUptime)}</strong> against the contractual <strong>${slaTargetNum.toFixed(2)}% SLA Target</strong>.
@@ -1092,25 +1181,8 @@ function buildHTMLReport(data) {
     </div>
   </div>
 
-  <!-- SLIDE 4: SITE INSPECTOR BREAKDOWN (PER-SITE OVERVIEW CARDS) -->
-  <div class="page">
-    <div class="header">
-      <div>
-        <h1>Site Operational Inspection (${siteSummary.length} Monitored Sites)</h1>
-        <div class="subtitle">Location-Specific Breakdown of Switches, APs, Stock Inventory &amp; Incident Metrics</div>
-      </div>
-      <div class="period-badge">${reportingPeriod}</div>
-    </div>
-
-    <div class="site-inspector-grid">
-      ${siteInspectorCardsHtml}
-    </div>
-
-    <div class="footer">
-      <div>Site Inspector Breakdown — SSOT Engine</div>
-      <div>Page 4</div>
-    </div>
-  </div>
+  <!-- SLIDE 4: SITE INSPECTOR BREAKDOWN (PER-SITE OVERVIEW CARDS, PAGINATED — B3) -->
+  ${siteInspectorPagesHtml}
 
   <!-- PER-SITE 3-PAGE SUITES (ALL 8 MONITORED SITES, PAGINATED) -->
   ${perSiteSuitesHtml}
@@ -1176,6 +1248,96 @@ function buildHTMLReport(data) {
   <!-- APPENDIX C: RAW INCIDENTS AUDIT TRAIL (PAGINATED) -->
   ${appendixCPagesHtml}
 
+  <!-- B2: IN-PAGE CHART RENDERING SCRIPT -->
+  <script>
+    (function() {
+      function renderCharts() {
+        if (typeof Chart === 'undefined') {
+          console.warn('[pdfGenerator] Chart.js not loaded, skipping in-page chart rendering');
+          return;
+        }
+
+        const ctxUp = document.getElementById('siteUptimeChart');
+        if (ctxUp) {
+          new Chart(ctxUp, {
+            type: 'bar',
+            data: {
+              labels: ${chartSiteLabelsJson},
+              datasets: [{
+                label: 'Switch Uptime %',
+                data: ${chartSiteUptimesJson},
+                backgroundColor: '#2563eb',
+                borderRadius: 4
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              plugins: {
+                legend: { display: false }
+              },
+              scales: {
+                y: {
+                  min: 90,
+                  max: 100,
+                  ticks: {
+                    font: { size: 9 },
+                    callback: function(v) { return v + '%'; }
+                  },
+                  grid: { color: '#e2e8f0' }
+                },
+                x: {
+                  ticks: { font: { size: 8 }, maxRotation: 25, minRotation: 0 }
+                }
+              }
+            }
+          });
+        }
+
+        const ctxRca = document.getElementById('rcaDriversChart');
+        if (ctxRca) {
+          new Chart(ctxRca, {
+            type: 'bar',
+            data: {
+              labels: ${chartRcaLabelsJson},
+              datasets: [{
+                label: 'Incidents',
+                data: ${chartRcaCountsJson},
+                backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4', '#64748b'],
+                borderRadius: 4
+              }]
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              plugins: {
+                legend: { display: false }
+              },
+              scales: {
+                x: {
+                  beginAtZero: true,
+                  ticks: { font: { size: 9 }, precision: 0 },
+                  grid: { color: '#e2e8f0' }
+                },
+                y: {
+                  ticks: { font: { size: 8 } }
+                }
+              }
+            }
+          });
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', renderCharts);
+      } else {
+        renderCharts();
+      }
+    })();
+  </script>
 </body>
 </html>
   `;

@@ -1165,8 +1165,14 @@ function MainPortal() {
                   Non-Hardware Activity Logs & Requests
                 </h4>
                 <DataTable
-                  columns={['Subject', 'SubCategory', 'DeviceName', 'DeviceSerial', 'DeviceType', 'Hostname', 'Status', 'RCA']}
-                  rows={otherActivityIncidents}
+                  columns={['display_reference', 'Location', 'Subject', 'SubCategory', 'DeviceName', 'DeviceSerial', 'DeviceType', 'Hostname', 'Status', 'RCA']}
+                  rows={otherActivityIncidents.map(i => ({
+                    ...i,
+                    Location: (!i.Location || String(i.Location).trim() === '' || i.Location === 'Unknown') ? '—' : i.Location,
+                    display_reference: i.display_reference
+                      ? (typeof i.display_reference === 'object' ? `${i.display_reference.type}: ${i.display_reference.value}` : String(i.display_reference))
+                      : (i.TicketNumber || i.IncidentNumber || i.IncidentID || '—')
+                  }))}
                 />
               </div>
             ) : (
