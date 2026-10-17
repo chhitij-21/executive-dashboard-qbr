@@ -134,8 +134,9 @@ test('On-Hold Ticket Period Cutoff Uptime Calculation & Impact on Dashboard Devi
     const gnSite = dashData.siteSummary.find(s => s.siteId === 'Greater Noida');
     assert.ok(gnSite, 'Greater Noida site summary should be present');
 
-    // Switch uptime average for Greater Noida (sw01 = 0%, sw02 = 99.93%) -> Avg JFL Uptime = 49.97%
-    assert.equal(gnSite.jflSwitchUptime, '49.97', 'Site jflSwitchUptime should equal average of switches');
+    // Cumulative Switch Uptime for Greater Noida: (89,280 avail - 44,670 hold) / 89,280 * 100 = 49.97%
+    assert.equal(gnSite.jflSwitchUptime, '49.97', 'Site jflSwitchUptime should equal cumulative switch uptime');
+    assert.equal(gnSite.proactiveSwitchUptime, '49.87', 'Site proactiveSwitchUptime should equal cumulative switch uptime');
 
   } finally {
     if (fs.existsSync(tmpDir)) {

@@ -1166,9 +1166,6 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // Aggregate downtime & hold time per device ID/Serial/Hostname from raw incidents
   const incDowntimeMap = {};
   incidents.forEach((inc) => {
-    const normKeys = getNormalizedKeys(inc);
-    if (normKeys.length === 0) return;
-
     let actMin = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
     let totMin = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
     let holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || 0);
@@ -1214,6 +1211,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
         }
       }
     }
+
+    inc.__actMin = actMin;
+    inc.__holdMin = holdMin;
+    inc.__totMin = totMin;
+
+    const normKeys = getNormalizedKeys(inc);
+    if (normKeys.length === 0) return;
 
     let entry = null;
     for (const k of normKeys) {
@@ -1671,6 +1675,31 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
   };
 }
 
+function computeActualDowntime(i) {
+  if (i.__actMin !== undefined && !isNaN(i.__actMin)) {
+    return Math.max(0, i.__actMin);
+  }
+  let actMin = Math.max(0, parseFloat(i.ActualResolutionMin || i['Actual Resolution Time (min)']) || 0);
+  let totMin = Math.max(0, parseFloat(i.TotalResolutionMin || i['Total Resolution Time (min)']) || 0);
+  let holdMin = Math.max(0, parseFloat(i.HoldTimeMin || i['Total JFL Downtime (Mins)HOLD Minute'] || i['Time on Hold (min)'] || i['Time on Hold (Minutes)']) || 0);
+
+  if (actMin <= 0 && totMin > 0) {
+    actMin = Math.max(0, totMin - holdMin);
+  }
+  if (actMin <= 0 && holdMin > 0) {
+    actMin = holdMin;
+  }
+  return actMin;
+}
+
+function computeHoldDowntime(i) {
+  if (i.__holdMin !== undefined && !isNaN(i.__holdMin)) {
+    return Math.max(0, i.__holdMin);
+  }
+  let holdMin = Math.max(0, parseFloat(i.HoldTimeMin || i['Total JFL Downtime (Mins)HOLD Minute'] || i['Time on Hold (min)'] || i['Time on Hold (Minutes)']) || 0);
+  return holdMin;
+}
+
 // ── Executive Summary ──────────────────────────────────────────────────────
 
 function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName, periodOptions = {}) {
@@ -1705,37 +1734,28 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const apRcaBrk = classifyRCALocal(apIncidents);
   const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
-  // ── Ticket-Weighted Incident Uptime (SSOT Executive Level) ──
-  // Matches Excel Pivot Table ('PPT Slide 1') Parity:
+  // ── Switch Incident Uptime (SSOT Executive Level) ──
   const swIncRows = incidents.filter(i => {
     const dt = String(i.DeviceType || '').trim().toUpperCase();
-    const sub = String(i.SubCategory || i.Category || '').trim().toLowerCase();
-    return dt === 'SW' && sub.includes('software');
+    return dt === 'SW' || dt === 'SWITCH';
   });
+
+  const switchesCount = switches.length;
+  const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
+  const totalAvailMins = switchesCount * availMinsPerSwitch;
 
   let jflSwitchUptime = '100.00';
   let proactiveSwitchUptime = '100.00';
-  if (swIncRows.length > 0) {
-    const availMins = periodOptions.windowMinutes || 131040;
-    const jflVals = swIncRows.map(i => {
-      const holdMin = Math.max(0, parseFloat(i.HoldTimeMin) || 0);
-      return Math.max(0, Math.min(100, ((availMins - holdMin) / availMins) * 100));
-    });
-    const proVals = swIncRows.map(i => {
-      const actMin = Math.max(0, parseFloat(i.ActualResolutionMin) || 0);
-      return Math.max(0, Math.min(100, ((availMins - actMin) / availMins) * 100));
-    });
-    jflSwitchUptime = avg(jflVals).toFixed(2);
-    proactiveSwitchUptime = avg(proVals).toFixed(2);
-  } else if (switches.length > 0) {
-    const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
-    const totalAvailMins = switches.length * availMinsPerSwitch;
-    const totalHoldMins = switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
-    const totalProactiveMins = switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
-    const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalHoldMins)) / totalAvailMins) * 100));
-    const proPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalProactiveMins)) / totalAvailMins) * 100));
-    jflSwitchUptime = jflPct.toFixed(2);
+
+  if (totalAvailMins > 0) {
+    const totalDownMins = swIncRows.reduce((sum, i) => sum + computeActualDowntime(i), 0);
+    const totalHoldMins = swIncRows.reduce((sum, i) => sum + computeHoldDowntime(i), 0);
+
+    const proPct = Math.max(0, Math.min(100, ((totalAvailMins - totalDownMins) / totalAvailMins) * 100));
+    const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - totalHoldMins) / totalAvailMins) * 100));
+
     proactiveSwitchUptime = proPct.toFixed(2);
+    jflSwitchUptime = jflPct.toFixed(2);
   }
 
   const activeSlaTarget = activeDevices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
@@ -1933,38 +1953,28 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
       const swJflUps = s.switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
       const swProUps = s.switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
 
-      // ── Ticket-Weighted Incident Uptime (Site Summary Level) ──
-      // Matches Excel Pivot Table ('PPT Slide 1') Parity:
+      // ── Switch Incident Uptime (Site Summary Level) ──
       const swIncRows = s.incidents.filter(i => {
         const dt = String(i.DeviceType || '').trim().toUpperCase();
-        const sub = String(i.SubCategory || i.Category || '').trim().toLowerCase();
-        return dt === 'SW' && sub.includes('software');
+        return dt === 'SW' || dt === 'SWITCH';
       });
+
+      const switchesCount = s.switches.length;
+      const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
+      const totalAvailMins = switchesCount * availMinsPerSwitch;
 
       let proactiveSwitchUptime = '100.00';
       let jflSwitchUptime = '100.00';
 
-      if (swIncRows.length > 0) {
-        const availMins = periodOptions.windowMinutes || 131040;
-        const jflVals = swIncRows.map(i => {
-          const holdMin = Math.max(0, parseFloat(i.HoldTimeMin) || 0);
-          return Math.max(0, Math.min(100, ((availMins - holdMin) / availMins) * 100));
-        });
-        const proVals = swIncRows.map(i => {
-          const actMin = Math.max(0, parseFloat(i.ActualResolutionMin) || 0);
-          return Math.max(0, Math.min(100, ((availMins - actMin) / availMins) * 100));
-        });
-        jflSwitchUptime = avg(jflVals).toFixed(2);
-        proactiveSwitchUptime = avg(proVals).toFixed(2);
-      } else if (s.switches.length > 0) {
-        const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
-        const totalAvailMins = s.switches.length * availMinsPerSwitch;
-        const totalHoldMins = s.switches.reduce((acc, d) => acc + (d.__holdMins || 0), 0);
-        const totalProactiveMins = s.switches.reduce((acc, d) => acc + (d.__proactiveDownMins || 0), 0);
-        const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalHoldMins)) / totalAvailMins) * 100));
-        const proPct = Math.max(0, Math.min(100, ((totalAvailMins - Math.min(totalAvailMins, totalProactiveMins)) / totalAvailMins) * 100));
-        jflSwitchUptime = jflPct.toFixed(2);
+      if (totalAvailMins > 0) {
+        const totalDownMins = swIncRows.reduce((sum, i) => sum + computeActualDowntime(i), 0);
+        const totalHoldMins = swIncRows.reduce((sum, i) => sum + computeHoldDowntime(i), 0);
+
+        const proPct = Math.max(0, Math.min(100, ((totalAvailMins - totalDownMins) / totalAvailMins) * 100));
+        const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - totalHoldMins) / totalAvailMins) * 100));
+
         proactiveSwitchUptime = proPct.toFixed(2);
+        jflSwitchUptime = jflPct.toFixed(2);
       }
 
       const apSerialsAndHosts = new Set([
