@@ -121,6 +121,7 @@ function heavyRateLimit(req, res, next) {
   next();
 }
 require('./routes/validationRoutes').mount(app);
+app.use('/api/vulnerabilities', require('./routes/vulnerabilities'));
 /**
  * validateDateRange — Server-side date validation for report generation requests.
  * Enforces all four rules from Requirement 2:
@@ -1851,6 +1852,28 @@ if ((require.main === module || !process.env.VERCEL) && process.env.NODE_ENV !==
 
   historyService.cleanupOldReports(3);
   startServer(Number(DEFAULT_PORT));
+
+  // ── Task 3: Vulnerabilities Scheduler (node-cron) ──────────────────────
+  try {
+    const cron = require('node-cron');
+    const { fetchAndSave, VULN_FILE } = require('./services/vulnerabilityFetcher');
+
+    cron.schedule('0 */6 * * *', async () => {
+      console.log('[vuln-fetch] Starting scheduled fetch...');
+      try {
+        await fetchAndSave();
+        console.log('[vuln-fetch] Complete');
+      } catch (err) {
+        console.error('[vuln-fetch] Failed:', err.message);
+      }
+    });
+
+    if (!fs.existsSync(VULN_FILE)) {
+      fetchAndSave().catch(console.error);
+    }
+  } catch (cronErr) {
+    console.warn('[server] Warning initializing vulnerability scheduler:', cronErr.message);
+  }
 }
 
 module.exports = app;
