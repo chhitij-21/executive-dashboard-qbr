@@ -1,6 +1,6 @@
 // frontend/src/components/VulnerabilitiesPage.jsx
 // Automated Vulnerabilities Dashboard powered by official Cisco PSIRT openVuln API (v2).
-// Real-time advisories, date range filtering, per-product grouping, tracking & operational checklist.
+// Real-time advisories, CVSS sorting, pagination, date range filtering, per-product grouping, tracking & operational checklist.
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE_URL, apiFetch } from '../config/api';
@@ -30,13 +30,14 @@ export default function VulnerabilitiesPage() {
   const [datePreset, setDatePreset] = useState('ALL'); // 'WEEK', 'MONTH', 'ALL', 'CUSTOM'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedSeverity, setSelectedSeverity] = useState('ALL');
+  const [selectedSeverity, setSelectedSeverity] = useState('ALL'); // 'ALL', 'CRITICAL', 'HIGH', 'MEDIUM'
+  const [showInformational, setShowInformational] = useState(false); // Default: UNCHECKED (hides NA / Informational)
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProduct, setExpandedProduct] = useState(null);
 
   // Pagination for flat table
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(15); // Default 15 rows per page
 
   // Local storage states for remediation tracker & validation checklist
   const [trackerStatus, setTrackerStatus] = useState(() => {
@@ -147,36 +148,59 @@ export default function VulnerabilitiesPage() {
     return { start: '', end: '' };
   }, [datePreset, startDate, endDate]);
 
-  // Filtered CVE rows
+  // Filtered & Sorted CVE rows
   const filteredCves = useMemo(() => {
     const all = vulnData?.cveList || [];
-    return all.filter((item) => {
-      // Date filter
-      if (effectiveDateRange.start && item.advisoryDate < effectiveDateRange.start) return false;
-      if (effectiveDateRange.end && item.advisoryDate > effectiveDateRange.end) return false;
+    return all
+      .filter((item) => {
+        // Task 5: Hide "NA" or "Informational" clutter (if toggle is unchecked)
+        if (!showInformational) {
+          const sev = (item.severity || '').toLowerCase();
+          const cve = (item.cveId || '').toUpperCase();
+          if (sev === 'informational' || cve === 'NA' || cve === 'N/A') {
+            return false;
+          }
+        }
 
-      // Severity filter
-      if (selectedSeverity !== 'ALL') {
-        if ((item.severity || '').toUpperCase() !== selectedSeverity) return false;
-      }
+        // Date filter
+        if (effectiveDateRange.start && item.advisoryDate < effectiveDateRange.start) return false;
+        if (effectiveDateRange.end && item.advisoryDate > effectiveDateRange.end) return false;
 
-      // Search query (CVE, Product, Impact)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchCve = (item.cveId || '').toLowerCase().includes(q);
-        const matchProd = (item.product || '').toLowerCase().includes(q);
-        const matchImpact = (item.vulnerabilityImpact || '').toLowerCase().includes(q);
-        if (!matchCve && !matchProd && !matchImpact) return false;
-      }
+        // Task 4: Quick Severity filter
+        if (selectedSeverity !== 'ALL') {
+          if ((item.severity || '').toUpperCase() !== selectedSeverity) return false;
+        }
 
-      return true;
-    });
-  }, [vulnData, effectiveDateRange, selectedSeverity, searchQuery]);
+        // Search query (CVE, Product, Impact)
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchCve = (item.cveId || '').toLowerCase().includes(q);
+          const matchProd = (item.product || '').toLowerCase().includes(q);
+          const matchImpact = (item.vulnerabilityImpact || '').toLowerCase().includes(q);
+          if (!matchCve && !matchProd && !matchImpact) return false;
+        }
 
-  // Reset pagination when filter changes
+        return true;
+      })
+      .sort((a, b) => {
+        // Task 1: Default sorting
+        // 1. CVSS Score (Descending) — highest first
+        const cvssA = parseFloat(a.cvss) || 0;
+        const cvssB = parseFloat(b.cvss) || 0;
+        if (cvssB !== cvssA) {
+          return cvssB - cvssA;
+        }
+        // 2. If CVSS tied, sort by Advisory Date (Descending)
+        const dateA = a.advisoryDate || '';
+        const dateB = b.advisoryDate || '';
+        return dateB.localeCompare(dateA);
+      });
+  }, [vulnData, effectiveDateRange, selectedSeverity, showInformational, searchQuery]);
+
+  // Reset pagination when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [datePreset, startDate, endDate, selectedSeverity, searchQuery]);
+  }, [datePreset, startDate, endDate, selectedSeverity, showInformational, searchQuery, pageSize]);
 
   // Grouped by Product Family for Executive Summary & Accordions
   const productGroups = useMemo(() => {
@@ -225,13 +249,16 @@ export default function VulnerabilitiesPage() {
     return { total, p1Count, p2Count, criticalCount, highCount, distinctProducts, patchedCount };
   }, [filteredCves, productGroups, trackerStatus]);
 
-  // Paginated flat table records
+  // Task 3: Paginated flat table records
+  const totalEntries = filteredCves.length;
+  const totalPages = Math.ceil(totalEntries / pageSize) || 1;
+  const startEntry = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endEntry = Math.min(currentPage * pageSize, totalEntries);
+
   const paginatedRows = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredCves.slice(start, start + pageSize);
   }, [filteredCves, currentPage, pageSize]);
-
-  const totalPages = Math.ceil(filteredCves.length / pageSize) || 1;
 
   // Checklist completed percentage
   const checklistProgress = useMemo(() => {
@@ -239,6 +266,14 @@ export default function VulnerabilitiesPage() {
     const doneCount = checklist.filter((i) => i.done).length;
     return Math.round((doneCount / checklist.length) * 100);
   }, [checklist]);
+
+  // Task 2: Truncate long product strings (> 60 characters)
+  const formatProductDisplay = (prod) => {
+    if (!prod) return 'Cisco Networking Equipment';
+    const clean = String(prod).trim();
+    if (clean.length <= 60) return clean;
+    return clean.slice(0, 60) + '...';
+  };
 
   const getSeverityBadgeClass = (sev) => {
     const s = String(sev || '').toLowerCase();
@@ -324,62 +359,89 @@ export default function VulnerabilitiesPage() {
         />
       </div>
 
-      {/* Filter Toolbar */}
+      {/* Filter Toolbar with Quick Pills & Informational Toggle */}
       <div className="card pad-md" style={{ marginBottom: '1.5rem', background: 'var(--bg-card)' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Preset Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>TIME PERIOD:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>TIME:</span>
             {[
-              { id: 'ALL', label: 'All Advisories' },
+              { id: 'ALL', label: 'All' },
               { id: 'WEEK', label: 'Last 7 Days' },
               { id: 'MONTH', label: 'Last 30 Days' },
-              { id: 'CUSTOM', label: 'Custom Range' },
+              { id: 'CUSTOM', label: 'Custom' },
             ].map((p) => (
               <button
                 key={p.id}
                 onClick={() => setDatePreset(p.id)}
                 className={`btn ${datePreset === p.id ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}
+                style={{ padding: '0.3rem 0.65rem', fontSize: '0.8rem', borderRadius: '6px' }}
               >
                 {p.label}
               </button>
             ))}
           </div>
 
-          {/* Severity Dropdown */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {/* Task 4: Quick Severity Pills */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>SEVERITY:</span>
-            <select
-              value={selectedSeverity}
-              onChange={(e) => setSelectedSeverity(e.target.value)}
-              className="nav-select"
-              style={{ fontSize: '0.85rem', padding: '0.35rem 0.75rem' }}
-            >
-              <option value="ALL">All Severities</option>
-              <option value="CRITICAL">Critical Only</option>
-              <option value="HIGH">High Only</option>
-              <option value="MEDIUM">Medium Only</option>
-              <option value="LOW">Low Only</option>
-            </select>
+            {[
+              { id: 'ALL', label: 'All', color: 'var(--accent-blue)', bg: 'rgba(37, 99, 235, 0.12)' },
+              { id: 'CRITICAL', label: 'Critical', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.15)' },
+              { id: 'HIGH', label: 'High', color: '#ea580c', bg: 'rgba(234, 88, 12, 0.15)' },
+              { id: 'MEDIUM', label: 'Medium', color: '#d97706', bg: 'rgba(217, 119, 6, 0.15)' },
+            ].map((s) => {
+              const isActive = selectedSeverity === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setSelectedSeverity(s.id)}
+                  type="button"
+                  style={{
+                    padding: '0.28rem 0.75rem',
+                    fontSize: '0.8rem',
+                    borderRadius: '9999px',
+                    fontWeight: isActive ? 700 : 500,
+                    border: isActive ? `1.5px solid ${s.color}` : '1px solid var(--border)',
+                    background: isActive ? s.bg : 'var(--bg-secondary)',
+                    color: isActive ? s.color : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
           </div>
 
+          {/* Task 5: Show Informational Advisories Toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', fontSize: '0.82rem', userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={showInformational}
+              onChange={(e) => setShowInformational(e.target.checked)}
+              style={{ width: '15px', height: '15px', cursor: 'pointer' }}
+            />
+            <span style={{ color: 'var(--text-secondary)' }}>Show Informational Advisories</span>
+          </label>
+
           {/* Search Box */}
-          <div style={{ flex: '1 1 220px', minWidth: '180px' }}>
+          <div style={{ flex: '1 1 200px', minWidth: '160px' }}>
             <input
               type="text"
-              placeholder="Search CVE ID, Product, Impact..."
+              placeholder="Search CVE, Product, Impact..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-field"
-              style={{ width: '100%', fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+              style={{ width: '100%', fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
             />
           </div>
         </div>
 
         {/* Custom Range Inputs */}
         {datePreset === 'CUSTOM' && (
-          <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>From:</label>
               <input
@@ -454,9 +516,19 @@ export default function VulnerabilitiesPage() {
                         background: isExpanded ? 'var(--bg-card-hover)' : 'transparent',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
                         <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{isExpanded ? '▼' : '▶'}</span>
-                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.92rem' }}>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            fontSize: '0.92rem',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={group.product}
+                        >
                           {group.product}
                         </span>
                       </div>
@@ -546,32 +618,11 @@ export default function VulnerabilitiesPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                  Active CVE Advisories Register ({filteredCves.length} Records)
+                  Active CVE Advisories Register ({totalEntries} Records)
                 </h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Detailed advisory disclosures, impact categorization, and recommended release targets.
+                  Sorted by CVSS Score (descending) & Advisory Date. Detailed impact disclosures and targets.
                 </span>
-              </div>
-
-              {/* Table pagination stats */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
-                <span>Page {currentPage} of {totalPages}</span>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                  className="btn btn-ghost"
-                  style={{ padding: '0.2rem 0.5rem' }}
-                >
-                  ◀
-                </button>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages}
-                  className="btn btn-ghost"
-                  style={{ padding: '0.2rem 0.5rem' }}
-                >
-                  ▶
-                </button>
               </div>
             </div>
 
@@ -581,14 +632,14 @@ export default function VulnerabilitiesPage() {
                   <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--bg-card-hover)', textAlign: 'left', color: 'var(--text-secondary)' }}>
                     <th style={{ padding: '0.6rem 0.5rem', width: '50px' }}>S.No</th>
                     <th style={{ padding: '0.6rem 0.6rem', width: '95px' }}>Date</th>
-                    <th style={{ padding: '0.6rem 0.6rem', minWidth: '160px' }}>Product</th>
+                    <th style={{ padding: '0.6rem 0.6rem', minWidth: '160px', maxWidth: '240px' }}>Product</th>
                     <th style={{ padding: '0.6rem 0.6rem', width: '135px' }}>CVE ID</th>
                     <th style={{ padding: '0.6rem 0.5rem', width: '90px' }}>Severity</th>
                     <th style={{ padding: '0.6rem 0.5rem', width: '70px' }}>CVSS</th>
                     <th style={{ padding: '0.6rem 0.5rem', width: '70px' }}>Priority</th>
                     <th style={{ padding: '0.6rem 0.6rem', minWidth: '220px' }}>Vulnerability Impact</th>
                     <th style={{ padding: '0.6rem 0.6rem', width: '130px' }}>Fixed Release</th>
-                    <th style={{ padding: '0.6rem 0.6rem', width: '100px' }}>Advisory</th>
+                    <th style={{ padding: '0.6rem 0.6rem', width: '90px' }}>Advisory</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -615,8 +666,12 @@ export default function VulnerabilitiesPage() {
                           <td style={{ padding: '0.6rem 0.6rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                             {row.advisoryDate}
                           </td>
-                          <td style={{ padding: '0.6rem 0.6rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                            {row.product}
+                          {/* Task 2: Truncated product display with title tooltip on hover */}
+                          <td
+                            style={{ padding: '0.6rem 0.6rem', color: 'var(--text-primary)', fontWeight: 500, maxWidth: '240px' }}
+                            title={row.product}
+                          >
+                            {formatProductDisplay(row.product)}
                           </td>
                           <td style={{ padding: '0.6rem 0.6rem', fontWeight: 600, color: 'var(--accent-blue)', whiteSpace: 'nowrap' }}>
                             <a href={row.advisoryLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -668,6 +723,55 @@ export default function VulnerabilitiesPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Task 3: Bottom Pagination Controls */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
+                Showing <strong>{startEntry}</strong> to <strong>{endEntry}</strong> of <strong>{totalEntries}</strong> entries
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Rows per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="nav-select"
+                    style={{ fontSize: '0.82rem', padding: '0.25rem 0.5rem' }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="btn btn-ghost"
+                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.82rem' }}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0 0.25rem' }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="btn btn-ghost"
+                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.82rem' }}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
