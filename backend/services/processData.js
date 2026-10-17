@@ -1063,10 +1063,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       );
       if (aliasSite && aliasSite !== 'Unknown') {
         resolvedSite = aliasSite;
-        item.Location = resolvedSite;
-        item.SiteID = resolvedSite;
+      } else {
+        resolvedSite = '';
       }
     }
+    if (resolvedSite === 'Unknown') resolvedSite = '';
+    item.Location = resolvedSite;
+    item.SiteID = resolvedSite;
 
     // Determine clean, non-generic device name
     let devName = '';
@@ -1079,7 +1082,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     } else if (item.SerialNo && item.SerialNo.toLowerCase() !== 'unknown' && item.SerialNo.toLowerCase() !== 'n/a') {
       devName = item.SerialNo;
     } else {
-      devName = `${resolvedSite} Device`;
+      devName = resolvedSite ? `${resolvedSite} Device` : 'Operational Device';
     }
 
     const sKey = String(item.SerialNo || '').trim();

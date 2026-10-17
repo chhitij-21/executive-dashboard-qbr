@@ -2446,7 +2446,11 @@ function buildOtherActivitySlide(pres, otherActivities = [], displayPeriod) {
       const fill = rowFill(idx);
       const sub = String(t.Subject || t.Description || 'Operational Activity').substring(0, 50);
       const subCat = String(t.SubCategory || t['Sub Category'] || t.Category || 'Change Request').substring(0, 22);
-      const devName = String(t.DeviceName || t.Location || t.SiteID || 'Monitored Site').substring(0, 18);
+      const rawLoc = String(t.Location || t.SiteID || '').trim();
+      let devName = String(t.DeviceName || '').trim();
+      if (!devName || devName === 'Unknown' || devName === 'Unknown Device' || devName === 'Device') {
+        devName = (rawLoc && rawLoc !== 'Unknown') ? `${rawLoc} Device` : 'Operational Task';
+      }
       const serial = String(t.SerialNo || t.DeviceID || 'N/A').substring(0, 18);
       const dType = String(t.DeviceType || 'SW').substring(0, 10);
       const host = String(t.Hostname || t.DeviceID || 'N/A').substring(0, 20);

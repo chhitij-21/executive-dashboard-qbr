@@ -1180,7 +1180,12 @@ function MainPortal() {
     );
   };
 
-  const reportSites = useMemo(() => (dashboardData?.siteSummary || []).map((s) => s.siteId), [dashboardData]);
+  const reportSites = useMemo(() => 
+    (dashboardData?.siteSummary || [])
+      .map((s) => s.siteId)
+      .filter((s) => s && String(s).trim() && s !== 'Unknown' && s !== '-' && s !== '—'),
+    [dashboardData]
+  );
 
   if (!user) {
     return (

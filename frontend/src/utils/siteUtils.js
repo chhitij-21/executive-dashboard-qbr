@@ -50,9 +50,9 @@ export function normalizeLoc(loc) {
 }
 
 const GENERIC_STRINGS = new Set([
-  'unknown', 'sheet1', 'sheet 1', 'raw', 'jfl',
+  '', 'unknown', 'sheet1', 'sheet 1', 'raw', 'jfl',
   'sla_compliance_report', 'sla compliance report',
-  'all location', 'all locations', 'n/a', 'none', 'null',
+  'all location', 'all locations', 'n/a', 'none', 'null', '-', '—',
 ]);
 
 const GENERIC_PREFIXES = /^(raw|sheet|sla|jfl|incident)/i;
@@ -64,9 +64,10 @@ const GENERIC_SUBSTRINGS = /sla_compliance|sla compliance|july|august|september|
  * Does NOT filter out valid customer site names.
  */
 export function isGenericLocation(loc) {
-  if (!loc) return true;
+  if (!loc || typeof loc !== 'string') return true;
   const str = String(loc).trim().toLowerCase();
   if (GENERIC_STRINGS.has(str)) return true;
+  if (/^(all\s*(locations?|sites?)?|overall|entire\s*network)$/i.test(str)) return true;
   if (GENERIC_PREFIXES.test(str)) return true;
   if (GENERIC_SUBSTRINGS.test(str)) return true;
   return false;

@@ -186,9 +186,11 @@ function normalizeSiteName(site) {
 }
 
 function isGenericLocation(loc) {
-  if (!loc) return true;
-  const str = String(loc).trim().toLowerCase();
-  if (['unknown', 'sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations', 'n/a', 'none', 'null'].includes(str)) return true;
+  if (!loc || typeof loc !== 'string') return true;
+  const str = loc.trim().toLowerCase();
+  if (str === '' || str === 'unknown' || str === 'n/a' || str === '-' || str === 'none' || str === 'null') return true;
+  if (/^(all\s*(locations?|sites?)?|overall|entire\s*network)$/i.test(str)) return true;
+  if (['sheet1', 'sheet 1', 'raw', 'jfl', 'sla_compliance_report', 'sla compliance report', 'all location', 'all locations'].includes(str)) return true;
   if (/raw/i.test(str) || /^sheet\d*$/i.test(str) || /sla/i.test(str) || /jfl/i.test(str) || /incident/i.test(str) || /july|august|september|october|november|december|january|february|march|april|may|june/i.test(str)) return true;
   if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
   if (str.includes('inventory india') || str === 'mmtc inventory india' || str === 'inventory') return true;
@@ -681,7 +683,7 @@ function resolveSiteFromText(subject, description, currentSite) {
   }
   
   const text = `${subject || ''} ${description || ''}`.toUpperCase();
-  if (!text.trim()) return currentSite || 'Unknown';
+  if (!text.trim()) return '';
   
   // Try longest aliases first to prevent partial matches
   const sortedAliases = Object.entries(SITE_ALIASES)
@@ -695,7 +697,7 @@ function resolveSiteFromText(subject, description, currentSite) {
     }
   }
   
-  return currentSite || 'Unknown';
+  return '';
 }
 
 module.exports = {
