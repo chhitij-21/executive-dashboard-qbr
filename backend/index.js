@@ -1768,6 +1768,10 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
 app.get(['/api/pdf/:jobId', '/pdf/:jobId', '/api/pdf', '/pdf'], sendFileHelper('pdfPath', 'QBR_Report.pdf'));
 app.get(['/api/ppt/:jobId', '/ppt/:jobId', '/api/ppt', '/ppt'], sendFileHelper('pptPath', 'QBR_Report.pptx'));
+app.get(['/api/report/pdf', '/report/pdf'], (req, res, next) => {
+  req.params = { ...req.params, jobId: 'latest' };
+  return sendFileHelper('pdfPath', 'QBR_Report.pdf')(req, res, next);
+});
 app.get(['/api/report/:jobId', '/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
 app.get(['/api/error-report/:jobId', '/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
 app.get(['/api/data-quality/:jobId', '/data-quality/:jobId'], sendFileHelper('dataQualityPath', 'data_quality_report.md'));

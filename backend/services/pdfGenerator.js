@@ -66,11 +66,16 @@ async function getBrowserLaunchConfig() {
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--single-process',
+            '--no-zygote',
             '--disable-gpu',
+            '--disable-extensions',
+            '--disable-background-networking',
+            '--js-flags=--max-old-space-size=200',
           ],
           defaultViewport: sparticuzChromium.defaultViewport || { width: 1920, height: 1080 },
           executablePath,
           headless: 'shell',
+          protocolTimeout: 120000,
         },
       };
     }
@@ -113,16 +118,34 @@ async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
     console.warn('[pdfGenerator] No viable Chromium. HTML fallback.');
     return false;
   }
-  console.log(`[pdfGenerator] Launching (mode: ${config.mode})`);
+  const htmlSizeKb = (Buffer.byteLength(htmlContent, 'utf8') / 1024).toFixed(1);
+  console.log(`[pdfGenerator] Launching (mode: ${config.mode}, HTML size: ${htmlSizeKb} KB)`);
   let browser = null;
   try {
+    const tLaunchStart = Date.now();
     browser = await config.puppeteer.launch(config.options);
+    const tLaunch = Date.now() - tLaunchStart;
+
     const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 60000 });
+    page.on('pageerror', err => console.warn(`[pdfGenerator:pageerror] ${err.message}`));
+    page.on('console', msg => {
+      if (msg.type() === 'error' || msg.type() === 'warning') {
+        console.warn(`[pdfGenerator:console.${msg.type()}] ${msg.text()}`);
+      }
+    });
+
+    const tSetStart = Date.now();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 90000 });
+    const tSet = Date.now() - tSetStart;
+
+    const tPdfStart = Date.now();
     const pdfBuffer = await page.pdf({
       format: 'A4', landscape: true, printBackground: true,
       margin: { top: '6mm', bottom: '6mm', left: '6mm', right: '6mm' },
     });
+    const tPdf = Date.now() - tPdfStart;
+    console.log(`[pdfGenerator] Timings: launch=${tLaunch}ms, setContent=${tSet}ms, pdfRender=${tPdf}ms`);
+
     await browser.close();
     if (pdfBuffer && pdfBuffer.length > 0) {
       fs.writeFileSync(outputPath, pdfBuffer);
@@ -156,8 +179,22 @@ async function generatePDF(qbrData, templatePath, outputPath) {
 
   const htmlContent = buildHTMLReport(qbrData);
 
-  // 1. Try rendering true binary PDF with Puppeteer
-  const pdfSuccess = await tryRenderPuppeteerPDF(htmlContent, targetPath);
+  // 1. Try rendering true binary PDF with Puppeteer (Attempt 1)
+  console.log('[pdfGenerator] Attempt 1...');
+  let pdfSuccess = await tryRenderPuppeteerPDF(htmlContent, targetPath);
+
+  if (!pdfSuccess) {
+    console.log('[pdfGenerator] Attempt 1 failed. Retry after 2s...');
+    await new Promise(r => setTimeout(r, 2000));
+    if (global.gc) {
+      console.log('[pdfGenerator] GC forced');
+      global.gc();
+    }
+    // Attempt 2
+    console.log('[pdfGenerator] Attempt 2...');
+    pdfSuccess = await tryRenderPuppeteerPDF(htmlContent, targetPath);
+  }
+
   if (pdfSuccess) {
     return targetPath;
   }
@@ -194,6 +231,7 @@ function buildHTMLReport(data) {
   
   // Contractual SLA Uptime Target is 99.30%
   const slaTargetNum = 99.30;
+  const ROWS_PER_PAGE = 15;
   let pageCounter = 1;
 
   const fmtNum = (val, def = '0') => (val !== undefined && val !== null ? String(val) : def);
@@ -408,15 +446,15 @@ function buildHTMLReport(data) {
     </div>
     `;
 
-    // Page B: Switch Uptime Report Table (Paginated in 22 rows per page)
+    // Page B: Switch Uptime Report Table (Paginated in ROWS_PER_PAGE rows per page)
     const swAt100Count = siteSws.filter(d => (d.__proactiveUptime ?? 100) >= 100).length;
-    const swChunks = chunkArray(siteSws, 22);
+    const swChunks = chunkArray(siteSws, ROWS_PER_PAGE);
     if (swChunks.length === 0) swChunks.push([]);
 
     swChunks.forEach((swChunk, chunkIdx) => {
       const pageLabel = swChunks.length > 1 ? ` (Page ${chunkIdx + 1} of ${swChunks.length})` : '';
       const swReportRows = swChunk.map((s, idx) => {
-        const globalIndex = chunkIdx * 22 + idx + 1;
+        const globalIndex = chunkIdx * ROWS_PER_PAGE + idx + 1;
         let rackName = s.Rack || 'Main Rack';
         if (rackName === 'NA' || rackName.includes('Not Cover') || rackName.length > 25) rackName = 'Main Rack';
         return `
@@ -460,22 +498,24 @@ function buildHTMLReport(data) {
             <div class="kpi-value text-green">${swAt100Count}</div>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 6%; text-align: center;">S.N</th>
-              <th style="width: 14%; text-align: left;">Location</th>
-              <th style="width: 22%; text-align: left;">Hostname</th>
-              <th style="width: 20%; text-align: left;">Serial No.</th>
-              <th style="width: 10%; text-align: center;">Device Type</th>
-              <th style="width: 14%; text-align: left;">Rack no.</th>
-              <th style="width: 14%; text-align: center;">Proactive -Uptime%</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${swReportRows || '<tr><td colspan="7" class="center">No switches monitored at this location.</td></tr>'}
-          </tbody>
-        </table>
+        <div style="page-break-inside: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 6%; text-align: center;">S.N</th>
+                <th style="width: 14%; text-align: left;">Location</th>
+                <th style="width: 22%; text-align: left;">Hostname</th>
+                <th style="width: 20%; text-align: left;">Serial No.</th>
+                <th style="width: 10%; text-align: center;">Device Type</th>
+                <th style="width: 14%; text-align: left;">Rack no.</th>
+                <th style="width: 14%; text-align: center;">Proactive -Uptime%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${swReportRows || '<tr><td colspan="7" class="center">No switches monitored at this location.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
         <div class="footer">
           <div>${clientShort} – Proactive Monthly Review</div>
           <div>Page ${pageCounter++}</div>
@@ -484,16 +524,16 @@ function buildHTMLReport(data) {
       `;
     });
 
-    // Page C: AP Incidents & RCA Table (Paginated in 22 rows per page)
+    // Page C: AP Incidents & RCA Table (Paginated in ROWS_PER_PAGE rows per page)
     const apIncMetCount = siteApIncs.filter(i => i.sla_status !== 'SLA Breached').length;
     const apIncBreachCount = siteApIncs.filter(i => i.sla_status === 'SLA Breached').length;
-    const apChunks = chunkArray(siteAps, 22);
+    const apChunks = chunkArray(siteAps, ROWS_PER_PAGE);
     if (apChunks.length === 0) apChunks.push([]);
 
     apChunks.forEach((apChunk, chunkIdx) => {
       const pageLabel = apChunks.length > 1 ? ` (Page ${chunkIdx + 1} of ${apChunks.length})` : '';
       const apReportRows = apChunk.map((a, idx) => {
-        const globalIndex = chunkIdx * 22 + idx + 1;
+        const globalIndex = chunkIdx * ROWS_PER_PAGE + idx + 1;
         const incs = siteApIncs.filter(i => i.DeviceID === a.DeviceID || i.SerialNo === a.SerialNo);
         const incCount = incs.length;
         const rca = incs.length > 0 ? (incs[0].RCA || apRca) : 'Stable Operations (No Incidents)';
@@ -538,22 +578,24 @@ function buildHTMLReport(data) {
             <div style="font-size: 13px; font-weight: 700; color: #7c3aed; margin-top: 4px;">${apRca}</div>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 6%; text-align: center;">S NO</th>
-              <th style="width: 14%; text-align: left;">Location</th>
-              <th style="width: 22%; text-align: left;">Hostname</th>
-              <th style="width: 20%; text-align: left;">Serial No.</th>
-              <th style="width: 10%; text-align: center;">Device Type</th>
-              <th style="width: 12%; text-align: center;">No of Incidents</th>
-              <th style="width: 16%; text-align: left;">Primary RCA Driver</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${apReportRows || '<tr><td colspan="7" class="center">No Access Points monitored at this location.</td></tr>'}
-          </tbody>
-        </table>
+        <div style="page-break-inside: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 6%; text-align: center;">S NO</th>
+                <th style="width: 14%; text-align: left;">Location</th>
+                <th style="width: 22%; text-align: left;">Hostname</th>
+                <th style="width: 20%; text-align: left;">Serial No.</th>
+                <th style="width: 10%; text-align: center;">Device Type</th>
+                <th style="width: 12%; text-align: center;">No of Incidents</th>
+                <th style="width: 16%; text-align: left;">Primary RCA Driver</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${apReportRows || '<tr><td colspan="7" class="center">No Access Points monitored at this location.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
         <div class="footer">
           <div>${clientShort} – Proactive Monthly Review</div>
           <div>Page ${pageCounter++}</div>
@@ -598,13 +640,13 @@ function buildHTMLReport(data) {
     </tr>
   `).join('');
 
-  // 4. Appendix A: All Switch Devices (Paginated 22 rows per page)
+  // 4. Appendix A: All Switch Devices (Paginated in ROWS_PER_PAGE rows per page)
   let rackSwitches = switchAn.expandedRackwiseUptime || switchAn.rackwiseUptime || [];
   if (!rackSwitches || rackSwitches.length === 0) {
     const devices = data.devices || [];
     rackSwitches = devices.filter(d => (d.DeviceType === 'SW' || (d.DeviceID && d.DeviceID.includes('-SW-'))) && !d.__isStock);
   }
-  const appSwChunks = chunkArray(rackSwitches, 22);
+  const appSwChunks = chunkArray(rackSwitches, ROWS_PER_PAGE);
   if (appSwChunks.length === 0) appSwChunks.push([]);
 
   const appendixAPagesHtml = appSwChunks.map((chunk, chunkIdx) => {
@@ -630,22 +672,24 @@ function buildHTMLReport(data) {
         </div>
         <div class="period-badge">${reportingPeriod}</div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th style="width: ${isJFL ? '15%' : '17%'}; text-align: left;">Site Location</th>
-            <th style="width: ${isJFL ? '14%' : '16%'}; text-align: left;">Rack Location</th>
-            <th style="width: ${isJFL ? '16%' : '18%'}; text-align: left;">Serial Number</th>
-            <th style="width: ${isJFL ? '18%' : '21%'}; text-align: left;">Hostname / Device ID</th>
-            <th style="width: ${isJFL ? '13%' : '14%'}; text-align: center;">Proactive Uptime %</th>
-            ${isJFL ? `<th style="width: 12%; text-align: center;">${clientShort} Uptime %</th>` : ''}
-            <th style="width: ${isJFL ? '12%' : '14%'}; text-align: center;">Operating Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml || `<tr><td colspan="${isJFL ? 7 : 6}" class="center">No switch rack data available.</td></tr>`}
-        </tbody>
-      </table>
+      <div style="page-break-inside: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: ${isJFL ? '15%' : '17%'}; text-align: left;">Site Location</th>
+              <th style="width: ${isJFL ? '14%' : '16%'}; text-align: left;">Rack Location</th>
+              <th style="width: ${isJFL ? '16%' : '18%'}; text-align: left;">Serial Number</th>
+              <th style="width: ${isJFL ? '18%' : '21%'}; text-align: left;">Hostname / Device ID</th>
+              <th style="width: ${isJFL ? '13%' : '14%'}; text-align: center;">Proactive Uptime %</th>
+              ${isJFL ? `<th style="width: 12%; text-align: center;">${clientShort} Uptime %</th>` : ''}
+              <th style="width: ${isJFL ? '12%' : '14%'}; text-align: center;">Operating Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || `<tr><td colspan="${isJFL ? 7 : 6}" class="center">No switch rack data available.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
       <div class="footer">
         <div>Appendix A: Switch Inventory — SSOT Engine</div>
         <div>Page ${pageCounter++}</div>
@@ -654,7 +698,7 @@ function buildHTMLReport(data) {
     `;
   }).join('');
 
-  // 5. Appendix B: All AP Devices / Outages (Paginated 22 rows per page)
+  // 5. Appendix B: All AP Devices / Outages (Paginated in ROWS_PER_PAGE rows per page)
   let apOutages = apAn.allAPOutages || apAn.top10APOutages || [];
   if (!apOutages || apOutages.length === 0) {
     const incidents = data.incidents || data.incidentDetails || [];
@@ -676,7 +720,7 @@ function buildHTMLReport(data) {
     });
     apOutages = Object.values(apMap);
   }
-  const appApChunks = chunkArray(apOutages, 22);
+  const appApChunks = chunkArray(apOutages, ROWS_PER_PAGE);
   if (appApChunks.length === 0) appApChunks.push([]);
 
   const appendixBPagesHtml = appApChunks.map((chunk, chunkIdx) => {
@@ -701,21 +745,23 @@ function buildHTMLReport(data) {
         </div>
         <div class="period-badge">${reportingPeriod}</div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 20%; text-align: left;">Device Hostname / ID</th>
-            <th style="width: 18%; text-align: left;">Serial Number</th>
-            <th style="width: 16%; text-align: left;">Site Location</th>
-            <th style="width: 12%; text-align: center;">Incident Count</th>
-            <th style="width: 14%; text-align: center;">Effective Uptime %</th>
-            <th style="width: 20%; text-align: left;">Primary RCA Driver</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml || '<tr><td colspan="6" class="center">No AP outages recorded during period. Operations 100% Stable.</td></tr>'}
-        </tbody>
-      </table>
+      <div style="page-break-inside: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 20%; text-align: left;">Device Hostname / ID</th>
+              <th style="width: 18%; text-align: left;">Serial Number</th>
+              <th style="width: 16%; text-align: left;">Site Location</th>
+              <th style="width: 12%; text-align: center;">Incident Count</th>
+              <th style="width: 14%; text-align: center;">Effective Uptime %</th>
+              <th style="width: 20%; text-align: left;">Primary RCA Driver</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || '<tr><td colspan="6" class="center">No AP outages recorded during period. Operations 100% Stable.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
       <div class="footer">
         <div>Appendix B: AP Incident Distribution — SSOT Engine</div>
         <div>Page ${pageCounter++}</div>
@@ -724,16 +770,16 @@ function buildHTMLReport(data) {
     `;
   }).join('');
 
-  // 6. Appendix C: All Incident Audit Trail Records (Paginated 20 rows per page to prevent page overflow — Task 3.1)
+  // 6. Appendix C: All Incident Audit Trail Records (Paginated in ROWS_PER_PAGE rows per page — Task 4.1)
   const allIncidents = data.incidents || data.incidentDetails || data.incidentList || [];
-  const appIncChunks = chunkArray(allIncidents, 20);
+  const appIncChunks = chunkArray(allIncidents, ROWS_PER_PAGE);
   if (appIncChunks.length === 0) appIncChunks.push([]);
 
   const appendixCPagesHtml = appIncChunks.map((chunk, chunkIdx) => {
     const pageLabel = appIncChunks.length > 1 ? ` (Page ${chunkIdx + 1} of ${appIncChunks.length})` : '';
     const rowsHtml = chunk.map((inc, idx) => {
       if (!inc) return '';
-      const ref = inc.display_reference ? `${inc.display_reference.type}: ${inc.display_reference.value}` : (inc.TicketNumber || inc.IncidentNumber || inc.IncidentID || (idx >= 0 ? `INC-${chunkIdx * 20 + idx + 1}` : 'N/A'));
+      const ref = inc.display_reference ? `${inc.display_reference.type}: ${inc.display_reference.value}` : (inc.TicketNumber || inc.IncidentNumber || inc.IncidentID || (idx >= 0 ? `INC-${chunkIdx * ROWS_PER_PAGE + idx + 1}` : 'N/A'));
       const slaBadge = inc.sla_status === 'SLA Breached' 
         ? '<span class="badge-danger">SLA Breached</span>'
         : '<span class="badge-success">SLA Met</span>';
@@ -769,23 +815,25 @@ function buildHTMLReport(data) {
         </div>
         <div class="period-badge">${reportingPeriod}</div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 16%; text-align: left;">Reference (Ticket / Incident ID)</th>
-            <th style="width: 12%; text-align: left;">Location</th>
-            <th style="width: 15%; text-align: left;">Device ID / Serial</th>
-            <th style="width: 6%; text-align: center;">Type</th>
-            <th style="width: 10%; text-align: center;">Hold Time</th>
-            <th style="width: 10%; text-align: center;">Fix Time</th>
-            <th style="width: 18%; text-align: left;">RCA Driver</th>
-            <th style="width: 13%; text-align: center;">SLA Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml || '<tr><td colspan="8" class="center">No incident records found. Operations 100% Stable.</td></tr>'}
-        </tbody>
-      </table>
+      <div style="page-break-inside: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 16%; text-align: left;">Reference (Ticket / Incident ID)</th>
+              <th style="width: 12%; text-align: left;">Location</th>
+              <th style="width: 15%; text-align: left;">Device ID / Serial</th>
+              <th style="width: 6%; text-align: center;">Type</th>
+              <th style="width: 10%; text-align: center;">Hold Time</th>
+              <th style="width: 10%; text-align: center;">Fix Time</th>
+              <th style="width: 18%; text-align: left;">RCA Driver</th>
+              <th style="width: 13%; text-align: center;">SLA Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || '<tr><td colspan="8" class="center">No incident records found. Operations 100% Stable.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
       <div class="footer">
         <div>Appendix C: Incidents Audit Trail — SSOT Engine</div>
         <div>Page ${pageCounter++}</div>
@@ -812,17 +860,19 @@ function buildHTMLReport(data) {
 
     .page {
       page-break-after: always;
-      page-break-inside: avoid;
+      page-break-inside: auto;
       box-sizing: border-box;
       padding: 16px 20px;
       position: relative;
       background: #ffffff;
-      min-height: 185mm;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
     .page:last-child { page-break-after: avoid; }
+    .page > table { overflow: visible; }
+    .page > * { max-height: none; }
 
     .header {
       display: flex;
@@ -892,7 +942,7 @@ function buildHTMLReport(data) {
       margin-top: 6px;
       margin-bottom: 10px;
       font-size: 9.5px;
-      table-layout: fixed;
+      table-layout: auto;
     }
     thead { display: table-header-group; }
     th {
@@ -915,6 +965,11 @@ function buildHTMLReport(data) {
       word-wrap: break-word;
       overflow-wrap: break-word;
     }
+    td.wrap-cell {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    td.center, th.center { white-space: nowrap; }
     td:first-child { border-left: 1px solid #e2e8f0; }
     td:last-child { border-right: 1px solid #e2e8f0; }
 
@@ -997,32 +1052,10 @@ function buildHTMLReport(data) {
         margin-left: auto;
         margin-right: auto;
       }
-      .print-hint {
-        background: linear-gradient(135deg, #0f172a, #1e3a5f);
-        color: #e0f2fe;
-        padding: 14px 28px;
-        text-align: center;
-        font-size: 13px;
-        font-weight: 500;
-        border-radius: 10px;
-        margin-bottom: 28px;
-        max-width: 1200px;
-        margin-left: auto;
-        margin-right: auto;
-        box-shadow: 0 2px 8px rgba(2,132,199,0.3);
-      }
-      .print-hint strong { color: #38bdf8; }
-      .print-hint kbd { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-family: monospace; }
     }
   </style>
 </head>
 <body>
-
-  <!-- SCREEN-ONLY PRINT HINT BANNER -->
-  <div class="print-hint no-print">
-    📄 <strong>Executive QBR PDF Report</strong> &nbsp;|&nbsp;
-    To save as PDF: Press <kbd>Ctrl+P</kbd> (Windows) or <kbd>⌘+P</kbd> (Mac) &nbsp;→&nbsp; Destination: <strong>Save as PDF</strong> &nbsp;→&nbsp; Layout: <strong>Landscape</strong> &nbsp;→&nbsp; Save
-  </div>
 
   <!-- SLIDE 1: COVER PAGE -->
   <div class="page">
