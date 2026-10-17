@@ -7,41 +7,63 @@ const path = require('path');
 const os = require('os');
 const ruleEngine = require('./ruleEngine');
 
-let puppeteer;
+let puppeteer, puppeteerCore, sparticuzChromium;
+try { puppeteer = require('puppeteer'); } catch (_) { puppeteer = null; }
 try {
-  puppeteer = require('puppeteer');
-} catch (e) {
-  puppeteer = null;
-}
+  puppeteerCore = require('puppeteer-core');
+  sparticuzChromium = require('@sparticuz/chromium');
+} catch (_) { puppeteerCore = null; sparticuzChromium = null; }
 
 /**
- * Locates Chrome executable if default Puppeteer shell is not available.
+ * Resolves browser launch configuration.
  * Priority:
- *   1. PUPPETEER_EXECUTABLE_PATH env var (set by Render / Docker entrypoint)
- *   2. CHROME_BIN env var (common CI/CD convention)
- *   3. Known static paths (Windows dev + Linux production)
+ *   1. Linux production (Render): @sparticuz/chromium + puppeteer-core
+ *   2. Custom binary override: PUPPETEER_EXECUTABLE_PATH + puppeteer-core
+ *   3. Local development: full puppeteer package
  */
-function findChromeExecutable() {
-  // Env-var overrides always win (Render, Docker, CI)
-  if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
-    return process.env.PUPPETEER_EXECUTABLE_PATH;
+async function getBrowserLaunchConfig() {
+  const isLinux = process.platform === 'linux';
+
+  if (isLinux && sparticuzChromium && puppeteerCore) {
+    return {
+      mode: 'sparticuz',
+      puppeteer: puppeteerCore,
+      options: {
+        args: [...sparticuzChromium.args, '--no-sandbox',
+               '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+               '--single-process'],
+        defaultViewport: sparticuzChromium.defaultViewport,
+        executablePath: await sparticuzChromium.executablePath(),
+        headless: 'shell',
+      },
+    };
   }
-  if (process.env.CHROME_BIN && fs.existsSync(process.env.CHROME_BIN)) {
-    return process.env.CHROME_BIN;
+
+  if (process.env.PUPPETEER_EXECUTABLE_PATH && puppeteerCore) {
+    if (fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+      return {
+        mode: 'custom',
+        puppeteer: puppeteerCore,
+        options: {
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+          headless: 'shell',
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        },
+      };
+    }
   }
-  const candidatePaths = [
-    path.join(os.homedir(), '.cache', 'puppeteer', 'chrome', 'win64-151.0.7922.47', 'chrome-win64', 'chrome.exe'),
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-    '/snap/bin/chromium',
-  ];
-  for (const p of candidatePaths) {
-    if (fs.existsSync(p)) return p;
+
+  if (puppeteer) {
+    return {
+      mode: 'local',
+      puppeteer: puppeteer,
+      options: {
+        headless: 'shell',
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      },
+    };
   }
+
   return null;
 }
 
@@ -49,50 +71,30 @@ function findChromeExecutable() {
  * Attempts to render HTML string into a binary PDF using Puppeteer.
  */
 async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
-  if (!puppeteer) return false;
+  const config = await getBrowserLaunchConfig();
+  if (!config) {
+    console.warn('[pdfGenerator] No viable Chromium. HTML fallback.');
+    return false;
+  }
+  console.log(`[pdfGenerator] Launching (mode: ${config.mode})`);
   let browser = null;
   try {
-    // Check env-var-specified executable first (Render/Docker sets PUPPETEER_EXECUTABLE_PATH)
-    const envExecPath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_BIN;
-    if (envExecPath && fs.existsSync(envExecPath)) {
-      browser = await puppeteer.launch({
-        headless: true,
-        executablePath: envExecPath,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-      });
-    } else {
-      try {
-        browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] });
-      } catch (e1) {
-        const execPath = findChromeExecutable();
-        if (execPath) {
-          browser = await puppeteer.launch({ headless: true, executablePath: execPath, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] });
-        }
-      }
-    }
-
-    if (!browser) return false;
-
+    browser = await config.puppeteer.launch(config.options);
     const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 60000 });
     const pdfBuffer = await page.pdf({
-      format: 'A4',
-      landscape: true,
-      printBackground: true,
-      margin: { top: '6mm', bottom: '6mm', left: '6mm', right: '6mm' }
+      format: 'A4', landscape: true, printBackground: true,
+      margin: { top: '6mm', bottom: '6mm', left: '6mm', right: '6mm' },
     });
     await browser.close();
-
     if (pdfBuffer && pdfBuffer.length > 0) {
       fs.writeFileSync(outputPath, pdfBuffer);
-      console.log(`[pdfGenerator] Real Binary PDF successfully generated via Puppeteer: ${outputPath} (${pdfBuffer.length} bytes)`);
+      console.log(`[pdfGenerator] PDF via ${config.mode}: ${outputPath} (${pdfBuffer.length} bytes)`);
       return true;
     }
   } catch (err) {
-    console.warn(`[pdfGenerator] Puppeteer PDF notice: ${err.message}. Falling back to HTML format.`);
-    if (browser) {
-      try { await browser.close(); } catch (_) {}
-    }
+    console.warn(`[pdfGenerator] Error (${config.mode}): ${err.message}`);
+    if (browser) { try { await browser.close(); } catch (_) {} }
   }
   return false;
 }
