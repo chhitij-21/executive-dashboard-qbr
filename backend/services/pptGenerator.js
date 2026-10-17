@@ -627,7 +627,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildActionPlanSlide(pres, exec, siteSummary, incidents, clientShort);
 
   // Slide 37: Other Activity
-  buildOtherActivitySlide(pres, allIncidents, displayPeriod);
+  buildOtherActivitySlide(pres, data.otherActivities || [], displayPeriod);
 
   // Appendix Section (Single Data Reference Notice Slide — Rule 1)
   buildAppendixNoticeSlide(pres, exec);
@@ -2404,16 +2404,25 @@ function buildAppendixIncidentRecordsSlide(pres, incidents) {
 }
 
 // ── Slide 37: Other Activity ───────────────────────────────────────────────
-function buildOtherActivitySlide(pres, incidents, displayPeriod) {
-  const nonSwApIncidents = (Array.isArray(incidents) ? incidents : []).filter(i => {
-    const devType = String(i.DeviceType || i['Device Type'] || '').toLowerCase();
-    const cat     = String(i.Category || i.SubCategory || i['Sub Category'] || i.Subject || i.Description || '').toLowerCase();
-    const isCR    = i.IsChangeRequest || /change request|request fulfillment|ise|wlc|router|asset scan|whitelist|mac address|maintenance|credentials|license/i.test(cat);
-    const isNonSwAp = !(/^sw$|switch/i.test(devType) || /^ap$|access point/i.test(devType));
-    return isCR || isNonSwAp;
-  });
+function resolveSlide37List(data) {
+  const otherActivities = (data && Array.isArray(data.otherActivities)) ? data.otherActivities : [];
+  return otherActivities.slice(0, 15);
+}
 
-  const displayList = nonSwApIncidents.length > 0 ? nonSwApIncidents : (Array.isArray(incidents) ? incidents.slice(0, 15) : []);
+function buildOtherActivitySlide(pres, otherActivities = [], displayPeriod) {
+  const displayList = Array.isArray(otherActivities) ? otherActivities.slice(0, 15) : [];
+
+  if (displayList.length === 0) {
+    _slideNum++;
+    const s = pres.addSlide();
+    s.background = { color: C.BG_LIGHT };
+    addHeader(pres, s, 'OVERVIEW', 'Other Activity — Change Requests, Maintenance, Request Fulfillment & Non-Hardware Tickets', _slideNum);
+    s.addText('No Other Activity tickets in this reporting period', {
+      x: 0.45, y: 3.0, w: 12.43, h: 1.0,
+      fontSize: 14, color: C.TEXT_MUTED, align: 'center', fontFace: C.FONT_PRIMARY, italic: true
+    });
+    return;
+  }
   const pageSize = 12;
   const totalPages = Math.max(1, Math.ceil(displayList.length / pageSize));
   const COL_W = [2.8, 1.4, 1.4, 1.4, 1.0, 1.5, 1.0, 1.93];
@@ -2525,4 +2534,4 @@ function td(text, fill, opts = {}) {
 // Exports
 // ─────────────────────────────────────────────────────────────────────────────
 
-module.exports = { generatePPT };
+module.exports = { generatePPT, resolveSlide37List };
