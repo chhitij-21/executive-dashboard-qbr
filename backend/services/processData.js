@@ -8,6 +8,7 @@ const {
   loadWorkbook, detectSheets,
   mergeInventorySheets, parseIncidentSheet, parseUptimeSummary,
   buildSerialToHostnameMap, normalizeSiteName: rawNormalizeSiteName, isGenericLocation,
+  resolveSiteFromText,
 } = require('./excelParser');
 
 function normalizeSiteName(site) {
@@ -1053,7 +1054,19 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // Enrich and build otherActivities using device lookup maps and comprehensive site patterns
   const otherActivities = rawOtherActivities.map((item) => {
     const subCat = deriveSubCategory(item);
-    const resolvedSite = resolveTicketSite(item, defaultCentralSite);
+    let resolvedSite = resolveTicketSite(item, defaultCentralSite);
+    if (!resolvedSite || resolvedSite === 'Unknown' || isGenericLocation(resolvedSite)) {
+      const aliasSite = resolveSiteFromText(
+        item.Subject || item.Description,
+        item.Description,
+        item.Location || item.SiteID || resolvedSite
+      );
+      if (aliasSite && aliasSite !== 'Unknown') {
+        resolvedSite = aliasSite;
+        item.Location = resolvedSite;
+        item.SiteID = resolvedSite;
+      }
+    }
 
     // Determine clean, non-generic device name
     let devName = '';

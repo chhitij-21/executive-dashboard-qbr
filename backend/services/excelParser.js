@@ -650,6 +650,54 @@ function analyzeWorkbookSchema(filePath) {
   };
 }
 
+const SITE_ALIASES = {
+  // Bangalore variants
+  'BLR': 'Bangalore', 'BLORE': 'Bangalore', 'BANGALORE': 'Bangalore',
+  // Gurgaon variants
+  'GGN': 'Gurgaon Plant', 'GURGAON': 'Gurgaon Plant',
+  'GURGAON PLANT': 'Gurgaon Plant', 'GURGAON HEAD OFFICE': 'Gurgaon Head Office',
+  // Delhi/NCR
+  'OKHLA': 'Okhla', 'NOIDA': 'Noida', 'GREATER NOIDA': 'Greater Noida',
+  'GZB': 'Greater Noida', 'ROHINI': 'Rohini Delhi',
+  'KAROLBAGH': 'Karolbagh', 'KAROL BAGH': 'Karolbagh',
+  // Other cities
+  'HYD': 'Hyderabad', 'HYDERABAD': 'Hyderabad',
+  'MUM': 'Mumbai', 'MUMBAI': 'Mumbai', 'BOMBAY': 'Mumbai',
+  'NAG': 'Nagpur', 'NAGPUR': 'Nagpur',
+  'KOL': 'Kolkata', 'KOLKATA': 'Kolkata',
+  'CHN': 'Chennai', 'CHENNAI': 'Chennai',
+  'VIZAG': 'Vizag', 'VIJAYWADA': 'Vijaywada', 'VIJAYAWADA': 'Vijaywada',
+  'LUDHIANA': 'Ludhiana', 'THRISSUR': 'Thrissur',
+  'AHMEDABAD': 'Ahmedabad', 'COIMBATORE': 'Coimbatore',
+  'GUWAHATI': 'Guwahati', 'BBSR': 'Bhubaneswar', 
+  'BHUBANESWAR': 'Bhubaneswar',
+  'MOHALI': 'Mohali', 'LAJPAT NAGAR': 'Lajpat Nagar',
+};
+
+function resolveSiteFromText(subject, description, currentSite) {
+  // If already resolved, return as-is
+  if (currentSite && currentSite !== 'Unknown' && currentSite !== '') {
+    return currentSite;
+  }
+  
+  const text = `${subject || ''} ${description || ''}`.toUpperCase();
+  if (!text.trim()) return currentSite || 'Unknown';
+  
+  // Try longest aliases first to prevent partial matches
+  const sortedAliases = Object.entries(SITE_ALIASES)
+    .sort((a, b) => b[0].length - a[0].length);
+  
+  for (const [alias, site] of sortedAliases) {
+    // Word boundary match — prevent "BLR" matching in "TBLRX"
+    const regex = new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'i');
+    if (regex.test(text)) {
+      return site;
+    }
+  }
+  
+  return currentSite || 'Unknown';
+}
+
 module.exports = {
   loadWorkbook,
   detectSheets,
@@ -660,4 +708,6 @@ module.exports = {
   analyzeWorkbookSchema,
   normalizeSiteName,
   isGenericLocation,
+  resolveSiteFromText,
+  SITE_ALIASES,
 };
