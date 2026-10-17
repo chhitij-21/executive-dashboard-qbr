@@ -9,6 +9,7 @@ import FileUploader from './components/FileUploader';
 import ReportHistory from './components/ReportHistory';
 import ClientManager from './components/ClientManager';
 import ExcelAnalyzer from './components/ExcelAnalyzer';
+import VulnerabilitiesPage from './components/VulnerabilitiesPage';
 
 import KpiCard from './components/KpiCard';
 import Chart from './components/Chart';
@@ -1261,6 +1262,12 @@ function MainPortal() {
         {tab === 'tickets' && (
           <ErrorBoundary>
             <TicketsDetailPage data={activeDashboardData} initialSubTab={ticketsSubTab} />
+          </ErrorBoundary>
+        )}
+
+        {tab === 'vulnerabilities' && (
+          <ErrorBoundary>
+            <VulnerabilitiesPage />
           </ErrorBoundary>
         )}
 

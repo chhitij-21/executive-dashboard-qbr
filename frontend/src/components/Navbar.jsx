@@ -115,6 +115,14 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
         </button>
 
         <button
+          className={`nav-tab-btn ${activeTab === 'vulnerabilities' ? 'active' : ''}`}
+          onClick={() => setActiveTab('vulnerabilities')}
+        >
+          <span className="nav-tab-icon">🛡️</span>
+          <span className="nav-tab-label">Vulnerabilities</span>
+        </button>
+
+        <button
           className={`nav-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
           onClick={() => setActiveTab('history')}
         >
