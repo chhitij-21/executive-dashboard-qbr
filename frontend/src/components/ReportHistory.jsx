@@ -42,8 +42,8 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
     } catch (err) {
       console.warn('[ReportHistory] Download ticket acquisition failed:', err);
     }
-    const authQuery = token ? `&downloadToken=${encodeURIComponent(token)}` : '';
-    window.location.href = `${API_BASE_URL}/api/${endpoint}/${jobId}?clientId=${encodeURIComponent(targetClientId)}${authQuery}`;
+    // Ticket flow failed — inform the user; do NOT fall back to insecure query-param auth
+    alert('Download failed: could not obtain a secure download ticket. Please ensure you are logged in and try again.');
   };
 
   const fetchHistory = async () => {

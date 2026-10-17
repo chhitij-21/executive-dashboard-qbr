@@ -1644,9 +1644,35 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
     // ── PPT: Serve existing PPT or generate on-the-fly from job's own dashboard_data.json ──
     if (pathKey === 'pptPath') {
+      // Task 1.2 (PPT-1): Timestamp-based cache invalidation.
+      // If dashboard_data.json is newer than the cached .pptx, discard the cache so
+      // the download always reflects the latest SSOT data (e.g. after a Phase B re-process).
+      let cachedPptValid = false;
       if (job?.pptPath && fs.existsSync(job.pptPath)) {
-        targetPath = job.pptPath;
-      } else {
+        const dashCandidatesCheck = [
+          job?.dashboardPath,
+          path.join(jobOutputDir, 'dashboard_data.json'),
+        ].filter(Boolean);
+        const dashPathCheck = dashCandidatesCheck.find((p) => p && fs.existsSync(p));
+        if (dashPathCheck) {
+          const pptMtime = fs.statSync(job.pptPath).mtimeMs;
+          const dashMtime = fs.statSync(dashPathCheck).mtimeMs;
+          if (pptMtime >= dashMtime) {
+            // Cache is fresh — serve it
+            cachedPptValid = true;
+            targetPath = job.pptPath;
+          } else {
+            console.log(`[server] PPT cache stale (ppt: ${new Date(pptMtime).toISOString()} < dash: ${new Date(dashMtime).toISOString()}). Regenerating from SSOT.`);
+            // Invalidate so the else-branch below regenerates
+            job.pptPath = null;
+          }
+        } else {
+          // No dashboard file to compare — trust the cache
+          cachedPptValid = true;
+          targetPath = job.pptPath;
+        }
+      }
+      if (!cachedPptValid) {
         const dashCandidates = [
           job?.dashboardPath,
           path.join(jobOutputDir, 'dashboard_data.json'),

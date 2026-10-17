@@ -234,8 +234,8 @@ function MainPortal() {
     } catch (err) {
       console.warn('[App] Download ticket acquisition failed:', err);
     }
-    const authQuery = token ? `&downloadToken=${encodeURIComponent(token)}` : '';
-    window.location.href = `${API_BASE_URL}/api/${exportType}/${jobId || 'latest'}?clientId=${encodeURIComponent(targetClientId)}${authQuery}`;
+    // Ticket flow failed — inform the user; do NOT fall back to insecure query-param auth
+    alert('Download failed: could not obtain a secure download ticket. Please ensure you are logged in and try again.');
   };
 
   // Use canonical backend dashboard data directly (SSOT)

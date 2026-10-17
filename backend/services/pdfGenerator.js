@@ -16,15 +16,28 @@ try {
 
 /**
  * Locates Chrome executable if default Puppeteer shell is not available.
+ * Priority:
+ *   1. PUPPETEER_EXECUTABLE_PATH env var (set by Render / Docker entrypoint)
+ *   2. CHROME_BIN env var (common CI/CD convention)
+ *   3. Known static paths (Windows dev + Linux production)
  */
 function findChromeExecutable() {
+  // Env-var overrides always win (Render, Docker, CI)
+  if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  if (process.env.CHROME_BIN && fs.existsSync(process.env.CHROME_BIN)) {
+    return process.env.CHROME_BIN;
+  }
   const candidatePaths = [
     path.join(os.homedir(), '.cache', 'puppeteer', 'chrome', 'win64-151.0.7922.47', 'chrome-win64', 'chrome.exe'),
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    '/usr/bin/google-chrome-stable',
     '/usr/bin/google-chrome',
     '/usr/bin/chromium-browser',
-    '/usr/bin/chromium'
+    '/usr/bin/chromium',
+    '/snap/bin/chromium',
   ];
   for (const p of candidatePaths) {
     if (fs.existsSync(p)) return p;
@@ -39,12 +52,22 @@ async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
   if (!puppeteer) return false;
   let browser = null;
   try {
-    try {
-      browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    } catch (e1) {
-      const execPath = findChromeExecutable();
-      if (execPath) {
-        browser = await puppeteer.launch({ headless: true, executablePath: execPath, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    // Check env-var-specified executable first (Render/Docker sets PUPPETEER_EXECUTABLE_PATH)
+    const envExecPath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_BIN;
+    if (envExecPath && fs.existsSync(envExecPath)) {
+      browser = await puppeteer.launch({
+        headless: true,
+        executablePath: envExecPath,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      });
+    } else {
+      try {
+        browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] });
+      } catch (e1) {
+        const execPath = findChromeExecutable();
+        if (execPath) {
+          browser = await puppeteer.launch({ headless: true, executablePath: execPath, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] });
+        }
       }
     }
 

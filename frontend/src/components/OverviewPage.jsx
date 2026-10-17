@@ -48,8 +48,8 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
     } catch (err) {
       console.warn('[OverviewPage] Download ticket acquisition failed:', err);
     }
-    const authQuery = token ? `&downloadToken=${encodeURIComponent(token)}` : '';
-    window.location.href = `${API_BASE_URL}/api/${exportType}/${activeJobId}?clientId=${encodeURIComponent(targetClientId)}${authQuery}`;
+    // Ticket flow failed — inform the user; do NOT fall back to insecure query-param auth
+    alert('Download failed: could not obtain a secure download ticket. Please ensure you are logged in and try again.');
   };
 
   return (
