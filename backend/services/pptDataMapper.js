@@ -95,8 +95,8 @@ function mapSnapshotToPPTData(qbrData) {
         activeDeviceCount:      s.activeDeviceCount ?? s.deviceCount,
         stockCount:             s.stockCount || 0,
         proactiveSwitchUptime:  s.proactiveSwitchUptime || s.switchUptime,
-        jflSwitchUptime:        s.jflSwitchUptime       || s.switchUptime,
-        switchUptime:           s.jflSwitchUptime       || s.switchUptime,
+        jflSwitchUptime:        s.jflSwitchUptime !== undefined ? s.jflSwitchUptime : null,
+        switchUptime:           s.jflSwitchUptime ?? s.proactiveSwitchUptime ?? s.switchUptime,
         overallUptime:          s.overallUptime         || s.switchUptime,
         incidentFreePercent:    s.incidentFreePercent,
         // AP Incidents: render as "Total / Unique" per AGENTS.md
@@ -109,7 +109,7 @@ function mapSnapshotToPPTData(qbrData) {
         primaryRcaAPs:          s.primaryRcaAPs      || s.primaryRcaForAPs || 'Stable Operations (No Incidents)',
         primaryRca:             s.primaryRcaSwitches || s.primaryRca       || 'Stable Operations (No Incidents)',
         primaryRcaForAPs:       s.primaryRcaAPs      || s.primaryRcaForAPs || 'Stable Operations (No Incidents)',
-        slaStatus:  parseFloat(s.jflSwitchUptime || s.switchUptime || 100) >= parseFloat(slaTarget ?? 99.3) ? 'MET' : 'BREACH',
+        slaStatus:  parseFloat(s.jflSwitchUptime ?? s.proactiveSwitchUptime ?? s.switchUptime ?? 100) >= parseFloat(slaTarget ?? 99.3) ? 'MET' : 'BREACH',
         healthScore:  s.healthScore,
         healthLabel:  s.healthLabel,
         path: `siteSummary[${idx}]`,
@@ -199,8 +199,8 @@ function mapSnapshotToPPTData(qbrData) {
       switchCount:            s.switchCount,
       apCount:                s.apCount,
       proactiveSwitchUptime:  s.proactiveSwitchUptime || s.switchUptime,
-      jflSwitchUptime:        s.jflSwitchUptime       || s.switchUptime,
-      switchUptime:           s.jflSwitchUptime       || s.switchUptime,  // alias for compatibility
+      jflSwitchUptime:        s.jflSwitchUptime !== undefined ? s.jflSwitchUptime : null,
+      switchUptime:           s.jflSwitchUptime ?? s.proactiveSwitchUptime ?? s.switchUptime,  // alias for compatibility
       overallUptime:          s.overallUptime         || s.switchUptime,
       incidentFreePercent:    s.incidentFreePercent,
       apIncidentsDisplay:     `${s.apIncidents ?? 0} / ${s.uniqueAPsWithIncidents ?? 0}`,
@@ -213,7 +213,7 @@ function mapSnapshotToPPTData(qbrData) {
       primaryRcaAPs:          s.primaryRcaAPs      || s.primaryRcaForAPs || 'Stable Operations (No Incidents)',
       primaryRca:             s.primaryRcaSwitches || s.primaryRca       || 'Stable Operations (No Incidents)',
       primaryRcaForAPs:       s.primaryRcaAPs      || s.primaryRcaForAPs || 'Stable Operations (No Incidents)',
-      slaStatus:  parseFloat(s.jflSwitchUptime || s.switchUptime || 100) >= parseFloat(slaTarget ?? 99.3) ? 'MET' : 'BREACH',
+      slaStatus:  parseFloat(s.jflSwitchUptime ?? s.proactiveSwitchUptime ?? s.switchUptime ?? 100) >= parseFloat(slaTarget ?? 99.3) ? 'MET' : 'BREACH',
       path: `siteSummary[${idx}]`,
     })),
 

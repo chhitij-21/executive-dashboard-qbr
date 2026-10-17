@@ -200,3 +200,86 @@ test('slaUptimeFormula - Scenario E: RC4 Bounds Clamping when cumulative downtim
   assert.ok(gnSite, 'Site Greater Noida should exist');
   assert.equal(gnSite.proactiveSwitchUptime, '0.00', 'Cumulative downtime exceeding total window must clamp to 0.00%');
 });
+
+test('slaUptimeFormula - Scenario F: MMTC client -> jflSwitchUptime MUST be null (SSOT Executive & Site Level)', async () => {
+  const switches = [
+    { 'Serial No.': 'SW-M1', 'Device Hostname': 'SW-M1', 'Location': 'Greater Noida', 'Device Type': 'SW' }
+  ];
+  const incidents = [
+    {
+      'Account Name': 'MMTC',
+      'Ticket Number': 'INC-MMTC-1',
+      'Device Serial': 'SW-M1',
+      'Device Type': 'SW',
+      'Site': 'Greater Noida',
+      'Status': 'Resolved',
+      'Open Time': '2026-07-01 10:00:00',
+      'Resolved Time': '2026-07-01 11:00:00',
+      'Actual Resolution Time (min)': 60,
+      'Time on Hold (min)': 30,
+      'SubCategory': 'Software Fault'
+    }
+  ];
+
+  const mmtcOptions = {
+    startDate: '2026-07-01',
+    endDate: '2026-07-31',
+    periodMode: 'monthly',
+    clientId: 'client-mmtcpamp',
+    clientName: 'MMTC-PAMP India Pvt. Ltd.'
+  };
+
+  const { dashData } = await runUptimePipeline(switches, incidents, mmtcOptions);
+  assert.ok(dashData, 'Dashboard data must exist');
+  assert.equal(dashData.executiveSummary.isJFLClient, false, 'MMTC must have isJFLClient === false');
+  assert.equal(dashData.executiveSummary.jflSwitchUptime, null, 'MMTC executiveSummary.jflSwitchUptime must be null');
+  assert.ok(dashData.executiveSummary.proactiveSwitchUptime, 'MMTC proactiveSwitchUptime must have value');
+
+  assert.ok(dashData.siteSummary && dashData.siteSummary.length > 0, 'Site summary must contain sites');
+  dashData.siteSummary.forEach(s => {
+    assert.equal(s.jflSwitchUptime, null, `Site ${s.siteId} jflSwitchUptime must be null for non-JFL client`);
+    assert.ok(s.proactiveSwitchUptime !== null, `Site ${s.siteId} proactiveSwitchUptime must not be null`);
+  });
+});
+
+test('slaUptimeFormula - Scenario G: JFL client -> jflSwitchUptime MUST have valid value', async () => {
+  const switches = [
+    { 'Serial No.': 'SW-J1', 'Device Hostname': 'SW-J1', 'Location': 'Greater Noida', 'Device Type': 'SW' }
+  ];
+  const incidents = [
+    {
+      'Account Name': 'JFL',
+      'Ticket Number': 'INC-JFL-1',
+      'Device Serial': 'SW-J1',
+      'Device Type': 'SW',
+      'Site': 'Greater Noida',
+      'Status': 'Resolved',
+      'Open Time': '2026-07-01 10:00:00',
+      'Resolved Time': '2026-07-01 11:00:00',
+      'Actual Resolution Time (min)': 60,
+      'Time on Hold (min)': 30,
+      'SubCategory': 'Software Fault'
+    }
+  ];
+
+  const jflOptions = {
+    startDate: '2026-07-01',
+    endDate: '2026-07-31',
+    periodMode: 'monthly',
+    clientId: 'client-jfl',
+    clientName: 'Jubilant Foodworks Ltd (JFL)'
+  };
+
+  const { dashData } = await runUptimePipeline(switches, incidents, jflOptions);
+  assert.ok(dashData, 'Dashboard data must exist');
+  assert.equal(dashData.executiveSummary.isJFLClient, true, 'JFL must have isJFLClient === true');
+  assert.notEqual(dashData.executiveSummary.jflSwitchUptime, null, 'JFL executiveSummary.jflSwitchUptime must not be null');
+  assert.ok(parseFloat(dashData.executiveSummary.jflSwitchUptime) >= 0 && parseFloat(dashData.executiveSummary.jflSwitchUptime) <= 100);
+
+  assert.ok(dashData.siteSummary && dashData.siteSummary.length > 0, 'Site summary must contain sites');
+  dashData.siteSummary.forEach(s => {
+    assert.notEqual(s.jflSwitchUptime, null, `Site ${s.siteId} jflSwitchUptime must have value for JFL client`);
+    assert.ok(parseFloat(s.jflSwitchUptime) >= 0 && parseFloat(s.jflSwitchUptime) <= 100);
+  });
+});
+

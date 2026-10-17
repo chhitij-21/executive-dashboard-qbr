@@ -130,16 +130,17 @@ try {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function generatePPT(data, _templatePath, outputPath, options = {}) {
+  const targetPath = (!outputPath && typeof _templatePath === 'string') ? _templatePath : outputPath;
   console.log('[pptGenerator] Mapping canonical snapshot to PPT presentation model...');
   const pptData = pptDataMapper.mapSnapshotToPPTData(data);
 
   console.log('[pptGenerator] Running pre-generation automated data reconciliation...');
-  const outputDir = path.dirname(outputPath);
+  const outputDir = path.dirname(targetPath);
   reconciliationEngine.reconcileDashboardAndPPT(data, pptData, outputDir);
 
   console.log('[pptGenerator] Generating Board-Level Executive QBR PPT...');
-  await buildPresentation(data, outputPath, options);
-  console.log('[pptGenerator] PPT written to:', outputPath);
+  await buildPresentation(data, targetPath, options);
+  console.log('[pptGenerator] PPT written to:', targetPath);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -262,8 +263,8 @@ function generateExecNarrative(exec, siteSummary, incidents) {
 
 function generateSiteInsights(siteKey, siteData, siteIncs) {
   const health = parseFloat(siteData.healthScore) || 100;
-  // Use canonical SSOT fields: jflSwitchUptime first, fall back to switchUptime
-  const uptime  = parseFloat(siteData.jflSwitchUptime || siteData.switchUptime) || 100;
+  // Use canonical SSOT fields: jflSwitchUptime first, fall back to proactiveSwitchUptime or switchUptime
+  const uptime  = parseFloat(siteData.jflSwitchUptime ?? siteData.proactiveSwitchUptime ?? siteData.switchUptime) || 100;
   const incFree = parseFloat(siteData.incidentFreePercent) || 100;
   // Use canonical SSOT field: primaryRcaSwitches first, fall back to primaryRca
   const topRca   = siteData.primaryRcaSwitches || siteData.primaryRca || 'None';
@@ -536,6 +537,7 @@ async function buildPresentation(data, outputPath, options = {}) {
 
   const customerName = data.customerName || exec.customerName || 'Client';
   const clientShort = (/mmtc/i.test(customerName) || data.clientId === 'client-mmtcpamp') ? 'MMTC' : ((/jfl/i.test(customerName) || data.clientId === 'client-jfl') ? 'JFL' : customerName);
+  const isJFL = Boolean(exec.isJFLClient ?? (/jfl|jubilant/i.test(customerName || '')) ?? data.clientId === 'client-jfl');
 
   const validSiteObjects = getValidSites(siteSummary);
   const targetSites = validSiteObjects.length > 0 ? validSiteObjects.map(s => s.siteId) : TARGET_SITES;
@@ -573,7 +575,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildCoverSlide(pres, exec, displayPeriod);
 
   // Slide 2: Executive Summary Table — All Sites (Reference PDF Structure)
-  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents, clientShort);
+  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents, clientShort, isJFL);
 
   // Slide 3: Executive Summary Overview
   buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown);
@@ -594,14 +596,14 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildRCAHeatmapSlide(pres, siteSummary, incidents, rcaBreakdown);
 
   // Slide 10: SLA Dashboard
-  buildSLASlide(pres, exec, siteSummary, slaAn, clientShort);
+  buildSLASlide(pres, exec, siteSummary, slaAn, clientShort, isJFL);
 
   // Slide 11: Ticket Analytics (All Monitored Tickets including CRs/Activities)
   const allIncidents = [...(data.incidents || []), ...(data.otherActivities || [])];
   buildTicketAnalyticsSlide(pres, allIncidents, siteSummary, exec);
 
   // Slide 12: Site Health Ranking
-  buildSiteRankingSlide(pres, siteSummary, incidents);
+  buildSiteRankingSlide(pres, siteSummary, incidents, isJFL);
 
   // Slide 13: Risk Assessment
   buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown);
@@ -613,8 +615,8 @@ async function buildPresentation(data, outputPath, options = {}) {
     const siteIncs = siteIncsMap[siteKey] || [];
     const siteAps  = siteApsMap[siteKey]  || [];
 
-    buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1, targetSites.length, clientShort);
-    buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1, targetSites.length, clientShort);
+    buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1, targetSites.length, clientShort, isJFL);
+    buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1, targetSites.length, clientShort, isJFL);
     buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1, targetSites.length, clientShort);
   });
 
@@ -891,25 +893,27 @@ function buildNetworkHealthSlide(pres, exec, siteSummary, incidents) {
 
 // ── Slide 5: Infrastructure Summary & Executive Overview ───────────────────
 // displayPeriod: canonical period string from report_period.display_label (passed from buildPresentation)
-function buildAIInsightsBullets(validSites, incidents, displayPeriod, slaTarget = 99.30, clientShort = 'Client') {
+function buildAIInsightsBullets(validSites, incidents, displayPeriod, slaTarget = 99.30, clientShort = 'Client', isJFL = true) {
   const bullets = [];
+  const uptimeLabel = isJFL ? `${clientShort} Switch Uptime` : 'Proactive Switch Uptime';
+  const getSiteUp = s => isJFL ? (s.jflSwitchUptime || s.switchUptime) : (s.proactiveSwitchUptime || s.switchUptime);
 
-  // 1. Top sites by Client Switch Uptime
-  const sortedByJfl = [...validSites].sort((a, b) => parseFloat(b.jflSwitchUptime || b.switchUptime || 100) - parseFloat(a.jflSwitchUptime || a.switchUptime || 100));
-  if (sortedByJfl.length > 0) {
-    const top3 = sortedByJfl.slice(0, 3).map(s => `${s.siteId} (${s.jflSwitchUptime || s.switchUptime || '100.00'}%)`).join(', ');
-    bullets.push(`Top sites by ${clientShort} Switch Uptime: ${top3}.`);
+  // 1. Top sites by Switch Uptime
+  const sortedByUp = [...validSites].sort((a, b) => parseFloat(getSiteUp(b) || 100) - parseFloat(getSiteUp(a) || 100));
+  if (sortedByUp.length > 0) {
+    const top3 = sortedByUp.slice(0, 3).map(s => `${s.siteId} (${getSiteUp(s) || '100.00'}%)`).join(', ');
+    bullets.push(`Top sites by ${uptimeLabel}: ${top3}.`);
   }
 
-  // 2. Bottom sites by Client Switch Uptime (flag breaches)
-  const sortedAsc = [...validSites].sort((a, b) => parseFloat(a.jflSwitchUptime || a.switchUptime || 0) - parseFloat(b.jflSwitchUptime || b.switchUptime || 0));
+  // 2. Bottom sites by Switch Uptime (flag breaches)
+  const sortedAsc = [...validSites].sort((a, b) => parseFloat(getSiteUp(a) || 0) - parseFloat(getSiteUp(b) || 0));
   if (sortedAsc.length > 0) {
     const bottom3 = sortedAsc.slice(0, 3).map(s => {
-      const val = parseFloat(s.jflSwitchUptime || s.switchUptime || 100);
+      const val = parseFloat(getSiteUp(s) || 100);
       const breachFlag = val < slaTarget ? ' BREACH' : '';
       return `${s.siteId} (${val.toFixed(2)}%${breachFlag})`;
     }).join(', ');
-    bullets.push(`Bottom sites by ${clientShort} Switch Uptime: ${bottom3}.`);
+    bullets.push(`Bottom sites by ${uptimeLabel}: ${bottom3}.`);
   }
 
   // 3. Largest RCA driver across all sites
@@ -949,37 +953,43 @@ function buildAIInsightsBullets(validSites, incidents, displayPeriod, slaTarget 
     bullets.push(`Site with the most On Hold tickets: ${topHoldPairs[0][0]} (${topHoldPairs[0][1]} tickets).`);
   }
 
-  // 6. Proactive vs Client Switch Uptime variance > 5%
-  const varianceList = validSites.filter(s => {
-    const pro = parseFloat(s.proactiveSwitchUptime || s.switchUptime || 100);
-    const jfl = parseFloat(s.jflSwitchUptime || s.switchUptime || 100);
-    return Math.abs(pro - jfl) > 5.0;
-  }).map(s => `${s.siteId} (Proactive: ${s.proactiveSwitchUptime}%, ${clientShort}: ${s.jflSwitchUptime}%)`);
-  if (varianceList.length > 0) {
-    bullets.push(`Sites with Proactive and ${clientShort} Switch Uptime variance > 5%: ${varianceList.join('; ')}.`);
+  // 6. Proactive vs Client Switch Uptime variance > 5% (JFL only)
+  if (isJFL) {
+    const varianceList = validSites.filter(s => {
+      const pro = parseFloat(s.proactiveSwitchUptime || s.switchUptime || 100);
+      const jfl = parseFloat(s.jflSwitchUptime || s.switchUptime || 100);
+      return Math.abs(pro - jfl) > 5.0;
+    }).map(s => `${s.siteId} (Proactive: ${s.proactiveSwitchUptime}%, ${clientShort}: ${s.jflSwitchUptime}%)`);
+    if (varianceList.length > 0) {
+      bullets.push(`Sites with Proactive and ${clientShort} Switch Uptime variance > 5%: ${varianceList.join('; ')}.`);
+    }
   }
 
   return bullets.slice(0, 6);
 }
 
-function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents = [], clientShort = 'Client') {
+function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents = [], clientShort = 'Client', isJFL = true) {
   const validSites = siteSummary.filter(st => {
     const n = String(st.siteId || '').toLowerCase();
     return !['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report'].includes(n) && !n.includes('sla_compliance');
   });
 
-  const COL_W = [1.7, 1.3, 1.8, 1.8, 2.2, 1.6, 2.03];
+  const COL_W = isJFL ? [1.7, 1.3, 1.8, 1.8, 2.2, 1.6, 2.03] : [2.0, 1.4, 2.2, 2.7, 1.8, 2.33];
   const W_TOTAL = COL_W.reduce((a, b) => a + b, 0);
 
   const headers = [
     th('Site', 'left'),
     th('No of devices', 'center'),
     th('Proactive Switch Uptime', 'center'),
-    th(`${clientShort} Switch Uptime`, 'center'),
+  ];
+  if (isJFL) {
+    headers.push(th(`${clientShort} Switch Uptime`, 'center'));
+  }
+  headers.push(
     th('Primary RCA Driver (Switches)', 'left'),
     th('AP Incidents (Unique)', 'center'),
-    th('Primary RCA Driver (AP)', 'left'),
-  ];
+    th('Primary RCA Driver (AP)', 'left')
+  );
 
   const periodStr = displayPeriod || exec.reportingPeriod || 'User Selected Period';
   const siteChunks = chunkArray(validSites, 9);
@@ -1004,15 +1014,20 @@ function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incide
       const apRca = apRcaRaw && !badVals.includes(apRcaRaw) ? apRcaRaw : noIncidentStr;
       const apIncStr = `${site.apIncidents ?? 0} / ${site.uniqueAPsWithIncidents ?? 0}`;
 
-      return [
+      const row = [
         td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
         td(fmt(site.deviceCount), fill, { align: 'center', color: C.TEXT_DARK }),
         td(proUp, fill, { align: 'center', bold: true, color: C.BLUE }),
-        td(jflUp, fill, { align: 'center', bold: true, color: parseFloat(jflUp) >= SLA_TARGET ? C.GREEN : C.RED }),
+      ];
+      if (isJFL) {
+        row.push(td(jflUp, fill, { align: 'center', bold: true, color: parseFloat(jflUp) >= SLA_TARGET ? C.GREEN : C.RED }));
+      }
+      row.push(
         td(swRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 }),
         td(apIncStr, fill, { align: 'center', color: C.AMBER, bold: true }),
-        td(apRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 }),
-      ];
+        td(apRca, fill, { align: 'left', color: C.TEXT_DARK, fontSize: 10 })
+      );
+      return row;
     });
 
     s.addTable([headers, ...rows], {
@@ -1023,7 +1038,7 @@ function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incide
 
     // AI Insights Block (placed immediately below the All-Sites table on Part 1)
     if (chunkIdx === 0) {
-      const aiBullets = buildAIInsightsBullets(validSites, incidents, periodStr, SLA_TARGET, clientShort);
+      const aiBullets = buildAIInsightsBullets(validSites, incidents, periodStr, SLA_TARGET, clientShort, isJFL);
       if (aiBullets.length > 0) {
         s.addText('AI Insights', {
           x: 0.45, y: 5.6, w: 12.43, h: 0.28,
@@ -1344,7 +1359,7 @@ function buildRCAHeatmapSlide(pres, siteSummary, incidents, rcaBreakdown) {
 }
 
 // ── Slide 10: SLA Dashboard ────────────────────────────────────────────────
-function buildSLASlide(pres, exec, siteSummary, slaAn, clientShort = 'Client') {
+function buildSLASlide(pres, exec, siteSummary, slaAn, clientShort = 'Client', isJFL = true) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -1386,25 +1401,39 @@ function buildSLASlide(pres, exec, siteSummary, slaAn, clientShort = 'Client') {
     return !['unknown', 'raw', 'sheet1', 'jfl', 'sla_compliance_report'].includes(n) && !n.includes('sla_compliance');
   });
 
-  const COL_W = [2.2, 1.3, 2.1, 2.1, 1.8, 1.83];
-  const headers = [
+  const COL_W = isJFL ? [2.2, 1.3, 2.1, 2.1, 1.8, 1.83] : [2.6, 1.6, 2.8, 2.6, 2.83];
+  const headers = isJFL ? [
     th('Site', 'left'), th('Devices', 'center'), th('Proactive Switch Uptime', 'center'),
     th(`${clientShort} Switch Uptime`, 'center'), th('Incident-Free %', 'center'), th('SLA Status', 'center'),
+  ] : [
+    th('Site', 'left'), th('Devices', 'center'), th('Proactive Switch Uptime', 'center'),
+    th('Incident-Free %', 'center'), th('SLA Status', 'center'),
   ];
   const rows = validSites.slice(0, 9).map((site, idx) => {
     const fill    = rowFill(idx);
     const jflVal  = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
-    const slaOk   = jflVal >= SLA_TARGET;
+    const proVal  = parseFloat(site.proactiveSwitchUptime || site.switchUptime) || 100;
+    const slaOk   = isJFL ? (jflVal >= SLA_TARGET) : (proVal >= SLA_TARGET);
     const incFree = parseFloat(site.incidentFreePercent) || 100;
     const statusPill = slaOk ? '✓ MET' : '🚨 BREACH';
-    return [
-      td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
-      td(fmt(site.deviceCount), fill, { align: 'center' }),
-      td(pct(site.proactiveSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: C.BLUE }),
-      td(pct(site.jflSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
-      td(pct(site.incidentFreePercent), fill, { align: 'center', bold: true, color: incFree >= 90 ? C.GREEN : C.AMBER }),
-      td(statusPill, fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
-    ];
+    if (isJFL) {
+      return [
+        td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
+        td(fmt(site.deviceCount), fill, { align: 'center' }),
+        td(pct(site.proactiveSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: C.BLUE }),
+        td(pct(site.jflSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
+        td(pct(site.incidentFreePercent), fill, { align: 'center', bold: true, color: incFree >= 90 ? C.GREEN : C.AMBER }),
+        td(statusPill, fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
+      ];
+    } else {
+      return [
+        td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
+        td(fmt(site.deviceCount), fill, { align: 'center' }),
+        td(pct(site.proactiveSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
+        td(pct(site.incidentFreePercent), fill, { align: 'center', bold: true, color: incFree >= 90 ? C.GREEN : C.AMBER }),
+        td(statusPill, fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
+      ];
+    }
   });
 
   s.addTable([headers, ...rows], {
@@ -1489,7 +1518,7 @@ function buildTicketAnalyticsSlide(pres, incidents, siteSummary, exec) {
 }
 
 // ── Slide 12: Site Health Ranking ─────────────────────────────────────────
-function buildSiteRankingSlide(pres, siteSummary, incidents) {
+function buildSiteRankingSlide(pres, siteSummary, incidents, isJFL = true) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -1521,14 +1550,19 @@ function buildSiteRankingSlide(pres, siteSummary, incidents) {
     const hScore   = parseFloat(site.healthScore) || 100;
     const risk     = riskLevel(hScore);
     const incCount = incBySite[site.siteId] || 0;
-    const siteUptime = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
+    const siteUptime = isJFL
+      ? (parseFloat(site.jflSwitchUptime || site.switchUptime) || 100)
+      : (parseFloat(site.proactiveSwitchUptime || site.switchUptime) || 100);
+    const uptimeStr = isJFL
+      ? pct(site.jflSwitchUptime || site.switchUptime)
+      : pct(site.proactiveSwitchUptime || site.switchUptime);
     const statusText = idx === 0 ? '🟢 TOP PERFORMER' : (risk.label === 'HIGH' ? '🚨 CRITICAL' : `${risk.label} (${healthLabel(hScore)})`);
 
     return [
       td(medals[idx] || `#${idx + 1}`, fill, { align: 'center', bold: true, color: idx < 3 ? C.ACCENT_GOLD : C.TEXT_MUTED }),
       td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
       td(`${hScore.toFixed(1)} / 100`, fill, { align: 'center', bold: true, color: healthColor(hScore) }),
-      td(pct(site.jflSwitchUptime || site.switchUptime), fill, { align: 'center', color: siteUptime >= SLA_TARGET ? C.GREEN : C.RED }),
+      td(uptimeStr, fill, { align: 'center', color: siteUptime >= SLA_TARGET ? C.GREEN : C.RED }),
       td(pct(site.incidentFreePercent), fill, { align: 'center', color: parseFloat(site.incidentFreePercent) >= 90 ? C.GREEN : C.AMBER }),
       td(String(incCount), fill, { align: 'center', color: incCount > 50 ? C.RED : incCount > 20 ? C.AMBER : C.TEXT_DARK }),
       td(statusText, fill, { align: 'center', bold: true, color: risk.color }),
@@ -1628,7 +1662,7 @@ function buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown) {
 
 // ── Site Slides A, B, C ────────────────────────────────────────────────────
 
-function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSites = 8, clientShort = 'Client') {
+function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSites = 8, clientShort = 'Client', isJFL = true) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -1638,16 +1672,18 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSit
     _slideNum
   );
 
-  // Use jflSwitchUptime (canonical SSOT field) for SLA compliance comparisons
+  // Use jflSwitchUptime for JFL, proactiveSwitchUptime for non-JFL (canonical SSOT fields)
   const siteJflUptime = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
+  const siteProUptime = parseFloat(site.proactiveSwitchUptime || site.switchUptime) || 100;
+  const targetUptime = isJFL ? siteJflUptime : siteProUptime;
   const kpis = [
     { label: 'Active Devices', value: fmt(site.deviceCount),                                         color: C.NAVY  },
     { label: 'Switches',       value: fmt(site.switchCount),                                          color: C.BLUE  },
     { label: 'Access Points',  value: fmt(site.apCount),                                              color: C.STEEL },
-    { label: `${clientShort} Uptime`, value: pct(site.jflSwitchUptime || site.switchUptime),         color: siteJflUptime >= SLA_TARGET ? C.GREEN : C.RED },
+    { label: isJFL ? `${clientShort} Uptime` : 'Proactive Uptime', value: pct(isJFL ? (site.jflSwitchUptime || site.switchUptime) : (site.proactiveSwitchUptime || site.switchUptime)), color: targetUptime >= SLA_TARGET ? C.GREEN : C.RED },
     { label: 'Incident-Free %',value: pct(site.incidentFreePercent),                                  color: parseFloat(site.incidentFreePercent) >= 90 ? C.GREEN : C.AMBER },
     { label: 'Health Score',   value: `${fmt(site.healthScore)} (${healthLabel(site.healthScore)})`, color: healthColor(site.healthScore) },
-    { label: 'SLA Status',     value: siteJflUptime >= SLA_TARGET ? 'MET' : 'BREACH',                 color: siteJflUptime >= SLA_TARGET ? C.GREEN : C.RED },
+    { label: 'SLA Status',     value: targetUptime >= SLA_TARGET ? 'MET' : 'BREACH',                 color: targetUptime >= SLA_TARGET ? C.GREEN : C.RED },
     { label: 'Total Incidents',value: fmt(siteIncs.length),                                           color: siteIncs.length > 0 ? C.AMBER : C.GREEN },
   ];
 
@@ -1683,13 +1719,15 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSit
   const topRcaAp = site.primaryRcaAPs || 'Stable Operations (No Incidents)';
   const aiSummary = [
     `${site.siteId || siteKey} operates ${fmt(site.deviceCount)} active devices (${fmt(site.switchCount)} switches, ${fmt(site.apCount)} APs).`,
-    `${clientShort} Switch Uptime: ${pct(site.jflSwitchUptime || site.switchUptime)} | Proactive Switch Uptime: ${pct(site.proactiveSwitchUptime || site.switchUptime)} — ${siteJflUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
+    isJFL
+      ? `${clientShort} Switch Uptime: ${pct(site.jflSwitchUptime || site.switchUptime)} | Proactive Switch Uptime: ${pct(site.proactiveSwitchUptime || site.switchUptime)} — ${siteJflUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`
+      : `Proactive Switch Uptime: ${pct(site.proactiveSwitchUptime || site.switchUptime)} — ${siteProUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
     `Primary RCA Drivers: Switches [${topRcaSw}] | APs [${topRcaAp}].`,
   ];
   addNarrativeBox(s, 5.4, aiSummary, `AI Site Summary — ${site.siteId || siteKey}`);
 }
 
-function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAps, siteNum, totalSites = 8, clientShort = 'Client') {
+function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAps, siteNum, totalSites = 8, clientShort = 'Client', isJFL = true) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -1700,7 +1738,9 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   );
 
   const at100 = siteSws.filter(sw => (sw.__effectiveUptime ?? 100) >= 100).length;
-  const swUp  = parseFloat(site.jflSwitchUptime || site.switchUptime || site.overallUptime || '100.00');
+  const swUp = isJFL
+    ? parseFloat(site.jflSwitchUptime || site.switchUptime || site.overallUptime || '100.00')
+    : parseFloat(site.proactiveSwitchUptime || site.switchUptime || site.overallUptime || '100.00');
 
   const kpis = [
     { label: 'Avg Switch Uptime', value: `${swUp.toFixed(2)}%`, color: swUp >= SLA_TARGET ? C.GREEN : C.RED },

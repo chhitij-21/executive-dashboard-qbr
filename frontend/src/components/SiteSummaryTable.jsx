@@ -19,21 +19,24 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite, cl
     );
   }
 
+  const hasJflUptime = filteredSites.some(site => site.jflSwitchUptime !== null && site.jflSwitchUptime !== undefined);
   const uptimeColLabel = clientCode ? `${clientCode} Switch Uptime` : 'Client Switch Uptime';
 
   return (
     <div className="data-table-container" style={{ overflow: 'visible' }}>
       <div className="table-scroll-wrapper" style={{ overflowX: 'auto', overflowY: 'visible', width: '100%' }}>
-        <table className="data-table site-summary-master-table" style={{ width: '100%', minWidth: '1150px', borderCollapse: 'collapse' }}>
+        <table className="data-table site-summary-master-table" style={{ width: '100%', minWidth: hasJflUptime ? '1150px' : '980px', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th style={{ width: '14%', minWidth: '130px', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Site</th>
-              <th style={{ width: '10%', padding: '0.6rem 0.4rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">No of devices</th>
-              <th style={{ width: '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Proactive Switch Uptime</th>
-              <th style={{ width: '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">{uptimeColLabel}</th>
-              <th style={{ width: '18%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA Driver (Switches)</th>
-              <th style={{ width: '12%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">AP Incidents (Unique)</th>
-              <th style={{ width: '18%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA Driver (AP)</th>
+              <th style={{ width: hasJflUptime ? '14%' : '16%', minWidth: '130px', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Site</th>
+              <th style={{ width: hasJflUptime ? '10%' : '12%', padding: '0.6rem 0.4rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">No of devices</th>
+              <th style={{ width: hasJflUptime ? '14%' : '16%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">Proactive Switch Uptime</th>
+              {hasJflUptime && (
+                <th style={{ width: '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">{uptimeColLabel}</th>
+              )}
+              <th style={{ width: hasJflUptime ? '18%' : '22%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA Driver (Switches)</th>
+              <th style={{ width: hasJflUptime ? '12%' : '14%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} className="cell-center">AP Incidents (Unique)</th>
+              <th style={{ width: hasJflUptime ? '18%' : '20%', padding: '0.6rem 0.5rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>Primary RCA Driver (AP)</th>
             </tr>
           </thead>
           <tbody>
@@ -86,9 +89,11 @@ export default function SiteSummaryTable({ sites, selectedSite, onSelectSite, cl
                   <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
                     <strong style={{ color: '#2563eb' }}>{proUp}%</strong>
                   </td>
-                  <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
-                    <strong style={{ color: '#16a34a' }}>{jflUp}%</strong>
-                  </td>
+                  {hasJflUptime && (
+                    <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem' }} className="cell-center">
+                      <strong style={{ color: '#16a34a' }}>{jflUp}%</strong>
+                    </td>
+                  )}
                   <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }} title={swRca}>
                     {swRca}
                   </td>

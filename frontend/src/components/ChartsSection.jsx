@@ -33,7 +33,7 @@ export function ChartsSection({ qbrData, showHeader = true }) {
     const target = parseFloat(qbrData.executiveSummary?.slaTarget || 99.3);
 
     return siteList.map(s => {
-      const uptimeNum = parseFloat(s.jflSwitchUptime || s.uptime || '100');
+      const uptimeNum = parseFloat(s.jflSwitchUptime ?? s.proactiveSwitchUptime ?? s.uptime ?? '100');
       const isBreaching = uptimeNum < target;
       return {
         name: s.siteId || s.site || 'Unknown',

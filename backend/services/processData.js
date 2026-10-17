@@ -1387,7 +1387,12 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── 8. Build all analytics ────────────────────────────────────────────────
   log('Building analytics sections...');
-  const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta, periodOptions, otherActivities);
+  const analyticsPeriodOptions = {
+    ...periodOptions,
+    clientId: targetClientId,
+    customerName: CUSTOMER_NAME,
+  };
+  const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta, analyticsPeriodOptions, otherActivities);
   qbrData.clientId = targetClientId;
   if (qbrData.executiveSummary) {
     qbrData.executiveSummary.clientId = targetClientId;
@@ -1640,7 +1645,7 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
   log(`Devices — Active: ${activeDevices.length}, Stock (Excluded from SLA): ${stockDevices.length}, Switches: ${switches.length}, APs: ${aps.length}`);
 
   const execSummary = buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName, periodOptions);
-  const siteSummary = buildSiteSummary(devices, switches, aps, incidents, reportingPeriod, periodOptions);
+  const siteSummary = buildSiteSummary(devices, switches, aps, incidents, reportingPeriod, periodOptions, customerName);
   const switchAn = buildSwitchAnalytics(switches, incidents, periodOptions);
   const apAn = buildAPAnalytics(aps, incidents, activeDevices);
   const incAn = buildIncidentAnalytics(incidents, activeDevices);
@@ -1734,6 +1739,8 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const apRcaBrk = classifyRCALocal(apIncidents);
   const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
 
+  const IS_JFL_CLIENT = /jfl|jubilant/i.test(customerName || '') || periodOptions?.clientId === 'client-jfl';
+
   // ── Switch Incident Uptime (SSOT Executive Level) ──
   const swIncRows = incidents.filter(i => {
     const dt = String(i.DeviceType || '').trim().toUpperCase();
@@ -1744,7 +1751,7 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
   const totalAvailMins = switchesCount * availMinsPerSwitch;
 
-  let jflSwitchUptime = '100.00';
+  let jflSwitchUptime = IS_JFL_CLIENT ? '100.00' : null;
   let proactiveSwitchUptime = '100.00';
 
   if (totalAvailMins > 0) {
@@ -1755,12 +1762,13 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
     const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - totalHoldMins) / totalAvailMins) * 100));
 
     proactiveSwitchUptime = proPct.toFixed(2);
-    jflSwitchUptime = jflPct.toFixed(2);
+    jflSwitchUptime = IS_JFL_CLIENT ? jflPct.toFixed(2) : null;
   }
 
   const activeSlaTarget = activeDevices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
   return {
+    isJFLClient: IS_JFL_CLIENT,
     customerName: customerName || 'Jubilant Foodworks Ltd (JFL)',
     reportingPeriod: reportingPeriod || 'User Selected Period',
     totalSites: sites.size,
@@ -1903,7 +1911,8 @@ function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
 
 // ── Site Summary ───────────────────────────────────────────────────────────
 
-function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod, periodOptions = {}) {
+function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod, periodOptions = {}, customerName = '') {
+  const isJFL = /jfl|jubilant/i.test(customerName || periodOptions?.customerName || '') || periodOptions?.clientId === 'client-jfl';
   const sitesMap = {};
 
   allDevices.forEach(d => {
@@ -1964,7 +1973,7 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
       const totalAvailMins = switchesCount * availMinsPerSwitch;
 
       let proactiveSwitchUptime = '100.00';
-      let jflSwitchUptime = '100.00';
+      let jflSwitchUptime = isJFL ? '100.00' : null;
 
       if (totalAvailMins > 0) {
         const totalDownMins = swIncRows.reduce((sum, i) => sum + computeActualDowntime(i), 0);
@@ -1974,7 +1983,7 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
         const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - totalHoldMins) / totalAvailMins) * 100));
 
         proactiveSwitchUptime = proPct.toFixed(2);
-        jflSwitchUptime = jflPct.toFixed(2);
+        jflSwitchUptime = isJFL ? jflPct.toFixed(2) : null;
       }
 
       const apSerialsAndHosts = new Set([
@@ -2064,7 +2073,7 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
             ? avg(vals).toFixed(2)
             : (swProUps.length > 0 ? avg(swProUps).toFixed(2) : '100.00');
         })(),
-        jflTicketAvg: (() => {
+        jflTicketAvg: isJFL ? (() => {
           const swIncRows = s.incidents.filter(i =>
             i.DeviceType && /^sw$/i.test(String(i.DeviceType).trim())
           );
@@ -2074,13 +2083,13 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
           return vals.length > 0
             ? avg(vals).toFixed(2)
             : (swJflUps.length > 0 ? avg(swJflUps).toFixed(2) : '100.00');
-        })(),
+        })() : null,
         ticketCountWithUptime: s.incidents.filter(i =>
           i.DeviceType && /^sw$/i.test(String(i.DeviceType).trim()) &&
           normaliseUptimePct(i.ProactiveUptimePct) !== null
         ).length,
         deviceCountWithUptime: s.switches.length,
-        switchUptime: finalJflUp,
+        switchUptime: isJFL ? finalJflUp : finalProUp,
         overallUptime: siteAvgUptime.toFixed(2),
         incidentFreePercent: finalIncFr,
         uniqueAPsWithIncidents: finalUnqAp,
@@ -2611,6 +2620,8 @@ function filterDashboardBySite(data, siteFilter) {
     startDate: data.report_period?.start_date || null,
     endDate: data.report_period?.end_date || null,
     windowMinutes: data.report_period?.window_minutes || 44640,
+    clientId: data.clientId || data.executiveSummary?.clientId,
+    customerName: customerName,
   };
 
   const execSummary = buildExecutiveSummary(activeDevices, switches, aps, enrichedIncidents, stockDevices, reportingPeriod, customerName, periodOptions);
@@ -2624,7 +2635,7 @@ function filterDashboardBySite(data, siteFilter) {
     execSummary.totalStockDevices = (targetSiteSummary.stockCount !== undefined && targetSiteSummary.stockCount !== null)
       ? targetSiteSummary.stockCount
       : Math.max(0, execSummary.totalDevices - (execSummary.totalSwitches + execSummary.totalAPs));
-    execSummary.overallUptime = targetSiteSummary.jflSwitchUptime || targetSiteSummary.proactiveSwitchUptime || targetSiteSummary.overallUptime || '100.00';
+    execSummary.overallUptime = targetSiteSummary.jflSwitchUptime ?? targetSiteSummary.proactiveSwitchUptime ?? targetSiteSummary.overallUptime ?? '100.00';
     execSummary.primaryRcaSwitches = targetSiteSummary.primaryRcaSwitches || targetSiteSummary.primaryRca || 'Stable Operations (No Incidents)';
     execSummary.primaryRcaAPs = targetSiteSummary.primaryRcaAPs || targetSiteSummary.primaryRcaForAPs || 'Stable Operations (No Incidents)';
   }

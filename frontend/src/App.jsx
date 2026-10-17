@@ -517,9 +517,11 @@ function MainPortal() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d', marginBottom: '0.35rem' }}>
                   <span style={{ fontWeight: 800 }}>✓</span> <span><strong>Proactive Switch Uptime Grounding:</strong> Dynamic formula evaluated against actual incident resolution minutes without clamping ({exec.proactiveSwitchUptime ?? '-'}%).</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d', marginBottom: '0.35rem' }}>
-                  <span style={{ fontWeight: 800 }}>✓</span> <span><strong>{clientLabel} Switch Uptime Grounding:</strong> Formula evaluated deducting contractual hold duration minutes ({exec.jflSwitchUptime ?? '-'}%).</span>
-                </div>
+                {exec.jflSwitchUptime !== null && exec.jflSwitchUptime !== undefined && (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d', marginBottom: '0.35rem' }}>
+                    <span style={{ fontWeight: 800 }}>✓</span> <span><strong>{clientLabel} Switch Uptime Grounding:</strong> Formula evaluated deducting contractual hold duration minutes ({exec.jflSwitchUptime ?? '-'}%).</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', color: '#15803d', marginBottom: '0.35rem' }}>
                   <span style={{ fontWeight: 800 }}>✓</span> <span><strong>Physical Inventory Identity:</strong> Active Switches ({exec.totalSwitches || 0}) + Active APs ({exec.totalAPs || 0}) + Stock Devices ({exec.totalStockDevices || 0}) = Total Devices ({exec.totalDevices || 0}).</span>
                 </div>
@@ -602,7 +604,9 @@ function MainPortal() {
               {/* Primary RCA Driver (APs) — reads from AP-specific field with fallback */}
               <KpiCard title="Primary RCA Driver (APs)" value={exec.primaryRcaAPs || exec.primaryRcaForAPs || 'Stable Operations (No Incidents)'} />
               {/* Client Switch Uptime & Proactive Switch Uptime — key executive KPIs from SSOT */}
-              <KpiCard title={`${clientLabel} Switch Uptime`} value={exec.jflSwitchUptime} unit="%" />
+              {exec.jflSwitchUptime !== null && exec.jflSwitchUptime !== undefined && (
+                <KpiCard title={`${clientLabel} Switch Uptime`} value={exec.jflSwitchUptime} unit="%" />
+              )}
               <KpiCard title="Proactive Switch Uptime" value={exec.proactiveSwitchUptime} unit="%" />
               <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" />
               <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" />

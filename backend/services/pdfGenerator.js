@@ -108,9 +108,10 @@ async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
  * @param {string} outputPath - Target file path (.pdf extension)
  */
 async function generatePDF(qbrData, templatePath, outputPath) {
+  const actualOutputPath = (!outputPath && typeof templatePath === 'string') ? templatePath : outputPath;
   const customerName = qbrData?.customerName || qbrData?.executiveSummary?.customerName || 'Customer';
   const clientShort = (/mmtc/i.test(customerName) || qbrData?.clientId === 'client-mmtcpamp') ? 'MMTC' : ((/jfl/i.test(customerName) || qbrData?.clientId === 'client-jfl') ? 'JFL' : 'Report');
-  const targetPath = outputPath || path.join(process.env.VERCEL ? os.tmpdir() : 'reports', `${clientShort}_QBR_${Date.now()}.pdf`);
+  const targetPath = actualOutputPath || path.join(process.env.VERCEL ? os.tmpdir() : 'reports', `${clientShort}_QBR_${Date.now()}.pdf`);
   const targetDir = path.dirname(targetPath);
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
@@ -151,6 +152,7 @@ function buildHTMLReport(data) {
   const pro = data.proactiveTicketAnalytics || {};
   const customerName = data.customerName || exec.customerName || 'Customer';
   const clientShort = (/mmtc/i.test(customerName) || data.clientId === 'client-mmtcpamp') ? 'MMTC' : ((/jfl/i.test(customerName) || data.clientId === 'client-jfl') ? 'JFL' : customerName);
+  const isJFL = Boolean(exec.isJFLClient ?? (/jfl|jubilant/i.test(customerName || '')) ?? data.clientId === 'client-jfl');
   const reportingPeriod = data.reportingPeriod || data.report_period?.display_label || exec.reportingPeriod || 'User Selected Period';
   
   // Contractual SLA Uptime Target is 99.30%
@@ -183,7 +185,7 @@ function buildHTMLReport(data) {
       <td class="bold text-left">${s.siteId}</td>
       <td class="center bold">${s.deviceCount || (s.switchCount + s.apCount) || 0}</td>
       <td class="center"><span class="${getSlaClass(proVal)}">${fmtPct(proVal)}</span></td>
-      <td class="center"><span class="${getSlaClass(jflVal)}">${fmtPct(jflVal)}</span></td>
+      ${isJFL ? `<td class="center"><span class="${getSlaClass(jflVal)}">${fmtPct(jflVal)}</span></td>` : ''}
       <td class="text-left">${swRca}</td>
       <td class="center bold text-primary">${s.apIncidents || 0} / ${s.uniqueAPsWithIncidents || 0}</td>
       <td class="text-left">${apRca}</td>
@@ -211,8 +213,8 @@ function buildHTMLReport(data) {
         </div>
         <div class="site-card-body">
           <div class="site-stat-col">
-            <div class="stat-label">${clientShort} Switch Uptime</div>
-            <div class="stat-val"><span class="${getSlaClass(jflVal)}">${fmtPct(jflVal)}</span></div>
+            <div class="stat-label">${isJFL ? `${clientShort} Switch Uptime` : 'Proactive Switch Uptime'}</div>
+            <div class="stat-val"><span class="${getSlaClass(isJFL ? jflVal : proVal)}">${fmtPct(isJFL ? jflVal : proVal)}</span></div>
           </div>
           <div class="site-stat-col">
             <div class="stat-label">AP Incidents (Unique)</div>
@@ -518,7 +520,7 @@ function buildHTMLReport(data) {
         <td class="font-mono text-left">${r.serialNumber || r.SerialNo || 'N/A'}</td>
         <td class="bold text-left">${r.hostname || r.Hostname || r.DeviceID || 'N/A'}</td>
         <td class="center"><span class="${getSlaClass(r.proactiveUptime || r.__proactiveUptime || r.monthlyUptime || r.periodUptime)}">${fmtPct(r.proactiveUptime || r.__proactiveUptime || r.monthlyUptime || r.periodUptime)}</span></td>
-        <td class="center"><span class="${getSlaClass(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}">${fmtPct(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}</span></td>
+        ${isJFL ? `<td class="center"><span class="${getSlaClass(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}">${fmtPct(r.jflUptime || r.monthlyUptime || r.__jflUptime || r.periodUptime)}</span></td>` : ''}
         <td class="center">${r.operatingStatus || r.status || (r.__slaBreach ? '<span class="badge-danger">Breached</span>' : '<span class="badge-success">Operational</span>')}</td>
       </tr>
     `).join('');
@@ -535,17 +537,17 @@ function buildHTMLReport(data) {
       <table>
         <thead>
           <tr>
-            <th style="width: 15%; text-align: left;">Site Location</th>
-            <th style="width: 14%; text-align: left;">Rack Location</th>
-            <th style="width: 16%; text-align: left;">Serial Number</th>
-            <th style="width: 18%; text-align: left;">Hostname / Device ID</th>
-            <th style="width: 13%; text-align: center;">Proactive Uptime %</th>
-            <th style="width: 12%; text-align: center;">${clientShort} Uptime %</th>
-            <th style="width: 12%; text-align: center;">Operating Status</th>
+            <th style="width: ${isJFL ? '15%' : '17%'}; text-align: left;">Site Location</th>
+            <th style="width: ${isJFL ? '14%' : '16%'}; text-align: left;">Rack Location</th>
+            <th style="width: ${isJFL ? '16%' : '18%'}; text-align: left;">Serial Number</th>
+            <th style="width: ${isJFL ? '18%' : '21%'}; text-align: left;">Hostname / Device ID</th>
+            <th style="width: ${isJFL ? '13%' : '14%'}; text-align: center;">Proactive Uptime %</th>
+            ${isJFL ? `<th style="width: 12%; text-align: center;">${clientShort} Uptime %</th>` : ''}
+            <th style="width: ${isJFL ? '12%' : '14%'}; text-align: center;">Operating Status</th>
           </tr>
         </thead>
         <tbody>
-          ${rowsHtml || '<tr><td colspan="7" class="center">No switch rack data available.</td></tr>'}
+          ${rowsHtml || `<tr><td colspan="${isJFL ? 7 : 6}" class="center">No switch rack data available.</td></tr>`}
         </tbody>
       </table>
       <div class="footer">
@@ -928,8 +930,8 @@ function buildHTMLReport(data) {
             <div class="cover-stat-lbl">Monitored Assets</div>
           </div>
           <div>
-            <div class="cover-stat-val">${fmtPct(exec.jflSwitchUptime)}</div>
-            <div class="cover-stat-lbl">${clientShort} Switch Uptime</div>
+            <div class="cover-stat-val">${fmtPct(isJFL ? exec.jflSwitchUptime : exec.proactiveSwitchUptime)}</div>
+            <div class="cover-stat-lbl">${isJFL ? `${clientShort} Switch Uptime` : 'Proactive Switch Uptime'}</div>
           </div>
           <div>
             <div class="cover-stat-val">${fmtNum(exec.healthScore, '100')}/100</div>
@@ -964,6 +966,7 @@ function buildHTMLReport(data) {
         <div class="kpi-value">${fmtNum(exec.totalDevices)} Devices</div>
         <div class="kpi-sub">${fmtNum(exec.totalSites)} Sites (${fmtNum(exec.totalSwitches)} Switches / ${fmtNum(exec.totalAPs)} APs / ${fmtNum(exec.totalStockDevices || exec.stockDevices)} Stock)</div>
       </div>
+      ${isJFL ? `
       <div class="kpi-card">
         <div class="kpi-title">${clientShort} Switch Uptime %</div>
         <div class="kpi-value"><span class="${getSlaClass(exec.jflSwitchUptime)}">${fmtPct(exec.jflSwitchUptime)}</span></div>
@@ -973,7 +976,17 @@ function buildHTMLReport(data) {
         <div class="kpi-title">Proactive Switch Uptime %</div>
         <div class="kpi-value"><span class="${getSlaClass(exec.proactiveSwitchUptime)}">${fmtPct(exec.proactiveSwitchUptime)}</span></div>
         <div class="kpi-sub">Net Working Time Deducted</div>
+      </div>` : `
+      <div class="kpi-card">
+        <div class="kpi-title">Proactive Switch Uptime %</div>
+        <div class="kpi-value"><span class="${getSlaClass(exec.proactiveSwitchUptime)}">${fmtPct(exec.proactiveSwitchUptime)}</span></div>
+        <div class="kpi-sub">Target SLA: ${slaTargetNum.toFixed(2)}%</div>
       </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Incident Resolution SLA %</div>
+        <div class="kpi-value"><span class="${getSlaClass(exec.slaCompliance)}">${fmtPct(exec.slaCompliance)}</span></div>
+        <div class="kpi-sub">SLA Compliance Rate</div>
+      </div>`}
       <div class="kpi-card">
         <div class="kpi-title">Infrastructure Health Score</div>
         <div class="kpi-value text-primary">${fmtNum(exec.healthScore, '100')}/100</div>
@@ -995,7 +1008,7 @@ function buildHTMLReport(data) {
 
     <div class="section-title">Executive Operational Narrative</div>
     <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; font-size: 11px; line-height: 1.5; color: #334155;">
-      During the <strong>${reportingPeriod}</strong> reporting period, network operations for <strong>${customerName}</strong> maintained robust availability across all <strong>${fmtNum(exec.totalDevices)}</strong> monitored network assets, achieving an Executive Health Score of <strong>${fmtNum(exec.healthScore, '100')}/100 (${exec.healthLabel || 'Good'})</strong> and a <strong>${fmtPct(exec.slaCompliance)} SLA Compliance Rate</strong> across incident resolution records. Switch infrastructure availability averaged <strong>${fmtPct(exec.jflSwitchUptime)}</strong> against the contractual <strong>${slaTargetNum.toFixed(2)}% SLA Target</strong>.
+      During the <strong>${reportingPeriod}</strong> reporting period, network operations for <strong>${customerName}</strong> maintained robust availability across all <strong>${fmtNum(exec.totalDevices)}</strong> monitored network assets, achieving an Executive Health Score of <strong>${fmtNum(exec.healthScore, '100')}/100 (${exec.healthLabel || 'Good'})</strong> and a <strong>${fmtPct(exec.slaCompliance)} SLA Compliance Rate</strong> across incident resolution records. Switch infrastructure availability averaged <strong>${fmtPct(isJFL ? exec.jflSwitchUptime : exec.proactiveSwitchUptime)}</strong> against the contractual <strong>${slaTargetNum.toFixed(2)}% SLA Target</strong>.
     </div>
 
     <div class="footer">
@@ -1017,17 +1030,17 @@ function buildHTMLReport(data) {
     <table>
       <thead>
         <tr>
-          <th style="width: 15%; text-align: left;">Site Location</th>
-          <th style="width: 11%; text-align: center;">No of Devices</th>
-          <th style="width: 16%; text-align: center;">Proactive Switch Uptime</th>
-          <th style="width: 16%; text-align: center;">${clientShort} Switch Uptime</th>
-          <th style="width: 17%; text-align: left;">Primary RCA Driver (Switches)</th>
-          <th style="width: 10%; text-align: center;">AP Incidents (Unique)</th>
-          <th style="width: 15%; text-align: left;">Primary RCA Driver (APs)</th>
+          <th style="width: ${isJFL ? '15%' : '17%'}; text-align: left;">Site Location</th>
+          <th style="width: ${isJFL ? '11%' : '13%'}; text-align: center;">No of Devices</th>
+          <th style="width: ${isJFL ? '16%' : '18%'}; text-align: center;">Proactive Switch Uptime</th>
+          ${isJFL ? `<th style="width: 16%; text-align: center;">${clientShort} Switch Uptime</th>` : ''}
+          <th style="width: ${isJFL ? '17%' : '20%'}; text-align: left;">Primary RCA Driver (Switches)</th>
+          <th style="width: ${isJFL ? '10%' : '12%'}; text-align: center;">AP Incidents (Unique)</th>
+          <th style="width: ${isJFL ? '15%' : '20%'}; text-align: left;">Primary RCA Driver (APs)</th>
         </tr>
       </thead>
       <tbody>
-        ${siteRowsHtml.length > 0 ? siteRowsHtml : '<tr><td colspan="7" class="center">No site data available.</td></tr>'}
+        ${siteRowsHtml.length > 0 ? siteRowsHtml : `<tr><td colspan="${isJFL ? 7 : 6}" class="center">No site data available.</td></tr>`}
       </tbody>
     </table>
 
