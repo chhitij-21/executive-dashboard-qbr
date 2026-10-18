@@ -13,6 +13,9 @@ import VulnerabilitiesPage from './components/VulnerabilitiesPage';
 import InventorySyncPage from './components/InventorySyncPage';
 
 import KpiCard from './components/KpiCard';
+import AISummaryPanel from './components/AISummaryPanel';
+import DashboardSkeleton from './components/DashboardSkeleton';
+import { motion, AnimatePresence } from 'framer-motion';
 import Chart from './components/Chart';
 import DataTable from './components/DataTable';
 import SiteSummaryTable from './components/SiteSummaryTable';
@@ -334,7 +337,7 @@ function MainPortal() {
     );
 
     if (status === 'processing') return renderProcessing();
-    if (isLoading && !dashboardData) return renderProcessing();
+    if (isLoading && !dashboardData) return <DashboardSkeleton />;
 
     if (!activeDashboardData) {
       return (
@@ -585,38 +588,55 @@ function MainPortal() {
                 <span className="exec-badge-item" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>Health: {exec.healthLabel || 'Excellent'}</span>
               </div>
             </div>
+ 
+            {/* AI Summary Panel under executiveSummary section */}
+            <AnimatePresence>
+              <AISummaryPanel
+                key={activeDashboardData?.jobId || 'ai-summary-panel'}
+                summaries={activeDashboardData?.aiSectionSummaries}
+              />
+            </AnimatePresence>
 
             <div className="exec-section-title">Key Performance Indicators</div>
             <div className="kpi-grid">
-              <KpiCard title="Customer" value={exec.customerName || activeClient?.name} />
-              {/* SSOT: Reporting Period reads from report_period.display_label first, then falls back to exec.reportingPeriod */}
-              <KpiCard title="Reporting Period" value={
-                activeDashboardData?.report_period?.display_label ||
-                exec.reportingPeriod ||
-                activeDashboardData?.reportingPeriod ||
-                'User Selected Period'
-              } />
-              <KpiCard title="Total Sites" value={exec.totalSites} />
-              <KpiCard title="Active Operational Devices" value={exec.totalDevices} />
-              <KpiCard title="Total Access Points (APs)" value={exec.totalAPs} />
-              <KpiCard title="AP Incidents Count" value={exec.apIncidents ?? apAn.apIncidents ?? 0} />
-              <KpiCard title="Unique APs with Incidents" value={exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0)} />
-              {/* Primary RCA Driver (Switches) — reads from switch-specific field with fallback */}
-              <KpiCard title="Primary RCA Driver (Switches)" value={exec.primaryRcaSwitches || exec.primaryRca || 'Stable Operations (No Incidents)'} />
-              {/* Primary RCA Driver (APs) — reads from AP-specific field with fallback */}
-              <KpiCard title="Primary RCA Driver (APs)" value={exec.primaryRcaAPs || exec.primaryRcaForAPs || 'Stable Operations (No Incidents)'} />
-              {/* Client Switch Uptime & Proactive Switch Uptime — key executive KPIs from SSOT */}
-              {exec.jflSwitchUptime !== null && exec.jflSwitchUptime !== undefined && (
-                <KpiCard title={`${clientLabel} Switch Uptime`} value={exec.jflSwitchUptime} unit="%" />
-              )}
-              <KpiCard title="Proactive Switch Uptime" value={exec.proactiveSwitchUptime} unit="%" />
-              <KpiCard title="Overall Uptime" value={exec.overallUptime} unit="%" />
-              <KpiCard title="Incident-Free %" value={exec.incidentFreePercent} unit="%" />
-              {/* SLA Uptime Target — dynamically 99.9% (monthly) or 99.3% (quarterly) from SSOT */}
-              <KpiCard title="SLA Uptime Target" value={slaAn.slaTarget ?? exec.slaTarget ?? 99.3} unit="%" />
-              <KpiCard title="SLA Compliance" value={exec.slaCompliance} unit="%" />
-              <KpiCard title="Health Score" value={`${exec.healthScore} (${exec.healthLabel})`} />
-              <KpiCard title="Total Incidents" value={exec.totalIncidents} />
+              {[
+                { title: 'Customer', value: exec.customerName || activeClient?.name },
+                {
+                  title: 'Reporting Period',
+                  value: activeDashboardData?.report_period?.display_label ||
+                    exec.reportingPeriod ||
+                    activeDashboardData?.reportingPeriod ||
+                    'User Selected Period'
+                },
+                { title: 'Total Sites', value: exec.totalSites },
+                { title: 'Active Operational Devices', value: exec.totalDevices },
+                { title: 'Total Access Points (APs)', value: exec.totalAPs },
+                { title: 'AP Incidents Count', value: exec.apIncidents ?? apAn.apIncidents ?? 0 },
+                { title: 'Unique APs with Incidents', value: exec.uniqueAPsWithIncidents ?? siteSummary.reduce((acc, s) => acc + (s.uniqueAPsWithIncidents || 0), 0) },
+                { title: 'Primary RCA Driver (Switches)', value: exec.primaryRcaSwitches || exec.primaryRca || 'Stable Operations (No Incidents)' },
+                { title: 'Primary RCA Driver (APs)', value: exec.primaryRcaAPs || exec.primaryRcaForAPs || 'Stable Operations (No Incidents)' },
+                ...(exec.jflSwitchUptime !== null && exec.jflSwitchUptime !== undefined
+                  ? [{ title: `${clientLabel} Switch Uptime`, value: exec.jflSwitchUptime, unit: '%' }]
+                  : []),
+                { title: 'Proactive Switch Uptime', value: exec.proactiveSwitchUptime, unit: '%' },
+                { title: 'Overall Uptime', value: exec.overallUptime, unit: '%' },
+                { title: 'Incident-Free %', value: exec.incidentFreePercent, unit: '%' },
+                { title: 'SLA Uptime Target', value: slaAn.slaTarget ?? exec.slaTarget ?? 99.3, unit: '%' },
+                { title: 'SLA Compliance', value: exec.slaCompliance, unit: '%' },
+                { title: 'Health Score', value: `${exec.healthScore} (${exec.healthLabel})` },
+                { title: 'Total Incidents', value: exec.totalIncidents }
+              ].map((kpi, idx) => (
+                <motion.div
+                  key={kpi.title}
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: idx * 0.1 }}
+                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                  style={{ height: '100%' }}
+                >
+                  <KpiCard title={kpi.title} value={kpi.value} unit={kpi.unit} />
+                </motion.div>
+              ))}
             </div>
 
             {/* External Site Dependencies & Client-Side Activities Card */}
