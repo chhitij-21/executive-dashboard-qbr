@@ -130,24 +130,135 @@ async function getBrowserLaunchConfig() {
   return null;
 }
 
+let browserInstance = null;
+let browserPromise = null;
+let idleTimer = null;
+
+const isTestEnv = (Array.isArray(process.execArgv) && process.execArgv.some(arg => arg.startsWith('--test'))) ||
+  process.env.npm_lifecycle_event === 'test' ||
+  process.env.NODE_ENV === 'test' ||
+  Boolean(process.env.NODE_TEST_CONTEXT);
+
+function scheduleTestCleanup() {
+  if (!isTestEnv) return;
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(async () => {
+    await closeBrowser();
+  }, 1000);
+  if (idleTimer && typeof idleTimer.unref === 'function') {
+    idleTimer.unref();
+  }
+}
+
+// Graceful exit handler
+process.on('SIGTERM', async () => {
+  await closeBrowser();
+});
+
+function isBrowserConnected(browser) {
+  if (!browser) return false;
+  if (typeof browser.connected === 'boolean') return browser.connected;
+  if (typeof browser.isConnected === 'function') return browser.isConnected();
+  return false;
+}
+
+/**
+ * Returns a singleton browser instance, launching a new one if not connected.
+ */
+async function getBrowser() {
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+
+  if (browserInstance && isBrowserConnected(browserInstance)) {
+    return browserInstance;
+  }
+
+  if (browserPromise) {
+    return await browserPromise;
+  }
+
+  browserPromise = (async () => {
+    try {
+      if (browserInstance) {
+        try { await browserInstance.close(); } catch (_) {}
+        browserInstance = null;
+      }
+
+      const config = await getBrowserLaunchConfig();
+      if (!config) {
+        return null;
+      }
+
+      console.log(`[pdfGenerator] Launching singleton browser (mode: ${config.mode})`);
+      const browser = await config.puppeteer.launch(config.options);
+
+      browser.on('disconnected', () => {
+        console.log('[pdfGenerator] Singleton browser disconnected');
+        if (browserInstance === browser) {
+          browserInstance = null;
+        }
+      });
+
+      browserInstance = browser;
+      return browserInstance;
+    } finally {
+      browserPromise = null;
+    }
+  })();
+
+  return await browserPromise;
+}
+
+/**
+ * Closes the singleton browser instance if open.
+ */
+async function closeBrowser() {
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+  if (browserPromise) {
+    try {
+      const b = await browserPromise;
+      if (b) await b.close();
+    } catch (_) {}
+    browserPromise = null;
+  }
+  if (browserInstance) {
+    try { await browserInstance.close(); } catch (_) {}
+    browserInstance = null;
+  }
+}
+
 /**
  * Attempts to render HTML string into a binary PDF using Puppeteer.
  */
 async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
-  const config = await getBrowserLaunchConfig();
-  if (!config) {
-    console.warn('[pdfGenerator] No viable Chromium. HTML fallback.');
-    return false;
-  }
   const htmlSizeKb = (Buffer.byteLength(htmlContent, 'utf8') / 1024).toFixed(1);
-  console.log(`[pdfGenerator] Launching (mode: ${config.mode}, HTML size: ${htmlSizeKb} KB)`);
   let browser = null;
+  let page = null;
   try {
     const tLaunchStart = Date.now();
-    browser = await config.puppeteer.launch(config.options);
+    browser = await getBrowser();
+    if (!browser) {
+      console.warn('[pdfGenerator] No viable Chromium. HTML fallback.');
+      return false;
+    }
     const tLaunch = Date.now() - tLaunchStart;
 
-    const page = await browser.newPage();
+    try {
+      page = await browser.newPage();
+    } catch (pageErr) {
+      console.warn('[pdfGenerator] Failed to create page (browser disconnected?):', pageErr.message);
+      if (browserInstance) {
+        try { await browserInstance.close(); } catch (_) {}
+      }
+      browserInstance = null;
+      throw pageErr;
+    }
+
     page.on('pageerror', err => console.warn(`[pdfGenerator:pageerror] ${err.message}`));
     page.on('console', msg => {
       if (msg.type() === 'error' || msg.type() === 'warning') {
@@ -166,17 +277,32 @@ async function tryRenderPuppeteerPDF(htmlContent, outputPath) {
       margin: { top: marginMm, bottom: marginMm, left: marginMm, right: marginMm },
     });
     const tPdf = Date.now() - tPdfStart;
-    console.log(`[pdfGenerator] Timings: launch=${tLaunch}ms, setContent=${tSet}ms, pdfRender=${tPdf}ms`);
+    console.log(`[pdfGenerator] Timings: getBrowser=${tLaunch}ms, setContent=${tSet}ms, pdfRender=${tPdf}ms`);
 
-    await browser.close();
+    await page.close();
+    page = null;
+
     if (pdfBuffer && pdfBuffer.length > 0) {
+      const dir = path.dirname(outputPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
       fs.writeFileSync(outputPath, pdfBuffer);
-      console.log(`[pdfGenerator] PDF via ${config.mode}: ${outputPath} (${pdfBuffer.length} bytes)`);
+      console.log(`[pdfGenerator] PDF generated: ${outputPath} (${pdfBuffer.length} bytes)`);
       return true;
     }
   } catch (err) {
-    console.warn(`[pdfGenerator] Error (${config.mode}): ${err.message}`);
-    if (browser) { try { await browser.close(); } catch (_) {} }
+    console.warn(`[pdfGenerator] Error: ${err.message}`);
+    if (browserInstance && !isBrowserConnected(browserInstance)) {
+      browserInstance = null;
+    }
+  } finally {
+    if (page) {
+      try { await page.close(); } catch (_) {}
+    }
+    if (isTestEnv) {
+      scheduleTestCleanup();
+    }
   }
   return false;
 }
@@ -1604,4 +1730,4 @@ function buildHTMLReport(data) {
   `;
 }
 
-module.exports = { generatePDF, buildHTMLReport };
+module.exports = { generatePDF, buildHTMLReport, getBrowser, closeBrowser };
