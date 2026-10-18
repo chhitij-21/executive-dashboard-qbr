@@ -25,6 +25,8 @@ import { API_BASE_URL, apiFetch } from './config/api';
 import defaultDashboardData from './data/defaultDashboardData.json';
 // FINDING-025 FIX: Import shared utilities instead of duplicating them inline.
 import { normalizeLoc, isGenericLocation } from './utils/siteUtils';
+import { filterDashboardBySite } from './utils/filterDashboardBySite';
+import { generateAISummary } from './utils/aiSummaryGenerator';
 import { AIChatbot } from './components/AIChatbot';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
@@ -98,6 +100,15 @@ function MainPortal() {
     setJobId('latest');
     setSelectedSite('ALL');
   }, [activeClient?.id]);
+
+  // Synchronize location selected in navbar or auth context with site filter
+  useEffect(() => {
+    if (activeLocation === 'All Locations') {
+      setSelectedSite('ALL');
+    } else if (activeLocation) {
+      setSelectedSite(activeLocation);
+    }
+  }, [activeLocation]);
 
   useKeyboardShortcuts({
     onSelectTab: (target) => {
@@ -243,8 +254,10 @@ function MainPortal() {
     alert('Download failed: could not obtain a secure download ticket. Please ensure you are logged in and try again.');
   };
 
-  // Use canonical backend dashboard data directly (SSOT)
-  const activeDashboardData = dashboardData;
+  // Recalculate dashboard data dynamically on siteFilter change (SSOT)
+  const activeDashboardData = useMemo(() => {
+    return filterDashboardBySite(dashboardData, selectedSite);
+  }, [dashboardData, selectedSite]);
 
 
   // Requirement 1: Device Uptime Distribution for ALL Switches (Core and Non-Core)
@@ -592,8 +605,8 @@ function MainPortal() {
             {/* AI Summary Panel under executiveSummary section */}
             <AnimatePresence>
               <AISummaryPanel
-                key={activeDashboardData?.jobId || 'ai-summary-panel'}
-                summaries={activeDashboardData?.aiSectionSummaries}
+                key={activeDashboardData?.jobId ? `${activeDashboardData.jobId}-exec` : 'ai-summary-panel-exec'}
+                text={generateAISummary('executive', activeDashboardData, selectedSite)}
               />
             </AnimatePresence>
 
@@ -715,6 +728,7 @@ function MainPortal() {
         {/* ── 2. Site Summary ────────────────────────────────────────────── */}
         {dashTab === 'sites' && (
           <div className="section-body card pad-md">
+            <AISummaryPanel text={generateAISummary('sites', activeDashboardData, selectedSite)} />
             <h3 className="section-title">Site Summary &amp; Site Inspector</h3>
             <p className="section-meta">
               Overview across all monitored sites. Select a site to inspect per-site switches, APs, stock inventory, and incident logs.
@@ -771,6 +785,7 @@ function MainPortal() {
         {/* ── 3. Switch Analytics ─────────────────────────────────────────── */}
         {dashTab === 'switches' && (
           <div className="section-body card pad-md">
+            <AISummaryPanel text={generateAISummary('switches', activeDashboardData, selectedSite)} />
             <h3 className="section-title">Switch Analytics</h3>
 
             {/* Uptime KPIs */}
@@ -924,6 +939,7 @@ function MainPortal() {
         {/* ── 4. AP Analytics ─────────────────────────────────────────────── */}
         {dashTab === 'aps' && (
           <div className="section-body card pad-md">
+            <AISummaryPanel text={generateAISummary('aps', activeDashboardData, selectedSite)} />
             <h3 className="section-title">Access Point (AP) Analytics</h3>
 
             {/* AP KPIs — no uptime per requirement */}
@@ -1054,6 +1070,7 @@ function MainPortal() {
         {/* ── 5. Incident Analytics ──────────────────────────────────────── */}
         {dashTab === 'incidents' && (
           <div className="section-body card pad-md">
+            <AISummaryPanel text={generateAISummary('incidents', activeDashboardData, selectedSite)} />
             <h3 className="section-title">Incident Analytics</h3>
             {/* Requirement 5: MTTR KPI card removed from frontend. MTTR is retained in backend for audit only. */}
             <div className="kpi-grid">
@@ -1089,6 +1106,7 @@ function MainPortal() {
         {/* ── 6. RCA Analytics ──────────────────────────────────────────── */}
         {dashTab === 'rca' && (
           <div className="section-body card pad-md">
+            <AISummaryPanel text={generateAISummary('rca', activeDashboardData, selectedSite)} />
             <h3 className="section-title">Root Cause Analysis (RCA)</h3>
             <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
               <KpiCard title="Total Analyzed Incidents" value={rcaAn.totalIncidents ?? 0} />
@@ -1126,6 +1144,7 @@ function MainPortal() {
         {/* ── 7. SLA Analytics ──────────────────────────────────────────── */}
         {dashTab === 'sla' && (
           <div className="section-body card pad-md">
+            <AISummaryPanel text={generateAISummary('sla', activeDashboardData, selectedSite)} />
             <h3 className="section-title">SLA Analytics (Active Operational Devices)</h3>
             <div className="kpi-grid">
               <KpiCard title="Overall SLA Compliance" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" />
@@ -1174,6 +1193,7 @@ function MainPortal() {
         {/* ── 8. Other Activity ──────────────────────────────────────────── */}
         {dashTab === 'other' && (
           <div className="section-body card pad-md">
+            <AISummaryPanel text={generateAISummary('other', activeDashboardData, selectedSite)} />
             <h3 className="section-title">Other Activity — Change Requests, Maintenance, Request Fulfillment & Non-Hardware Tickets</h3>
             <div className="kpi-grid">
               <KpiCard title="Total Other Activity Tickets" value={otherActivityIncidents.length} />
@@ -1245,6 +1265,9 @@ function MainPortal() {
       <main className="main-content">
         {tab === 'overview' && (
           <ErrorBoundary>
+            <div style={{ maxWidth: '1680px', margin: '0 auto', padding: '0 1rem' }}>
+              <AISummaryPanel text={generateAISummary('overview', activeDashboardData, selectedSite)} />
+            </div>
             <OverviewPage
               data={activeDashboardData}
               jobId={jobId}

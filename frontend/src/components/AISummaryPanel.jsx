@@ -78,13 +78,16 @@ function AISummaryItem({ sectionKey, text }) {
  * AISummaryPanel — Displays AI Section Summaries with graceful fallback, line clamping, and motion.
  * @param {Object|string} summaries - aiSectionSummaries map or string from SSOT
  */
-export default function AISummaryPanel({ summaries }) {
-  // Defensive coding: handle null, undefined, empty object
-  const safeSummaries = summaries || {};
+export default function AISummaryPanel({ summaries, text, title }) {
+  // Defensive coding: handle text prop directly or summaries map/string
+  let safeSummaries = summaries || {};
+  if (text) {
+    safeSummaries = { [title || 'executive']: text };
+  }
 
   const entries = typeof safeSummaries === 'string'
     ? [['executive', safeSummaries]]
-    : Object.entries(safeSummaries).filter(([_, text]) => Boolean(text && String(text).trim()));
+    : Object.entries(safeSummaries).filter(([_, val]) => Boolean(val && String(val).trim()));
 
   // If empty: Render a professional card with subtle gray background
   if (entries.length === 0) {

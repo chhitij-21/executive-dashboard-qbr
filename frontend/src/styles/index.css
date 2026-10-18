@@ -94,8 +94,10 @@ body {
 /* ── Navigation System ───────────────────────────────────────────────────── */
 .nav-bar {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
+  align-items: center;
+  max-width: 100%;
   gap: 1rem;
   padding: 0.65rem 1.5rem;
   background: var(--nav-bg);
@@ -399,6 +401,7 @@ body {
 .nav-user-container {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .user-profile-pill {
