@@ -97,11 +97,38 @@ function loadUserMfaData() {
       const raw = fs.readFileSync(USERS_FILE, 'utf-8');
       const mfaMap = JSON.parse(raw);
       if (typeof mfaMap === 'object' && mfaMap !== null) {
+        // Sync MFA properties to existing in-memory seeded users
         for (const user of USERS) {
           if (mfaMap[user.id]) {
             user.mfaSecret = mfaMap[user.id].mfaSecret || null;
             user.mfaEnabled = !!mfaMap[user.id].mfaEnabled;
             user.pendingMfaSecret = mfaMap[user.id].pendingMfaSecret || null;
+          }
+        }
+
+        // Load persisted users from users.json into USERS array if not already present
+        for (const [key, val] of Object.entries(mfaMap)) {
+          if (val && typeof val === 'object' && val.email && val.password) {
+            const userId = val.id || key;
+            const userEmail = String(val.email).toLowerCase().trim();
+            const exists = USERS.some(
+              (u) => u.id === userId || (u.email && u.email.toLowerCase() === userEmail)
+            );
+            if (!exists) {
+              USERS.push({
+                id: userId,
+                email: val.email,
+                username: val.username || userEmail.split('@')[0],
+                password: val.password,
+                name: val.name || (val.role === 'admin' ? 'Admin User' : 'Portal User'),
+                role: val.role || 'client_user',
+                assignedClient: val.assignedClient || (val.role === 'admin' ? 'all' : 'client-jfl'),
+                avatar: val.avatar || (val.role === 'admin' ? '👑' : '👤'),
+                mfaSecret: val.mfaSecret || null,
+                mfaEnabled: !!val.mfaEnabled,
+                pendingMfaSecret: val.pendingMfaSecret || null,
+              });
+            }
           }
         }
       }
@@ -115,10 +142,25 @@ function saveUserMfaData() {
   try {
     const dir = path.dirname(USERS_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const mfaMap = {};
+    let existingMap = {};
+    if (fs.existsSync(USERS_FILE)) {
+      try {
+        existingMap = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8')) || {};
+      } catch (e) {}
+    }
+    const mfaMap = { ...existingMap };
     for (const user of USERS) {
-      if (user.mfaSecret || user.mfaEnabled || user.pendingMfaSecret) {
+      if (user.mfaSecret || user.mfaEnabled || user.pendingMfaSecret || existingMap[user.id]) {
         mfaMap[user.id] = {
+          ...(existingMap[user.id] || {}),
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          password: user.password,
+          name: user.name,
+          role: user.role,
+          assignedClient: user.assignedClient,
+          avatar: user.avatar,
           mfaSecret: user.mfaSecret || null,
           mfaEnabled: !!user.mfaEnabled,
           pendingMfaSecret: user.pendingMfaSecret || null,
@@ -409,4 +451,7 @@ module.exports = {
   verifyMFATempToken,
   consumeMFATempToken,
   issueSessionForUser,
+  loadUserMfaData,
+  loadUserData: loadUserMfaData,
+  USERS,
 };

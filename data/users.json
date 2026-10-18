@@ -1,0 +1,15 @@
+{
+  "user-super-admin": {
+    "id": "user-super-admin",
+    "email": "admin@portal.com",
+    "username": "admin",
+    "password": "admin123",
+    "name": "Super Admin",
+    "role": "admin",
+    "assignedClient": "all",
+    "avatar": "👑",
+    "mfaSecret": null,
+    "mfaEnabled": false,
+    "pendingMfaSecret": null
+  }
+}
