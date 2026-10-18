@@ -23,6 +23,8 @@ const historyService = require('./services/historyService');
 const { validateUpload } = require('./services/uploadValidationService');
 const authService = require('./services/authService');
 const ruleEngine = require('./services/ruleEngine');
+const { migrate } = require('./db/migrate');
+const { healthCheck } = require('./config/database');
 
 const app = express();
 
@@ -106,6 +108,8 @@ function heavyRateLimit(req, res, next) {
 require('./routes/validationRoutes').mount(app);
 app.use('/api/vulnerabilities', require('./routes/vulnerabilities'));
 app.use(['/api/mfa', '/mfa'], require('./routes/mfa'));
+const inventorySyncRouter = require('./routes/inventorySync');
+app.use('/api/inventory', inventorySyncRouter);
 /**
  * validateDateRange — Server-side date validation for report generation requests.
  * Enforces all four rules from Requirement 2:
@@ -1842,7 +1846,26 @@ if ((require.main === module || !process.env.VERCEL) && process.env.NODE_ENV !==
   }
 
   historyService.cleanupOldReports(3);
-  startServer(Number(DEFAULT_PORT));
+  (async () => {
+    try {
+      const result = await migrate();
+      console.log('[Phase G] Turso schema ready:',
+                  result.statementsRun, 'statements in',
+                  result.durationMs, 'ms');
+      const health = await healthCheck();
+      if (!health.healthy) {
+        throw new Error('Turso health check failed: ' + health.error);
+      }
+      console.log('[Phase G] Turso connection healthy');
+    } catch (err) {
+      console.error('[Phase G] FATAL: migration/health failed:', err.message);
+      process.exit(1);
+    }
+    startServer(Number(DEFAULT_PORT));
+  })().catch((err) => {
+    console.error('[Phase G] FATAL startup error:', err);
+    process.exit(1);
+  });
 
   // ── Task 3: Vulnerabilities Scheduler (node-cron) ──────────────────────
   try {

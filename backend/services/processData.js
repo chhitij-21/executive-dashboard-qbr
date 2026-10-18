@@ -2702,5 +2702,12 @@ function filterDashboardBySite(data, siteFilter) {
   };
 }
 
-module.exports = { processJFLWorkbooks, filterDashboardBySite, buildProactiveTicketAnalytics, normalizeSiteName };
+module.exports = {
+  processJFLWorkbooks,
+  filterDashboardBySite,
+  buildProactiveTicketAnalytics,
+  normalizeSiteName,
+  buildSiteSummary,
+  validateAnalytics,
+};
 

@@ -1,149 +1,225 @@
-# Phase F Implementation Plan: Smart Mitigation (LLM) & TOTP Multi-Factor Authentication (MFA)
+# Phase G Implementation Plan: Inventory Sync (Turso Database)
 
-## 1. Problem Statement
-The Vulnerabilities intelligence module currently shows generic fallback strings like "Refer to advisory" for CVEs when vendor feeds omit explicit fixed software versions. Security and network executives require exact, actionable mitigation guidance (e.g., "Upgrade to Cisco NX-OS 9.3(13)" or specific feature workarounds) directly within their report views. Concurrently, enterprise security mandates require Multi-Factor Authentication (MFA/TOTP) via standard Authenticator Apps (Google Authenticator, Microsoft Authenticator, 1Password) so that critical executive reports, client tenant dashboards, and administrative controls cannot be accessed with single-factor credentials alone.
+## 1. Problem Statement & Architecture
+Enterprise clients periodically upgrade, decommission, and reassign switches and access points across branch sites. Phase G introduces a persistent Turso (libSQL/SQLite) inventory database to track device lifecycle changes, hardware replacements, and configuration drift across reporting quarters.
 
----
-
-## 2. Files to Touch (Exact Paths & Scope)
-
-### Backend
-1. **`backend/package.json`**:
-   - Add dependencies: `speakeasy` (^2.0.0) and `qrcode` (^1.5.3).
-2. **`backend/services/mitigationService.js`** (NEW):
-   - Multi-provider LLM integration (OpenAI / Gemini / Groq) with structured prompt:
-     `"The following Cisco vulnerability needs an exact mitigation step. CVE: {cveId} Title: {vulnerabilityImpact} Advisory Link: {advisoryLink} Provide a single actionable sentence (e.g., 'Upgrade to version X' or 'Disable feature Y'). Do not say 'Refer to advisory'."`
-   - Fallback HTTP regex scraper for Cisco Security Advisory URLs: fetches advisory HTML, extracts 1-2 actionable sentences from "Fixed Software" or "Workarounds" sections.
-   - Batch and single-CVE enrichment functions with in-memory caching to avoid duplicate API calls.
-3. **`backend/services/vulnerabilityFetcher.js`** (`lines 54-78, 108-140`):
-   - Add `smartMitigation` field to flat CVE transformation when `fixedRelease` is empty or contains `"Refer to advisory"`.
-   - Update `fetchAndSave()` and provide `enrichCachedVulnerabilities()` to persist smart mitigations to `data/vulnerabilities.json`.
-4. **`backend/routes/vulnerabilities.js`** (`lines 38-83, 89-114`):
-   - Expose `smartMitigation` in `GET /api/vulnerabilities` and trigger enrichment during refresh or on cached startup.
-5. **`backend/services/authService.js`** (`lines 26-73, 101-135, 137-156`):
-   - User database persistence for MFA state: `mfaSecret` and `mfaEnabled` stored in `data/users.json` (falling back to memory with persistent store).
-   - Support `mfaRequired: true` and short-lived `tempToken` (5-minute TTL) in `authenticateUser()`.
-   - Provide helper methods: `createMFATempToken()`, `verifyMFATempToken()`, `enableUserMFA()`, `disableUserMFA()`, `issueSessionForUser()`.
-6. **`backend/routes/mfa.js`** (NEW):
-   - `POST /api/mfa/setup`: Generates TOTP secret (speakeasy) + QR code Data URI (qrcode).
-   - `POST /api/mfa/verify`: Verifies 6-digit TOTP code, enables MFA for user (`mfaEnabled = true`).
-   - `POST /api/mfa/login-verify`: Validates `tempToken` + 6-digit TOTP code during sign-in, issues full session token on success.
-7. **`backend/index.js`** (`lines 255-275`):
-   - Mount `/api/mfa` router.
-   - Update `/api/auth/login` to return `{ mfaRequired: true, tempToken }` if `user.mfaEnabled` is true.
-8. **`backend/tests/mfa.test.js`** (NEW):
-   - Scenario tests for MFA setup, QR code generation, TOTP token verification, login challenge, and invalid code rejection (+4 tests).
-9. **`backend/tests/mitigation.test.js`** (NEW):
-   - Scenario tests for LLM mitigation extraction, fallback regex scraping, and `vulnerabilities.json` persistence (+2 tests, bringing test count from 76 to 82/82).
-
-### Frontend
-10. **`frontend/src/components/MFASetup.jsx`** (NEW):
-    - Enterprise MFA management card: status badge, QR code modal, manual secret entry, 6-digit confirmation input, and disable option.
-11. **`frontend/src/components/MFALogin.jsx`** (NEW):
-    - Two-factor sign-in modal/challenge view for entering the 6-digit Authenticator code when `mfaRequired: true`.
-12. **`frontend/src/components/LoginModal.jsx`** (`lines 37-60, 61-120`):
-    - Intercept `mfaRequired: true` from login response and display `<MFALogin />`.
-13. **`frontend/src/context/AuthContext.jsx`** (`lines 117-160`):
-    - Support two-step login flow: store temporary challenge state and complete login via `verifyMFALogin(tempToken, code)`.
-14. **`frontend/src/components/ClientManager.jsx`**:
-    - Integrate `<MFASetup />` into the Client Management / Profile view so administrators and client users can manage MFA.
-15. **`frontend/src/components/VulnerabilitiesPage.jsx`** (`lines 590-605`):
-    - Render `row.smartMitigation || row.fixedRelease` with a visual indicator ("🤖 Smart Fix" or actionable pill) when smart mitigation has replaced "Refer to advisory".
+The system matches devices by hardware Serial Number (`serial_no`), computes granular diffs (`added`, `removed`, `replaced`, `unchanged`), stages uploads as `pending` syncs for administrator approval, and provides snapshot-based rollback without impacting existing PDF/PPT generation or multi-tenant isolation.
 
 ---
 
-## 3. Data Flow & Control Flow Changes
+## 2. Verbatim 4-Table Database Schema (`backend/db/schema.sql`)
+The database schema uses the original 4-table specification verbatim with zero additional or altered columns:
 
-### A. Smart Mitigation Data Flow
-```mermaid
-flowchart TD
-    A[Cisco PSIRT API / Cache] --> B{fixedRelease == 'Refer to advisory' or empty?}
-    B -- No --> C[Use existing fixedRelease]
-    B -- Yes --> D{LLM Key Available?}
-    D -- Yes (OpenAI / Gemini / Groq) --> E[Call LLM with Actionable Prompt]
-    E --> F[Extract Single Actionable Sentence]
-    D -- No / LLM Error --> G[Fetch Advisory HTML]
-    G --> H[Regex Scraper: Fixed Software / Workarounds]
-    F --> I[Store smartMitigation in vulnerabilities.json]
-    H --> I
-    I --> J[Frontend Displays Smart Actionable Text]
-    C --> J
-```
+```sql
+CREATE TABLE IF NOT EXISTS inventory_devices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id TEXT NOT NULL,
+  serial_no TEXT NOT NULL,
+  mac_address TEXT,
+  cloud_id TEXT,
+  hostname TEXT,
+  device_type TEXT,
+  model TEXT,
+  site_id TEXT,
+  rack_location TEXT,
+  status TEXT DEFAULT 'active',
+  first_seen_at TEXT DEFAULT (datetime('now')),
+  last_seen_at TEXT DEFAULT (datetime('now')),
+  last_sync_id INTEGER,
+  UNIQUE (client_id, serial_no)
+);
 
-### B. TOTP MFA Flow
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User / Admin
-    participant UI as Frontend (Login / Modal)
-    participant Auth as Backend Auth (/api/auth)
-    participant MFA as Backend MFA (/api/mfa)
-    participant App as Authenticator App
+CREATE TABLE IF NOT EXISTS inventory_syncs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id TEXT NOT NULL,
+  triggered_by TEXT,
+  uploaded_file_name TEXT,
+  diff_summary TEXT, 
+  status TEXT DEFAULT 'pending',
+  created_at TEXT DEFAULT (datetime('now')),
+  approved_at TEXT
+);
 
-    rect rgb(240, 248, 255)
-    note over User, MFA: Setup MFA Flow
-    User->>UI: Click "Enable Two-Factor Auth"
-    UI->>MFA: POST /api/mfa/setup (Bearer Token)
-    MFA-->>UI: Return { secret, qrCodeDataUrl }
-    UI->>User: Display QR Code
-    User->>App: Scan QR Code
-    App-->>User: Generates 6-Digit Code
-    User->>UI: Enter 6-Digit Code
-    UI->>MFA: POST /api/mfa/verify { token: "123456" }
-    MFA-->>UI: Set user.mfaEnabled=true, Return 200 OK
-    end
+CREATE TABLE IF NOT EXISTS inventory_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_id INTEGER REFERENCES inventory_syncs(id),
+  client_id TEXT NOT NULL,
+  serial_no TEXT,
+  change_type TEXT, 
+  before_state TEXT, 
+  after_state TEXT, 
+  changed_fields TEXT, 
+  created_at TEXT DEFAULT (datetime('now'))
+);
 
-    rect rgb(255, 245, 240)
-    note over User, MFA: Login Flow with MFA Enabled
-    User->>UI: Submit Email & Password
-    UI->>Auth: POST /api/auth/login
-    Auth-->>UI: Return { mfaRequired: true, tempToken: "mfa_tmp_..." } (No JWT yet!)
-    UI->>UI: Switch to MFALogin View
-    User->>App: Check 6-digit Code
-    User->>UI: Enter 6-digit Code
-    UI->>MFA: POST /api/mfa/login-verify { tempToken, token: "123456" }
-    MFA-->>UI: Return Full Session { token: "...", user: {...} }
-    UI->>UI: AuthContext sets authenticated user
-    end
+CREATE TABLE IF NOT EXISTS inventory_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_id INTEGER,
+  client_id TEXT NOT NULL,
+  snapshot_data TEXT, 
+  created_at TEXT DEFAULT (datetime('now'))
+);
 ```
 
 ---
 
-## 4. Risks and Edge Cases
-1. **LLM API Rate Limits / Offline**:
-   - Risk: LLM quota exceeded (e.g. Groq 429) or network failure during mitigation generation.
-   - Mitigation: Robust fallback to HTML regex scraper for Cisco advisories + deterministic caching in `data/vulnerabilities.json`.
-2. **MFA Clock Drift**:
-   - Risk: Client device and server clock slightly desynchronized (e.g. ±30s).
-   - Mitigation: Set `window: 1` in `speakeasy.totp.verify`, accepting codes from current window ±1 (total 90-second grace window).
-3. **MFA Lockout / Loss of Secret**:
-   - Risk: User loses phone/authenticator before completing setup or needs recovery.
-   - Mitigation: `mfaEnabled` is only set to `true` after the user successfully proves they have scanned the QR code by submitting a valid code in `/api/mfa/verify`. If setup is abandoned, the account remains accessible.
-4. **Tenant Isolation & Security Invariants**:
-   - Risk: Download tickets, SSE endpoints, or client isolation broken by MFA changes.
-   - Mitigation: Existing 76/76 tests enforce strict isolation. `tempToken` cannot be used as a Bearer token or download ticket. Real token is ONLY issued upon successful code verification.
-5. **No Exposure of Secrets**:
-   - Risk: User passwords or `mfaSecret` leaked in `/api/auth/me` or `/api/auth/demo-accounts`.
-   - Mitigation: `_safeUser()` strips both `password` and `mfaSecret` before sending any user object to the client.
+## 3. Strict Database Client (`backend/config/database.js`)
+- Initializes libSQL client via `createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN })`.
+- **STRICT TURSO ONLY** (No silent local SQLite file fallback in production).
+- If `TURSO_DATABASE_URL` is missing: throws an immediate, fatal startup error:
+  ```javascript
+  if (!process.env.TURSO_DATABASE_URL) {
+    throw new Error('[FATAL] Missing TURSO_DATABASE_URL environment variable. Turso connection is strictly required.');
+  }
+  ```
+- Exports: `db`, `execute(sql, args)`, `transaction(fn)`, `healthCheck()`.
+- For unit testing (`backend/tests/inventorySync.test.js`), in-memory SQLite (`file::memory:?cache=shared`) is used directly in test setup so CI/unit tests run offline, deterministically, and fast without hitting production Turso.
 
 ---
 
-## 5. Test Cases to Add / Update (Target 80+/80 Pass)
-1. `backend/tests/mfa.test.js`:
-   - **Test 1**: `POST /api/mfa/setup` generates valid secret and data:image/png QR code URI for authenticated user.
-   - **Test 2**: `POST /api/mfa/verify` accepts valid TOTP code and marks user as `mfaEnabled=true`, rejecting wrong code.
-   - **Test 3**: `/api/auth/login` returns `{ mfaRequired: true, tempToken }` without session JWT when user has MFA enabled.
-   - **Test 4**: `POST /api/mfa/login-verify` exchanges valid tempToken + TOTP code for full authenticated session token, rejecting invalid codes or expired tempTokens.
-2. `backend/tests/mitigation.test.js`:
-   - **Test 5**: Smart mitigation extractor replaces "Refer to advisory" with LLM-generated actionable mitigation.
-   - **Test 6**: Scraper fallback successfully extracts mitigation when LLM is unavailable or errors.
+## 4. Per-Client Mapping & Migration Script (`backend/scripts/migrate-existing-inventories.js`)
+One unified script with two distinct, per-client column mappers tailored to source Excel ground truth:
 
-Total test count: 76 existing + 6 new = 82 passing tests (exceeding 80/80 target).
+### A. JFL Mapper (`mapJFLRow`)
+```javascript
+function mapJFLRow(row) {
+  return {
+    client_id: 'jfl',
+    serial_no: String(row['Serial No.'] || '').trim(),
+    mac_address: row['MAC Address'] ? String(row['MAC Address']).trim() : null,
+    cloud_id: row['Network ID'] ? String(row['Network ID']).trim() : null,
+    hostname: row['Hostname'] ? String(row['Hostname']).trim() : null,
+    device_type: row['Device Type'] ? String(row['Device Type']).trim() : null,
+    model: row['Model'] ? String(row['Model']).trim() : null,
+    site_id: row['Location'] ? String(row['Location']).trim() : null,
+    rack_location: row['Rack no.'] ? String(row['Rack no.']).trim() : null,
+    status: row['Hostname'] === 'STOCK'               ? 'stock'
+          : row['Rack no.'] === 'Not Cover with us'   ? 'not_covered'
+          : row['Faulty Serial no']                   ? 'faulty'
+          : 'active',
+  };
+}
+```
+
+### B. MMTC Mapper (`mapMMTCRow`)
+```javascript
+function deriveDeviceType(model) {
+  if (!model) return 'SW';
+  const m = String(model).trim();
+  if (/^MR/i.test(m)) return 'AP';
+  if (/^MS|^C9300|^C9200/i.test(m)) return 'SW';
+  if (/^MX/i.test(m)) return 'Router';
+  return 'SW';
+}
+
+function deriveMMTCSite(network) {
+  if (!network) return 'Unknown';
+  let s = String(network).trim();
+  // Strip leading prefixes
+  s = s.replace(/^(IND|INDIA)-/i, '');
+  // Strip intermediate tokens
+  s = s.replace(/PVC-/i, '');
+  s = s.replace(/-PLANT.*$/i, '');
+  s = s.replace(/-HEAD-OFFICE.*$/i, '');
+  s = s.replace(/-IT.*$/i, '');
+  return s.toUpperCase().trim() || 'Unknown';
+}
+
+function mapMMTCRow(row) {
+  return {
+    client_id: 'mmtc',
+    serial_no: String(row['Cloud ID'] || '').trim(), // REQUIRED unique device serial
+    mac_address: row['MAC address'] ? String(row['MAC address']).trim() : null,
+    cloud_id: null,                                 // no source
+    hostname: null,                                 // no source
+    device_type: deriveDeviceType(row['Model']),
+    model: row['Model'] ? String(row['Model']).trim() : null,
+    site_id: deriveMMTCSite(row['Network']),
+    rack_location: null,                            // no source
+    status: 'active',
+  };
+}
+```
+
+### C. Migration Verification & Hard-Abort Gate
+The migration runs inside a transaction or rolls back completely if any invariant fails:
+```javascript
+const checks = [
+  { sql: "SELECT COUNT(*) as cnt FROM inventory_devices WHERE client_id='jfl'", expected: 444, label: 'JFL total devices' },
+  { sql: "SELECT COUNT(*) as cnt FROM inventory_devices WHERE client_id='jfl' AND status='active'", expected: 372, label: 'JFL active devices' },
+  { sql: "SELECT COUNT(DISTINCT site_id) as cnt FROM inventory_devices WHERE client_id='jfl'", expected: 8, label: 'JFL unique sites' },
+  { sql: "SELECT COUNT(*) as cnt FROM inventory_devices WHERE client_id='mmtc'", expected: 145, label: 'MMTC total devices' },
+  { sql: "SELECT COUNT(DISTINCT site_id) as cnt FROM inventory_devices WHERE client_id='mmtc'", expected: 21, label: 'MMTC unique sites' },
+];
+
+for (const chk of checks) {
+  const res = await db.execute(chk.sql);
+  const actual = Number(res.rows[0].cnt);
+  if (actual !== chk.expected) {
+    throw new Error(`[MIGRATION ABORT] Invariant failed for ${chk.label}: expected ${chk.expected}, got ${actual}. Rolling back entire migration.`);
+  }
+}
+```
 
 ---
 
-## 6. Rollback Plan
-- Git commit checkpoint before Phase F changes.
-- If dependencies or MFA create unexpected regressions:
-  - `git revert` the Phase F commit.
-  - In-memory users and `vulnerabilities.json` remain backward compatible with prior schema.
+## 5. Diff Engine Rules (`backend/services/inventorySyncService.js`)
+Matching key is `serial_no`:
+1. **Added**: `serial_no` exists in new upload, does not exist in DB for `client_id`.
+2. **Removed**: `serial_no` exists in DB with `status='active'`, but is missing from new upload.
+3. **Replaced**: `serial_no` matches, but ANY of the following fields changed:
+   - `mac_address`, `cloud_id`, `hostname`, `device_type`, `model`, `site_id`, `rack_location`
+   - **Status changes** (`active` ↔ `stock` ↔ `faulty` ↔ `not_covered`) are ALSO categorized as **`replaced`** (not removed), because the serial number remains present.
+4. **Unchanged**: `serial_no` matches and all comparison fields + status are identical.
+
+---
+
+## 6. Dashboard Query Contract (`GET /api/inventory/current`)
+- Route: `GET /api/inventory/current?clientId=:clientId[&include=all]`
+- **Default**: Returns **ONLY `status = 'active'`** devices. (Ensures JFL returns exactly 372 active devices).
+- **`?include=all`**: Returns all 444 devices including `stock`, `faulty`, and `not_covered`.
+- Stored `diff_summary` in `inventory_syncs`: JSON object containing counts `{ added, removed, replaced, unchanged }`.
+
+---
+
+## 7. API Routes (`backend/routes/inventorySync.js`)
+Protected by `requireAuth` and `requireClientAccess`:
+- `POST /api/inventory/sync/upload`: Parses file with appropriate client mapper, runs `computeDiff`, saves `inventory_syncs` (`status='pending'`) and `inventory_history` preview records.
+- `GET /api/inventory/sync/:syncId`: Returns sync preview including `diff_summary` and changed fields.
+- `POST /api/inventory/sync/:syncId/approve`: Takes snapshot of pre-sync state in `inventory_snapshots`, applies changes to `inventory_devices`, marks sync `approved`.
+- `POST /api/inventory/sync/:syncId/reject`: Marks sync `rejected`.
+- `GET /api/inventory/syncs`: Lists past sync history for client.
+- `GET /api/inventory/current`: Returns current inventory adhering to query contract (default active, `?include=all`).
+
+---
+
+## 8. Frontend Interface (`frontend/src/components/InventorySyncPage.jsx`)
+- Dedicated "Inventory Sync" tab in navigation.
+- Client selector (`JFL` / `MMTC`) + Turso DB live health indicator.
+- File uploader accepting new inventory spreadsheet.
+- Visual Diff Preview Cards: Added (Green), Removed (Red), Replaced (Amber), Unchanged (Slate).
+- Detailed side-by-side table displaying exact changed fields (`before` → `after`).
+- "Approve & Update DB" button and "Cancel / Reject" button.
+- Sync History audit table with "Rollback to Snapshot" capability.
+- Active Inventory table toggleable between "Active Only" (372) and "All Devices" (444).
+
+---
+
+## 9. 8 Unit & Integration Tests (`backend/tests/inventorySync.test.js`)
+Tests scale from 82/82 to 90/90 pass using in-memory database:
+1. `computeDiff` detects added device (JFL-shaped row).
+2. `computeDiff` detects removed device (JFL-shaped row).
+3. `computeDiff` detects replaced — MAC change.
+4. `computeDiff` detects replaced — status change (`active` → `stock`, serial still present).
+5. `computeDiff` detects unchanged (identical row).
+6. `approveSync` inserts on real DB (in-memory SQLite) — verifies snapshot row created, device counts match, and `inventory_history` rows written per change.
+7. `rollbackToSnapshot` restores from snapshot.
+8. Multi-tenant isolation — MMTC sync cannot see JFL rows; JFL approve cannot affect MMTC devices.
+
+---
+
+## 10. Verification Invariants
+- Existing `POST /api/upload`, `processData.js`, `pptGenerator.js`, `pdfGenerator.js` untouched.
+- Vulnerabilities and MFA flows untouched.
+- Backend tests: 82/82 → 90/90 pass.
+- Frontend build: passes with zero errors.
