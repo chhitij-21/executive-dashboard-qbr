@@ -595,9 +595,16 @@ export default function VulnerabilitiesPage() {
                               color: 'var(--text-secondary)',
                               fontSize: '0.8rem',
                             }}
-                            title={row.fixedRelease}
+                            title={row.smartMitigation || row.fixedRelease}
                           >
-                            {row.fixedRelease || 'Refer to Cisco Advisory bulletin'}
+                            {row.smartMitigation && !/refer to advisory/i.test(row.smartMitigation) ? (
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.35rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#10b981', flexShrink: 0 }}>🛡️</span>
+                                <span>{row.smartMitigation}</span>
+                              </div>
+                            ) : (
+                              row.fixedRelease || 'Refer to Cisco Advisory bulletin'
+                            )}
                           </td>
                         </tr>
                       );

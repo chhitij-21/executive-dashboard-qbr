@@ -129,6 +129,16 @@ export function AuthProvider({ children }) {
         return { success: false, error: 'Invalid username or password' };
       }
 
+      // Check if MFA is required for this account
+      if (json.mfaRequired) {
+        return {
+          success: false,
+          mfaRequired: true,
+          tempToken: json.tempToken,
+          user: json.user,
+        };
+      }
+
       // Requirement 2: Store name, role, client, location, session inside AuthContext
       const sessionData = json;
       const userObj = json.user || json;
@@ -155,6 +165,47 @@ export function AuthProvider({ children }) {
       return { success: true };
     } catch (err) {
       return { success: false, error: 'Connection error — please ensure backend server is running.' };
+    }
+  };
+
+  const completeMFALogin = async (tempToken, code) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/mfa/login-verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tempToken, token: code }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        return { success: false, error: json.error || 'Invalid 6-digit verification code' };
+      }
+
+      const sessionData = json;
+      const userObj = json.user || json;
+
+      setUser(userObj);
+      setSession(sessionData);
+      if (json.token) setToken(json.token);
+      setIsBackendOffline(false);
+
+      const safeUserStorage = {
+        email: userObj.email,
+        name: userObj.name,
+        role: userObj.role,
+        assignedClient: userObj.assignedClient,
+      };
+      localStorage.setItem('portal_user', JSON.stringify(safeUserStorage));
+      if (json.token) localStorage.setItem('portal_token', json.token);
+
+      if (userObj.role === 'client_user' && userObj.assignedClient !== 'all') {
+        const target = clients.find((c) => c.id === userObj.assignedClient);
+        if (target) setActiveClient(target);
+      }
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Failed to verify MFA code. Please try again.' };
     }
   };
 
@@ -186,6 +237,7 @@ export function AuthProvider({ children }) {
         setActiveClient,
         setActiveLocation,
         login,
+        completeMFALogin,
         logout,
         refreshClients,
         isAdmin: user?.role === 'admin',

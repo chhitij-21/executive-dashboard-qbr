@@ -71,6 +71,11 @@ if (process.env.ENABLE_CLIENT_ACCOUNTS !== 'false') {
   }
 }
 
+const fs = require('fs');
+const path = require('path');
+
+const USERS_FILE = path.resolve(__dirname, '../../data/users.json');
+
 // In-memory token map: token → { session, expiresAt }
 const tokens = new Map();
 
@@ -80,13 +85,65 @@ const downloadTickets = new Map();
 const sseTickets = new Map();
 const SSE_TICKET_TTL_MS = 60 * 1000; // 60 seconds
 
+// In-memory MFA temporary challenge tokens: tempToken → { userId, expiresAt }
+const mfaTempTokens = new Map();
+const MFA_TEMP_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// ─── Persistence for User MFA States ──────────────────────────────────────────
+
+function loadUserMfaData() {
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const raw = fs.readFileSync(USERS_FILE, 'utf-8');
+      const mfaMap = JSON.parse(raw);
+      if (typeof mfaMap === 'object' && mfaMap !== null) {
+        for (const user of USERS) {
+          if (mfaMap[user.id]) {
+            user.mfaSecret = mfaMap[user.id].mfaSecret || null;
+            user.mfaEnabled = !!mfaMap[user.id].mfaEnabled;
+            user.pendingMfaSecret = mfaMap[user.id].pendingMfaSecret || null;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // Non-blocking
+  }
+}
+
+function saveUserMfaData() {
+  try {
+    const dir = path.dirname(USERS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const mfaMap = {};
+    for (const user of USERS) {
+      if (user.mfaSecret || user.mfaEnabled || user.pendingMfaSecret) {
+        mfaMap[user.id] = {
+          mfaSecret: user.mfaSecret || null,
+          mfaEnabled: !!user.mfaEnabled,
+          pendingMfaSecret: user.pendingMfaSecret || null,
+        };
+      }
+    }
+    fs.writeFileSync(USERS_FILE, JSON.stringify(mfaMap, null, 2), 'utf-8');
+  } catch (err) {
+    // Non-blocking
+  }
+}
+
+// Initial load
+loadUserMfaData();
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function _safeUser(user) {
   if (!user) return null;
-  // Never expose password in any outbound object
-  const { password, ...safe } = user;
-  return safe;
+  // Never expose password or secrets in any outbound object
+  const { password, mfaSecret, pendingMfaSecret, ...safe } = user;
+  return {
+    ...safe,
+    mfaEnabled: !!user.mfaEnabled,
+  };
 }
 
 function _purgeExpiredTokens() {
@@ -94,6 +151,92 @@ function _purgeExpiredTokens() {
   for (const [tok, data] of tokens.entries()) {
     if (now > data.expiresAt) tokens.delete(tok);
   }
+  for (const [t, data] of mfaTempTokens.entries()) {
+    if (now > data.expiresAt) mfaTempTokens.delete(t);
+  }
+}
+
+function getUserById(id) {
+  return USERS.find((u) => u.id === id) || null;
+}
+
+function getUserByEmail(email) {
+  if (!email) return null;
+  const target = email.toLowerCase().trim();
+  return USERS.find(
+    (u) => u.email.toLowerCase() === target || (u.username && u.username.toLowerCase() === target)
+  ) || null;
+}
+
+function setUserMFA(userId, { mfaSecret, mfaEnabled, pendingMfaSecret } = {}) {
+  const user = getUserById(userId);
+  if (!user) return false;
+  if (mfaSecret !== undefined) user.mfaSecret = mfaSecret;
+  if (mfaEnabled !== undefined) user.mfaEnabled = !!mfaEnabled;
+  if (pendingMfaSecret !== undefined) user.pendingMfaSecret = pendingMfaSecret;
+  saveUserMfaData();
+  return true;
+}
+
+function resetUserMFA(userId) {
+  const user = getUserById(userId);
+  if (!user) return false;
+  user.mfaSecret = null;
+  user.mfaEnabled = false;
+  user.pendingMfaSecret = null;
+  saveUserMfaData();
+  return true;
+}
+
+function createMFATempToken(user) {
+  _purgeExpiredTokens();
+  const tempToken = 'mfa_tmp_' + crypto.randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + MFA_TEMP_TOKEN_TTL_MS;
+  mfaTempTokens.set(tempToken, {
+    userId: user.id,
+    expiresAt,
+  });
+  return tempToken;
+}
+
+function verifyMFATempToken(tempToken) {
+  if (!tempToken || typeof tempToken !== 'string') return null;
+  _purgeExpiredTokens();
+  const entry = mfaTempTokens.get(tempToken);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    mfaTempTokens.delete(tempToken);
+    return null;
+  }
+  return getUserById(entry.userId);
+}
+
+function consumeMFATempToken(tempToken) {
+  if (tempToken) mfaTempTokens.delete(tempToken);
+}
+
+function issueSessionForUser(user) {
+  _purgeExpiredTokens();
+  const token = crypto.randomBytes(32).toString('hex');
+
+  if (tokens.size >= 10000) {
+    _purgeExpiredTokens();
+    if (tokens.size >= 9000) {
+      const keys = [...tokens.keys()].slice(0, Math.floor(tokens.size * 0.2));
+      keys.forEach((k) => tokens.delete(k));
+    }
+  }
+
+  const expiresAt = Date.now() + TOKEN_TTL_MS;
+  const session = {
+    user: _safeUser(user),
+    token,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(expiresAt).toISOString(),
+  };
+
+  tokens.set(token, { ...session, expiresAt });
+  return session;
 }
 
 // ─── Auth Functions ───────────────────────────────────────────────────────────
@@ -107,31 +250,17 @@ function authenticateUser(email, password) {
   );
   if (!user) return null;
 
-  _purgeExpiredTokens();
-
-  // SECURITY: Use cryptographically secure random token. Never embed user ID or timestamp.
-  const token = crypto.randomBytes(32).toString('hex');
-
-  // Guard against unbounded memory growth on long-running servers
-  if (tokens.size >= 10000) {
-    _purgeExpiredTokens();
-    // If still too large after purge, clear oldest 20%
-    if (tokens.size >= 9000) {
-      const keys = [...tokens.keys()].slice(0, Math.floor(tokens.size * 0.2));
-      keys.forEach(k => tokens.delete(k));
-    }
+  // If MFA is enabled, issue short-lived tempToken and challenge without real session JWT
+  if (user.mfaEnabled) {
+    const tempToken = createMFATempToken(user);
+    return {
+      mfaRequired: true,
+      tempToken,
+      user: _safeUser(user),
+    };
   }
-  const expiresAt = Date.now() + TOKEN_TTL_MS;
 
-  const session = {
-    user: _safeUser(user),
-    token,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(expiresAt).toISOString(),
-  };
-
-  tokens.set(token, { ...session, expiresAt });
-  return session;
+  return issueSessionForUser(user);
 }
 
 function verifyToken(authHeader) {
@@ -272,4 +401,12 @@ module.exports = {
   verifyAndConsumeDownloadTicket,
   createSSETicket,
   verifyAndConsumeSSETicket,
+  getUserById,
+  getUserByEmail,
+  setUserMFA,
+  resetUserMFA,
+  createMFATempToken,
+  verifyMFATempToken,
+  consumeMFATempToken,
+  issueSessionForUser,
 };

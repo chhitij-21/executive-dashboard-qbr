@@ -105,6 +105,7 @@ function heavyRateLimit(req, res, next) {
 }
 require('./routes/validationRoutes').mount(app);
 app.use('/api/vulnerabilities', require('./routes/vulnerabilities'));
+app.use(['/api/mfa', '/mfa'], require('./routes/mfa'));
 /**
  * validateDateRange — Server-side date validation for report generation requests.
  * Enforces all four rules from Requirement 2:
@@ -260,9 +261,16 @@ app.post(['/api/auth/login', '/auth/login'], authRateLimit, (req, res) => {
   if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
-  const session = authService.authenticateUser(email.trim(), password);
-  if (!session) return res.status(401).json({ error: 'Invalid email or password' });
-  res.json(session);
+  const result = authService.authenticateUser(email.trim(), password);
+  if (!result) return res.status(401).json({ error: 'Invalid email or password' });
+  if (result.mfaRequired) {
+    return res.json({
+      mfaRequired: true,
+      tempToken: result.tempToken,
+      user: result.user,
+    });
+  }
+  res.json(result);
 });
 
 app.get(['/api/auth/me', '/auth/me'], requireAuth, (req, res) => {

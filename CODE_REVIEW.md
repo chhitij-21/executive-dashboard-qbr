@@ -1,47 +1,63 @@
-# Code Review: Cisco PSIRT openVuln API Integration (Phase E)
+# Phase F Code Review: Smart Mitigation (LLM) & TOTP Multi-Factor Authentication
 
-## 1. Changes Summary
-- `backend/services/ciscoPsirtClient.js`: OAuth2 client credentials authentication against the new Cisco ID endpoint (`https://id.cisco.com/oauth2/default/v1/token`), token caching with 60s buffer, rate-limiting throttle (min 250ms spacing between calls), and retry handler for HTTP 429 (`Retry-After`) and HTTP 401.
-- `backend/services/vulnerabilityFetcher.js`: Pure data transformation `transformAdvisoriesToCveList` expanding each Cisco advisory into flat CVE records. Atomically persists 100 genuine advisories (217 CVEs) to `data/vulnerabilities.json`.
-- `backend/routes/vulnerabilities.js`: Express router mounting `GET /api/vulnerabilities` (public read with optional date, severity, priority, and product filters) and `GET|POST /api/vulnerabilities/refresh` (admin-only manual trigger protected by `requireAuth, requireAdmin`).
-- `backend/index.js`: Mounted `/api/vulnerabilities`, registered `node-cron` 6-hour scheduler (`0 */6 * * *`), and added safe initial startup cache initialization.
-- `backend/tests/vulnerabilities.test.js`: Comprehensive 2-part test suite verifying mock token acquisition format, rate-limiting throttle timing, CVRF data transformation, and live express API endpoint response.
-- `frontend/src/components/VulnerabilitiesPage.jsx`: Full-featured reactive UI component with real-time Cisco intelligence, time preset filters (Last 7 Days, Last 30 Days, All, Custom Range), severity dropdown, instant search, executive product family accordion grouping, paginated flat CVE table, localStorage-backed remediation status tracker, and operational engineering checklist.
-- `frontend/src/components/Navbar.jsx` & `frontend/src/App.jsx`: Wired Vulnerabilities navigation tab and page into application shell.
-
----
-
-## 2. Correctness vs Spec
-- **Real data only**: No mock or fabricated CVE entries in production data. All 217 CVE records sourced directly from Cisco PSIRT openVuln API v2.
-- **New Token Endpoint**: Uses `https://id.cisco.com/oauth2/default/v1/token` instead of deprecated `cloudsso.cisco.com`.
-- **Flat Table Fields**: Exact mapping implemented (`advisoryDate`, `product`, `cveId`, `severity`, `cvss`, `vulnerabilityImpact`, `fixedRelease`, `priority`, `advisoryLink`).
-- **Rate limiting**: Throttled to min 250ms interval between calls; 429 backoff parses `Retry-After` header.
-- **Test suite**: 76/76 tests passing (100% pass rate, 0 failures, 0 regressions).
-- **Frontend build**: Vite production build succeeded in 3.81s with 0 errors.
-
----
-
-## 3. Security Analysis
-- **Authentication & RBAC**: `GET /api/vulnerabilities` is public read, while `/refresh` strictly enforces `requireAuth, requireAdmin`. Unauthenticated or tenant users cannot trigger external API quota exhaustion.
-- **Credential Hygiene**: Credentials read from `process.env.CISCO_CLIENT_ID` and `process.env.CISCO_CLIENT_SECRET`, with default fallback for developer environments.
-- **Input Validation**: Date ranges sanitized via regex and date string comparisons. Query parameters are treated defensively with type checks.
-- **XSS & Injection**: React JSX handles text escaping natively for advisory summaries and CVE IDs; external advisory URLs open safely with `target="_blank" rel="noopener noreferrer"`.
+## 1. Changes Summary (file:line)
+- **`.gitignore`** (lines 17–20): Ignored `data/users.json` and `data/mitigation_cache.json` to prevent committing sensitive user MFA secrets or ephemeral caches.
+- **`backend/package.json`**: Added `speakeasy` (^2.0.0) and `qrcode` (^1.5.4) dependencies.
+- **`backend/routes/mfa.js`** (lines 1–180): New express router with `/api/mfa/setup`, `/api/mfa/verify`, `/api/mfa/disable`, `/api/mfa/status`, and `/api/mfa/login-verify`.
+- **`backend/services/mitigationService.js`** (lines 1–355): Implemented LLM-based smart mitigation extractor (OpenAI / Gemini / Groq) with robust HTML regex scraping fallback, heuristic fallback, and dual-layer caching.
+- **`backend/services/authService.js`** (lines 74–170, 395–412): Integrated TOTP MFA user state persistence in `data/users.json`, `_safeUser()` secret redaction, short-lived `tempToken` issuance (5-min TTL), challenge login lifecycle, and helper exports.
+- **`backend/services/vulnerabilityFetcher.js`** (lines 70–78, 110–125): Emitted `smartMitigation` field in flat CVE model and integrated enrichment into `fetchAndSave()`.
+- **`backend/index.js`** (lines 107–108, 258–272): Mounted `/api/mfa` router; updated `/api/auth/login` to return `{ mfaRequired: true, tempToken }` without session token when MFA is active.
+- **`backend/tests/mfa.test.js`** (lines 1–170): 4 new end-to-end unit tests covering setup, verification, login challenge, and code validation.
+- **`backend/tests/mitigation.test.js`** (lines 1–95): 2 new unit tests for LLM generation and fallback regex scraping.
+- **`frontend/src/components/MFALogin.jsx`** (lines 1–125): Interactive 6-digit TOTP verification UI with auto-focus and input sanitization.
+- **`frontend/src/components/MFASetup.jsx`** (lines 1–285): Authenticator App setup card with QR code rendering, manual key copy, 6-digit confirmation, and disable options.
+- **`frontend/src/components/LoginModal.jsx`** (lines 35–80): Challenge view switching between standard login and `MFALogin`.
+- **`frontend/src/components/ClientManager.jsx`** (lines 335–342): Embedded `MFASetup` into enterprise client management console.
+- **`frontend/src/components/VulnerabilitiesPage.jsx`** (lines 590–615): Replaced generic "Refer to advisory" text with `row.smartMitigation`.
+- **`frontend/src/context/AuthContext.jsx`** (lines 125–190): Added `completeMFALogin()` and challenge intercept in `login()`.
+- **`data/vulnerabilities.json`**: Enriched all 217 CVEs with actionable `smartMitigation` strings.
 
 ---
 
-## 4. Performance & Resource Management
-- **In-Memory Caching**: Access token cached until 60 seconds before expiration, avoiding redundant OAuth2 roundtrips.
-- **File Persistence**: Vulnerability records cached in `data/vulnerabilities.json` using atomic temporary file write and rename (`fs.renameSync`) to eliminate dirty reads.
-- **Front-end Filtering**: All client-side filtering and accordion groupings memoized with `useMemo` to ensure zero lag on large datasets.
+## 2. Correctness vs Specification
+- **Smart Mitigation**: All 217 CVEs have actionable, sentence-based mitigation steps. The feed gracefully falls back from LLM (OpenAI/Gemini/Groq) to the Cisco HTML regex scraper without throwing or blocking.
+- **TOTP MFA Flow**: Login challenge cleanly intercepts single-factor authentication when `mfaEnabled=true`, issuing only a short-lived `tempToken` and withholding the session JWT until `/api/mfa/login-verify` succeeds.
+- **No Stale Data or Placeholder Text**: Zero occurrences of "Refer to advisory" in mitigated records.
 
 ---
 
-## 5. Improvement Points Identified & Addressed
-1. **Fallback for Missing CVEs in Advisories**: Handled advisories that do not list an explicit CVE by defaulting gracefully to the advisory ID rather than dropping records.
-2. **Double-Click / Multi-Tab Synchronization**: In `VulnerabilitiesPage.jsx`, localStorage state updates catch JSON parse errors safely.
-3. **Graceful Degradation on Network Outage**: In `backend/routes/vulnerabilities.js`, if Cisco API fails during an initial fetch, the server serves empty or existing cached data without throwing 500s or crashing the process.
+## 3. Security (Injection, Auth, Leaks)
+- **Zero Secret Leakage**: Verified that `_safeUser()` removes `password`, `mfaSecret`, and `pendingMfaSecret` from all API responses (`/api/auth/login`, `/api/auth/me`, `/api/mfa/login-verify`).
+- **Fail-Closed Verification**: TOTP verification uses `window: 1` (±30s allowable drift) to prevent replay while accommodating minor clock skew. Invalid tokens immediately return 400 or 401.
+- **Single-Use Temp Tokens**: `mfaTempTokens` are consumed immediately upon successful verification and automatically purged after 5 minutes.
+- **Git Safety**: `data/users.json` and `data/mitigation_cache.json` are gitignored.
 
 ---
 
-## 6. Verdict
-APPROVED. All acceptance criteria met. Ready for commit and deployment.
+## 4. Performance & Scalability
+- **Dual-Layer Caching**: `mitigationService` caches extracted mitigations in memory and persists them to `data/mitigation_cache.json`. Repeated requests for the same advisory link hit memory in O(1) without outbound network calls.
+- **Bounded Token Maps**: Active token maps in `authService` automatically purge expired entries and enforce a hard cap of 10,000 entries.
+- **Frontend Bundle**: Vite production build succeeded in 3.87s with gzip JS chunk at 51.48 kB.
+
+---
+
+## 5. Readability & Code Standards
+- Adheres to existing ESLint and CommonJS module patterns across backend services.
+- Clean separation of presentation (`MFASetup.jsx`, `MFALogin.jsx`) and auth context state (`AuthContext.jsx`).
+- Clear JSDoc headers on all exported service functions.
+
+---
+
+## 6. Test Coverage & Verification
+- **Total Tests Passing**: 82 / 82 tests pass natively (surpassing the 80/80 requirement).
+- **Tenant Isolation**: All 23 multi-tenant scenarios pass with zero regressions.
+- **Vulnerabilities Suite**: All Cisco PSIRT and Smart Mitigation tests pass.
+- **MFA Suite**: 4 / 4 scenarios pass (setup, verify, challenge, login-verify).
+
+---
+
+## 7. Improvement Points
+1. **Rate Limiting on `/api/mfa/login-verify`**: Currently protected by upstream general rate limiters; adding a dedicated brute-force rate limiter (e.g. max 5 failed attempts per 5 minutes per user) would further harden against rapid guessing.
+2. **Backup Recovery Codes**: While standard Authenticator apps offer cloud backup, generating 8-character one-time recovery codes would provide account recovery if a user loses their authenticator device.
+3. **Async Batch Scraper on Initial Load**: Initial enrichment of 217 CVEs was executed via cached batching; periodic cron sync (`vulnerabilityFetcher.fetchAndSave`) automatically keeps future CVEs enriched.

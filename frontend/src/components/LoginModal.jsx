@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/api';
+import MFALogin from './MFALogin';
 
 export default function LoginModal({ isOpen, onClose, requireLogin = false }) {
   const { login, isBackendOffline } = useAuth();
@@ -9,6 +10,7 @@ export default function LoginModal({ isOpen, onClose, requireLogin = false }) {
   const [password, setPassword] = useState(import.meta.env.VITE_ADMIN_PASSWORD || 'admin123');
   const [error, setError] = useState(null);
   const [demoAccounts, setDemoAccounts] = useState([]);
+  const [mfaChallenge, setMfaChallenge] = useState(null); // { tempToken }
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -19,6 +21,13 @@ export default function LoginModal({ isOpen, onClose, requireLogin = false }) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [requireLogin, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setMfaChallenge(null);
+      setError(null);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/auth/demo-accounts`)
@@ -39,7 +48,10 @@ export default function LoginModal({ isOpen, onClose, requireLogin = false }) {
     setError(null);
     const res = await login(email, password);
     if (res.success) {
+      setMfaChallenge(null);
       onClose();
+    } else if (res.mfaRequired) {
+      setMfaChallenge({ tempToken: res.tempToken });
     } else {
       setError(res.error || 'Backend Offline');
     }
@@ -52,7 +64,10 @@ export default function LoginModal({ isOpen, onClose, requireLogin = false }) {
     setPassword(pass);
     const res = await login(demoUser.email, pass);
     if (res.success) {
+      setMfaChallenge(null);
       onClose();
+    } else if (res.mfaRequired) {
+      setMfaChallenge({ tempToken: res.tempToken });
     } else {
       setError(res.error || 'Backend Offline');
     }
@@ -70,50 +85,66 @@ export default function LoginModal({ isOpen, onClose, requireLogin = false }) {
           <div className="alert-error">⚠️ {error || 'Backend Offline'}</div>
         )}
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label>Username / Email</label>
-            <input
-              type="text"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Username or Email"
-              required
-            />
-          </div>
+        {mfaChallenge ? (
+          <MFALogin
+            tempToken={mfaChallenge.tempToken}
+            onSuccess={() => {
+              setMfaChallenge(null);
+              onClose();
+            }}
+            onCancel={() => {
+              setMfaChallenge(null);
+              setError(null);
+            }}
+          />
+        ) : (
+          <>
+            <form onSubmit={handleSubmit} className="login-form">
+              <div className="form-group">
+                <label>Username / Email</label>
+                <input
+                  type="text"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Username or Email"
+                  required
+                />
+              </div>
 
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+              <div className="form-group">
+                <label>Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
 
-          <button type="submit" className="btn-primary full-width">
-          Sign In to Dashboard
-          </button>
-        </form>
+              <button type="submit" className="btn-primary full-width">
+                Sign In to Dashboard
+              </button>
+            </form>
 
-        <div className="demo-divider">
-          <span>OR QUICK SIGN-IN AS</span>
-        </div>
+            <div className="demo-divider">
+              <span>OR QUICK SIGN-IN AS</span>
+            </div>
 
-        <div className="demo-accounts-grid">
-          {demoAccounts.map((acc) => (
-            <button
-              key={acc.email}
-              className="btn-demo-account"
-              onClick={() => handleDemoClick(acc)}
-            >
-              <div className="demo-role">{acc.role === 'admin' ? '👨‍💼 Admin' : '👩‍💻 Client User'}</div>
-              <div className="demo-name">{acc.name}</div>
-              <div className="demo-email">{acc.email}</div>
-            </button>
-          ))}
-        </div>
+            <div className="demo-accounts-grid">
+              {demoAccounts.map((acc) => (
+                <button
+                  key={acc.email}
+                  className="btn-demo-account"
+                  onClick={() => handleDemoClick(acc)}
+                >
+                  <div className="demo-role">{acc.role === 'admin' ? '👨‍💼 Admin' : '👩‍💻 Client User'}</div>
+                  <div className="demo-name">{acc.name}</div>
+                  <div className="demo-email">{acc.email}</div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

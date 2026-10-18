@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL, apiFetch } from '../config/api';
+import MFASetup from './MFASetup';
 
 export default function ClientManager() {
   const { clients, activeClient, activeLocation, setActiveClient, setActiveLocation, refreshClients, isAdmin, isBackendOffline } = useAuth();
@@ -335,6 +336,9 @@ incident_severity_values:
             );
           })}
         </div>
+
+        {/* Enterprise Security & MFA Management */}
+        <MFASetup />
       </div>
 
       {/* Add Client Modal */}

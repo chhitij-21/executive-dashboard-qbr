@@ -19,7 +19,8 @@
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-meraki-os-drbEX9GH",
@@ -31,7 +32,8 @@
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-meraki-os-drbEX9GH",
@@ -43,7 +45,8 @@
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-meraki-os-drbEX9GH",
@@ -55,7 +58,8 @@
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-meraki-os-drbEX9GH",
@@ -67,7 +71,8 @@
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-meraki-os-drbEX9GH",
@@ -79,7 +84,8 @@
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-meraki-os-drbEX9GH",
@@ -91,7 +97,8 @@
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-esa-dfCrfXkm",
@@ -103,7 +110,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Gateway and Secure Email and Web Manager Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-esa-dfCrfXkm",
@@ -115,7 +123,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Gateway and Secure Email and Web Manager Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-esa-dfCrfXkm",
@@ -127,7 +136,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Gateway and Secure Email and Web Manager Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-esa-dfCrfXkm",
@@ -139,7 +149,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Gateway and Secure Email and Web Manager Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-esa-dfCrfXkm",
@@ -151,7 +162,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Gateway and Secure Email and Web Manager Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-esa-dfCrfXkm",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-notice-QGwHnJ6k",
@@ -163,7 +175,8 @@
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of October 21, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-QGwHnJ6k"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-QGwHnJ6k",
+      "smartMitigation": "releases for the following Cisco products: Expressway Series (security hardening release) IOS XR Software for ASR 9000 Series Routers Secure Client Snort (security hardening release) Unified Communications products (security hardening release) To remediate vulnerabilities to be disclosed on October 21, 2026, Cisco strongly recommends that customers upgrade to the fixed software indicated in the advisories. For more information about changes in Cisco PSIRT vulnerability disclosure, see Strengthening the Foundation: A Predictable, Customer-Focused Response to AI-Accelerated Vulnerability Discovery ."
     },
     {
       "advisoryId": "cisco-sa-esa-afw-zqYJkjxp",
@@ -175,7 +188,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Gateway Arbitrary File Write Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-afw-zqYJkjxp"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-afw-zqYJkjxp",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ucs-uefi-sb-bypass-eb6xC5GW",
@@ -187,7 +201,8 @@
       "vulnerabilityImpact": "Cisco UCS and UCS-Based Appliances UEFI Shell Secure Boot Bypass Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ucs-uefi-sb-bypass-eb6xC5GW"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ucs-uefi-sb-bypass-eb6xC5GW",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-napi-rce-r2shwu2j",
@@ -199,7 +214,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software NX-API Remote Code Execution Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-napi-rce-r2shwu2j"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-napi-rce-r2shwu2j",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-notice-fBn58ELx",
@@ -211,7 +227,8 @@
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of October 7, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-fBn58ELx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-fBn58ELx",
+      "smartMitigation": "releases for the following Cisco products: Expressway Series (security hardening release) IOS XR Software for ASR 9000 Series Routers Secure Client Snort (security hardening release) Unified Communications products (security hardening release) To remediate vulnerabilities to be disclosed on October 21, 2026, Cisco strongly recommends that customers upgrade to the fixed software indicated in the advisories. For more information about changes in Cisco PSIRT vulnerability disclosure, see Strengthening the Foundation: A Predictable, Customer-Focused Response to AI-Accelerated Vulnerability Discovery ."
     },
     {
       "advisoryId": "cisco-sa-ssm-access-nttb2dhE",
@@ -223,7 +240,8 @@
       "vulnerabilityImpact": "Cisco License (Smart Software Manager) On-Prem Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ssm-access-nttb2dhE"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ssm-access-nttb2dhE",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ssm-access-nttb2dhE",
@@ -235,7 +253,8 @@
       "vulnerabilityImpact": "Cisco License (Smart Software Manager) On-Prem Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ssm-access-nttb2dhE"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ssm-access-nttb2dhE",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ssm-access-nttb2dhE",
@@ -247,7 +266,8 @@
       "vulnerabilityImpact": "Cisco License (Smart Software Manager) On-Prem Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ssm-access-nttb2dhE"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ssm-access-nttb2dhE",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ssm-access-nttb2dhE",
@@ -259,7 +279,8 @@
       "vulnerabilityImpact": "Cisco License (Smart Software Manager) On-Prem Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ssm-access-nttb2dhE"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ssm-access-nttb2dhE",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-nxosw1-cWzSbtR",
@@ -271,7 +292,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-nxosw1-cWzSbtR",
@@ -283,7 +305,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-nxosw1-cWzSbtR",
@@ -295,7 +318,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-nxosw1-cWzSbtR",
@@ -307,7 +331,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-nxosw1-cWzSbtR",
@@ -319,7 +344,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-nxosw1-cWzSbtR",
@@ -331,7 +357,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following tables, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-finesse-ssrf-mmSuyugS",
@@ -343,7 +370,8 @@
       "vulnerabilityImpact": "Cisco Finesse Server-Side Request Forgery Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-finesse-ssrf-mmSuyugS"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-finesse-ssrf-mmSuyugS",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-ssm-Ph77wdhf",
@@ -355,7 +383,8 @@
       "vulnerabilityImpact": "Cisco License (Smart Software Manager) On-Prem Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco License On-Prem software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ssm-Ph77wdhf",
@@ -367,7 +396,8 @@
       "vulnerabilityImpact": "Cisco License (Smart Software Manager) On-Prem Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco License On-Prem software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ssm-Ph77wdhf",
@@ -379,7 +409,8 @@
       "vulnerabilityImpact": "Cisco License (Smart Software Manager) On-Prem Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco License On-Prem software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ssm-Ph77wdhf",
@@ -391,7 +422,8 @@
       "vulnerabilityImpact": "Cisco License (Smart Software Manager) On-Prem Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco License On-Prem software releases."
     },
     {
       "advisoryId": "cisco-sa-apic-cmdinj-L6VR4E7",
@@ -403,7 +435,8 @@
       "vulnerabilityImpact": "Cisco Application Policy Infrastructure Controller API Command Injection Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-apic-cmdinj-L6VR4E7"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-apic-cmdinj-L6VR4E7",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-apic-info-priv-enAdB5vD",
@@ -415,7 +448,8 @@
       "vulnerabilityImpact": "Cisco Application Policy Infrastructure Controller Unauthorized File Access Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-apic-info-priv-enAdB5vD"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-apic-info-priv-enAdB5vD",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-moam-rce-uBTzYV7",
@@ -427,7 +461,8 @@
       "vulnerabilityImpact": "Cisco Nexus 3000 and 9000 Series Switches MPLS OAM Remote Code Execution Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-moam-rce-uBTzYV7"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-moam-rce-uBTzYV7",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-aci-epgcbp-SfDU7NLf",
@@ -439,7 +474,8 @@
       "vulnerabilityImpact": "Cisco Nexus 9000 Series Fabric Switches in ACI Mode Endpoint Group Contract Bypass Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-aci-epgcbp-SfDU7NLf"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-aci-epgcbp-SfDU7NLf",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-apic-UOXWtfh",
@@ -451,7 +487,8 @@
       "vulnerabilityImpact": "Cisco Application Policy Infrastructure Controller Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-apic-UOXWtfh"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-apic-UOXWtfh",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-apic-UOXWtfh",
@@ -463,7 +500,8 @@
       "vulnerabilityImpact": "Cisco Application Policy Infrastructure Controller Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-apic-UOXWtfh"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-apic-UOXWtfh",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-apic-UOXWtfh",
@@ -475,7 +513,8 @@
       "vulnerabilityImpact": "Cisco Application Policy Infrastructure Controller Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-apic-UOXWtfh"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-apic-UOXWtfh",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-ngoam-rce-LWKQ4BU",
@@ -487,7 +526,8 @@
       "vulnerabilityImpact": "Cisco Nexus 3000 and 9000 Series Switches NGOAM Remote Code Execution Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ngoam-rce-LWKQ4BU",
@@ -499,7 +539,8 @@
       "vulnerabilityImpact": "Cisco Nexus 3000 and 9000 Series Switches NGOAM Remote Code Execution Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ngoam-rce-LWKQ4BU",
@@ -511,7 +552,8 @@
       "vulnerabilityImpact": "Cisco Nexus 3000 and 9000 Series Switches NGOAM Remote Code Execution Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-nxos-mppe-dhKZAFgb",
@@ -523,7 +565,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software Python Sandbox Escape Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-nxos-mppe-dhKZAFgb"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-nxos-mppe-dhKZAFgb",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-nxos-nscpdos-SnderkC7",
@@ -535,7 +578,8 @@
       "vulnerabilityImpact": "Cisco NX-OS Software Control Plane Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-nxos-nscpdos-SnderkC7"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-nxos-nscpdos-SnderkC7",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-sdwan-webauth-xr8beuuU",
@@ -547,7 +591,8 @@
       "vulnerabilityImpact": "Cisco Catalyst SD-WAN Manager API Authentication Bypass Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-webauth-xr8beuuU"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-webauth-xr8beuuU",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxe-V8NMuMZJ",
@@ -559,7 +604,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxe-V8NMuMZJ",
@@ -571,7 +617,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxe-V8NMuMZJ",
@@ -583,7 +630,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxe-V8NMuMZJ",
@@ -595,7 +643,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxe-V8NMuMZJ",
@@ -607,7 +656,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxe-V8NMuMZJ",
@@ -619,7 +669,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxe-V8NMuMZJ",
@@ -631,7 +682,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxe-V8NMuMZJ",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-ise-multiauth-bypass-sgD2HbL4",
@@ -643,7 +695,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authentication Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multiauth-bypass-sgD2HbL4",
@@ -655,7 +708,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authentication Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multiauth-bypass-sgD2HbL4",
@@ -667,7 +721,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authentication Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multiauth-bypass-sgD2HbL4",
@@ -679,7 +734,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authentication Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-asaftdvirtual-dos-MuenGnYR",
@@ -691,7 +747,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software SSL VPN Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftdvirtual-dos-MuenGnYR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftdvirtual-dos-MuenGnYR",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-asa-ftd-logging-dos-ZXXNesfN",
@@ -703,7 +760,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software Logging Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asa-ftd-logging-dos-ZXXNesfN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asa-ftd-logging-dos-ZXXNesfN",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-asaftdfmc-uvpPROhN",
@@ -715,7 +773,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance, Secure Firewall Threat Defense, and Secure Firewall Management Center Software Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-asaftdfmc-uvpPROhN",
@@ -727,7 +786,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance, Secure Firewall Threat Defense, and Secure Firewall Management Center Software Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-asaftdfmc-uvpPROhN",
@@ -739,7 +799,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance, Secure Firewall Threat Defense, and Secure Firewall Management Center Software Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-asaftdfmc-uvpPROhN",
@@ -751,7 +812,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance, Secure Firewall Threat Defense, and Secure Firewall Management Center Software Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-asaftdfmc-uvpPROhN",
@@ -763,7 +825,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance, Secure Firewall Threat Defense, and Secure Firewall Management Center Software Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-asaftdfmc-uvpPROhN",
@@ -775,7 +838,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance, Secure Firewall Threat Defense, and Secure Firewall Management Center Software Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-asaftdfmc-uvpPROhN",
@@ -787,7 +851,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance, Secure Firewall Threat Defense, and Secure Firewall Management Center Software Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-asaftdfmc-uvpPROhN",
@@ -799,7 +864,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance, Secure Firewall Threat Defense, and Secure Firewall Management Center Software Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-asaftdfmc-uvpPROhN",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-asaftd-dtls-dos-Kp57HkyO",
@@ -811,7 +877,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software for Secure Firewall 3100 and 4200 Series DTLS Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-dtls-dos-Kp57HkyO"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-dtls-dos-Kp57HkyO",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ftd-acl-bypass-8p6vFvw",
@@ -823,7 +890,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software Object Group Access Control List Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ftd-acl-bypass-8p6vFvw"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ftd-acl-bypass-8p6vFvw",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ftd-acl-bypass-8p6vFvw",
@@ -835,7 +903,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software Object Group Access Control List Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ftd-acl-bypass-8p6vFvw"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ftd-acl-bypass-8p6vFvw",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-asaftd-ikev2cert-dos-uWyc2xtv",
@@ -847,7 +916,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software IKEv2 Certificate Authentication Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-ikev2cert-dos-uWyc2xtv"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-ikev2cert-dos-uWyc2xtv",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-asaftd-tcpdns-dos-p6dUnjr5",
@@ -859,7 +929,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software TCP DNS Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-tcpdns-dos-p6dUnjr5"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-tcpdns-dos-p6dUnjr5",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-asaftd-eigrp-dos-GOhNejSj",
@@ -871,7 +942,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software EIGRP Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-eigrp-dos-GOhNejSj"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-eigrp-dos-GOhNejSj",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxr-qg64NcM",
@@ -883,7 +955,8 @@
       "vulnerabilityImpact": "Cisco IOS XR Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists the affected Cisco IOS XR Software train, and the right column lists the first release that includes the fixes for these vulnerabilities, and the releases that have SMUs for affected platforms to address these vulnerabilities."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxr-qg64NcM",
@@ -895,7 +968,8 @@
       "vulnerabilityImpact": "Cisco IOS XR Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists the affected Cisco IOS XR Software train, and the right column lists the first release that includes the fixes for these vulnerabilities, and the releases that have SMUs for affected platforms to address these vulnerabilities."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxr-qg64NcM",
@@ -907,7 +981,8 @@
       "vulnerabilityImpact": "Cisco IOS XR Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists the affected Cisco IOS XR Software train, and the right column lists the first release that includes the fixes for these vulnerabilities, and the releases that have SMUs for affected platforms to address these vulnerabilities."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxr-qg64NcM",
@@ -919,7 +994,8 @@
       "vulnerabilityImpact": "Cisco IOS XR Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists the affected Cisco IOS XR Software train, and the right column lists the first release that includes the fixes for these vulnerabilities, and the releases that have SMUs for affected platforms to address these vulnerabilities."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxr-qg64NcM",
@@ -931,7 +1007,8 @@
       "vulnerabilityImpact": "Cisco IOS XR Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists the affected Cisco IOS XR Software train, and the right column lists the first release that includes the fixes for these vulnerabilities, and the releases that have SMUs for affected platforms to address these vulnerabilities."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxr-qg64NcM",
@@ -943,7 +1020,8 @@
       "vulnerabilityImpact": "Cisco IOS XR Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists the affected Cisco IOS XR Software train, and the right column lists the first release that includes the fixes for these vulnerabilities, and the releases that have SMUs for affected platforms to address these vulnerabilities."
     },
     {
       "advisoryId": "cisco-sa-hardening-iosxr-qg64NcM",
@@ -955,7 +1033,8 @@
       "vulnerabilityImpact": "Cisco IOS XR Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-iosxr-qg64NcM",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists the affected Cisco IOS XR Software train, and the right column lists the first release that includes the fixes for these vulnerabilities, and the releases that have SMUs for affected platforms to address these vulnerabilities."
     },
     {
       "advisoryId": "cisco-sa-esa-inj-2bLVGmhX",
@@ -967,7 +1046,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Gateway SQL Injection Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-inj-2bLVGmhX"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-inj-2bLVGmhX",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-notice-jfxK98ZP",
@@ -979,7 +1059,8 @@
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of September 16, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-jfxK98ZP"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-jfxK98ZP",
+      "smartMitigation": "releases for the following Cisco products: Expressway Series (security hardening release) IOS XR Software for ASR 9000 Series Routers Secure Client Snort (security hardening release) Unified Communications products (security hardening release) To remediate vulnerabilities to be disclosed on October 21, 2026, Cisco strongly recommends that customers upgrade to the fixed software indicated in the advisories. For more information about changes in Cisco PSIRT vulnerability disclosure, see Strengthening the Foundation: A Predictable, Customer-Focused Response to AI-Accelerated Vulnerability Discovery ."
     },
     {
       "advisoryId": "cisco-sa-fmc-static-cred-BET3Cjh",
@@ -991,7 +1072,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Static Credential Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-static-cred-BET3Cjh"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-static-cred-BET3Cjh",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-asaftd-vpn-dos-dzv4mQFF",
@@ -1003,7 +1085,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software Remote Access SSL VPN Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-vpn-dos-dzv4mQFF"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-vpn-dos-dzv4mQFF",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-onprem-fmc-authbypass-5JPp45V2",
@@ -1015,7 +1098,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Authentication Bypass Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-onprem-fmc-authbypass-5JPp45V2"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-onprem-fmc-authbypass-5JPp45V2",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-rce-se7bYU57",
@@ -1027,7 +1111,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Remote Code Execution Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-rce-se7bYU57"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-rce-se7bYU57",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-rce-se7bYU57",
@@ -1039,7 +1124,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Remote Code Execution Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-rce-se7bYU57"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-rce-se7bYU57",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-rce-se7bYU57",
@@ -1051,7 +1137,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Remote Code Execution Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-rce-se7bYU57"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-rce-se7bYU57",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ISE-ABP-VNSW7Tn5",
@@ -1063,7 +1150,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authentication Bypass Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ISE-ABP-VNSW7Tn5"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ISE-ABP-VNSW7Tn5",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-ndw1-psFvnrg",
@@ -1075,7 +1163,8 @@
       "vulnerabilityImpact": "Cisco Nexus Dashboard Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ndw1-psFvnrg",
@@ -1087,7 +1176,8 @@
       "vulnerabilityImpact": "Cisco Nexus Dashboard Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ndw1-psFvnrg",
@@ -1099,7 +1189,8 @@
       "vulnerabilityImpact": "Cisco Nexus Dashboard Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ndw1-psFvnrg",
@@ -1111,7 +1202,8 @@
       "vulnerabilityImpact": "Cisco Nexus Dashboard Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ndw1-psFvnrg",
@@ -1123,7 +1215,8 @@
       "vulnerabilityImpact": "Cisco Nexus Dashboard Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ndw1-psFvnrg",
@@ -1135,7 +1228,8 @@
       "vulnerabilityImpact": "Cisco Nexus Dashboard Software Security Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ndw1-psFvnrg",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-fmcftd-sftun-multivulns-WGVHOrN3",
@@ -1147,7 +1241,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center and Secure Firewall Threat Defense Software sftunnel Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmcftd-sftun-multivulns-WGVHOrN3"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmcftd-sftun-multivulns-WGVHOrN3",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmcftd-sftun-multivulns-WGVHOrN3",
@@ -1159,7 +1254,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center and Secure Firewall Threat Defense Software sftunnel Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmcftd-sftun-multivulns-WGVHOrN3"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmcftd-sftun-multivulns-WGVHOrN3",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-RADIUS-dos-wR3hYPMw",
@@ -1171,7 +1267,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine RADIUS Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-RADIUS-dos-wR3hYPMw"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-RADIUS-dos-wR3hYPMw",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-sql-inj-3QTKR947",
@@ -1183,7 +1280,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine SQL Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-sql-inj-3QTKR947"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-sql-inj-3QTKR947",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-sql-inj-3QTKR947",
@@ -1195,7 +1293,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine SQL Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-sql-inj-3QTKR947"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-sql-inj-3QTKR947",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ftd-tls1.3-dos-dLxwFWgF",
@@ -1207,7 +1306,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Threat Defense Software TLS 1.3 Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ftd-tls1.3-dos-dLxwFWgF"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ftd-tls1.3-dos-dLxwFWgF",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-vuln-kWLeNnRD",
@@ -1219,7 +1319,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine 802.1X Session Hijack and Information Disclosure Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-vuln-kWLeNnRD"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-vuln-kWLeNnRD",
+      "smartMitigation": "Cisco considers any workarounds and mitigations to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-vuln-kWLeNnRD",
@@ -1231,7 +1332,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine 802.1X Session Hijack and Information Disclosure Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-vuln-kWLeNnRD"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-vuln-kWLeNnRD",
+      "smartMitigation": "Cisco considers any workarounds and mitigations to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multisql-inject-JnHK54Rq",
@@ -1243,7 +1345,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine SQL and HQL Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multisql-inject-JnHK54Rq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multisql-inject-JnHK54Rq",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multisql-inject-JnHK54Rq",
@@ -1255,7 +1358,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine SQL and HQL Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multisql-inject-JnHK54Rq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multisql-inject-JnHK54Rq",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multisql-inject-JnHK54Rq",
@@ -1267,7 +1371,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine SQL and HQL Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multisql-inject-JnHK54Rq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multisql-inject-JnHK54Rq",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multisql-inject-JnHK54Rq",
@@ -1279,7 +1384,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine SQL and HQL Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multisql-inject-JnHK54Rq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multisql-inject-JnHK54Rq",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ftd-snort2-ssldos-Mw7WYX9c",
@@ -1291,7 +1397,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Threat Defense Software Snort 2 SSL/TLS Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ftd-snort2-ssldos-Mw7WYX9c"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ftd-snort2-ssldos-Mw7WYX9c",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-teva-os-command-W4GAO6jp",
@@ -1303,7 +1410,8 @@
       "vulnerabilityImpact": "Cisco ThousandEyes Virtual Appliance Authenticated Web Interface Command Injection Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-teva-os-command-W4GAO6jp"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-teva-os-command-W4GAO6jp",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-inf-disc-LFWvcCu",
@@ -1315,7 +1423,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Information Disclosure Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-inf-disc-LFWvcCu"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-inf-disc-LFWvcCu",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-xss-Uz9VWRQ",
@@ -1327,7 +1436,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Cross-Site Scripting Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-xss-Uz9VWRQ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-xss-Uz9VWRQ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-traversal-WDTgYCdn",
@@ -1339,7 +1449,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Multiple Path Traversal Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-traversal-WDTgYCdn"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-traversal-WDTgYCdn",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-traversal-WDTgYCdn",
@@ -1351,7 +1462,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Multiple Path Traversal Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-traversal-WDTgYCdn"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-traversal-WDTgYCdn",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-traversal-WDTgYCdn",
@@ -1363,7 +1475,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Multiple Path Traversal Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-traversal-WDTgYCdn"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-traversal-WDTgYCdn",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-traversal-WDTgYCdn",
@@ -1375,7 +1488,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Multiple Path Traversal Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-traversal-WDTgYCdn"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-traversal-WDTgYCdn",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-auth-bypass-1-MxcTNgwx",
@@ -1387,7 +1501,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authorization Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-auth-bypass-1-MxcTNgwx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-auth-bypass-1-MxcTNgwx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-auth-bypass-1-MxcTNgwx",
@@ -1399,7 +1514,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authorization Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-auth-bypass-1-MxcTNgwx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-auth-bypass-1-MxcTNgwx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-auth-bypass-broadwor-57m9dmm5",
@@ -1411,7 +1527,8 @@
       "vulnerabilityImpact": "Cisco BroadWorks CommPilot Application Software Authorization Bypass Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-auth-bypass-broadwor-57m9dmm5"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-auth-bypass-broadwor-57m9dmm5",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc-javarce-y2NypXwk",
@@ -1423,7 +1540,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Java Deserialization Remote Code Execution Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-javarce-y2NypXwk"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-javarce-y2NypXwk",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc-mulivulns-4PsnFwvx",
@@ -1435,7 +1553,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc-mulivulns-4PsnFwvx",
@@ -1447,7 +1566,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc-mulivulns-4PsnFwvx",
@@ -1459,7 +1579,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc-mulivulns-4PsnFwvx",
@@ -1471,7 +1592,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc-mulivulns-4PsnFwvx",
@@ -1483,7 +1605,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-mulivulns-4PsnFwvx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-ise-XU5EwX5T",
@@ -1495,7 +1618,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ise-XU5EwX5T",
@@ -1507,7 +1631,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ise-XU5EwX5T",
@@ -1519,7 +1644,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ise-XU5EwX5T",
@@ -1531,7 +1657,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ise-XU5EwX5T",
@@ -1543,7 +1670,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-ise-XU5EwX5T",
@@ -1555,7 +1683,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Hardening Release: September 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ise-XU5EwX5T",
+      "smartMitigation": "To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-fmc-sftunn-codex-c3O4Jft2",
@@ -1567,7 +1696,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software sftunnel Root Arbitrary Code Execution Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-sftunn-codex-c3O4Jft2"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc-sftunn-codex-c3O4Jft2",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc2-multivulns-HXgcqRG",
@@ -1579,7 +1709,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc2-multivulns-HXgcqRG",
@@ -1591,7 +1722,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-fmc2-multivulns-HXgcqRG",
@@ -1603,7 +1735,8 @@
       "vulnerabilityImpact": "Cisco Secure Firewall Management Center Software Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-cmd-inj-e2CuZCYZ",
@@ -1615,7 +1748,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Command Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-cmd-inj-e2CuZCYZ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-cmd-inj-e2CuZCYZ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-cmd-inj-e2CuZCYZ",
@@ -1627,7 +1761,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Command Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-cmd-inj-e2CuZCYZ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-cmd-inj-e2CuZCYZ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-hrP9jQSQ",
@@ -1639,7 +1774,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-hrP9jQSQ",
@@ -1651,7 +1787,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-hrP9jQSQ",
@@ -1663,7 +1800,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-hrP9jQSQ",
@@ -1675,7 +1813,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-hrP9jQSQ",
@@ -1687,7 +1826,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-hrP9jQSQ",
@@ -1699,7 +1839,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-hrP9jQSQ",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-mult-vul-ymSsTLCc",
@@ -1711,7 +1852,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authenticated Remote Code Execution and API Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-mult-vul-ymSsTLCc"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-mult-vul-ymSsTLCc",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-mult-vul-ymSsTLCc",
@@ -1723,7 +1865,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authenticated Remote Code Execution and API Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-mult-vul-ymSsTLCc"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-mult-vul-ymSsTLCc",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-mult-vul-ymSsTLCc",
@@ -1735,7 +1878,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Authenticated Remote Code Execution and API Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-mult-vul-ymSsTLCc"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-mult-vul-ymSsTLCc",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-cimc-arg-inject-upSHdMfU",
@@ -1747,7 +1891,8 @@
       "vulnerabilityImpact": "Cisco Integrated Management Controller Argument Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cimc-arg-inject-upSHdMfU"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cimc-arg-inject-upSHdMfU",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-cimc-arg-inject-upSHdMfU",
@@ -1759,7 +1904,8 @@
       "vulnerabilityImpact": "Cisco Integrated Management Controller Argument Injection Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cimc-arg-inject-upSHdMfU"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cimc-arg-inject-upSHdMfU",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-esa-smime-disc-dzw4rEdY",
@@ -1771,7 +1917,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Secure/Multipurpose Internet Mail Extensions Ciphertext Decryption Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-smime-disc-dzw4rEdY"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-smime-disc-dzw4rEdY",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-esa-smime-disc-dzw4rEdY",
@@ -1783,7 +1930,8 @@
       "vulnerabilityImpact": "Cisco Secure Email Secure/Multipurpose Internet Mail Extensions Ciphertext Decryption Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-smime-disc-dzw4rEdY"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-smime-disc-dzw4rEdY",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-notice-f2SiMFxl",
@@ -1795,7 +1943,8 @@
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of September 2, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-f2SiMFxl"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-f2SiMFxl",
+      "smartMitigation": "releases for the following Cisco products: Expressway Series (security hardening release) IOS XR Software for ASR 9000 Series Routers Secure Client Snort (security hardening release) Unified Communications products (security hardening release) To remediate vulnerabilities to be disclosed on October 21, 2026, Cisco strongly recommends that customers upgrade to the fixed software indicated in the advisories. For more information about changes in Cisco PSIRT vulnerability disclosure, see Strengthening the Foundation: A Predictable, Customer-Focused Response to AI-Accelerated Vulnerability Discovery ."
     },
     {
       "advisoryId": "cisco-sa-phone-dos-txMYNRzv",
@@ -1807,7 +1956,8 @@
       "vulnerabilityImpact": "Cisco Desk Phone 9800 Series, IP Phone 7800 and 8800 Series, and Video Phone 8875 with SIP Software Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-phone-dos-txMYNRzv"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-phone-dos-txMYNRzv",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-n9k-s1-rce-EH8dEtr",
@@ -1819,7 +1969,8 @@
       "vulnerabilityImpact": "Cisco Nexus 9000 Series Switches Silicon One Remote Code Execution Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-n9k-s1-rce-EH8dEtr"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-n9k-s1-rce-EH8dEtr",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-crosswork-UzDTU9Vh",
@@ -1831,7 +1982,8 @@
       "vulnerabilityImpact": "Cisco Crosswork Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-crosswork-UzDTU9Vh"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-crosswork-UzDTU9Vh",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco Crosswork products."
     },
     {
       "advisoryId": "cisco-sa-hardening-crosswork-UzDTU9Vh",
@@ -1843,7 +1995,8 @@
       "vulnerabilityImpact": "Cisco Crosswork Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-crosswork-UzDTU9Vh"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-crosswork-UzDTU9Vh",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco Crosswork products."
     },
     {
       "advisoryId": "cisco-sa-hardening-crosswork-UzDTU9Vh",
@@ -1855,7 +2008,8 @@
       "vulnerabilityImpact": "Cisco Crosswork Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-crosswork-UzDTU9Vh"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-crosswork-UzDTU9Vh",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco Crosswork products."
     },
     {
       "advisoryId": "cisco-sa-hardening-crosswork-UzDTU9Vh",
@@ -1867,7 +2021,8 @@
       "vulnerabilityImpact": "Cisco Crosswork Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-crosswork-UzDTU9Vh"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-crosswork-UzDTU9Vh",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco Crosswork products."
     },
     {
       "advisoryId": "cisco-sa-notice-LDquvx5d",
@@ -1879,7 +2034,8 @@
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of August 19, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-LDquvx5d"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-LDquvx5d",
+      "smartMitigation": "releases for the following Cisco products: Expressway Series (security hardening release) IOS XR Software for ASR 9000 Series Routers Secure Client Snort (security hardening release) Unified Communications products (security hardening release) To remediate vulnerabilities to be disclosed on October 21, 2026, Cisco strongly recommends that customers upgrade to the fixed software indicated in the advisories. For more information about changes in Cisco PSIRT vulnerability disclosure, see Strengthening the Foundation: A Predictable, Customer-Focused Response to AI-Accelerated Vulnerability Discovery ."
     },
     {
       "advisoryId": "cisco-sa-ie1k-uxq86Lnx",
@@ -1891,7 +2047,8 @@
       "vulnerabilityImpact": "Cisco Industrial Ethernet 1000 Series Switches Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ie1k-uxq86Lnx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ie1k-uxq86Lnx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-roomos-bof-vTMANZgu",
@@ -1903,7 +2060,8 @@
       "vulnerabilityImpact": "Cisco RoomOS Stack Overflow Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-roomos-bof-vTMANZgu"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-roomos-bof-vTMANZgu",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-bworks-xxe-uwUd7CEt",
@@ -1915,7 +2073,8 @@
       "vulnerabilityImpact": "Cisco BroadWorks Out-of-Band Blind XML External Entity Injection Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-bworks-xxe-uwUd7CEt"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-bworks-xxe-uwUd7CEt",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-csw1-shSvndWP",
@@ -1927,7 +2086,8 @@
       "vulnerabilityImpact": "Cisco Secure Workload Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-csw1-shSvndWP",
@@ -1939,7 +2099,8 @@
       "vulnerabilityImpact": "Cisco Secure Workload Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-csw1-shSvndWP",
@@ -1951,7 +2112,8 @@
       "vulnerabilityImpact": "Cisco Secure Workload Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-csw1-shSvndWP",
@@ -1963,7 +2125,8 @@
       "vulnerabilityImpact": "Cisco Secure Workload Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-csw1-shSvndWP",
@@ -1975,7 +2138,8 @@
       "vulnerabilityImpact": "Cisco Secure Workload Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-csw1-shSvndWP",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-ie1k-NgXUFF52",
@@ -1987,7 +2151,8 @@
       "vulnerabilityImpact": "Cisco Industrial Ethernet 1000 Series Switches Stored Cross-Site Scripting Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ie1k-NgXUFF52"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ie1k-NgXUFF52",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ucce-pcce-ssrf-TghHxD",
@@ -1999,7 +2164,8 @@
       "vulnerabilityImpact": "Cisco Packaged Contact Center Enterprise and Cisco Unified Contact Center Enterprise Server-Side Request Forgery Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ucce-pcce-ssrf-TghHxD"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ucce-pcce-ssrf-TghHxD",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-cuic-sql-inject-2qbfWSm5",
@@ -2011,7 +2177,8 @@
       "vulnerabilityImpact": "Cisco Unified Intelligence Center SQL Injection Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cuic-sql-inject-2qbfWSm5"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cuic-sql-inject-2qbfWSm5",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-WuuvVd26",
@@ -2023,7 +2190,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-WuuvVd26",
@@ -2035,7 +2203,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-WuuvVd26",
@@ -2047,7 +2216,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-WuuvVd26",
@@ -2059,7 +2229,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-WuuvVd26",
@@ -2071,7 +2242,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-WuuvVd26",
@@ -2083,7 +2255,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-WuuvVd26",
@@ -2095,7 +2268,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-sdwan-infodis-SPuJBDCe",
@@ -2107,7 +2281,8 @@
       "vulnerabilityImpact": "Cisco Catalyst SD-WAN Manager Information Disclosure Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-infodis-SPuJBDCe"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-infodis-SPuJBDCe",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-notice-L4XfJg8S",
@@ -2119,7 +2294,8 @@
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of August 5, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-L4XfJg8S"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-L4XfJg8S",
+      "smartMitigation": "releases for the following Cisco products: Expressway Series (security hardening release) IOS XR Software for ASR 9000 Series Routers Secure Client Snort (security hardening release) Unified Communications products (security hardening release) To remediate vulnerabilities to be disclosed on October 21, 2026, Cisco strongly recommends that customers upgrade to the fixed software indicated in the advisories. For more information about changes in Cisco PSIRT vulnerability disclosure, see Strengthening the Foundation: A Predictable, Customer-Focused Response to AI-Accelerated Vulnerability Discovery ."
     },
     {
       "advisoryId": "cisco-sa-ios-xmcp-thbAr34t",
@@ -2131,7 +2307,8 @@
       "vulnerabilityImpact": "Cisco IOS Software and IOS XE Software Extensible Messaging Client Protocol Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ios-xmcp-thbAr34t"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ios-xmcp-thbAr34t",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-cimc-xss-7EhBFxBp",
@@ -2143,7 +2320,8 @@
       "vulnerabilityImpact": "Cisco Integrated Management Controller Cross-Site Scripting Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cimc-xss-7EhBFxBp"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cimc-xss-7EhBFxBp",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-iosxe-bing-MGHrFAkd",
@@ -2155,7 +2333,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Blocks Extensible Exchange Protocol Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-iosxe-bing-MGHrFAkd"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-iosxe-bing-MGHrFAkd",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-hardening-sdwan-faLcR3K",
@@ -2167,7 +2346,8 @@
       "vulnerabilityImpact": "Cisco Catalyst SD-WAN Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K",
+      "smartMitigation": "To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-sdwan-faLcR3K",
@@ -2179,7 +2359,8 @@
       "vulnerabilityImpact": "Cisco Catalyst SD-WAN Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K",
+      "smartMitigation": "To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-sdwan-faLcR3K",
@@ -2191,7 +2372,8 @@
       "vulnerabilityImpact": "Cisco Catalyst SD-WAN Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K",
+      "smartMitigation": "To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-sdwan-faLcR3K",
@@ -2203,7 +2385,8 @@
       "vulnerabilityImpact": "Cisco Catalyst SD-WAN Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K",
+      "smartMitigation": "To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-sdwan-faLcR3K",
@@ -2215,7 +2398,8 @@
       "vulnerabilityImpact": "Cisco Catalyst SD-WAN Software Security Hardening Release: August 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-sdwan-faLcR3K",
+      "smartMitigation": "To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-webui-dos-qdc7qx3",
@@ -2227,7 +2411,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Web-Based Management Interface Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-webui-dos-qdc7qx3"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-webui-dos-qdc7qx3",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ts-agent-fw-bypass-MYBTMrev",
@@ -2239,7 +2424,8 @@
       "vulnerabilityImpact": "Cisco Terminal Services Agent Firewall Rules Bypass Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ts-agent-fw-bypass-MYBTMrev"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ts-agent-fw-bypass-MYBTMrev",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-roomos-infodisc-qBXjfmWm",
@@ -2251,7 +2437,8 @@
       "vulnerabilityImpact": "Cisco RoomOS Logging Subsystem Information Disclosure Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-roomos-infodisc-qBXjfmWm"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-roomos-infodisc-qBXjfmWm",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-xe-webui-dos-PtAODAWW",
@@ -2263,7 +2450,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software Web-Based Management Interface Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-xe-webui-dos-PtAODAWW"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-xe-webui-dos-PtAODAWW",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-iosxe-snmp-dos-ZAqNm4MD",
@@ -2275,7 +2463,8 @@
       "vulnerabilityImpact": "Cisco IOS XE Software SNMP Denial of Service Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-iosxe-snmp-dos-ZAqNm4MD"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-iosxe-snmp-dos-ZAqNm4MD",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-sdwan-privesc-4uxFrdzx",
@@ -2287,7 +2476,8 @@
       "vulnerabilityImpact": "Cisco Catalyst SD-WAN Controller, Catalyst SD-WAN Manager, and Catalyst SD-WAN Validator Authenticated Privilege Escalation Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-privesc-4uxFrdzx"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-privesc-4uxFrdzx",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-xss-42tgsdMG",
@@ -2299,7 +2489,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Stored Cross-Site Scripting Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-xss-42tgsdMG"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-xss-42tgsdMG",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-xss-42tgsdMG",
@@ -2311,7 +2502,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Stored Cross-Site Scripting Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-xss-42tgsdMG"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-xss-42tgsdMG",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-notice-ILh3ZrP5",
@@ -2323,7 +2515,8 @@
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of July 15, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-ILh3ZrP5"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-ILh3ZrP5",
+      "smartMitigation": "releases for the following Cisco products: Expressway Series (security hardening release) IOS XR Software for ASR 9000 Series Routers Secure Client Snort (security hardening release) Unified Communications products (security hardening release) To remediate vulnerabilities to be disclosed on October 21, 2026, Cisco strongly recommends that customers upgrade to the fixed software indicated in the advisories. For more information about changes in Cisco PSIRT vulnerability disclosure, see Strengthening the Foundation: A Predictable, Customer-Focused Response to AI-Accelerated Vulnerability Discovery ."
     },
     {
       "advisoryId": "cisco-sa-hardening-roomos-AqNMbEq",
@@ -2335,7 +2528,8 @@
       "vulnerabilityImpact": "Cisco RoomOS Security Hardening Release: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-roomos-AqNMbEq",
@@ -2347,7 +2541,8 @@
       "vulnerabilityImpact": "Cisco RoomOS Security Hardening Release: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-roomos-AqNMbEq",
@@ -2359,7 +2554,8 @@
       "vulnerabilityImpact": "Cisco RoomOS Security Hardening Release: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-roomos-AqNMbEq",
@@ -2371,7 +2567,8 @@
       "vulnerabilityImpact": "Cisco RoomOS Security Hardening Release: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-roomos-AqNMbEq",
@@ -2383,7 +2580,8 @@
       "vulnerabilityImpact": "Cisco RoomOS Security Hardening Release: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-hardening-roomos-AqNMbEq",
@@ -2395,7 +2593,8 @@
       "vulnerabilityImpact": "Cisco RoomOS Security Hardening Release: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-roomos-AqNMbEq",
+      "smartMitigation": "To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Fixed Releases In the following table, the left column lists Cisco software releases."
     },
     {
       "advisoryId": "cisco-sa-ise-traversal-xNt7wb2Y",
@@ -2407,7 +2606,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Path Traversal Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-traversal-xNt7wb2Y"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-traversal-xNt7wb2Y",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-G5WP8vv",
@@ -2419,7 +2619,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Remote Code Execution and Information Disclosure Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-G5WP8vv"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-G5WP8vv",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ise-multi-G5WP8vv",
@@ -2431,7 +2632,8 @@
       "vulnerabilityImpact": "Cisco Identity Services Engine Remote Code Execution and Information Disclosure Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-G5WP8vv"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multi-G5WP8vv",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-catc-file-read-wLH2vf8X",
@@ -2443,7 +2645,8 @@
       "vulnerabilityImpact": "Cisco Catalyst Center Arbitrary File Read Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-catc-file-read-wLH2vf8X"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-catc-file-read-wLH2vf8X",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-88cFYyxR",
@@ -2455,7 +2658,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-88cFYyxR",
@@ -2467,7 +2671,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-88cFYyxR",
@@ -2479,7 +2684,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-88cFYyxR",
@@ -2491,7 +2697,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-88cFYyxR",
@@ -2503,7 +2710,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-88cFYyxR",
@@ -2515,7 +2723,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-clamav-88cFYyxR",
@@ -2527,7 +2736,8 @@
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: July 2026",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-88cFYyxR",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-notice-vwL7b0S7",
@@ -2539,7 +2749,8 @@
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of July 1, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-vwL7b0S7"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-vwL7b0S7",
+      "smartMitigation": "releases for the following Cisco products: Expressway Series (security hardening release) IOS XR Software for ASR 9000 Series Routers Secure Client Snort (security hardening release) Unified Communications products (security hardening release) To remediate vulnerabilities to be disclosed on October 21, 2026, Cisco strongly recommends that customers upgrade to the fixed software indicated in the advisories. For more information about changes in Cisco PSIRT vulnerability disclosure, see Strengthening the Foundation: A Predictable, Customer-Focused Response to AI-Accelerated Vulnerability Discovery ."
     },
     {
       "advisoryId": "cisco-sa-cucm-ssrf-cXPnHcW",
@@ -2551,7 +2762,8 @@
       "vulnerabilityImpact": "Cisco Unified Communications Manager Server-Side Request Forgery Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P1",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cucm-ssrf-cXPnHcW"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cucm-ssrf-cXPnHcW",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-finesse-rfi-gwpkdc89",
@@ -2563,7 +2775,8 @@
       "vulnerabilityImpact": "Cisco Finesse Remote File Inclusion Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-finesse-rfi-gwpkdc89"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-finesse-rfi-gwpkdc89",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ucce-pcce-xss-2JVyg3uD",
@@ -2575,7 +2788,8 @@
       "vulnerabilityImpact": "Cisco Packaged Contact Center Enterprise and Cisco Unified Contact Center Enterprise Cross-Site Scripting Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ucce-pcce-xss-2JVyg3uD"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ucce-pcce-xss-2JVyg3uD",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-ucce-pcce-xss-2JVyg3uD",
@@ -2587,7 +2801,8 @@
       "vulnerabilityImpact": "Cisco Packaged Contact Center Enterprise and Cisco Unified Contact Center Enterprise Cross-Site Scripting Vulnerabilities",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ucce-pcce-xss-2JVyg3uD"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ucce-pcce-xss-2JVyg3uD",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-umbrella-priv-esc-F4wJB7AU",
@@ -2599,7 +2814,8 @@
       "vulnerabilityImpact": "Cisco Umbrella Virtual Appliance Privilege Escalation Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-umbrella-priv-esc-F4wJB7AU"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-umbrella-priv-esc-F4wJB7AU",
+      "smartMitigation": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To fully remediate this vulnerability and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory."
     },
     {
       "advisoryId": "cisco-sa-webex-app-redirect-KOyxhffH",
@@ -2611,7 +2827,8 @@
       "vulnerabilityImpact": "Cisco Webex App Open Redirect Vulnerability",
       "fixedRelease": "Refer to advisory",
       "priority": "P2",
-      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-webex-app-redirect-KOyxhffH"
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-webex-app-redirect-KOyxhffH",
+      "smartMitigation": "Cisco has addressed this vulnerability in Cisco Webex App, which is cloud based. No user action is required."
     }
   ]
 }
