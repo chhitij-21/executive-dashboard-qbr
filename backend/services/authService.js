@@ -97,29 +97,37 @@ function loadUserMfaData() {
       const raw = fs.readFileSync(USERS_FILE, 'utf-8');
       const mfaMap = JSON.parse(raw);
       if (typeof mfaMap === 'object' && mfaMap !== null) {
-        // Sync MFA properties to existing in-memory seeded users
+        // 1. Sync MFA properties to existing in-memory seeded users (matching by id, email, or username)
         for (const user of USERS) {
-          if (mfaMap[user.id]) {
-            user.mfaSecret = mfaMap[user.id].mfaSecret || null;
-            user.mfaEnabled = !!mfaMap[user.id].mfaEnabled;
-            user.pendingMfaSecret = mfaMap[user.id].pendingMfaSecret || null;
+          const entry = mfaMap[user.id] ||
+            Object.values(mfaMap).find(e => e && (
+              (e.id && e.id === user.id) ||
+              (e.email && user.email && e.email.toLowerCase() === user.email.toLowerCase()) ||
+              (e.username && user.username && e.username.toLowerCase() === user.username.toLowerCase())
+            ));
+
+          if (entry) {
+            user.mfaSecret = entry.mfaSecret || null;
+            user.mfaEnabled = !!entry.mfaEnabled;
+            user.pendingMfaSecret = entry.pendingMfaSecret || null;
+            if (entry.password && !user.password) user.password = entry.password;
           }
         }
 
-        // Load persisted users from users.json into USERS array if not already present
+        // 2. Load persisted users from users.json into USERS array if not already present
         for (const [key, val] of Object.entries(mfaMap)) {
-          if (val && typeof val === 'object' && val.email && val.password) {
+          if (val && typeof val === 'object' && (val.email || val.id)) {
             const userId = val.id || key;
-            const userEmail = String(val.email).toLowerCase().trim();
+            const userEmail = val.email ? String(val.email).toLowerCase().trim() : '';
             const exists = USERS.some(
-              (u) => u.id === userId || (u.email && u.email.toLowerCase() === userEmail)
+              (u) => u.id === userId || (userEmail && u.email && u.email.toLowerCase() === userEmail)
             );
             if (!exists) {
               USERS.push({
                 id: userId,
-                email: val.email,
-                username: val.username || userEmail.split('@')[0],
-                password: val.password,
+                email: val.email || `${userId}@portal.com`,
+                username: val.username || (userEmail ? userEmail.split('@')[0] : userId),
+                password: val.password || null,
                 name: val.name || (val.role === 'admin' ? 'Admin User' : 'Portal User'),
                 role: val.role || 'client_user',
                 assignedClient: val.assignedClient || (val.role === 'admin' ? 'all' : 'client-jfl'),
@@ -156,7 +164,7 @@ function saveUserMfaData() {
           id: user.id,
           email: user.email,
           username: user.username,
-          password: user.password,
+          password: user.password || existingMap[user.id]?.password || undefined,
           name: user.name,
           role: user.role,
           assignedClient: user.assignedClient,
@@ -164,6 +172,7 @@ function saveUserMfaData() {
           mfaSecret: user.mfaSecret || null,
           mfaEnabled: !!user.mfaEnabled,
           pendingMfaSecret: user.pendingMfaSecret || null,
+          updatedAt: new Date().toISOString(),
         };
       }
     }
@@ -453,5 +462,6 @@ module.exports = {
   issueSessionForUser,
   loadUserMfaData,
   loadUserData: loadUserMfaData,
+  saveUserMfaData,
   USERS,
 };

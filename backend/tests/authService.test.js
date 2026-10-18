@@ -79,4 +79,34 @@ describe('AuthService users.json dynamic persistence suite', () => {
     assert.equal(session.user.role, 'client_user');
     assert.equal(session.user.assignedClient, 'client-jfl');
   });
+
+  it('MFA state persists across server restart simulation', () => {
+    // 1. Create a mock user in the in-memory USERS array.
+    const restartUser = {
+      id: 'user-restart-test',
+      email: 'admin-restart@portal.com',
+      username: 'adminrestart',
+      name: 'Restart Admin',
+      role: 'admin',
+      assignedClient: 'all',
+      mfaSecret: 'JBSWY3DPEHPK3PXP',
+      mfaEnabled: true
+    };
+    authService.USERS.push(restartUser);
+
+    // 2. Call saveUserMfaData() to save the user with mfaEnabled: true and dummy mfaSecret
+    authService.saveUserMfaData();
+
+    // 3. Clear the USERS array (simulate restart)
+    authService.USERS.length = 0;
+
+    // 4. Call loadUserMfaData() to reload
+    authService.loadUserMfaData();
+
+    // 5. Assert that the user in the USERS array now has mfaEnabled === true
+    const reloaded = authService.getUserById('user-restart-test');
+    assert.ok(reloaded, 'User must exist in USERS array after restart reload');
+    assert.equal(reloaded.mfaEnabled, true, 'User mfaEnabled must be true after restart');
+    assert.equal(reloaded.mfaSecret, 'JBSWY3DPEHPK3PXP');
+  });
 });
