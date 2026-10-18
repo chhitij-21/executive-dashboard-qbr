@@ -123,6 +123,14 @@ export default function Navbar({ activeTab, setActiveTab, onOpenLogin, reportSit
         </button>
 
         <button
+          className={`nav-tab-btn ${activeTab === 'inventory-sync' ? 'active' : ''}`}
+          onClick={() => setActiveTab('inventory-sync')}
+        >
+          <span className="nav-tab-icon">🔄</span>
+          <span className="nav-tab-label">Inventory Sync</span>
+        </button>
+
+        <button
           className={`nav-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
           onClick={() => setActiveTab('history')}
         >

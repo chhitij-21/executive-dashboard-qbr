@@ -10,6 +10,7 @@ import ReportHistory from './components/ReportHistory';
 import ClientManager from './components/ClientManager';
 import ExcelAnalyzer from './components/ExcelAnalyzer';
 import VulnerabilitiesPage from './components/VulnerabilitiesPage';
+import InventorySyncPage from './components/InventorySyncPage';
 
 import KpiCard from './components/KpiCard';
 import Chart from './components/Chart';
@@ -1268,6 +1269,12 @@ function MainPortal() {
         {tab === 'vulnerabilities' && (
           <ErrorBoundary>
             <VulnerabilitiesPage />
+          </ErrorBoundary>
+        )}
+
+        {tab === 'inventory-sync' && (
+          <ErrorBoundary>
+            <InventorySyncPage />
           </ErrorBoundary>
         )}
 
