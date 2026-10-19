@@ -13,7 +13,7 @@ import VulnerabilitiesPage from './components/VulnerabilitiesPage';
 import InventorySyncPage from './components/InventorySyncPage';
 
 import KpiCard from './components/KpiCard';
-import AISummaryPanel from './components/AISummaryPanel';
+import EnterpriseInsightCard from './components/EnterpriseInsightCard';
 import DashboardSkeleton from './components/DashboardSkeleton';
 import { motion, AnimatePresence } from 'framer-motion';
 import Chart from './components/Chart';
@@ -602,13 +602,13 @@ function MainPortal() {
               </div>
             </div>
  
-            {/* AI Summary Panel under executiveSummary section */}
-            <AnimatePresence>
-              <AISummaryPanel
-                key={activeDashboardData?.jobId ? `${activeDashboardData.jobId}-exec` : 'ai-summary-panel-exec'}
-                text={generateAISummary('executive', activeDashboardData, selectedSite)}
-              />
-            </AnimatePresence>
+            {/* Virtual CTO AI Intelligence Briefing under executiveSummary section */}
+            <EnterpriseInsightCard
+              section="executive"
+              activeTab="executive"
+              activeDashboardData={activeDashboardData}
+              selectedSite={selectedSite}
+            />
 
             <div className="exec-section-title">Key Performance Indicators</div>
             <div className="kpi-grid">
@@ -728,7 +728,12 @@ function MainPortal() {
         {/* ── 2. Site Summary ────────────────────────────────────────────── */}
         {dashTab === 'sites' && (
           <div className="section-body card pad-md">
-            <AISummaryPanel text={generateAISummary('sites', activeDashboardData, selectedSite)} />
+            <EnterpriseInsightCard
+              section="sites"
+              activeTab="sites"
+              activeDashboardData={activeDashboardData}
+              selectedSite={selectedSite}
+            />
             <h3 className="section-title">Site Summary &amp; Site Inspector</h3>
             <p className="section-meta">
               Overview across all monitored sites. Select a site to inspect per-site switches, APs, stock inventory, and incident logs.
@@ -785,7 +790,12 @@ function MainPortal() {
         {/* ── 3. Switch Analytics ─────────────────────────────────────────── */}
         {dashTab === 'switches' && (
           <div className="section-body card pad-md">
-            <AISummaryPanel text={generateAISummary('switches', activeDashboardData, selectedSite)} />
+            <EnterpriseInsightCard
+              section="switches"
+              activeTab="switches"
+              activeDashboardData={activeDashboardData}
+              selectedSite={selectedSite}
+            />
             <h3 className="section-title">Switch Analytics</h3>
 
             {/* Uptime KPIs */}
@@ -939,7 +949,12 @@ function MainPortal() {
         {/* ── 4. AP Analytics ─────────────────────────────────────────────── */}
         {dashTab === 'aps' && (
           <div className="section-body card pad-md">
-            <AISummaryPanel text={generateAISummary('aps', activeDashboardData, selectedSite)} />
+            <EnterpriseInsightCard
+              section="aps"
+              activeTab="aps"
+              activeDashboardData={activeDashboardData}
+              selectedSite={selectedSite}
+            />
             <h3 className="section-title">Access Point (AP) Analytics</h3>
 
             {/* AP KPIs — no uptime per requirement */}
@@ -1070,7 +1085,12 @@ function MainPortal() {
         {/* ── 5. Incident Analytics ──────────────────────────────────────── */}
         {dashTab === 'incidents' && (
           <div className="section-body card pad-md">
-            <AISummaryPanel text={generateAISummary('incidents', activeDashboardData, selectedSite)} />
+            <EnterpriseInsightCard
+              section="incidents"
+              activeTab="incidents"
+              activeDashboardData={activeDashboardData}
+              selectedSite={selectedSite}
+            />
             <h3 className="section-title">Incident Analytics</h3>
             {/* Requirement 5: MTTR KPI card removed from frontend. MTTR is retained in backend for audit only. */}
             <div className="kpi-grid">
@@ -1106,7 +1126,12 @@ function MainPortal() {
         {/* ── 6. RCA Analytics ──────────────────────────────────────────── */}
         {dashTab === 'rca' && (
           <div className="section-body card pad-md">
-            <AISummaryPanel text={generateAISummary('rca', activeDashboardData, selectedSite)} />
+            <EnterpriseInsightCard
+              section="rca"
+              activeTab="rca"
+              activeDashboardData={activeDashboardData}
+              selectedSite={selectedSite}
+            />
             <h3 className="section-title">Root Cause Analysis (RCA)</h3>
             <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
               <KpiCard title="Total Analyzed Incidents" value={rcaAn.totalIncidents ?? 0} />
@@ -1144,7 +1169,12 @@ function MainPortal() {
         {/* ── 7. SLA Analytics ──────────────────────────────────────────── */}
         {dashTab === 'sla' && (
           <div className="section-body card pad-md">
-            <AISummaryPanel text={generateAISummary('sla', activeDashboardData, selectedSite)} />
+            <EnterpriseInsightCard
+              section="sla"
+              activeTab="sla"
+              activeDashboardData={activeDashboardData}
+              selectedSite={selectedSite}
+            />
             <h3 className="section-title">SLA Analytics (Active Operational Devices)</h3>
             <div className="kpi-grid">
               <KpiCard title="Overall SLA Compliance" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" />
@@ -1193,7 +1223,12 @@ function MainPortal() {
         {/* ── 8. Other Activity ──────────────────────────────────────────── */}
         {dashTab === 'other' && (
           <div className="section-body card pad-md">
-            <AISummaryPanel text={generateAISummary('other', activeDashboardData, selectedSite)} />
+            <EnterpriseInsightCard
+              section="other"
+              activeTab="other"
+              activeDashboardData={activeDashboardData}
+              selectedSite={selectedSite}
+            />
             <h3 className="section-title">Other Activity — Change Requests, Maintenance, Request Fulfillment & Non-Hardware Tickets</h3>
             <div className="kpi-grid">
               <KpiCard title="Total Other Activity Tickets" value={otherActivityIncidents.length} />
@@ -1266,7 +1301,12 @@ function MainPortal() {
         {tab === 'overview' && (
           <ErrorBoundary>
             <div style={{ maxWidth: '1680px', margin: '0 auto', padding: '0 1rem' }}>
-              <AISummaryPanel text={generateAISummary('overview', activeDashboardData, selectedSite)} />
+              <EnterpriseInsightCard
+                section="overview"
+                activeTab="overview"
+                activeDashboardData={activeDashboardData}
+                selectedSite={selectedSite}
+              />
             </div>
             <OverviewPage
               data={activeDashboardData}

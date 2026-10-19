@@ -730,6 +730,61 @@ app.post(['/api/ai/section-summary', '/ai/section-summary'], requireAuth, requir
   }
 });
 
+// ── Enterprise AI Insights Endpoint (Virtual CTO AI Engine) ────────────────
+const { generateEnterpriseInsights } = require('./services/aiInsightsService');
+
+app.post(['/api/ai/insights', '/ai/insights'], requireAuth, requireClientAccess((req) => req.body?.clientId || req.query?.clientId || req.headers['x-client-id'] || (req.user?.assignedClient !== 'all' ? req.user?.assignedClient : 'client-jfl')), async (req, res) => {
+  try {
+    const { section, data: bodyData, jobId } = req.body || {};
+    const clientId = req.targetClientId;
+
+    let targetData = bodyData;
+    if (!targetData) {
+      const reqJobId = jobId || 'latest';
+      let job = null;
+      if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
+        job = resolveLatestCompletedJob(clientId);
+      } else {
+        job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+      }
+
+      let dPath = job?.dashboardPath;
+      if (!dPath || !fs.existsSync(dPath)) {
+        const activeJobId = job?.jobId || (reqJobId !== 'latest' && reqJobId !== 'default' ? reqJobId : null);
+        if (activeJobId) {
+          const candidate = path.join(REPORTS_DIR, `job_${activeJobId}`, 'dashboard_data.json');
+          if (fs.existsSync(candidate)) dPath = candidate;
+        }
+      }
+
+      if (dPath && fs.existsSync(dPath)) {
+        try {
+          targetData = JSON.parse(fs.readFileSync(dPath, 'utf8'));
+        } catch (e) { }
+      }
+    }
+
+    const insights = await generateEnterpriseInsights({
+      section: section || 'overview',
+      data: targetData,
+      clientId,
+    });
+
+    res.json({
+      success: true,
+      section: section || 'overview',
+      executive_summary: insights.executive_summary,
+      business_risks: insights.business_risks,
+      action_items: insights.action_items,
+      ...insights,
+      data: insights,
+    });
+  } catch (err) {
+    console.error('[server] Error in /api/ai/insights:', err.message);
+    res.status(500).json({ error: `AI Insights generation error: ${err.message}` });
+  }
+});
+
 // ── Claudex Loop — Agentic SSE Endpoint ────────────────────────────────────
 // GET /api/chat/loop?prompt=...&jobId=...&clientId=...&ticket=sse_...
 // Streams Think->Act->Observe->Repeat events via Server-Sent Events.
