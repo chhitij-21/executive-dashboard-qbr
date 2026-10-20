@@ -46,3 +46,17 @@ CREATE TABLE IF NOT EXISTS inventory_snapshots (
   snapshot_data TEXT, 
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS reports_tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id TEXT NOT NULL,
+  ticket_number TEXT NOT NULL,
+  period_start TEXT,
+  period_end TEXT,
+  payload_json TEXT NOT NULL,
+  bucket TEXT,
+  ticket_type TEXT,
+  uploaded_at TEXT NOT NULL,
+  UNIQUE(client_id, ticket_number)
+);
+

@@ -2342,6 +2342,109 @@ textarea:focus-visible {
   }
 }
 
+/* ── MMTC Reports View (Phase 1) ────────────────────────────────────────── */
+.report-view {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.report-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  padding: 1.5rem;
+}
+
+.report-kpi {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.report-kpi-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.report-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.report-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.report-header-bar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.report-period-toggle {
+  display: flex;
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.report-period-toggle button {
+  padding: 0.4rem 0.9rem;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.report-period-toggle button:last-child {
+  border-right: none;
+}
+
+.report-period-toggle button.active {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--accent-blue, #2563eb);
+}
+
+.report-upload-bar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.report-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.report-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+
 
 
 

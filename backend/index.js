@@ -110,6 +110,9 @@ app.use('/api/vulnerabilities', require('./routes/vulnerabilities'));
 app.use(['/api/mfa', '/mfa'], require('./routes/mfa'));
 const inventorySyncRouter = require('./routes/inventorySync');
 app.use('/api/inventory', inventorySyncRouter);
+const reportsRouter = require('./routes/reports');
+app.use(['/api/reports', '/reports'], reportsRouter);
+
 /**
  * validateDateRange — Server-side date validation for report generation requests.
  * Enforces all four rules from Requirement 2:

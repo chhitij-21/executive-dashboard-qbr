@@ -29,6 +29,8 @@ import { filterDashboardBySite } from './utils/filterDashboardBySite';
 import { generateAISummary } from './utils/aiSummaryGenerator';
 import { AIChatbot } from './components/AIChatbot';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import ReportsView from './components/ReportsView';
+
 
 /**
  * ErrorBoundary — catches React render errors and shows a clean executive error card.
@@ -584,7 +586,16 @@ function MainPortal() {
               {label}
             </button>
           ))}
+          {activeClient?.id === 'client-mmtcpamp' && (
+            <button
+              className={dashTab === 'reports' ? 'dash-tab active' : 'dash-tab'}
+              onClick={() => setDashTab('reports')}
+            >
+              Reports
+            </button>
+          )}
         </div>
+
 
         {/* ── 1. Executive Summary ──────────────────────────────────────── */}
         {dashTab === 'executive' && (
@@ -1259,7 +1270,12 @@ function MainPortal() {
             )}
           </div>
         )}
+
+        {dashTab === 'reports' && activeClient?.id === 'client-mmtcpamp' && (
+          <ReportsView />
+        )}
       </div>
+
     );
   };
 
