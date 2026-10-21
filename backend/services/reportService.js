@@ -85,7 +85,7 @@ function classifyTicketType(ticket) {
  * @param {object} ticket
  * @returns {{ bucket: 'SLA Met' | 'SLA Breached' | 'On Hold', responseMet: boolean|null, resolutionMet: boolean|null, effectiveResolution: number|null }}
  */
-function computeSla(ticket) {
+function computeSla(ticket, clientId) {
   if (!ticket) {
     return { bucket: 'SLA Met', responseMet: true, resolutionMet: true, effectiveResolution: 0 };
   }
@@ -97,7 +97,10 @@ function computeSla(ticket) {
 
   // Response SLA evaluation
   const respActual = parseFloat(ticket['Actual Response Time (min)']);
-  const respAgreed = parseFloat(ticket['Agreed Response SLA (min)']);
+  let respAgreed = parseFloat(ticket['Agreed Response SLA (min)']);
+  if (clientId === 'client-mmtcpamp' || clientId === 'mmtc') {
+    respAgreed = 30; // MMTC Response Time SLA
+  }
   const respStatusCol = (ticket['Response SLA Status'] || '').toString().trim().toLowerCase();
 
   let respMet = true;
@@ -309,7 +312,7 @@ function buildReport(clientId, start, end, options = {}) {
     }
 
     // SLA
-    const slaRes = computeSla(t);
+    const slaRes = computeSla(t, clientId);
     if (slaRes.bucket === 'SLA Met') slaMet++;
     else if (slaRes.bucket === 'SLA Breached') slaBreached++;
     else if (slaRes.bucket === 'On Hold') slaOnHold++;
@@ -373,32 +376,35 @@ function buildReport(clientId, start, end, options = {}) {
     ispLocation = top15;
   }
 
-  // Phase 2: ISP Device Breakdown & Grand Total
+  // Phase 2: ISP Location Breakdown & Grand Total
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const ispDeviceMap = {};
+  const ispLocationMap = {};
+  
   windowTickets.forEach(t => {
     const rca = (t['RCA'] || t.rca || '').toString().trim();
     if (rca === 'ISP Issue') {
-      const devName = String(t['Device Name'] || t.device_name || t.DeviceName || 'Unknown').trim();
+      const locName = extractSiteFromDeviceName(t['Device Name'] || t.device_name || t.DeviceName || 'Unknown');
       const d = parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime);
       const mName = d ? months[d.getMonth()] : (startDt ? months[startDt.getMonth()] : 'July');
-      if (!ispDeviceMap[devName]) {
-        ispDeviceMap[devName] = { month: mName, device_name: devName, total: 0 };
+      
+      if (!ispLocationMap[locName]) {
+        ispLocationMap[locName] = { month: mName, location: locName, total: 0 };
       }
-      ispDeviceMap[devName].total++;
+      ispLocationMap[locName].total++;
     }
   });
 
-  const ispDeviceBreakdown = Object.values(ispDeviceMap)
+  const ispLocationBreakdown = Object.values(ispLocationMap)
     .sort((a, b) => b.total - a.total)
     .map((item, idx) => ({
       s_no: idx + 1,
       month: item.month,
-      device_name: item.device_name,
+      location: item.location,
+      device_name: item.location,
       total: item.total,
     }));
 
-  const ispGrandTotal = ispDeviceBreakdown.reduce((sum, item) => sum + item.total, 0);
+  const ispGrandTotal = ispLocationBreakdown.reduce((sum, item) => sum + item.total, 0);
 
   // TASK 2b (Data Shape): hold_tickets: { ticket_number, subject, reason, rollover, created_date } (Filter Status == 'On Hold')
   const holdTickets = allTickets
@@ -463,7 +469,8 @@ function buildReport(clientId, start, end, options = {}) {
       channel_denom: isAllRatio,
     },
     isp_location: ispLocation,
-    isp_device_breakdown: ispDeviceBreakdown,
+    isp_location_breakdown: ispLocationBreakdown,
+    isp_device_breakdown: ispLocationBreakdown,
     isp_grand_total: ispGrandTotal,
     top_sites: ispLocation,
     hold_tickets: holdTickets,
@@ -496,7 +503,8 @@ function toAiPayload(report) {
     rca_breakdown: report?.rca_breakdown || [],
     isp_pct: report?.isp_pct || {},
     top_sites: report?.isp_location || report?.top_sites || [],
-    isp_device_breakdown: report?.isp_device_breakdown || [],
+    isp_location_breakdown: report?.isp_location_breakdown || report?.isp_device_breakdown || [],
+    isp_device_breakdown: report?.isp_location_breakdown || report?.isp_device_breakdown || [],
     isp_grand_total: report?.isp_grand_total || 0,
   };
 }
@@ -536,7 +544,7 @@ async function persistTickets(clientId, tickets, period = {}) {
       chunk.map(async (t) => {
         const ticketNo = t['Ticket Number'] || t.ticket_number || t.TicketNumber;
         if (!ticketNo) return;
-        const slaRes = computeSla(t);
+        const slaRes = computeSla(t, clientId);
         const ticketType = classifyTicketType(t);
         try {
           await database.execute(
@@ -604,7 +612,7 @@ async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
   for (const t of list) {
     const ticketNo = t['Ticket Number'] || t.ticket_number || t.TicketNumber;
     if (!ticketNo) continue;
-    const slaRes = computeSla(t);
+    const slaRes = computeSla(t, clientId);
     const ticketType = classifyTicketType(t);
 
     await database.execute(

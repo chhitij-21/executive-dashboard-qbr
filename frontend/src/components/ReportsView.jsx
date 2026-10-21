@@ -160,19 +160,19 @@ export default function ReportsView({ jobId = 'latest' }) {
           fontWeight: 700,
           fontSize: '1.05rem',
         }}>
-          ISP Issue – Device Wise Breakdown
+          ISP Issue – Location Wise Breakdown
         </div>
         <table className="mmtc-table" style={{ marginTop: 0 }}>
           <thead>
             <tr>
               <th style={{ width: '10%' }}>S NO</th>
               <th style={{ width: '20%' }}>Month</th>
-              <th style={{ width: '50%' }}>Device Name</th>
+              <th style={{ width: '50%' }}>Location</th>
               <th style={{ width: '20%' }}>Total</th>
             </tr>
           </thead>
           <tbody>
-            {(report?.isp_device_breakdown || []).length === 0 ? (
+            {(report?.isp_location_breakdown || report?.isp_device_breakdown || []).length === 0 ? (
               <tr>
                 <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: '#6b7280' }}>
                   No ISP tickets found.
@@ -180,11 +180,11 @@ export default function ReportsView({ jobId = 'latest' }) {
               </tr>
             ) : (
               <>
-                {(report?.isp_device_breakdown || []).map((row, idx) => (
+                {(report?.isp_location_breakdown || report?.isp_device_breakdown || []).map((row, idx) => (
                   <tr key={idx}>
                     <td>{row.s_no}</td>
                     <td>{row.month}</td>
-                    <td style={{ fontWeight: 500 }}>{row.device_name}</td>
+                    <td style={{ fontWeight: 500 }}>{row.location || row.device_name}</td>
                     <td>{row.total}</td>
                   </tr>
                 ))}

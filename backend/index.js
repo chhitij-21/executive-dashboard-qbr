@@ -622,7 +622,7 @@ app.post(['/api/chat', '/chat'], requireAuth, requireClientAccess((req) => req.b
 
 function getCleanExecutiveSummary(section, qbrData) {
   const customer = qbrData.customerName || 'Jubilant Foodworks Ltd (JFL)';
-  const period = qbrData.report_period?.display_label || qbrData.reportingPeriod || 'Selected Period';
+  const period = qbrData.report_period?.display_label || qbrData.reportingPeriod || '';
   const exec = qbrData.executiveSummary || {};
   const pro = qbrData.proactiveTicketAnalytics || {};
 

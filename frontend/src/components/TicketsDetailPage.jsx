@@ -39,7 +39,7 @@ export default function TicketsDetailPage({ data, initialSubTab }) {
   const bySite = pro.bySite || [];
   const holdReasons = pro.holdReasons || [];
   const rawIncidents = [...(data.incidents || []), ...(data.otherActivities || [])];
-  const periodLabel = data.report_period?.display_label || data.reportingPeriod || 'Selected Period';
+  const periodLabel = data.report_period?.display_label || data.reportingPeriod || '';
   const customerName = activeClient?.name || data.customerName || 'Customer';
 
   // Filtered raw incidents for Tab 4

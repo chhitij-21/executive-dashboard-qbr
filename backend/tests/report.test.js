@@ -778,6 +778,19 @@ describe('Phase 1 — MMTC Reports Suite (TDD)', () => {
     assert.equal(jsonLatest.meta?.start, '2026-08-01', 'Start date must match August batch');
     assert.equal(jsonLatest.meta?.end, '2026-08-31', 'End date must match August batch');
   });
+
+  // ── T24. isp_location_breakdown groups by location (Phase 2 update) ─────────
+  it('T24. isp_location_breakdown groups ISP issues by site location and includes location field', () => {
+    const liveFixturePath = path.resolve(__dirname, 'fixtures/mmtc_july_live.json');
+    const tickets = JSON.parse(fs.readFileSync(liveFixturePath, 'utf8'));
+    const report = buildReport('mmtc', '2026-07-01', '2026-07-31', { tickets });
+
+    assert.ok(Array.isArray(report.isp_location_breakdown), 'report.isp_location_breakdown must be an array');
+    assert.ok(report.isp_location_breakdown.length > 0, 'Must have at least one ISP location entry');
+    assert.equal(typeof report.isp_grand_total, 'number');
+    assert.ok(report.isp_location_breakdown[0].location, 'Entry must have a location field');
+    assert.equal(typeof report.isp_location_breakdown[0].location, 'string');
+  });
 });
 
 

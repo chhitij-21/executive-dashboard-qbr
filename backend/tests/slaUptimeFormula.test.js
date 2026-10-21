@@ -283,3 +283,45 @@ test('slaUptimeFormula - Scenario G: JFL client -> jflSwitchUptime MUST have val
   });
 });
 
+test('slaUptimeFormula - Scenario H: MMTC incident SLA thresholds apply P1-P4 targets', async () => {
+  const switches = [
+    { 'Serial No.': 'SW-M1', 'Device Hostname': 'SW-M1', 'Location': 'Gurgaon Head Office', 'Device Type': 'SW' }
+  ];
+  const incidents = [
+    {
+      'Account Name': 'MMTC',
+      'Ticket Number': 'INC-MMTC-P1',
+      'SerialNo': 'SW-M1',
+      'Priority': 'P1',
+      'Actual Resolution Time (min)': '120',
+    },
+    {
+      'Account Name': 'MMTC',
+      'Ticket Number': 'INC-MMTC-P2',
+      'SerialNo': 'SW-M1',
+      'Priority': 'P2',
+      'Actual Resolution Time (min)': '300',
+    }
+  ];
+
+  const mmtcOptions = {
+    startDate: '2026-07-01',
+    endDate: '2026-07-31',
+    periodMode: 'monthly',
+    clientId: 'client-mmtcpamp',
+    clientName: 'MMTC-PAMP India Pvt. Ltd.'
+  };
+
+  const { dashData } = await runUptimePipeline(switches, incidents, mmtcOptions);
+  assert.ok(dashData, 'Dashboard data must exist');
+  const incs = dashData.incidents || [];
+  const p1Inc = incs.find(i => i.TicketNumber === 'INC-MMTC-P1');
+  const p2Inc = incs.find(i => i.TicketNumber === 'INC-MMTC-P2');
+  assert.ok(p1Inc, 'P1 incident must be present');
+  assert.ok(p2Inc, 'P2 incident must be present');
+  assert.equal(p1Inc.sla_status, 'SLA Met', 'P1 2h resolution must meet 3h target');
+  assert.equal(p1Inc.sla_target_hours, 3, 'P1 SLA target must be 3 hours (180/60)');
+  assert.equal(p2Inc.sla_status, 'SLA Breached', 'P2 5h resolution must breach 4h target');
+  assert.equal(p2Inc.sla_target_hours, 4, 'P2 SLA target must be 4 hours (240/60)');
+});
+

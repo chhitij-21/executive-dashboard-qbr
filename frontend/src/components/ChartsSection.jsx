@@ -73,7 +73,7 @@ export function ChartsSection({ qbrData, showHeader = true }) {
   if (!qbrData) return null;
 
   const customerName = (activeClient?.name || qbrData?.customerName || 'Customer').toUpperCase();
-  const periodLabel = qbrData?.report_period?.display_label || qbrData?.reportingPeriod || '1 September 2026 – 30 September 2026';
+  const periodLabel = qbrData?.report_period?.display_label || qbrData?.reportingPeriod || '';
   const slaTarget = parseFloat(qbrData?.executiveSummary?.slaTarget || 99.3);
 
   return (

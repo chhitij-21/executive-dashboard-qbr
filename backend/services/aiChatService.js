@@ -476,7 +476,7 @@ function buildSystemContext(qbrData, opts) {
 
   const claudexMode = opts && opts.claudexMode;
   const exec = qbrData.executiveSummary || {};
-  const reportPeriod = qbrData.report_period?.display_label || qbrData.reportingPeriod || 'N/A';
+  const reportPeriod = qbrData.report_period?.display_label || qbrData.reportingPeriod || '';
 
   // Always read SLA target live from rules.yaml — never fallback to hardcoded 99.3
   const liveSlaTarget = ruleEngine.getSLATarget();
@@ -571,7 +571,7 @@ function generateNativeSSOTAnswer(prompt, qbrData) {
   const sites = Array.isArray(qbrData?.siteSummary) ? qbrData.siteSummary : [];
   const devices = Array.isArray(qbrData?.devices) ? qbrData.devices : [];
   const incidents = Array.isArray(qbrData?.incidents) ? qbrData.incidents : [];
-  const period = qbrData?.report_period?.display_label || qbrData?.reportingPeriod || 'Selected Period';
+  const period = qbrData?.report_period?.display_label || qbrData?.reportingPeriod || '';
   const engList = Array.isArray(qbrData?.proactiveTicketAnalytics?.byEngineer)
     ? qbrData.proactiveTicketAnalytics.byEngineer
     : (Array.isArray(qbrData?.engineerBreakdown) ? qbrData.engineerBreakdown : []);

@@ -528,7 +528,7 @@ async function buildPresentation(data, outputPath, options = {}) {
   const displayPeriod   = reportPeriodObj.display_label
     || data.reportingPeriod
     || exec.reportingPeriod
-    || 'User Selected Period';
+    || '';
 
   // FINDING-010 FIX: Resolve SLA_TARGET from the processed data (set by processData.js).
   // This guarantees the PPT uses the same threshold that was used to determine breaches.
@@ -715,7 +715,7 @@ function buildCoverSlide(pres, exec, displayPeriod) {
   });
 
   // Use canonical displayPeriod (report_period.display_label from SSOT)
-  s.addText(`Reporting Period: ${fmt(displayPeriod || exec.reportingPeriod || 'User Selected Period')}`, {
+  s.addText(`Reporting Period: ${fmt(displayPeriod || exec.reportingPeriod || '')}`, {
     x: 0.95, y: 3.65, w: panelW - 0.5, h: 0.35,
     fontSize: 12, color: 'D0E8FF', fontFace: 'Calibri',
   });
@@ -998,7 +998,7 @@ function buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incide
     th('Primary RCA Driver (AP)', 'left')
   );
 
-  const periodStr = displayPeriod || exec.reportingPeriod || 'User Selected Period';
+  const periodStr = displayPeriod || exec.reportingPeriod || '';
   const siteChunks = chunkArray(validSites, 9);
   if (siteChunks.length === 0) siteChunks.push([]);
 

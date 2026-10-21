@@ -325,7 +325,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       period_type: 'custom',
       display_label: `${sdLabel} – ${edLabel}`,
     };
-  } else if (options.reportingPeriod && options.reportingPeriod !== 'User Selected Period' && options.reportingPeriod !== 'Custom Period') {
+  } else if (options.reportingPeriod && options.reportingPeriod !== '' && options.reportingPeriod !== 'Custom Period') {
     reportPeriodMeta = {
       start_date: startDate,
       end_date: endDate,
@@ -337,7 +337,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const periodMode = options.periodMode || 'custom';
   const activeReportingPeriod = reportPeriodMeta
     ? reportPeriodMeta.display_label
-    : (options.reportingPeriod || 'User Selected Period');
+    : (options.reportingPeriod || '');
 
   function determinePeriodType(sd, ed) {
     if (!sd || !ed) return 'monthly';
@@ -812,7 +812,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
         clientLocations = activeC.locations.filter(l => l && l !== 'All Locations');
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 
   const DEFAULT_VALID_SITES = ['Bangalore', 'Greater Noida', 'Guwahati', 'Hyderabad', 'Mohali', 'Mumbai', 'Mumbai-DC', 'Nagpur', 'Noida'];
   const VALID_SITES = clientLocations.length > 0 ? clientLocations : DEFAULT_VALID_SITES;
@@ -1399,7 +1399,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   writeFile(outputDir, 'validation_report.md', reportLines.join('\n'));
 
   // ── 7b. Enrich every incident with per-incident SLA status and display_reference (Req 6 & 7) ──
-  incidents = incidents.map(inc => computeIncidentEnrichment(inc, INCIDENT_SLA_TARGET_HOURS));
+  incidents = incidents.map(inc => computeIncidentEnrichment(inc, INCIDENT_SLA_TARGET_HOURS, !isMmtcInitial));
   log(`Incidents enriched with sla_status and display_reference`);
 
   // ── RMA Reconciliation (for ALL clients: JFL, MMTC, etc.) ──
@@ -1532,10 +1532,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // Asynchronous non-blocking PPT generation so API response returns immediately
   const pptPromise = generatePPT(qbrData, templatePath, pptPath)
     .then(() => {
-      try { log(`PPT generated: ${pptPath}`); } catch (_) {}
+      try { log(`PPT generated: ${pptPath}`); } catch (_) { }
     })
     .catch((e) => {
-      try { log(`PPT generation notice: ${e.message}`); } catch (_) {}
+      try { log(`PPT generation notice: ${e.message}`); } catch (_) { }
     });
 
   if (options.waitForPPT) {
@@ -1593,14 +1593,14 @@ function validateJFL(devices, incidents, log) {
  * @param {Object} inc - single incident row
  * @param {number} slaTargetHours - from ruleEngine.getIncidentSLATargetHours()
  */
-function computeIncidentEnrichment(inc, slaTargetHours) {
+function computeIncidentEnrichment(inc, slaTargetHours, isJflClient = true) {
   const excelSlaMin = parseFloat(inc.AgreedResolutionSLAMin);
   if (!isNaN(excelSlaMin) && excelSlaMin > 0) {
     slaTargetHours = parseFloat((excelSlaMin / 60).toFixed(2));
   }
   inc.TicketOwner = String(inc['Ticket Owner'] || inc.TicketOwner || '').trim() || 'Unassigned';
-  inc.HoldReason  = String(inc['Hold Reason']  || inc.HoldReason  || '').trim();
-  inc.RawStatus   = String(inc['Status']       || inc.RawStatus   || inc.Status || '').trim();
+  inc.HoldReason = String(inc['Hold Reason'] || inc.HoldReason || '').trim();
+  inc.RawStatus = String(inc['Status'] || inc.RawStatus || inc.Status || '').trim();
   // ── Resolution time calculation ──────────────────────────────────────────
   // JFL SLA POLICY: net_resolution_hours = active working time only (hold excluded).
   //
@@ -1678,6 +1678,16 @@ function computeIncidentEnrichment(inc, slaTargetHours) {
   }
 
   // ── SLA status ────────────────────────────────────────────────────────────
+  // MMTC CUSTOM SLA THRESHOLDS (P1-P4) & Response Time (30 min)
+  if (!isJflClient) {
+    inc.AgreedResponseSLAMin = 30;
+    const priority = String(inc.Priority || inc['Priority'] || inc.priority || '').toUpperCase();
+    if (priority.includes('P1') || priority.includes('CRITICAL')) slaTargetHours = 180 / 60;
+    else if (priority.includes('P2') || priority.includes('MAJOR')) slaTargetHours = 240 / 60;
+    else if (priority.includes('P3') || priority.includes('MINOR')) slaTargetHours = 1440 / 60;
+    else if (priority.includes('P4') || priority.includes('LOW')) slaTargetHours = 2880 / 60;
+  }
+
   let slaStatus = null;
   const rawStatus = String(inc.Status || '').trim().toLowerCase();
   const isOpenIncident = !rawStatus ||
@@ -1806,7 +1816,7 @@ function computeHoldDowntime(i) {
 // ── Executive Summary ──────────────────────────────────────────────────────
 
 function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName, periodOptions = {}) {
-  const IS_JFL_CLIENT = /jfl|jubilant/i.test(customerName || '') || periodOptions?.clientId === 'client-jfl';
+  const isJflClient = /jfl|jubilant/i.test(customerName || '') || periodOptions?.clientId === 'client-jfl';
   const total = activeDevices.length;
   const uptimes = activeDevices.map(d => d.__effectiveUptime ?? 100);
   const overallUptime = total > 0 ? avg(uptimes).toFixed(2) : '100.00';
@@ -1831,7 +1841,7 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const ticketSlaTotal = metTickets + breachedTickets;
 
   let slaPct;
-  if (!IS_JFL_CLIENT) {
+  if (!isJflClient) {
     slaPct = ticketSlaTotal > 0 ? ((metTickets / ticketSlaTotal) * 100).toFixed(2) : '100.00';
   } else if (ticketSlaTotal > 0 && (!devSlaPct || (devSlaPct === '100.00' && breachedTickets > 0))) {
     slaPct = ((metTickets / ticketSlaTotal) * 100).toFixed(2);
@@ -1871,7 +1881,7 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
   const totalAvailMins = switchesCount * availMinsPerSwitch;
 
-  let jflSwitchUptime = IS_JFL_CLIENT ? '100.00' : null;
+  let jflSwitchUptime = isJflClient ? '100.00' : null;
   let proactiveSwitchUptime = '100.00';
 
   if (totalAvailMins > 0) {
@@ -1882,15 +1892,15 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
     const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - totalHoldMins) / totalAvailMins) * 100));
 
     proactiveSwitchUptime = proPct.toFixed(2);
-    jflSwitchUptime = IS_JFL_CLIENT ? jflPct.toFixed(2) : null;
+    jflSwitchUptime = isJflClient ? jflPct.toFixed(2) : null;
   }
 
   const activeSlaTarget = activeDevices[0]?.__slaTarget ?? ruleEngine.getSLATarget();
 
   return {
-    isJFLClient: IS_JFL_CLIENT,
+    isJFLClient: isJflClient,
     customerName: customerName || (periodOptions?.clientId === 'client-mmtcpamp' ? 'MMTC' : 'Jubilant Foodworks Ltd (JFL)'),
-    reportingPeriod: reportingPeriod || 'User Selected Period',
+    reportingPeriod: reportingPeriod || '',
     totalSites: sites.size > 0 ? sites.size : (total > 0 ? 1 : 0),
     totalDevices: total,
     totalStockDevices: stockDevices.length,
@@ -1946,15 +1956,15 @@ function deriveSubCategory(item) {
 
 function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
   const HOLD_CATEGORIES = [
-    { rx: /power|psu|ups/i,                                                                 label: 'Power Issue at Site' },
-    { rx: /client[\s-]?side|client[\s-]?site/i,                                             label: 'Client-Side Activity' },
-    { rx: /firmware/i,                                                                      label: 'Firmware Upgradation' },
-    { rx: /dhcp/i,                                                                          label: 'DHCP Server Issue' },
-    { rx: /unreachable|not reachable|unrachable|un reachable|offline/i,                     label: 'Device Unreachable on Dashboard' },
-    { rx: /boot/i,                                                                          label: 'Device Boot Issue' },
-    { rx: /isp/i,                                                                           label: 'ISP Issue' },
+    { rx: /power|psu|ups/i, label: 'Power Issue at Site' },
+    { rx: /client[\s-]?side|client[\s-]?site/i, label: 'Client-Side Activity' },
+    { rx: /firmware/i, label: 'Firmware Upgradation' },
+    { rx: /dhcp/i, label: 'DHCP Server Issue' },
+    { rx: /unreachable|not reachable|unrachable|un reachable|offline/i, label: 'Device Unreachable on Dashboard' },
+    { rx: /boot/i, label: 'Device Boot Issue' },
+    { rx: /isp/i, label: 'ISP Issue' },
     { rx: /awaiting|customer response|customer confirmation|customer reply|discussed with|observation shared|need customer/i, label: 'Awaiting Customer Response' },
-    { rx: /coordinating|ground team|need configuration|need to check/i,                     label: 'Coordination in Progress' },
+    { rx: /coordinating|ground team|need configuration|need to check/i, label: 'Coordination in Progress' },
   ];
 
   const normalizeHoldReason = (raw) => {
@@ -1965,15 +1975,17 @@ function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
 
   const bucketStatus = (s) => {
     const t = String(s || '').trim();
-    if (/^closed$/i.test(t))                 return 'closed';
-    if (/^resolved$/i.test(t))               return 'closed';  // Resolved = Closed for KPI counting
-    if (/^on[\s-]?hold$/i.test(t))           return 'onHold';
+    if (/^closed$/i.test(t)) return 'closed';
+    if (/^resolved$/i.test(t)) return 'closed';  // Resolved = Closed for KPI counting
+    if (/^on[\s-]?hold$/i.test(t)) return 'onHold';
     if (/^ticket[\s-]?assignment$/i.test(t)) return 'assignment';
     return 'open';
   };
 
-  const empty = { total: 0, open: 0, onHold: 0, assignment: 0, closed: 0, resolved: 0, closedOnly: 0,
-                  slaMet: 0, slaBreached: 0, slaPercent: '0.00' };
+  const empty = {
+    total: 0, open: 0, onHold: 0, assignment: 0, closed: 0, resolved: 0, closedOnly: 0,
+    slaMet: 0, slaBreached: 0, slaPercent: '0.00'
+  };
   const incList = Array.isArray(incidents) ? incidents : [];
   const otherList = Array.isArray(otherActivities) ? otherActivities : [];
   const allTickets = [...incList, ...otherList];
@@ -1990,10 +2002,10 @@ function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
   const pct = (met, br) => (met + br) === 0 ? '0.00' : ((met / (met + br)) * 100).toFixed(2);
 
   for (const inc of allTickets) {
-    const eng  = inc.TicketOwner || inc['Ticket Owner'] || 'Unassigned';
+    const eng = inc.TicketOwner || inc['Ticket Owner'] || 'Unassigned';
     const site = inc.SiteID || inc.Location || 'Unknown';
     const rawSt = String(inc.RawStatus || inc.Status || '').trim();
-    const bk   = bucketStatus(rawSt);
+    const bk = bucketStatus(rawSt);
 
     if (/^closed$/i.test(rawSt)) {
       overall.closedOnly = (overall.closedOnly || 0) + 1;
@@ -2007,7 +2019,7 @@ function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
     const s = String(slaRaw || '').trim();
 
     overall[bk]++;
-    if (s === 'SLA Met')      overall.slaMet++;
+    if (s === 'SLA Met') overall.slaMet++;
     else if (s === 'SLA Breached') overall.slaBreached++;
 
     if (!engMap.has(eng)) engMap.set(eng, {
@@ -2016,7 +2028,7 @@ function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
     });
     const e = engMap.get(eng);
     e.total++; e[bk]++;
-    if (s === 'SLA Met')           e.slaMet++;
+    if (s === 'SLA Met') e.slaMet++;
     else if (s === 'SLA Breached') e.slaMissed++;
 
     if (!siteMap.has(site)) siteMap.set(site, {
@@ -2025,7 +2037,7 @@ function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
     });
     const st = siteMap.get(site);
     st.total++; st[bk]++;
-    if (s === 'SLA Met')           st.slaMet++;
+    if (s === 'SLA Met') st.slaMet++;
     else if (s === 'SLA Breached') st.slaBreached++;
 
     if (bk === 'onHold') {

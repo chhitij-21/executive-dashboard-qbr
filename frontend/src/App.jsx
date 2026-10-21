@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useMemo, useRef, Component } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
+import Topbar from './components/Topbar';
+import OverviewDashboard from './components/OverviewDashboard';
 import OverviewPage from './components/OverviewPage';
 import TicketsDetailPage from './components/TicketsDetailPage';
 import LoginModal from './components/LoginModal';
@@ -463,7 +466,7 @@ function MainPortal() {
                 {activeDashboardData?.report_period?.display_label ||
                   exec.reportingPeriod ||
                   activeDashboardData?.reportingPeriod ||
-                  'User Selected Period'}
+                  ''}
               </strong>
             </p>
           </div>
@@ -601,7 +604,7 @@ function MainPortal() {
               className={dashTab === 'reports' ? 'dash-tab active' : 'dash-tab'}
               onClick={() => setDashTab('reports')}
             >
-              Reports
+              Report Summary
             </button>
           )}
         </div>
@@ -640,7 +643,7 @@ function MainPortal() {
                   value: activeDashboardData?.report_period?.display_label ||
                     exec.reportingPeriod ||
                     activeDashboardData?.reportingPeriod ||
-                    'User Selected Period'
+                    ''
                 },
                 { title: 'Total Sites', value: exec.totalSites },
                 { title: 'Active Operational Devices', value: exec.totalDevices },
@@ -1141,13 +1144,6 @@ function MainPortal() {
                 <DataTable columns={['siteId', 'count']} rows={incAn.siteWiseIncidents} />
               </div>
             )}
-
-            {incAn.deviceWiseIncidents?.length > 0 && (
-              <div style={{ marginTop: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Top Incident Frequency Devices</h4>
-                <DataTable columns={['DeviceID', 'SerialNo', 'count']} rows={incAn.deviceWiseIncidents} />
-              </div>
-            )}
           </div>
         )}
 
@@ -1322,96 +1318,183 @@ function MainPortal() {
   }
 
   return (
-    <div className="app-container">
-      <Navbar
-        activeTab={tab}
-        setActiveTab={setTab}
-        onOpenLogin={() => setIsLoginOpen(true)}
-        reportSites={reportSites}
-      />
+    <div
+      className="flex h-screen bg-[#f8fafc] overflow-hidden font-sans text-gray-900"
+      style={{
+        display: 'flex',
+        height: '100vh',
+        backgroundColor: '#f8fafc',
+        overflow: 'hidden',
+        fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+        color: '#0f172a',
+      }}
+    >
+      <Sidebar activeTab={tab} onSelectTab={setTab} />
 
-      <main className="main-content">
-        {tab === 'overview' && (
-          <ErrorBoundary>
-            <div style={{ maxWidth: '1680px', margin: '0 auto', padding: '0 1rem' }}>
-              <EnterpriseInsightCard
-                section="overview"
-                activeTab="overview"
-                activeDashboardData={activeDashboardData}
-                selectedSite={selectedSite}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          height: '100vh',
+          overflow: 'hidden',
+        }}
+      >
+        <Topbar onOpenUpload={() => setTab('upload')} data={activeDashboardData} />
+
+        <main
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflowY: 'auto',
+            padding: 0,
+            backgroundColor: '#f8fafc',
+          }}
+        >
+          {tab === 'overview' && (
+            <ErrorBoundary>
+              <OverviewDashboard
+                data={activeDashboardData}
+                onNavigate={(t) => setTab(t)}
+              />
+            </ErrorBoundary>
+          )}
+
+          {tab === 'reports' && (
+            <ErrorBoundary>
+              {activeClient?.id === 'client-mmtcpamp' ? (
+                <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                  <ReportsView jobId={jobId} />
+                </div>
+              ) : (
+                <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                  {renderDashboard()}
+                </div>
+              )}
+            </ErrorBoundary>
+          )}
+
+          {tab === 'insights' && (
+            <ErrorBoundary>
+              <div style={{ padding: '2rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <EnterpriseInsightCard
+                  section="overview"
+                  activeTab="overview"
+                  activeDashboardData={activeDashboardData}
+                  selectedSite={selectedSite}
+                />
+              </div>
+            </ErrorBoundary>
+          )}
+
+          {tab === 'health' && (
+            <ErrorBoundary>
+              <div style={{ padding: '2rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <SiteInspector
+                  data={activeDashboardData}
+                  selectedSite={selectedSite}
+                  onSelectSite={setSelectedSite}
+                />
+              </div>
+            </ErrorBoundary>
+          )}
+
+          {(tab === 'incidents' || tab === 'tickets') && (
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <TicketsDetailPage data={activeDashboardData} initialSubTab={ticketsSubTab} />
+              </div>
+            </ErrorBoundary>
+          )}
+
+          {tab === 'inventory' && (
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <InventorySyncPage />
+              </div>
+            </ErrorBoundary>
+          )}
+
+          {tab === 'sla' && (
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                {renderDashboard()}
+              </div>
+            </ErrorBoundary>
+          )}
+
+          {tab === 'dashboard' && (
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                {isLoading && dashboardData && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem', color: '#1d4ed8' }}>
+                    <div className="spinner" style={{ width: 18, height: 18, flexShrink: 0 }} aria-label="Refreshing dashboard" />
+                    <span>Refreshing dashboard data...</span>
+                  </div>
+                )}
+                {renderDashboard()}
+              </div>
+            </ErrorBoundary>
+          )}
+
+          {tab === 'upload' && (
+            <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+              <FileUploader
+                onJobStarted={(jid) => {
+                  setJobId(jid);
+                  setStatus('processing');
+                }}
+                onJobCompleted={(jid) => {
+                  setJobId(jid);
+                  setTab('dashboard');
+                  window.dispatchEvent(new Event('qbr-report-uploaded'));
+                }}
               />
             </div>
-            <OverviewPage
-              data={activeDashboardData}
-              jobId={jobId}
-              onOpenReports={() => setTab('dashboard')}
-              onOpenTickets={() => setTab('tickets')}
-            />
-          </ErrorBoundary>
-        )}
+          )}
 
-        {tab === 'upload' && (
-          <FileUploader
-            onJobStarted={(jid) => {
-              setJobId(jid);
-              setStatus('processing');
-            }}
-            onJobCompleted={(jid) => {
-              setJobId(jid);
-              setTab('dashboard');
-              window.dispatchEvent(new Event('qbr-report-uploaded'));
-            }}
-          />
-        )}
-
-        {tab === 'dashboard' && (
-          <ErrorBoundary>
-            {isLoading && dashboardData && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem', color: '#1d4ed8' }}>
-                <div className="spinner" style={{ width: 18, height: 18, flexShrink: 0 }} aria-label="Refreshing dashboard" />
-                <span>Refreshing dashboard data...</span>
+          {tab === 'vulnerabilities' && (
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <VulnerabilitiesPage />
               </div>
-            )}
-            {renderDashboard()}
-          </ErrorBoundary>
-        )}
+            </ErrorBoundary>
+          )}
 
-        {tab === 'tickets' && (
-          <ErrorBoundary>
-            <TicketsDetailPage data={activeDashboardData} initialSubTab={ticketsSubTab} />
-          </ErrorBoundary>
-        )}
+          {tab === 'inventory-sync' && (
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <InventorySyncPage />
+              </div>
+            </ErrorBoundary>
+          )}
 
-        {tab === 'vulnerabilities' && (
-          <ErrorBoundary>
-            <VulnerabilitiesPage />
-          </ErrorBoundary>
-        )}
+          {tab === 'history' && (
+            <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+              <ReportHistory
+                onViewDashboard={(jid) => {
+                  setJobId(jid);
+                  setStatus('completed');
+                  setTab('dashboard');
+                }}
+                onReportDeleted={(jid) => {
+                  if (jobId === jid) {
+                    setJobId(null);
+                    setDashboardData(null);
+                  }
+                }}
+              />
+            </div>
+          )}
 
-        {tab === 'inventory-sync' && (
-          <ErrorBoundary>
-            <InventorySyncPage />
-          </ErrorBoundary>
-        )}
-
-        {tab === 'history' && (
-          <ReportHistory
-            onViewDashboard={(jid) => {
-              setJobId(jid);
-              setStatus('completed');
-              setTab('dashboard');
-            }}
-            onReportDeleted={(jid) => {
-              if (jobId === jid) {
-                setJobId(null);
-                setDashboardData(null);
-              }
-            }}
-          />
-        )}
-
-        {tab === 'clients' && <ClientManager />}
-      </main>
+          {(tab === 'settings' || tab === 'clients') && (
+            <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+              <ClientManager />
+            </div>
+          )}
+        </main>
+      </div>
 
       <AIChatbot jobId={jobId} />
       <LoginModal
