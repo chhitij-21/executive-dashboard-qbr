@@ -373,6 +373,33 @@ function buildReport(clientId, start, end, options = {}) {
     ispLocation = top15;
   }
 
+  // Phase 2: ISP Device Breakdown & Grand Total
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const ispDeviceMap = {};
+  windowTickets.forEach(t => {
+    const rca = (t['RCA'] || t.rca || '').toString().trim();
+    if (rca === 'ISP Issue') {
+      const devName = String(t['Device Name'] || t.device_name || t.DeviceName || 'Unknown').trim();
+      const d = parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime);
+      const mName = d ? months[d.getMonth()] : (startDt ? months[startDt.getMonth()] : 'July');
+      if (!ispDeviceMap[devName]) {
+        ispDeviceMap[devName] = { month: mName, device_name: devName, total: 0 };
+      }
+      ispDeviceMap[devName].total++;
+    }
+  });
+
+  const ispDeviceBreakdown = Object.values(ispDeviceMap)
+    .sort((a, b) => b.total - a.total)
+    .map((item, idx) => ({
+      s_no: idx + 1,
+      month: item.month,
+      device_name: item.device_name,
+      total: item.total,
+    }));
+
+  const ispGrandTotal = ispDeviceBreakdown.reduce((sum, item) => sum + item.total, 0);
+
   // TASK 2b (Data Shape): hold_tickets: { ticket_number, subject, reason, rollover, created_date } (Filter Status == 'On Hold')
   const holdTickets = allTickets
     .filter(t => {
@@ -436,6 +463,8 @@ function buildReport(clientId, start, end, options = {}) {
       channel_denom: isAllRatio,
     },
     isp_location: ispLocation,
+    isp_device_breakdown: ispDeviceBreakdown,
+    isp_grand_total: ispGrandTotal,
     top_sites: ispLocation,
     hold_tickets: holdTickets,
     cr_tickets: crTickets,
@@ -467,6 +496,8 @@ function toAiPayload(report) {
     rca_breakdown: report?.rca_breakdown || [],
     isp_pct: report?.isp_pct || {},
     top_sites: report?.isp_location || report?.top_sites || [],
+    isp_device_breakdown: report?.isp_device_breakdown || [],
+    isp_grand_total: report?.isp_grand_total || 0,
   };
 }
 
@@ -543,8 +574,14 @@ async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
     return { written: Array.isArray(tickets) ? tickets.length : 0 };
   }
 
-  // 1. Delete previous entries for client_id='mmtc'
-  await database.execute('DELETE FROM reports_tickets WHERE client_id = ?', ['mmtc']);
+  const jobId = period?.jobId || period?.job_id || null;
+
+  // 1. Delete previous entries
+  if (jobId) {
+    await database.execute('DELETE FROM reports_tickets WHERE client_id = ? AND job_id = ?', ['mmtc', jobId]);
+  } else {
+    await database.execute('DELETE FROM reports_tickets WHERE client_id = ?', ['mmtc']);
+  }
 
   // 2. Insert or replace each ticket
   let count = 0;
@@ -572,8 +609,8 @@ async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
 
     await database.execute(
       `INSERT OR REPLACE INTO reports_tickets 
-       (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at, job_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         'mmtc',
         String(ticketNo),
@@ -583,6 +620,7 @@ async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
         slaRes.bucket,
         ticketType,
         now,
+        jobId,
       ]
     );
     count++;
@@ -629,7 +667,7 @@ async function buildReportAsync(clientId, start, end, options = {}) {
 }
 
 // Mirror of frontend/src/utils/reportHelpers.js::buildDeterministicSummary.
-// Keep in sync — both are tested independently (backend T12/T13,
+// Keep in sync — both are tested independently (backend T12/T13/T22,
 // frontend via Vite).
 function buildDeterministicSummary(report) {
   if (!report || !report.summary || !report.summary.total) {
@@ -644,26 +682,18 @@ function buildDeterministicSummary(report) {
   const total = report.summary.total;
   const met = report.sla?.met ?? 0;
   const breached = report.sla?.breached ?? 0;
-  const onHold = report.sla?.on_hold ?? 0;
-  const start = report.meta?.start || '';
-  const end = report.meta?.end || '';
-  const periodStr = start && end ? ` between ${start} and ${end}` : '';
+  const totalSla = met + breached;
+  const slaPercentage = totalSla > 0 ? ((met / totalSla) * 100).toFixed(2) : '100.00';
 
   const rcaList = Array.isArray(report.rca_breakdown) ? report.rca_breakdown : [];
-  const topRca = rcaList[0];
-  const topRcaStr = topRca ? `Top driver: ${topRca.rca} (${topRca.tickets} tickets).` : '';
+  const topRca = rcaList[0]?.rca || 'None';
+  const topRcaCount = rcaList[0]?.tickets ?? 0;
 
-  const ispPctVal = report.isp_pct?.channel_denom ?? report.isp_pct?.rca_denom ?? 0;
-  const ispPercent = (typeof ispPctVal === 'number' && !isNaN(ispPctVal)) ? ispPctVal.toFixed(2) : '0.00';
-  const ispStr = `Meraki-ISP: ${ispPercent}% of tickets were ISP-related and were closed within the agreed SLA.`;
+  const ispList = Array.isArray(report.isp_device_breakdown) ? report.isp_device_breakdown : [];
+  const topIspDevice = ispList[0]?.device_name || 'None';
+  const topIspCount = ispList[0]?.total ?? 0;
 
-  const sitesList = Array.isArray(report.top_sites) && report.top_sites.length > 0
-    ? report.top_sites
-    : (Array.isArray(report.isp_location) ? report.isp_location : []);
-  const top3Sites = sitesList.slice(0, 3).map((s) => s.site || s.name || s).filter(Boolean);
-  const sitesStr = top3Sites.length > 0 ? ` Most affected sites: ${top3Sites.join(', ')}.` : '';
-
-  return `MMTC received ${total} tickets${periodStr}. ${met} SLA met, ${breached} breached, ${onHold} on hold. ${topRcaStr} ${ispStr}${sitesStr}`.replace(/\s+/g, ' ').trim();
+  return `MMTC received a total of ${total} tickets. Out of these, ${met} met the SLA and ${breached} were breached. The primary RCA driver was ${topRca} (${topRcaCount} tickets). The top ISP-affected device was ${topIspDevice} with ${topIspCount} tickets. Overall Ticket SLA Compliance stands at ${slaPercentage}%.`;
 }
 
 module.exports = {

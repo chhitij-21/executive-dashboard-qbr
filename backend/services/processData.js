@@ -35,7 +35,6 @@ function normalizeSiteName(site) {
 }
 const ruleEngine = require('./ruleEngine');
 const { generatePPT } = require('./pptGenerator');
-const { generatePDF } = require('./pdfGenerator');
 const { continuousPipelineAudit } = require('./ai/iq200Validator');
 const clientService = require('./clientService');
 
@@ -361,7 +360,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const periodLabel = periodLabelMap[periodType] || 'Monthly Uptime %';
   const periodOptions = { periodType, periodLabel, startDate, endDate };
 
-  log(`JFL pipeline started (Period: ${activeReportingPeriod}, periodType: ${periodType}, startDate: ${startDate}, endDate: ${endDate})`);
+  const clientConfig = options.clientId ? clientService.getClientById(options.clientId) : null;
+  const isMmtcInitial = options.clientId === 'client-mmtcpamp' || options.clientId === 'client-mmtc' || options.clientId === 'mmtc' || /mmtc/i.test(options.clientName || clientConfig?.name || '');
+  const clientName = options.clientName || (isMmtcInitial ? 'MMTC' : (clientConfig?.code || clientConfig?.name || 'JFL'));
+  const CUSTOMER_NAME = options.clientName || clientConfig?.name || (isMmtcInitial ? 'MMTC' : 'Jubilant Foodworks Ltd (JFL)');
+  const REPORTING_PERIOD = activeReportingPeriod;
+
+  log(`${clientName} pipeline started (Period: ${activeReportingPeriod}, periodType: ${periodType}, startDate: ${startDate}, endDate: ${endDate})`);
 
   const ruleConfigFile = options.ruleConfigFile || (options.clientId ? `rules_${options.clientId}.yaml` : 'rules.yaml');
   ruleEngine.loadRules(ruleConfigFile);
@@ -371,11 +376,10 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const SLA_TARGET = ruleEngine.getSLATarget(effectivePeriodMode);
   // Incident Resolution SLA target (hours) — distinct from uptime SLA
   const INCIDENT_SLA_TARGET_HOURS = ruleEngine.getIncidentSLATargetHours();
-  const clientConfig = options.clientId ? clientService.getClientById(options.clientId) : null;
-  const CUSTOMER_NAME = options.clientName || clientConfig?.name || (options.clientId === 'client-mmtcpamp' ? 'MMTC' : 'Jubilant Foodworks Ltd (JFL)');
-  const REPORTING_PERIOD = activeReportingPeriod;
 
   log(`Rules loaded from: ${ruleConfigFile}. Uptime SLA Target: ${SLA_TARGET}% | Incident Resolution SLA: ${INCIDENT_SLA_TARGET_HOURS}h`);
+
+  options.onProgress?.('parsing_excel', 'Parsing Excel workbooks...');
 
   // ── 1 & 2. Parse workbooks with automatic role detection ─────────────────
   let incWb, invWb;
@@ -550,6 +554,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       aliasToClientId.set(normAlias, cId);
     }
   }
+
+  options.onProgress?.('filtering_data', 'Filtering Data & Computing Metrics...');
 
   // Register client names and codes from clients.json dynamically
   try {
@@ -1396,17 +1402,97 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   incidents = incidents.map(inc => computeIncidentEnrichment(inc, INCIDENT_SLA_TARGET_HOURS));
   log(`Incidents enriched with sla_status and display_reference`);
 
+  // ── RMA Reconciliation (for ALL clients: JFL, MMTC, etc.) ──
+  reconcileRMA(devices, incidents);
+
+  options.onProgress?.('filtering_data', 'Filtering data & calculating uptime metrics...');
   // ── 8. Build all analytics ────────────────────────────────────────────────
   log('Building analytics sections...');
+
+  let historicalIncidents = [];
+  try {
+    const db = require('../config/database');
+    const clientService = require('./clientService');
+    const canonicalClient = clientService.resolveCanonicalClientId(targetClientId || CUSTOMER_NAME || 'mmtc');
+    if (db && typeof db.execute === 'function') {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const cutoffStr = sixMonthsAgo.toISOString().slice(0, 10);
+      const histRes = await db.execute(
+        `SELECT payload_json, period_start, uploaded_at FROM reports_tickets 
+         WHERE client_id = ? AND (period_start >= ? OR uploaded_at >= ?)`,
+        [canonicalClient, cutoffStr, cutoffStr]
+      );
+      if (histRes?.rows?.length > 0) {
+        historicalIncidents = histRes.rows.map(r => {
+          const raw = r.payload_json || r[0];
+          return typeof raw === 'string' ? JSON.parse(raw) : raw;
+        }).filter(Boolean);
+      }
+    }
+  } catch (histErr) {
+    log(`Historical tickets query note: ${histErr.message}`);
+  }
+
   const analyticsPeriodOptions = {
     ...periodOptions,
     clientId: targetClientId,
     customerName: CUSTOMER_NAME,
+    historicalIncidents: [
+      ...(Array.isArray(periodOptions?.historicalIncidents) ? periodOptions.historicalIncidents : []),
+      ...historicalIncidents,
+    ],
   };
   const qbrData = buildAllAnalytics(devices, incidents, allLocMap, log, activeReportingPeriod, CUSTOMER_NAME, reportPeriodMeta, analyticsPeriodOptions, otherActivities);
   qbrData.clientId = targetClientId;
   if (qbrData.executiveSummary) {
     qbrData.executiveSummary.clientId = targetClientId;
+  }
+
+  // MMTC PPT Schema Integration: hold_tickets, cr_tickets, cr_summary
+  if (isMmtc) {
+    const allInc = Array.isArray(incidents) ? incidents : [];
+    const otherAct = Array.isArray(otherActivities) ? otherActivities : [];
+    const combinedTickets = [...allInc, ...otherAct];
+
+    if (!qbrData.hold_tickets) {
+      qbrData.hold_tickets = combinedTickets
+        .filter(t => {
+          const st = String(t.Status || t.status || '').trim().toLowerCase();
+          return st === 'on hold' || st === 'hold' || st === 'on-hold';
+        })
+        .map(t => ({
+          ticket_number: String(t.TicketNumber || t['Ticket Number'] || t.IncidentNumber || t.IncidentID || t.ticket_number || '').trim(),
+          subject: String(t.Subject || t.Description || t.subject || '').trim(),
+          reason: String(t.HoldReason || t['Hold Reason'] || t.reason || 'Unspecified').trim(),
+          rollover: 'On Hold',
+          created_date: String(t.CreatedTime || t['Created Time'] || t.created_date || '').trim(),
+        }));
+    }
+
+    if (!qbrData.cr_tickets) {
+      const crCandidates = combinedTickets.filter(t => {
+        const sc = String(t.SubCategory || t['Sub Category'] || t.Category || '').trim().toLowerCase();
+        return sc.includes('change request') || sc === 'cr';
+      });
+
+      qbrData.cr_tickets = crCandidates.map((t, idx) => ({
+        s_no: idx + 1,
+        subject: String(t.Subject || t.Description || t.subject || '').trim(),
+        category: String(t.Category || t.category || '').trim(),
+        sub_category: String(t.SubCategory || t['Sub Category'] || 'Change Request').trim(),
+        status: String(t.Status || t.status || 'Closed').trim(),
+      }));
+    }
+
+    if (!qbrData.cr_summary) {
+      qbrData.cr_summary = {
+        meraki_crs: qbrData.cr_tickets.filter(c => /meraki/i.test(c.category || c.subject)).length,
+        security_crs: qbrData.cr_tickets.filter(c => /security|firewall|fmc|ftd/i.test(c.category || c.subject)).length,
+        security_emails: 0,
+        total_crs: qbrData.cr_tickets.length,
+      };
+    }
   }
   log('Analytics complete');
 
@@ -1421,7 +1507,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── 8c. Continuous IQ-200 Hallucination-Free AI Validator & Invariant Checker ──
   try {
-    const iq200Audit = continuousPipelineAudit(qbrData);
+    const iq200Audit = continuousPipelineAudit(qbrData, { clientId: targetClientId, clientName: CUSTOMER_NAME });
     qbrData.iq200Audit = iq200Audit;
     log(`IQ-200 AI Validator: ${iq200Audit.status} (Score: ${iq200Audit.score}%, Invariants: ${iq200Audit.invariants?.passed}/${iq200Audit.invariants?.total}, Hallucinations: ${iq200Audit.hallucinationsDetected})`);
   } catch (auditErr) {
@@ -1434,7 +1520,6 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── 10. Save dashboard JSON (SSOT) FIRST so data is immediately available ─
   const templatePath = path.resolve('templates', 'master_template.pptx');
   const clientPrefix = (targetClientId === 'client-mmtcpamp' || /mmtc/i.test(CUSTOMER_NAME)) ? 'MMTC' : 'JFL';
-  const pdfPath = path.join(outputDir, `${clientPrefix}_QBR_${Date.now()}.pdf`);
   const pptPath = path.join(outputDir, `${clientPrefix}_QBR_${Date.now()}.pptx`);
 
   const dashPath = path.join(outputDir, 'dashboard_data.json');
@@ -1442,26 +1527,28 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   fs.writeFileSync(dashPath, jsonPayloadStr);
   log('Dashboard JSON saved to job folder');
 
-  // ── 11. PPT & PDF Report Generation ──────────────────────────────────────
-  try {
-    await generatePPT(qbrData, templatePath, pptPath).catch(() => { });
-    log(`PPT generated: ${pptPath}`);
-  } catch (e) { }
+  options.onProgress?.('generating_ppt', 'Generating QBR PowerPoint Presentation...');
+  // ── 11. PPT Report Generation ──────────────────────────────────────
+  // Asynchronous non-blocking PPT generation so API response returns immediately
+  const pptPromise = generatePPT(qbrData, templatePath, pptPath)
+    .then(() => {
+      try { log(`PPT generated: ${pptPath}`); } catch (_) {}
+    })
+    .catch((e) => {
+      try { log(`PPT generation notice: ${e.message}`); } catch (_) {}
+    });
 
-  // Async PDF generation so HTTP response is instant while PDF builds in background
-  generatePDF(qbrData, templatePath, pdfPath).then(() => {
-    try { log(`PDF generated: ${pdfPath}`); } catch (_) {}
-  }).catch((e) => {
-    try { log(`PDF notice: ${e.message}`); } catch (_) {}
-  });
+  if (options.waitForPPT) {
+    await pptPromise;
+  }
 
   writeFile(outputDir, 'error_report.md', '# Error Report\n\nNo errors.');
 
+  options.onProgress?.('completed', 'QBR Report & PowerPoint Generated Successfully!');
   log('Pipeline complete ✓');
   return {
     success: true,
     dashboardPath: dashPath,
-    pdfPath: pdfPath,
     pptPath: pptPath,
     reportPath: path.join(outputDir, 'validation_report.md'),
     errorReportPath: path.join(outputDir, 'error_report.md'),
@@ -1744,9 +1831,9 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const ticketSlaTotal = metTickets + breachedTickets;
 
   let slaPct;
-  if (!IS_JFL_CLIENT && ticketSlaTotal > 0) {
-    slaPct = ((metTickets / ticketSlaTotal) * 100).toFixed(2);
-  } else if (ticketSlaTotal > 0 && (!devSlaPct || devSlaPct === '100.00' && breachedTickets > 0)) {
+  if (!IS_JFL_CLIENT) {
+    slaPct = ticketSlaTotal > 0 ? ((metTickets / ticketSlaTotal) * 100).toFixed(2) : '100.00';
+  } else if (ticketSlaTotal > 0 && (!devSlaPct || (devSlaPct === '100.00' && breachedTickets > 0))) {
     slaPct = ((metTickets / ticketSlaTotal) * 100).toFixed(2);
   } else {
     slaPct = devSlaPct;
@@ -2448,8 +2535,23 @@ function buildIncidentAnalytics(incidents, devices, periodOptions = {}) {
   const sevSplit = splitBySeverity(incidents);
   const mttrHours = calculateMTTRHours(incidents);
 
+  const historical = Array.isArray(periodOptions?.historicalIncidents) ? periodOptions.historicalIncidents : [];
+
   const monthMap = {};
-  incidents.forEach(inc => {
+  const seenTicketIds = new Set();
+  const allIncidentsForTrend = [];
+
+  [...incidents, ...historical].forEach(inc => {
+    const id = inc['Ticket Number'] || inc.ticket_number || inc.TicketNumber || inc.IncidentID || inc.id;
+    if (id) {
+      const key = String(id).trim();
+      if (seenTicketIds.has(key)) return;
+      seenTicketIds.add(key);
+    }
+    allIncidentsForTrend.push(inc);
+  });
+
+  allIncidentsForTrend.forEach(inc => {
     const ct = inc['Created Time'] || inc.CreatedTime || inc.created_time || inc.OpenTime || inc.open_time;
     if (!ct) return;
     const d = parseIncidentDate(ct);
@@ -2492,6 +2594,13 @@ function buildIncidentAnalytics(incidents, devices, periodOptions = {}) {
   const monthlyTrend = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b))
     .map(([month, count]) => ({ month, count }));
 
+  // Check months with actual incidents > 0
+  const monthsWithData = Object.keys(monthMap).filter(k => (monthMap[k] || 0) > 0);
+  let dataWarning = null;
+  if (monthsWithData.length <= 1) {
+    dataWarning = "Only 1 month of data available. Trend requires multi-month data.";
+  }
+
   const siteMap = {};
   incidents.forEach(i => { const s = i.SiteID || i.Location || 'Unknown'; siteMap[s] = (siteMap[s] || 0) + 1; });
   const siteWiseIncidents = Object.entries(siteMap).map(([siteId, count]) => ({ siteId, count })).sort((a, b) => b.count - a.count);
@@ -2514,6 +2623,7 @@ function buildIncidentAnalytics(incidents, devices, periodOptions = {}) {
     minorIncidents: sevSplit.minor,
     mttrHours,
     monthlyTrend,
+    dataWarning,
     siteWiseIncidents,
     deviceWiseIncidents,
     rcaBreakdown: classifyRCALocal(incidents),
@@ -2829,6 +2939,28 @@ function filterDashboardBySite(data, siteFilter) {
   };
 }
 
+function reconcileRMA(devices, incidents) {
+  if (!Array.isArray(devices) || !Array.isArray(incidents)) return devices;
+  const rmaMap = new Map();
+  incidents.forEach(inc => {
+    const oldSerial = inc['Device Serial'] || inc['Device Serial Number'] || inc['DeviceID'];
+    const newSerial = inc['Replaced Serial Number'];
+    if (oldSerial && newSerial) {
+      rmaMap.set(String(oldSerial).trim().toUpperCase(), 'Faulty');
+      rmaMap.set(String(newSerial).trim().toUpperCase(), 'Active');
+    }
+  });
+
+  devices.forEach(dev => {
+    const serial = String(dev.Serial || dev.SerialNo || dev.DeviceID || '').trim().toUpperCase();
+    if (rmaMap.has(serial)) {
+      dev.DeployementStatus = rmaMap.get(serial);
+      dev.Status = rmaMap.get(serial);
+    }
+  });
+  return devices;
+}
+
 module.exports = {
   processJFLWorkbooks,
   filterDashboardBySite,
@@ -2840,5 +2972,6 @@ module.exports = {
   buildIncidentAnalytics,
   buildSLAAnalytics,
   deriveSubCategory,
+  reconcileRMA,
 };
 

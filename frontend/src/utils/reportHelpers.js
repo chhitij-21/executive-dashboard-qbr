@@ -26,27 +26,18 @@ export function buildDeterministicSummary(report) {
   const total = report.summary.total;
   const met = report.sla?.met ?? 0;
   const breached = report.sla?.breached ?? 0;
-  const onHold = report.sla?.on_hold ?? 0;
-  const start = report.meta?.start || '';
-  const end = report.meta?.end || '';
-  const periodStr = start && end ? ` between ${start} and ${end}` : '';
+  const totalSla = met + breached;
+  const slaPercentage = totalSla > 0 ? ((met / totalSla) * 100).toFixed(2) : '100.00';
 
   const rcaList = Array.isArray(report.rca_breakdown) ? report.rca_breakdown : [];
-  const topRca = rcaList[0];
-  const topRcaStr = topRca ? `Top driver: ${topRca.rca} (${topRca.tickets} tickets).` : '';
+  const topRca = rcaList[0]?.rca || 'None';
+  const topRcaCount = rcaList[0]?.tickets ?? 0;
 
-  const ispPctVal = report.isp_pct?.channel_denom ?? report.isp_pct?.rca_denom ?? 0;
-  const ispPercent = (typeof ispPctVal === 'number' && !isNaN(ispPctVal)) ? ispPctVal.toFixed(2) : '0.00';
-  const ispStr = `Meraki-ISP: ${ispPercent}% of tickets were ISP-related and were closed within the agreed SLA.`;
+  const ispList = Array.isArray(report.isp_device_breakdown) ? report.isp_device_breakdown : [];
+  const topIspDevice = ispList[0]?.device_name || 'None';
+  const topIspCount = ispList[0]?.total ?? 0;
 
-
-  const sitesList = Array.isArray(report.top_sites) && report.top_sites.length > 0
-    ? report.top_sites
-    : (Array.isArray(report.isp_location) ? report.isp_location : []);
-  const top3Sites = sitesList.slice(0, 3).map((s) => s.site || s.name || s).filter(Boolean);
-  const sitesStr = top3Sites.length > 0 ? ` Most affected sites: ${top3Sites.join(', ')}.` : '';
-
-  return `MMTC received ${total} tickets${periodStr}. ${met} SLA met, ${breached} breached, ${onHold} on hold. ${topRcaStr} ${ispStr}${sitesStr}`.replace(/\s+/g, ' ').trim();
+  return `MMTC received a total of ${total} tickets. Out of these, ${met} met the SLA and ${breached} were breached. The primary RCA driver was ${topRca} (${topRcaCount} tickets). The top ISP-affected device was ${topIspDevice} with ${topIspCount} tickets. Overall Ticket SLA Compliance stands at ${slaPercentage}%.`;
 }
 
 export default {

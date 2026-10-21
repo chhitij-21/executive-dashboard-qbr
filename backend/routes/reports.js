@@ -111,27 +111,59 @@ router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
       return res.status(200).json(getZeroedReport(clientId));
     }
 
-    // Find latest uploaded_at batch timestamp
-    const maxRes = await db.execute(
-      'SELECT MAX(uploaded_at) AS latest FROM reports_tickets WHERE client_id = ?',
-      [clientId]
-    );
+    const requestedJobId = (req.query?.jobId || '').toString().trim();
+    let rows = [];
+    let batchTimestamp = null;
 
-    const latestUploadedAt = maxRes?.rows?.[0]?.latest || maxRes?.rows?.[0]?.[0];
-    if (!latestUploadedAt) {
-      return res.status(200).json(getZeroedReport(clientId));
+    if (requestedJobId && requestedJobId !== 'latest' && requestedJobId !== 'default') {
+      // 1. If req.query.jobId is provided and not 'latest', filter reports_tickets by that specific job_id (or uploaded_at batch).
+      const jobRes = await db.execute(
+        'SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND (job_id = ? OR uploaded_at = ?)',
+        [clientId, requestedJobId, requestedJobId]
+      );
+      rows = jobRes?.rows || [];
+
+      // If not found by direct query, check historyService for the job's upload timestamp
+      if (rows.length === 0) {
+        try {
+          const historyService = require('../services/historyService');
+          const job = historyService.getReportByJobId(requestedJobId);
+          if (job?.uploadTimestamp) {
+            const tsRes = await db.execute(
+              'SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND uploaded_at = ?',
+              [clientId, job.uploadTimestamp]
+            );
+            rows = tsRes?.rows || [];
+          }
+        } catch (_) {}
+      }
     }
 
-    // Load all tickets from this latest batch
-    const batchRes = await db.execute(
-      'SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND uploaded_at = ?',
-      [clientId, latestUploadedAt]
-    );
+    // Only fallback to MAX(uploaded_at) if jobId is 'latest' or missing or no rows were found
+    if (rows.length === 0) {
+      const maxRes = await db.execute(
+        'SELECT MAX(uploaded_at) AS latest FROM reports_tickets WHERE client_id = ?',
+        [clientId]
+      );
 
-    const rows = batchRes?.rows || [];
+      const latestUploadedAt = maxRes?.rows?.[0]?.latest || maxRes?.rows?.[0]?.[0];
+      if (!latestUploadedAt) {
+        return res.status(200).json(getZeroedReport(clientId));
+      }
+
+      batchTimestamp = latestUploadedAt;
+      const batchRes = await db.execute(
+        'SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND uploaded_at = ?',
+        [clientId, latestUploadedAt]
+      );
+      rows = batchRes?.rows || [];
+    }
+
     if (rows.length === 0) {
       return res.status(200).json(getZeroedReport(clientId));
     }
+
+    batchTimestamp = batchTimestamp || rows[0]?.uploaded_at || rows[0]?.[3];
 
     const tickets = rows.map((r) => {
       const raw = r.payload_json || r[0];
@@ -145,7 +177,7 @@ router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
 
     const { buildReport, parseTicketDate } = require('../services/reportService');
 
-    // TASK 1c: If period_start/end are null in DB, derive them from the min/max of Created Time in the tickets array
+    // CRITICAL: buildReport must receive the exact start and end dates of that specific batch
     if (!start || !end) {
       const dates = tickets
         .map((t) => parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime))
@@ -167,7 +199,8 @@ router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
       client_id: clientId,
       start,
       end,
-      uploaded_at: latestUploadedAt,
+      uploaded_at: batchTimestamp,
+      job_id: requestedJobId && requestedJobId !== 'latest' ? requestedJobId : undefined,
     };
 
     return res.status(200).json(report);

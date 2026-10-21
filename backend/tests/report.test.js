@@ -466,7 +466,7 @@ describe('Phase 1 — MMTC Reports Suite (TDD)', () => {
     assert.ok(typeof summary === 'string' && summary.trim().length > 0, 'Summary must be non-empty string');
     assert.ok(summary.includes('124'), 'Summary must include total ticket count 124');
     assert.ok(summary.includes('ISP Issue'), 'Summary must include top driver ISP Issue');
-    assert.ok(summary.includes('92.74'), 'Summary must include ISP% 92.74');
+    assert.ok(summary.includes('Overall Ticket SLA Compliance stands at'), 'Summary must include Ticket SLA compliance');
     assert.doesNotMatch(summary, /empty/i, 'Summary must not contain "empty"');
     assert.doesNotMatch(summary, /no data/i, 'Summary must not contain "no data"');
     assert.doesNotMatch(summary, /configuration missing/i, 'Summary must not contain "configuration missing"');
@@ -661,5 +661,123 @@ describe('Phase 1 — MMTC Reports Suite (TDD)', () => {
       });
     }
   });
+
+  // ── T21. isp_device_breakdown sort & grand total (Phase 2) ────────────────
+  it('T21. isp_device_breakdown filters RCA == "ISP Issue", groups by Device Name, sorts descending, and calculates isp_grand_total', () => {
+    const liveFixturePath = path.resolve(__dirname, 'fixtures/mmtc_july_live.json');
+    const tickets = JSON.parse(fs.readFileSync(liveFixturePath, 'utf8'));
+    const report = buildReport('mmtc', '2026-07-01', '2026-07-31', { tickets });
+
+    assert.ok(Array.isArray(report.isp_device_breakdown), 'report.isp_device_breakdown must be an array');
+    assert.ok(report.isp_device_breakdown.length > 0, 'Must have at least one ISP device entry');
+    assert.equal(typeof report.isp_grand_total, 'number', 'isp_grand_total must be a number');
+
+    let sum = 0;
+    for (let i = 0; i < report.isp_device_breakdown.length; i++) {
+      const item = report.isp_device_breakdown[i];
+      assert.equal(item.s_no, i + 1, 's_no must be 1-indexed');
+      assert.equal(typeof item.month, 'string', 'month must be a string');
+      assert.ok(item.month.length > 0, 'month must not be empty');
+      assert.equal(typeof item.device_name, 'string', 'device_name must be a string');
+      assert.ok(item.device_name.length > 0, 'device_name must not be empty');
+      assert.equal(typeof item.total, 'number', 'total must be a number');
+      assert.ok(item.total > 0, 'total must be > 0');
+      sum += item.total;
+
+      if (i > 0) {
+        assert.ok(
+          report.isp_device_breakdown[i - 1].total >= item.total,
+          `Must be sorted descending by total: ${report.isp_device_breakdown[i - 1].total} >= ${item.total}`
+        );
+      }
+    }
+
+    assert.equal(report.isp_grand_total, sum, 'isp_grand_total must equal sum of device totals');
+    assert.equal(report.isp_grand_total, 115, 'July fixture ISP tickets total must be 115');
+  });
+
+  // ── T22. buildDeterministicSummary rich string template (Phase 2) ─────────
+  it('T22. buildDeterministicSummary outputs exact rich template with total, met, breached, topRca, topIspDevice, and slaPercentage', () => {
+    const liveFixturePath = path.resolve(__dirname, 'fixtures/mmtc_july_live.json');
+    const tickets = JSON.parse(fs.readFileSync(liveFixturePath, 'utf8'));
+    const report = buildReport('mmtc', '2026-07-01', '2026-07-31', { tickets });
+    const summary = buildDeterministicSummary(report);
+
+    const topRca = report.rca_breakdown[0].rca;
+    const topRcaCount = report.rca_breakdown[0].tickets;
+    const topIspDevice = report.isp_device_breakdown[0].device_name;
+    const topIspCount = report.isp_device_breakdown[0].total;
+    const expected = `MMTC received a total of 124 tickets. Out of these, 124 met the SLA and 0 were breached. The primary RCA driver was ${topRca} (${topRcaCount} tickets). The top ISP-affected device was ${topIspDevice} with ${topIspCount} tickets. Overall Ticket SLA Compliance stands at 100.00%.`;
+
+    assert.equal(summary, expected);
+  });
+
+  // ── T23. GET /api/reports/mmtc/latest?jobId=<batch> filtering ────────────
+  it('T23. GET /api/reports/mmtc/latest?jobId=<batch> filters by specific jobId and returns exact batch dates', async () => {
+    let db = null;
+    try {
+      db = require('../config/database');
+    } catch (_) {}
+
+    if (!db || typeof db.execute !== 'function') return;
+
+    // Clean up test tickets
+    await db.execute("DELETE FROM reports_tickets WHERE client_id = 'mmtc'");
+
+    // Insert July batch (job-july-test)
+    const tJuly1 = { 'Ticket Number': 'TEST-JULY-1', 'Created Time': '2026-07-10 10:00', Status: 'Closed', Channel: 'Alert', Category: 'Meraki' };
+    const tJuly2 = { 'Ticket Number': 'TEST-JULY-2', 'Created Time': '2026-07-15 11:00', Status: 'Closed', Channel: 'Email', Category: 'Meraki' };
+    await db.execute(
+      `INSERT INTO reports_tickets (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at, job_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['mmtc', 'TEST-JULY-1', '2026-07-01', '2026-07-31', JSON.stringify(tJuly1), 'within_sla', 'incident', '2026-08-01T10:00:00.000Z', 'job-july-test']
+    );
+    await db.execute(
+      `INSERT INTO reports_tickets (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at, job_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['mmtc', 'TEST-JULY-2', '2026-07-01', '2026-07-31', JSON.stringify(tJuly2), 'within_sla', 'incident', '2026-08-01T10:00:00.000Z', 'job-july-test']
+    );
+
+    // Insert August batch (job-aug-test)
+    const tAug1 = { 'Ticket Number': 'TEST-AUG-1', 'Created Time': '2026-08-05 10:00', Status: 'Closed', Channel: 'Alert', Category: 'Meraki' };
+    const tAug2 = { 'Ticket Number': 'TEST-AUG-2', 'Created Time': '2026-08-12 11:00', Status: 'Closed', Channel: 'Email', Category: 'Meraki' };
+    const tAug3 = { 'Ticket Number': 'TEST-AUG-3', 'Created Time': '2026-08-20 12:00', Status: 'Closed', Channel: 'Alert', Category: 'Meraki' };
+    await db.execute(
+      `INSERT INTO reports_tickets (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at, job_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['mmtc', 'TEST-AUG-1', '2026-08-01', '2026-08-31', JSON.stringify(tAug1), 'within_sla', 'incident', '2026-09-01T10:00:00.000Z', 'job-aug-test']
+    );
+    await db.execute(
+      `INSERT INTO reports_tickets (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at, job_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['mmtc', 'TEST-AUG-2', '2026-08-01', '2026-08-31', JSON.stringify(tAug2), 'within_sla', 'incident', '2026-09-01T10:00:00.000Z', 'job-aug-test']
+    );
+    await db.execute(
+      `INSERT INTO reports_tickets (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at, job_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['mmtc', 'TEST-AUG-3', '2026-08-01', '2026-08-31', JSON.stringify(tAug3), 'within_sla', 'incident', '2026-09-01T10:00:00.000Z', 'job-aug-test']
+    );
+
+    // 1. Query specifically for July job
+    const resJuly = await fetch(`${baseUrl}/api/reports/mmtc/latest?jobId=job-july-test`, {
+      headers: { Authorization: `Bearer ${mmtcToken}` },
+    });
+    assert.equal(resJuly.status, 200);
+    const jsonJuly = await resJuly.json();
+    assert.equal(jsonJuly.summary?.total, 2, 'July batch must return exactly 2 tickets');
+    assert.equal(jsonJuly.meta?.start, '2026-07-01', 'Start date must match July batch');
+    assert.equal(jsonJuly.meta?.end, '2026-07-31', 'End date must match July batch');
+
+    // 2. Query default latest (should return August)
+    const resLatest = await fetch(`${baseUrl}/api/reports/mmtc/latest`, {
+      headers: { Authorization: `Bearer ${mmtcToken}` },
+    });
+    assert.equal(resLatest.status, 200);
+    const jsonLatest = await resLatest.json();
+    assert.equal(jsonLatest.summary?.total, 3, 'Latest batch must return 3 August tickets');
+    assert.equal(jsonLatest.meta?.start, '2026-08-01', 'Start date must match August batch');
+    assert.equal(jsonLatest.meta?.end, '2026-08-31', 'End date must match August batch');
+  });
 });
+
 

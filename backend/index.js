@@ -16,7 +16,6 @@ const { processJFLWorkbooks, filterDashboardBySite } = require('./services/proce
 // from the job's own dashboard_data.json whenever the pre-generated file is missing.
 // This is the SSOT guarantee: the PPT always reflects the exact same data as the dashboard.
 const { generatePPT } = require('./services/pptGenerator');
-const { generatePDF } = require('./services/pdfGenerator');
 
 const clientService = require('./services/clientService');
 const historyService = require('./services/historyService');
@@ -1034,6 +1033,13 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
       endDate,
       reportingPeriod: reportPeriod || historyPeriodLabel,
       periodMode,
+      onProgress: (step, label) => {
+        if (jobs[jobId]) {
+          jobs[jobId].status = step;
+          jobs[jobId].step = step;
+          jobs[jobId].stepLabel = label;
+        }
+      },
     });
 
     const isSuccess = Boolean(result && result.success);
@@ -1113,7 +1119,7 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
         const canonical = clientService.resolveCanonicalClientId(clientId);
         const pStart = startDate || (req.body.start_date || req.body.startDate || '').trim() || result?.report_period?.start_date || null;
         const pEnd = endDate || (req.body.end_date || req.body.endDate || '').trim() || result?.report_period?.end_date || null;
-        await dualWriteToReportsTickets(canonical, rows, { start: pStart, end: pEnd });
+        await dualWriteToReportsTickets(canonical, rows, { start: pStart, end: pEnd, jobId });
       }
     } catch (e) {
       console.warn('[upload] dual-write skipped:', e.message);
@@ -1167,10 +1173,11 @@ app.get(['/api/status/:jobId', '/status/:jobId'], requireAuth, requireClientAcce
     jobId,
     clientId: job.clientId,
     status: job.status || 'completed',
+    step: job.step || job.status || 'processing',
+    stepLabel: job.stepLabel || null,
     error: job.error || null,
     dashboardPath: job.dashboardPath || null,
     pptPath: job.pptPath || null,
-    pdfPath: job.pdfPath || null,
   });
 });
 
@@ -1658,68 +1665,6 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
     const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
     const clientCode = (client.code || client.id || 'REPORT').toUpperCase().replace(/[^A-Z0-9_-]/g, '');
 
-    // ── PDF: Generate fresh PDF on-the-fly from job's own dashboard_data.json (SSOT guarantee) ────
-    if (pathKey === 'pdfPath') {
-      const dashCandidates = [
-        job?.dashboardPath,
-        path.join(jobOutputDir, 'dashboard_data.json'),
-      ].filter(Boolean);
-
-      const dashPath = dashCandidates.find((p) => p && fs.existsSync(p));
-
-      if (dashPath) {
-        try {
-          console.log(`[server] Generating fresh Executive PDF Report on-the-fly from SSOT for ${client.name}: ${dashPath}`);
-          if (!fs.existsSync(jobOutputDir)) fs.mkdirSync(jobOutputDir, { recursive: true });
-          const freshPdfPath = path.join(jobOutputDir, `${clientCode}_QBR_${Date.now()}.pdf`);
-          const qbrData = JSON.parse(fs.readFileSync(dashPath, 'utf8'));
-
-          const qbrDataClientId = qbrData.clientId ? clientService.resolveCanonicalClientId(qbrData.clientId) : null;
-          if (qbrDataClientId && qbrDataClientId !== clientId) {
-            return res.status(403).json({ error: 'Customer isolation violation: Data artifact belongs to another customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
-          }
-
-          await generatePDF(qbrData, null, freshPdfPath);
-
-          job.pdfPath = freshPdfPath;
-          jobs[activeJobId] = { ...jobs[activeJobId], pdfPath: freshPdfPath };
-          historyService.recordReport({
-            ...job,
-            jobId: activeJobId,
-            clientId,
-            status: 'completed',
-            pdfPath: freshPdfPath,
-          });
-
-          targetPath = freshPdfPath;
-        } catch (genErr) {
-          console.error('[server] On-the-fly Executive PDF Report generation failed:', genErr.message);
-          return res.status(500).json({ error: `Report generation failed: ${genErr.message}` });
-        }
-      } else {
-        return res.status(404).json({ error: 'Dashboard data not found for report generation. Please re-upload your files.', code: 'DATASET_NOT_FOUND' });
-      }
-
-      const resolvedTarget = path.resolve(targetPath);
-      const resolvedJobDir = path.resolve(jobOutputDir);
-      const isUnderJobDir = resolvedTarget.startsWith(resolvedJobDir + path.sep) || resolvedTarget === resolvedJobDir;
-
-      if (!isUnderJobDir) {
-        console.error(`[server] SECURITY: Path traversal / job ownership violation. Requested: ${resolvedTarget}`);
-        return res.status(403).json({ error: 'Artifact ownership mismatch for requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
-      }
-
-      console.log(`[server] Serving Executive PDF Report download: ${resolvedTarget}`);
-      const fileHeader = fs.readFileSync(resolvedTarget, { encoding: null }).slice(0, 4).toString();
-      const downloadPdfName = `${clientCode}_QBR_Executive_Report.pdf`;
-      const downloadHtmlName = `${clientCode}_QBR_Executive_Report.html`;
-      if (fileHeader === '%PDF') {
-        return res.download(resolvedTarget, downloadPdfName);
-      }
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.download(resolvedTarget, downloadHtmlName);
-    }
-
     // ── PPT: Serve existing PPT or generate on-the-fly from job's own dashboard_data.json ──
     if (pathKey === 'pptPath') {
       // Task 1.2 (PPT-1): Timestamp-based cache invalidation.
@@ -1844,12 +1789,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
   }
 };
 
-app.get(['/api/pdf/:jobId', '/pdf/:jobId', '/api/pdf', '/pdf'], sendFileHelper('pdfPath', 'QBR_Report.pdf'));
 app.get(['/api/ppt/:jobId', '/ppt/:jobId', '/api/ppt', '/ppt'], sendFileHelper('pptPath', 'QBR_Report.pptx'));
-app.get(['/api/report/pdf', '/report/pdf'], (req, res, next) => {
-  req.params = { ...req.params, jobId: 'latest' };
-  return sendFileHelper('pdfPath', 'QBR_Report.pdf')(req, res, next);
-});
 app.get(['/api/report/:jobId', '/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
 app.get(['/api/error-report/:jobId', '/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
 app.get(['/api/data-quality/:jobId', '/data-quality/:jobId'], sendFileHelper('dataQualityPath', 'data_quality_report.md'));

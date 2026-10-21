@@ -18,11 +18,25 @@ function formatDowntime(val) {
   });
 }
 
-export default function ReportsView() {
+export default function ReportsView({ jobId = 'latest' }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [execSummary, setExecSummary] = useState('');
+
+  const formatPeriodDate = (dStr) => {
+    if (!dStr) return '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(dStr)) {
+      const parts = dStr.slice(0, 10).split('-');
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      if (mIdx >= 0 && mIdx < 12 && day > 0) {
+        return `${day} ${months[mIdx]} ${parts[0]}`;
+      }
+    }
+    return dStr;
+  };
 
   const fetchLatestReport = async () => {
     setLoading(true);
@@ -32,7 +46,8 @@ export default function ReportsView() {
         ...getAuthHeaders(),
         'Cache-Control': 'no-cache, no-store, must-revalidate',
       };
-      const res = await fetch(`${API_BASE_URL}/api/reports/mmtc/latest`, { headers });
+      const queryParam = jobId ? `?jobId=${encodeURIComponent(jobId)}` : '';
+      const res = await fetch(`${API_BASE_URL}/api/reports/mmtc/latest${queryParam}`, { headers });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || `HTTP ${res.status}`);
@@ -49,10 +64,10 @@ export default function ReportsView() {
 
   useEffect(() => {
     fetchLatestReport();
-  }, []);
+  }, [jobId]);
 
-  const start = report?.meta?.start || '1 September 2026';
-  const end = report?.meta?.end || '30 September 2026';
+  const start = formatPeriodDate(report?.meta?.start) || '1 September 2026';
+  const end = formatPeriodDate(report?.meta?.end) || '30 September 2026';
   const channel = report?.channel || {};
   const rcaList = Array.isArray(report?.rca_breakdown) ? report.rca_breakdown : [];
   const holdTickets = Array.isArray(report?.hold_tickets) ? report.hold_tickets : [];
@@ -130,6 +145,54 @@ export default function ReportsView() {
                   No RCA data available for this period.
                 </td>
               </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── 3b. ISP Device Table: ISP Issue – Device Wise Breakdown ── */}
+      <div style={{ marginBottom: '2rem', overflowX: 'auto' }}>
+        <div style={{
+          background: '#7b1c5a',
+          color: 'white',
+          padding: '12px 16px',
+          borderRadius: '8px 8px 0 0',
+          fontWeight: 700,
+          fontSize: '1.05rem',
+        }}>
+          ISP Issue – Device Wise Breakdown
+        </div>
+        <table className="mmtc-table" style={{ marginTop: 0 }}>
+          <thead>
+            <tr>
+              <th style={{ width: '10%' }}>S NO</th>
+              <th style={{ width: '20%' }}>Month</th>
+              <th style={{ width: '50%' }}>Device Name</th>
+              <th style={{ width: '20%' }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(report?.isp_device_breakdown || []).length === 0 ? (
+              <tr>
+                <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: '#6b7280' }}>
+                  No ISP tickets found.
+                </td>
+              </tr>
+            ) : (
+              <>
+                {(report?.isp_device_breakdown || []).map((row, idx) => (
+                  <tr key={idx}>
+                    <td>{row.s_no}</td>
+                    <td>{row.month}</td>
+                    <td style={{ fontWeight: 500 }}>{row.device_name}</td>
+                    <td>{row.total}</td>
+                  </tr>
+                ))}
+                <tr style={{ background: '#7b1c5a', color: 'white', fontWeight: 700 }}>
+                  <td colSpan="3" style={{ color: 'white' }}>Grand Total</td>
+                  <td style={{ color: 'white' }}>{report?.isp_grand_total ?? 0}</td>
+                </tr>
+              </>
             )}
           </tbody>
         </table>

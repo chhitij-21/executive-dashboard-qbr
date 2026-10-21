@@ -146,6 +146,31 @@ function buildSsotGroundTruth(qbrData) {
     registerNumber(item.percentage);
   });
 
+  // 5b. Process MMTC PPT Schema: hold_tickets, cr_tickets, cr_summary
+  const holdTickets = Array.isArray(qbrData.hold_tickets) ? qbrData.hold_tickets : [];
+  holdTickets.forEach(ht => {
+    if (!ht) return;
+    const tNum = ht.ticket_number || ht.ticketNumber || ht.TicketNumber || ht.TicketNo;
+    if (tNum) knownIncidents.add(String(tNum).trim().toLowerCase());
+    if (ht.reason) knownRcas.add(String(ht.reason).trim());
+    registerNumber(ht.ticket_number);
+  });
+
+  const crTickets = Array.isArray(qbrData.cr_tickets) ? qbrData.cr_tickets : [];
+  crTickets.forEach(cr => {
+    if (!cr) return;
+    registerNumber(cr.s_no);
+    const tNum = cr.ticket_number || cr.TicketNumber || cr.s_no;
+    if (tNum) knownIncidents.add(String(tNum).trim().toLowerCase());
+    if (cr.category) knownRcas.add(String(cr.category).trim());
+    if (cr.sub_category) knownRcas.add(String(cr.sub_category).trim());
+  });
+
+  const crSummary = qbrData.cr_summary || {};
+  ['meraki_crs', 'security_crs', 'security_emails', 'total_crs'].forEach(k => {
+    registerNumber(crSummary[k]);
+  });
+
   // 6. Process Report Period
   const periodMeta = qbrData.report_period || {};
   registerNumber(periodMeta.window_minutes);
@@ -155,6 +180,9 @@ function buildSsotGroundTruth(qbrData) {
     period: qbrData.reportingPeriod,
     exec,
     sites: sites.map(s => ({ id: s.siteId, jfl: s.jflSwitchUptime, pro: s.proactiveSwitchUptime, dev: s.deviceCount })),
+    holdTickets: holdTickets.map(h => ({ num: h.ticket_number, reason: h.reason, rollover: h.rollover })),
+    crTickets: crTickets.map(c => ({ s_no: c.s_no, subject: c.subject, cat: c.category, status: c.status })),
+    crSummary,
   });
 
   return {
@@ -512,24 +540,43 @@ function continuousPipelineAudit(qbrData, options = {}) {
     return NON_MONITORED_CITIES.includes(s);
   });
 
+  const cId = options.clientId || qbrData.clientId || qbrData.executiveSummary?.clientId;
+  const cName = qbrData.customerName || qbrData.executiveSummary?.customerName || '';
+  const isMmtc = cId === 'client-mmtcpamp' || cId === 'client-mmtc' || cId === 'mmtc' || /mmtc/i.test(cName);
+
   // 4. Verify proactive uptime bounds & absence of artificial 100% clamping when resolution minutes exist
   const issues = [];
   if (nonMonitoredViolations.length > 0) {
     issues.push(`NON_MONITORED_SITE_DETECTED: Detected unauthorized locations: ${nonMonitoredViolations.join(', ')}`);
   }
 
-  // Check siteSummary uptimes
+  // Check siteSummary uptimes (JFL Switch Uptime is strictly for JFL; MMTC does not have JFL Switch Uptime)
   const sites = Array.isArray(qbrData.siteSummary) ? qbrData.siteSummary : [];
   sites.forEach(site => {
-    const pro = parseFloat(String(site.proactiveSwitchUptime).replace('%', ''));
-    const jfl = parseFloat(String(site.jflSwitchUptime).replace('%', ''));
-    if (isNaN(pro) || pro < 0 || pro > 100) {
-      issues.push(`SITE_UPTIME_OUT_OF_BOUNDS: Site ${site.siteId} proactive uptime ${site.proactiveSwitchUptime} invalid`);
+    if (site.proactiveSwitchUptime !== null && site.proactiveSwitchUptime !== undefined && site.proactiveSwitchUptime !== 'N/A') {
+      const pro = parseFloat(String(site.proactiveSwitchUptime).replace('%', ''));
+      if (isNaN(pro) || pro < 0 || pro > 100) {
+        issues.push(`SITE_UPTIME_OUT_OF_BOUNDS: Site ${site.siteId} proactive uptime ${site.proactiveSwitchUptime} invalid`);
+      }
     }
-    if (isNaN(jfl) || jfl < 0 || jfl > 100) {
-      issues.push(`SITE_UPTIME_OUT_OF_BOUNDS: Site ${site.siteId} JFL uptime ${site.jflSwitchUptime} invalid`);
+    if (!isMmtc && site.jflSwitchUptime !== null && site.jflSwitchUptime !== undefined && site.jflSwitchUptime !== 'N/A') {
+      const jfl = parseFloat(String(site.jflSwitchUptime).replace('%', ''));
+      if (isNaN(jfl) || jfl < 0 || jfl > 100) {
+        issues.push(`SITE_UPTIME_OUT_OF_BOUNDS: Site ${site.siteId} JFL uptime ${site.jflSwitchUptime} invalid`);
+      }
     }
   });
+
+  // Validate MMTC PPT schema when present
+  if (qbrData.hold_tickets !== undefined && !Array.isArray(qbrData.hold_tickets)) {
+    issues.push('INVALID_SCHEMA: hold_tickets must be an array');
+  }
+  if (qbrData.cr_tickets !== undefined && !Array.isArray(qbrData.cr_tickets)) {
+    issues.push('INVALID_SCHEMA: cr_tickets must be an array');
+  }
+  if (qbrData.cr_summary !== undefined && (typeof qbrData.cr_summary !== 'object' || qbrData.cr_summary === null)) {
+    issues.push('INVALID_SCHEMA: cr_summary must be an object');
+  }
 
   // Calculate IQ-200 score (100 base minus deductions for invariant failures)
   const failedCount = cvResult.failed?.length || 0;

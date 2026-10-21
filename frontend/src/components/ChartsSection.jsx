@@ -132,20 +132,26 @@ export function ChartsSection({ qbrData, showHeader = true }) {
             </span>
           </div>
           <div style={{ width: '100%', height: 400 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={engineerSlaData} margin={{ top: 25, right: 15, left: 0, bottom: 70 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color, #f1f5f9)" />
-                <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11.5, fontWeight: 600, fill: 'var(--text-main, #334155)' }} />
-                <YAxis tick={{ fontSize: 12, fill: 'var(--text-main, #475569)' }} />
-                <Tooltip
-                  formatter={(val, name) => [val, name === 'met' ? 'SLA Met' : 'SLA Breached']}
-                  contentStyle={{ background: 'var(--bg-card, #ffffff)', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <Legend verticalAlign="top" align="right" height={36} wrapperStyle={{ fontSize: '11.5px', fontWeight: 600 }} />
-                <Bar dataKey="met" name="SLA Met" stackId="a" fill="#10b981" />
-                <Bar dataKey="breached" name="SLA Breached" stackId="a" fill="#ef4444" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: '#dc2626', fontSize: 11.5, fontWeight: 700, formatter: (v) => v > 0 ? `⚠️ ${v} Breached` : '' }} />
-              </BarChart>
-            </ResponsiveContainer>
+            {(!engineerSlaData || engineerSlaData.length === 0) ? (
+              <div className="text-gray-400" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                No data available for this period
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={engineerSlaData} margin={{ top: 25, right: 15, left: 0, bottom: 70 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color, #f1f5f9)" />
+                  <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11.5, fontWeight: 600, fill: 'var(--text-main, #334155)' }} />
+                  <YAxis tick={{ fontSize: 12, fill: 'var(--text-main, #475569)' }} />
+                  <Tooltip
+                    formatter={(val, name) => [val, name === 'met' ? 'SLA Met' : 'SLA Breached']}
+                    contentStyle={{ background: 'var(--bg-card, #ffffff)', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend verticalAlign="top" align="right" height={36} wrapperStyle={{ fontSize: '11.5px', fontWeight: 600 }} />
+                  <Bar dataKey="met" name="SLA Met" stackId="a" fill="#10b981" />
+                  <Bar dataKey="breached" name="SLA Breached" stackId="a" fill="#ef4444" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: '#dc2626', fontSize: 11.5, fontWeight: 700, formatter: (v) => v > 0 ? `⚠️ ${v} Breached` : '' }} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -169,23 +175,29 @@ export function ChartsSection({ qbrData, showHeader = true }) {
             </span>
           </div>
           <div style={{ width: '100%', height: 400 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={siteSlaData} margin={{ top: 25, right: 15, left: 0, bottom: 70 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color, #f1f5f9)" />
-                <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11.5, fontWeight: 600, fill: 'var(--text-main, #334155)' }} />
-                <YAxis domain={[50, 100]} tick={{ fontSize: 12, fill: 'var(--text-main, #475569)' }} />
-                <Tooltip
-                  formatter={(val) => [`${val}%`, 'Switch Uptime %']}
-                  contentStyle={{ background: 'var(--bg-card, #ffffff)', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <ReferenceLine y={slaTarget} stroke="#ef4444" strokeDasharray="4 4" label={{ value: `SLA Target (${slaTarget}%)`, fill: '#dc2626', fontSize: 11, fontWeight: 700, position: 'top' }} />
-                <Bar dataKey="uptime" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: '#0f172a', fontSize: 11, fontWeight: 700, formatter: (v) => `${v}%` }}>
-                  {siteSlaData.map((entry, index) => (
-                    <Cell key={`site-cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {(!siteSlaData || siteSlaData.length === 0) ? (
+              <div className="text-gray-400" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                No data available for this period
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={siteSlaData} margin={{ top: 25, right: 15, left: 0, bottom: 70 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color, #f1f5f9)" />
+                  <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11.5, fontWeight: 600, fill: 'var(--text-main, #334155)' }} />
+                  <YAxis domain={[50, 100]} tick={{ fontSize: 12, fill: 'var(--text-main, #475569)' }} />
+                  <Tooltip
+                    formatter={(val) => [`${val}%`, 'Switch Uptime %']}
+                    contentStyle={{ background: 'var(--bg-card, #ffffff)', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <ReferenceLine y={slaTarget} stroke="#ef4444" strokeDasharray="4 4" label={{ value: `SLA Target (${slaTarget}%)`, fill: '#dc2626', fontSize: 11, fontWeight: 700, position: 'top' }} />
+                  <Bar dataKey="uptime" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: '#0f172a', fontSize: 11, fontWeight: 700, formatter: (v) => `${v}%` }}>
+                    {siteSlaData.map((entry, index) => (
+                      <Cell key={`site-cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -204,15 +216,21 @@ export function ChartsSection({ qbrData, showHeader = true }) {
             📊 {t('chart_engineer_title')}
           </h4>
           <div style={{ width: '100%', height: 400 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={engineerData} margin={{ top: 25, right: 15, left: 0, bottom: 70 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color, #f1f5f9)" />
-                <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11.5, fontWeight: 600, fill: 'var(--text-main, #334155)' }} />
-                <YAxis tick={{ fontSize: 12, fill: 'var(--text-main, #475569)' }} />
-                <Tooltip contentStyle={{ background: 'var(--bg-card, #ffffff)', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                <Bar dataKey="tickets" fill="#6366f1" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: '#4338ca', fontSize: 11.5, fontWeight: 700 }} />
-              </BarChart>
-            </ResponsiveContainer>
+            {(!engineerData || engineerData.length === 0) ? (
+              <div className="text-gray-400" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                No data available for this period
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={engineerData} margin={{ top: 25, right: 15, left: 0, bottom: 70 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color, #f1f5f9)" />
+                  <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11.5, fontWeight: 600, fill: 'var(--text-main, #334155)' }} />
+                  <YAxis tick={{ fontSize: 12, fill: 'var(--text-main, #475569)' }} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-card, #ffffff)', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                  <Bar dataKey="tickets" fill="#6366f1" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: '#4338ca', fontSize: 11.5, fontWeight: 700 }} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -231,27 +249,33 @@ export function ChartsSection({ qbrData, showHeader = true }) {
             🥧 {t('chart_site_title')}
           </h4>
           <div style={{ width: '100%', height: 400 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={siteData}
-                  cx="50%"
-                  cy="42%"
-                  outerRadius={115}
-                  innerRadius={50}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ name, value }) => `${name}: ${value}`}
-                  labelLine={true}
-                >
-                  {siteData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ background: 'var(--bg-card, #ffffff)', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                <Legend verticalAlign="bottom" height={48} wrapperStyle={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-main, #475569)', paddingTop: '12px' }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {(!siteData || siteData.length === 0) ? (
+              <div className="text-gray-400" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                No data available for this period
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={siteData}
+                    cx="50%"
+                    cy="42%"
+                    outerRadius={115}
+                    innerRadius={50}
+                    paddingAngle={2}
+                    dataKey="value"
+                    label={({ name, value }) => `${name}: ${value}`}
+                    labelLine={true}
+                  >
+                    {siteData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: 'var(--bg-card, #ffffff)', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                  <Legend verticalAlign="bottom" height={48} wrapperStyle={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-main, #475569)', paddingTop: '12px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>

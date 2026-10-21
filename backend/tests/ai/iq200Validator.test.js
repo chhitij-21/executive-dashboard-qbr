@@ -162,5 +162,36 @@ test('IQ-200 Hallucination-Free AI Validator & Checker Suite', async (t) => {
     assert.equal(auditRes.diversionsDetected, 0);
     assert.ok(auditRes.invariants.passed >= 20);
   });
+
+  await t.test('10. continuousPipelineAudit passes with 100% and 0 hallucinations on MMTC PPT schema (hold_tickets, cr_tickets, cr_summary)', () => {
+    const mmtcData = JSON.parse(JSON.stringify(mockQbrData));
+    mmtcData.clientId = 'client-mmtcpamp';
+    mmtcData.customerName = 'MMTC';
+    mmtcData.executiveSummary.customerName = 'MMTC';
+    mmtcData.executiveSummary.clientId = 'client-mmtcpamp';
+    mmtcData.executiveSummary.jflSwitchUptime = null;
+    mmtcData.siteSummary.forEach(s => {
+      s.jflSwitchUptime = null;
+    });
+    mmtcData.hold_tickets = [
+      { ticket_number: 'INC-1001', subject: 'Site power failure', reason: 'Power Outage', rollover: 'On Hold', created_date: '2026-09-02' }
+    ];
+    mmtcData.cr_tickets = [
+      { s_no: 1, subject: 'Firewall policy update', category: 'Security', sub_category: 'Change Request', status: 'Closed' }
+    ];
+    mmtcData.cr_summary = {
+      meraki_crs: 0,
+      security_crs: 1,
+      security_emails: 0,
+      total_crs: 1,
+    };
+
+    const auditRes = continuousPipelineAudit(mmtcData, { clientId: 'client-mmtcpamp' });
+    assert.equal(auditRes.status, 'PASS');
+    assert.equal(auditRes.score, 100);
+    assert.equal(auditRes.hallucinationsDetected, 0);
+    assert.equal(auditRes.invariants.passed, 20);
+    assert.equal(auditRes.invariants.failed, 0);
+  });
 });
 

@@ -276,12 +276,12 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
                               📈 Dashboard
                             </button>
                             <a
-                              href="#download-pdf"
-                              onClick={(e) => handleDownload(e, 'pdf', item.jobId, item.clientId)}
+                              href="#download-ppt"
+                              onClick={(e) => handleDownload(e, 'ppt', item.jobId, item.clientId)}
                               className="btn-action btn-ppt"
-                              title="Download Executive PDF Report"
+                              title="Download Executive PPT Presentation"
                             >
-                              📄 PDF
+                              📊 PPT
                             </a>
                             <a
                               href="#download-report"

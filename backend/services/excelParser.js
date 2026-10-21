@@ -13,6 +13,10 @@ function loadWorkbook(filePath) {
   const wb = xlsx.readFile(filePath, { cellDates: false, raw: true, dense: true });
   const result = {};
   wb.SheetNames.forEach((name) => {
+    if (isRemovedSheet(name)) {
+      result[name] = [];
+      return;
+    }
     const rows = xlsx.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
     result[name] = rows.map((row, idx) => ({
       ...row,

@@ -2,6 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL, apiFetch } from '../config/api';
 
+const PROCESSING_STEPS = [
+  { id: 'parsing', stepKey: 'parsing_excel', label: 'Parsing Excel...', icon: '📄', desc: 'Reading workbooks & validating sheets' },
+  { id: 'filtering', stepKey: 'filtering_data', label: 'Filtering Data...', icon: '🔍', desc: 'Applying rules, uptime & SLA formulas' },
+  { id: 'ppt', stepKey: 'generating_ppt', label: 'Generating PPT...', icon: '📊', desc: 'Building executive PowerPoint presentation' },
+];
+
 export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const { user, clients, activeClient, activeLocation, setActiveClient, setActiveLocation, isAdmin } = useAuth();
   const [incidentFile, setIncidentFile] = useState(null);
@@ -14,6 +20,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
   const [status, setStatus] = useState('idle'); // idle, processing, failed, completed
   const [stageText, setStageText] = useState('Uploading Excel Files...');
+  const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [validationErrors, setValidationErrors] = useState([]);
   const [validationWarnings, setValidationWarnings] = useState([]);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -124,7 +131,24 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     setValidationWarnings([]);
     setErrorMsg(null);
     setStatus('processing');
-    setStageText('Uploading files to backend...');
+    setCurrentStepIndex(0);
+    setStageText('Parsing Excel...');
+
+    // Smooth progressive step timer while backend processes upload request
+    const stepTimer = setInterval(() => {
+      setCurrentStepIndex((prev) => {
+        if (prev < 0) return 0;
+        if (prev === 0) {
+          setStageText('Filtering Data...');
+          return 1;
+        }
+        if (prev === 1) {
+          setStageText('Generating PPT...');
+          return 2;
+        }
+        return prev;
+      });
+    }, 12000);
 
     // Cold-start warning timer if server takes longer than 3 seconds to respond
     const wakeTimer = setTimeout(() => {
@@ -177,11 +201,13 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
         } catch (e) { }
       }
 
+      clearInterval(stepTimer);
       clearTimeout(wakeTimer);
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setStatus('failed');
+        setCurrentStepIndex(-1);
         if (res.status === 401) {
           setErrorMsg('Authentication required. Please click "Sign In" at top right or refresh.');
         } else if (json.validationErrors) {
@@ -195,16 +221,32 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
       if (json.status === 'completed' || json.success) {
         setStatus('completed');
+        setCurrentStepIndex(3);
         setStageText('QBR Report & PowerPoint Generated Successfully!');
         if (onJobCompleted) onJobCompleted(json.jobId);
       } else {
-        setStageText('Files uploaded! Running Rule Engine & Generating QBR PowerPoint...');
+        const initialStep = json.step || json.status;
+        if (initialStep === 'parsing_excel') {
+          setCurrentStepIndex(0);
+          setStageText(json.stepLabel || 'Parsing Excel...');
+        } else if (initialStep === 'filtering_data') {
+          setCurrentStepIndex(1);
+          setStageText(json.stepLabel || 'Filtering Data...');
+        } else if (initialStep === 'generating_ppt') {
+          setCurrentStepIndex(2);
+          setStageText(json.stepLabel || 'Generating PPT...');
+        } else {
+          setCurrentStepIndex(2);
+          setStageText('Generating QBR PowerPoint Presentation...');
+        }
         setCurrentJobId(json.jobId);
         if (onJobStarted) onJobStarted(json.jobId);
       }
     } catch (err) {
+      clearInterval(stepTimer);
       clearTimeout(wakeTimer);
       setStatus('failed');
+      setCurrentStepIndex(-1);
       setErrorMsg('Unable to connect to backend server. Render Free Tier instance spins down on inactivity (~30s cold start). Please wait a few seconds and try uploading again.');
     }
   };
@@ -236,12 +278,27 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
         if (data.status === 'completed') {
           setStatus('completed');
+          setCurrentStepIndex(4);
           setStageText('QBR Report & PowerPoint Generated Successfully!');
           if (onJobCompleted) onJobCompleted(currentJobId);
         } else if (data.status === 'failed' || data.status === 'error') {
           setStatus('failed');
+          setCurrentStepIndex(-1);
           setErrorMsg(data.error || 'Report generation failed. Please check your input files.');
         } else {
+          // Sync sequential steps with backend status / step
+          const stepKey = data.step || data.status;
+          if (stepKey === 'parsing_excel') {
+            setCurrentStepIndex(0);
+            setStageText(data.stepLabel || 'Parsing Excel...');
+          } else if (stepKey === 'filtering_data') {
+            setCurrentStepIndex(1);
+            setStageText(data.stepLabel || 'Filtering Data...');
+          } else if (stepKey === 'generating_ppt') {
+            setCurrentStepIndex(2);
+            setStageText(data.stepLabel || 'Generating PPT...');
+          }
+
           // Still processing — apply backoff
           pollInterval = Math.min(pollInterval * 1.5, MAX_INTERVAL);
           timerId = setTimeout(checkStatus, Math.round(pollInterval));
@@ -551,7 +608,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               style={{ padding: '0.8rem 2rem', fontSize: '1rem', fontWeight: 'bold', cursor: incidentFile ? 'pointer' : 'not-allowed' }}
             >
               {status === 'processing' ? (
-                <>⏳ Processing... Please wait</>
+                <>⏳ {stageText}</>
               ) : (
                 <>⚡ Validate & Generate QBR Reports</>
               )}
@@ -561,13 +618,68 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
         {/* Processing Spinner / Progress Indicator */}
         {status === 'processing' && (
-          <div className="processing-indicator" style={{ marginTop: '1.5rem', padding: '1rem', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div className="spinner"></div>
-            <div className="processing-text">
-              <h4 style={{ margin: 0, color: '#1d4ed8' }}>{stageText}</h4>
-              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#3b82f6' }}>
-                Parsing workbooks • Applying rules • Calculating uptime & SLA metrics • Building PowerPoint presentation
-              </p>
+          <div className="processing-indicator" style={{
+            marginTop: '1.5rem',
+            padding: '1.25rem',
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '10px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div className="spinner"></div>
+              <div className="processing-text">
+                <h4 style={{ margin: 0, color: '#1d4ed8' }}>{stageText}</h4>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#3b82f6' }}>
+                  Processing workbooks • Applying rules • Calculating uptime & SLA metrics • Building PowerPoint presentation
+                </p>
+              </div>
+            </div>
+
+            {/* Sequential Steps Cards */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '0.75rem',
+              marginTop: '0.25rem',
+              paddingTop: '0.75rem',
+              borderTop: '1px solid #dbeafe'
+            }}>
+              {PROCESSING_STEPS.map((step, idx) => {
+                const isDone = currentStepIndex > idx || status === 'completed';
+                const isActive = currentStepIndex === idx && status !== 'completed';
+                return (
+                  <div
+                    key={step.id}
+                    style={{
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: '8px',
+                      background: isActive ? '#ffffff' : isDone ? '#f0fdf4' : '#f8fafc',
+                      border: isActive ? '2px solid #3b82f6' : isDone ? '1px solid #86efac' : '1px solid #e2e8f0',
+                      boxShadow: isActive ? '0 2px 4px rgba(59, 130, 246, 0.15)' : 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                      <span style={{ fontSize: '1.1rem' }}>{isDone ? '✅' : step.icon}</span>
+                      <strong style={{
+                        fontSize: '0.85rem',
+                        color: isActive ? '#1d4ed8' : isDone ? '#15803d' : '#64748b'
+                      }}>
+                        {step.label}
+                      </strong>
+                    </div>
+                    <div style={{
+                      fontSize: '0.75rem',
+                      color: isActive ? '#2563eb' : isDone ? '#16a34a' : '#94a3b8'
+                    }}>
+                      {step.desc}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

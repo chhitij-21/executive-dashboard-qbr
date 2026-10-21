@@ -41,7 +41,8 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
       if (res.ok) {
         const ticketData = await res.json();
         if (ticketData.downloadTicket) {
-          window.location.href = `${API_BASE_URL}/api/${exportType}/${activeJobId}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          const downloadUrl = `${API_BASE_URL}/api/${exportType}/${activeJobId}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          window.location.href = downloadUrl;
           return;
         }
       }
@@ -99,7 +100,7 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
               </h3>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.25rem 0' }}>
-              Executive dashboard, PPT, PDF &amp; validation reports
+              Executive dashboard, PPT &amp; validation reports
             </p>
 
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.5rem 0', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -138,24 +139,6 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
                   }}
                 >
                   <span>•</span> Download Executive PPT Report
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#download-pdf"
-                  onClick={(e) => handleDownload(e, 'pdf')}
-                  style={{
-                    color: '#2563eb',
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <span>•</span> Download PDF Report
                 </a>
               </li>
             </ul>

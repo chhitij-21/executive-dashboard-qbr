@@ -18,7 +18,7 @@ const DEFAULT_CHECKLIST = [
 ];
 
 export default function VulnerabilitiesPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, activeClient } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,17 +87,19 @@ export default function VulnerabilitiesPage() {
   };
 
   // Fetch vulnerabilities from backend
-  const loadVulnerabilities = async () => {
+  const loadVulnerabilities = async (signal) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/vulnerabilities`);
+      const clientQuery = activeClient?.id ? `?clientId=${encodeURIComponent(activeClient.id)}` : '';
+      const res = await apiFetch(`${API_BASE_URL}/api/vulnerabilities${clientQuery}`, { signal });
       if (!res.ok) {
         throw new Error(`Failed to fetch vulnerabilities (HTTP ${res.status})`);
       }
       const data = await res.json();
       setVulnData(data);
     } catch (err) {
+      if (err.name === 'AbortError') return;
       console.error('[VulnerabilitiesPage] Load error:', err);
       setError(err.message || 'Unable to connect to vulnerabilities API');
     } finally {
@@ -124,8 +126,12 @@ export default function VulnerabilitiesPage() {
   };
 
   useEffect(() => {
-    loadVulnerabilities();
-  }, []);
+    const controller = new AbortController();
+    loadVulnerabilities(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [activeClient?.id]);
 
   // Compute date filter boundary
   const effectiveDateRange = useMemo(() => {
@@ -148,7 +154,7 @@ export default function VulnerabilitiesPage() {
 
   // Filtered & Sorted CVE rows
   const filteredCves = useMemo(() => {
-    const all = vulnData?.cveList || [];
+    const all = vulnData?.vulnerabilities || vulnData?.cveList || [];
     return all
       .filter((item) => {
         // Task: Hide "NA" or "Informational" clutter (if toggle is unchecked)
@@ -202,12 +208,12 @@ export default function VulnerabilitiesPage() {
 
   // Overall KPI metrics (compact summary)
   const kpis = useMemo(() => {
-    const total = filteredCves.length;
-    const p1Count = filteredCves.filter((c) => c.priority === 'P1').length;
-    const p2Count = total - p1Count;
-    const criticalCount = filteredCves.filter((c) => (c.severity || '').toLowerCase() === 'critical').length;
-    const highCount = filteredCves.filter((c) => (c.severity || '').toLowerCase() === 'high').length;
-    const distinctProducts = new Set(filteredCves.map((c) => c.product).filter(Boolean)).size;
+    const total = filteredCves.length || 0;
+    const p1Count = filteredCves.filter((c) => c.priority === 'P1').length || 0;
+    const p2Count = (total - p1Count) || 0;
+    const criticalCount = filteredCves.filter((c) => (c.severity || '').toLowerCase() === 'critical').length || 0;
+    const highCount = filteredCves.filter((c) => (c.severity || '').toLowerCase() === 'high').length || 0;
+    const distinctProducts = (new Set(filteredCves.map((c) => c.product).filter(Boolean)).size) || 0;
 
     let patchedCount = 0;
     for (const c of filteredCves) {
@@ -317,24 +323,24 @@ export default function VulnerabilitiesPage() {
       >
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Total Advisories</span>
-          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.total}</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.total || 0}</span>
         </div>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#dc2626', textTransform: 'uppercase' }}>P1 Critical / High</span>
-          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#dc2626' }}>{kpis.p1Count}</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#dc2626' }}>{kpis.p1Count || 0}</span>
         </div>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>P2 Medium / Low</span>
-          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.p2Count}</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.p2Count || 0}</span>
         </div>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Affected Products</span>
-          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.distinctProducts}</span>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.distinctProducts || 0}</span>
         </div>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Remediation Progress</span>
           <span style={{ fontSize: '1.15rem', fontWeight: 700, color: kpis.patchedCount === kpis.total && kpis.total > 0 ? 'var(--accent-green)' : 'var(--text-primary)' }}>
-            {kpis.patchedCount} / {kpis.total}
+            {kpis.patchedCount || 0} / {kpis.total || 0}
           </span>
         </div>
       </div>
@@ -521,8 +527,10 @@ export default function VulnerabilitiesPage() {
                 <tbody>
                   {paginatedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                        No advisories found matching the selected filters.
+                      <td colSpan={8} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
+                        {vulnData?.filteredCount === 0 || (!loading && (vulnData?.vulnerabilities || vulnData?.cveList || []).length === 0)
+                          ? 'No known vulnerabilities found for the current inventory.'
+                          : 'No advisories found matching the selected filters.'}
                       </td>
                     </tr>
                   ) : (

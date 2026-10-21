@@ -4,10 +4,12 @@ const { describe, test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const http = require('http');
 
 const ciscoPsirtClient = require('../services/ciscoPsirtClient');
 const vulnerabilityFetcher = require('../services/vulnerabilityFetcher');
+const historyService = require('../services/historyService');
 const app = require('../index');
 
 describe('Cisco PSIRT openVuln Integration Suite', () => {
@@ -183,6 +185,78 @@ describe('Cisco PSIRT openVuln Integration Suite', () => {
     } finally {
       if (server) {
         await new Promise((resolve) => server.close(resolve));
+      }
+    }
+  });
+
+  test('Part 3: Multi-tenant vulnerability filtering returns Meraki CVE and excludes Windows CVE for MX68CW-WW inventory', async () => {
+    let server;
+    const testDir = path.join(os.tmpdir(), `test_vuln_${Date.now()}`);
+    const testDashPath = path.join(testDir, 'dashboard_data.json');
+    const metaFile = path.resolve(__dirname, '..', '..', 'data', 'reports_metadata.json');
+    const origMeta = fs.existsSync(metaFile) ? fs.readFileSync(metaFile, 'utf8') : null;
+
+    try {
+      // 1. Create clean test dashboard data with only MX68CW-WW model
+      fs.mkdirSync(testDir, { recursive: true });
+      fs.writeFileSync(
+        testDashPath,
+        JSON.stringify({
+          clientId: 'client-test-mx',
+          devices: [
+            { DeviceID: 'DEV-MX-01', SerialNo: 'Q2CW-TEST-1', Model: 'MX68CW-WW', DeviceType: 'SW' },
+          ],
+        }),
+        'utf8'
+      );
+
+      // Record test report in history
+      historyService.recordReport({
+        jobId: 'test-job-mx-68',
+        clientId: 'client-test-mx',
+        clientName: 'Test Client MX',
+        status: 'completed',
+        dashboardPath: testDashPath,
+        uploadTimestamp: new Date().toISOString(),
+      });
+
+      await new Promise((resolve) => {
+        server = app.listen(0, '127.0.0.1', () => resolve());
+      });
+      const port = server.address().port;
+
+      // Query with clientId=client-test-mx
+      const res = await originalFetch(`http://127.0.0.1:${port}/api/vulnerabilities?clientId=client-test-mx`);
+      assert.equal(res.status, 200, 'GET /api/vulnerabilities?clientId=client-test-mx returned 200');
+
+      const json = await res.json();
+      assert.equal(json.success, true);
+      assert.ok(Array.isArray(json.modelsFound), 'modelsFound must be an array');
+      assert.ok(json.modelsFound.includes('MX68CW-WW'), 'modelsFound must include MX68CW-WW');
+      assert.ok(Array.isArray(json.vulnerabilities), 'vulnerabilities must be an array');
+      assert.equal(json.filteredCount, json.vulnerabilities.length, 'filteredCount must match vulnerabilities length');
+      assert.ok(json.vulnerabilities.length > 0, 'Expected at least 1 vulnerability for Meraki MX');
+
+      // Meraki CVE must be returned
+      const hasMeraki = json.vulnerabilities.some((v) => (v.product || '').toLowerCase().includes('meraki'));
+      assert.ok(hasMeraki, 'Meraki CVE must be returned for MX68CW-WW inventory');
+
+      // Windows CVE must be excluded
+      const hasWindows = json.vulnerabilities.some((v) => (v.product || '').toLowerCase().includes('windows'));
+      assert.equal(hasWindows, false, 'Windows CVE must be excluded for MX68CW-WW inventory');
+
+      // Non-Meraki CVEs (like IOS XE) must be excluded for pure MX68CW-WW inventory
+      const hasIosXe = json.vulnerabilities.some((v) => (v.product || '').toLowerCase().includes('ios xe'));
+      assert.equal(hasIosXe, false, 'IOS XE CVEs must be excluded for purely Meraki inventory');
+    } finally {
+      if (server) {
+        await new Promise((resolve) => server.close(resolve));
+      }
+      if (origMeta !== null) {
+        try { fs.writeFileSync(metaFile, origMeta, 'utf8'); } catch (_) {}
+      }
+      if (fs.existsSync(testDir)) {
+        try { fs.rmSync(testDir, { recursive: true, force: true }); } catch (_) {}
       }
     }
   });

@@ -261,7 +261,8 @@ function MainPortal() {
       if (res.ok) {
         const ticketData = await res.json();
         if (ticketData.downloadTicket) {
-          window.location.href = `${API_BASE_URL}/api/${exportType}/${jobId || 'latest'}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          const downloadUrl = `${API_BASE_URL}/api/${exportType}/${jobId || 'latest'}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          window.location.href = downloadUrl;
           return;
         }
       }
@@ -439,7 +440,7 @@ function MainPortal() {
           <div className="alert-box alert-success" style={{ marginBottom: '1rem', background: '#d4edda', color: '#155724', padding: '0.85rem 1.2rem', borderRadius: '8px', border: '1px solid #c3e6cb', fontWeight: 500, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div>
               <strong>Dashboard Generated Successfully</strong> •{' '}
-              <strong>Executive PDF Report Generated Successfully</strong> • <strong>IQ-200 Continuous Validation Completed (0 Hallucinations)</strong> — <strong>Ready for Download</strong>
+              <strong>Executive PPT Presentation Generated Successfully</strong> • <strong>IQ-200 Continuous Validation Completed (0 Hallucinations)</strong> — <strong>Ready for Download</strong>
             </div>
             <button
               onClick={() => setShowAiAuditModal(true)}
@@ -476,18 +477,9 @@ function MainPortal() {
               ✓ IQ-200 Validated Engine (0 Hallucinations)
             </button>
             <a
-              href="#download-pdf"
-              onClick={(e) => handleDownload(e, 'pdf')}
-              className="btn-primary"
-              title="Download Executive QBR PDF Report"
-              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}
-            >
-              📄 Download PDF Report
-            </a>
-            <a
               href="#download-ppt"
               onClick={(e) => handleDownload(e, 'ppt')}
-              className="btn-secondary"
+              className="btn-primary"
               title="Download Executive QBR PPT Presentation"
               style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}
             >
@@ -1131,7 +1123,14 @@ function MainPortal() {
 
             {incidentTrendData.length > 0 && (
               <div className="chart-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 className="chart-panel-title">Monthly Incident Volume Trend</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <h3 className="chart-panel-title" style={{ margin: 0 }}>Monthly Incident Volume Trend</h3>
+                  {incAn.dataWarning && (
+                    <span style={{ fontSize: '0.8rem', color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '4px', padding: '0.2rem 0.5rem', fontWeight: 500 }}>
+                      ⚠️ {incAn.dataWarning}
+                    </span>
+                  )}
+                </div>
                 <TrendChart data={incidentTrendData} datasetLabel="Incidents" yLabel="Count" color="hsl(0,73%,58%)" />
               </div>
             )}
@@ -1290,7 +1289,7 @@ function MainPortal() {
         )}
 
         {dashTab === 'reports' && activeClient?.id === 'client-mmtcpamp' && (
-          <ReportsView />
+          <ReportsView jobId={jobId} />
         )}
       </div>
 
