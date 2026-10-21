@@ -30,6 +30,7 @@ import { generateAISummary } from './utils/aiSummaryGenerator';
 import { AIChatbot } from './components/AIChatbot';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import ReportsView from './components/ReportsView';
+import { isTabHiddenForClient } from './utils/reportHelpers';
 
 
 /**
@@ -83,6 +84,7 @@ function MainPortal() {
   const [showAiAuditModal, setShowAiAuditModal] = useState(false);
 
   const [jobId, setJobId] = useState('latest');
+  console.log('APP RENDER:', activeClient?.id, 'JOB ID:', jobId);
   const [status, setStatus] = useState('idle');
   const [isLoading, setIsLoading] = useState(false);
   // Always start with null — never show stale bundled defaultDashboardData.
@@ -94,14 +96,20 @@ function MainPortal() {
   // Request sequencing guard to eliminate customer race conditions (Defect D5)
   const requestSeqRef = useRef(0);
 
-  // Invalidate previous customer data immediately when active client changes
+  // Invalidate previous customer data immediately when active client changes (TASK 1b)
   useEffect(() => {
     setDashboardData(null);
-    setStatus('idle');
-    setApiError(null);
-    setJobId('latest');
+    setStatus('loading');
     setSelectedSite('ALL');
+    setJobId('latest');
+    setApiError(null);
   }, [activeClient?.id]);
+
+  useEffect(() => {
+    if (isTabHiddenForClient(activeClient?.id, dashTab)) {
+      setDashTab('executive');
+    }
+  }, [activeClient?.id, dashTab]);
 
   // Synchronize location selected in navbar or auth context with site filter
   useEffect(() => {
@@ -132,6 +140,7 @@ function MainPortal() {
     let pollInterval = null;
     const currentSeq = ++requestSeqRef.current;
     const targetClientId = activeClient?.id;
+    const abortController = new AbortController();
 
     if (!targetClientId) {
       setIsLoading(false);
@@ -151,7 +160,11 @@ function MainPortal() {
           site: siteParam,
         }).toString();
 
-        const res = await apiFetch(`${API_BASE_URL}/api/dashboard?${query}`);
+        const fetchUrl = `${API_BASE_URL}/api/dashboard?${query}`;
+        console.log('FETCHING API:', fetchUrl);
+        const res = await apiFetch(fetchUrl, {
+          signal: abortController.signal,
+        });
         // If a newer request has started or component unmounted, drop this response
         if (currentSeq !== requestSeqRef.current || !isSubscribed) return false;
 
@@ -166,6 +179,7 @@ function MainPortal() {
           return false;
         }
         const json = await res.json();
+        console.log('API RESPONSE:', json.executiveSummary?.customerName);
         if (currentSeq !== requestSeqRef.current || !isSubscribed) return false;
 
         if (json.status && json.status !== 'completed') {
@@ -194,6 +208,7 @@ function MainPortal() {
         if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
         return true;
       } catch (e) {
+        if (e.name === 'AbortError') return false;
         if (currentSeq === requestSeqRef.current && isSubscribed) {
           setApiError('Network error connecting to backend API.');
         }
@@ -217,6 +232,7 @@ function MainPortal() {
 
     return () => {
       isSubscribed = false;
+      abortController.abort();
       if (pollInterval) clearInterval(pollInterval);
     };
   }, [activeClient?.id, jobId, selectedSite, activeLocation]);
@@ -438,7 +454,7 @@ function MainPortal() {
         <div className="section-header card pad-md" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h2 className="section-title">
-              {exec.customerName || activeClient?.name || 'Executive Dashboard'}
+              {activeClient?.name || exec.customerName || 'Executive Dashboard'}
             </h2>
             <p className="section-meta">
               Location Context: <strong>{activeLocation}</strong> • Period:{' '}
@@ -577,7 +593,9 @@ function MainPortal() {
             { id: 'rca', label: 'RCA Analytics' },
             { id: 'sla', label: 'SLA Analytics' },
             { id: 'other', label: 'Other Activity' },
-          ].map(({ id, label }) => (
+          ]
+            .filter(({ id }) => !isTabHiddenForClient(activeClient?.id, id))
+            .map(({ id, label }) => (
             <button
               key={id}
               className={dashTab === id ? 'dash-tab active' : 'dash-tab'}
@@ -604,7 +622,7 @@ function MainPortal() {
             <div className="exec-banner">
               <div className="exec-banner-left">
                 <h3>Executive Performance Overview</h3>
-                <p>Quarterly Business Review (QBR) &amp; SLA Compliance Audit for {exec.customerName || activeClient?.name || 'Customer'}</p>
+                <p>Quarterly Business Review (QBR) &amp; SLA Compliance Audit for {activeClient?.name || exec.customerName || 'Customer'}</p>
               </div>
               <div className="exec-banner-badges">
                 <span className="exec-badge-item">{exec.totalSites ?? activeDashboardData?.siteSummary?.length ?? '-'} Monitored Sites</span>
@@ -624,7 +642,7 @@ function MainPortal() {
             <div className="exec-section-title">Key Performance Indicators</div>
             <div className="kpi-grid">
               {[
-                { title: 'Customer', value: exec.customerName || activeClient?.name },
+                { title: 'Customer', value: activeClient?.name || exec.customerName },
                 {
                   title: 'Reporting Period',
                   value: activeDashboardData?.report_period?.display_label ||
@@ -737,7 +755,7 @@ function MainPortal() {
         )}
 
         {/* ── 2. Site Summary ────────────────────────────────────────────── */}
-        {dashTab === 'sites' && (
+        {dashTab === 'sites' && !isTabHiddenForClient(activeClient?.id, 'sites') && (
           <div className="section-body card pad-md">
             <EnterpriseInsightCard
               section="sites"
@@ -799,7 +817,7 @@ function MainPortal() {
         )}
 
         {/* ── 3. Switch Analytics ─────────────────────────────────────────── */}
-        {dashTab === 'switches' && (
+        {dashTab === 'switches' && !isTabHiddenForClient(activeClient?.id, 'switches') && (
           <div className="section-body card pad-md">
             <EnterpriseInsightCard
               section="switches"
@@ -958,7 +976,7 @@ function MainPortal() {
         )}
 
         {/* ── 4. AP Analytics ─────────────────────────────────────────────── */}
-        {dashTab === 'aps' && (
+        {dashTab === 'aps' && !isTabHiddenForClient(activeClient?.id, 'aps') && (
           <div className="section-body card pad-md">
             <EnterpriseInsightCard
               section="aps"

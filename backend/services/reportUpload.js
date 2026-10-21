@@ -98,7 +98,10 @@ function parseTicketExcel(buffer) {
   return { rows, errors: [] };
 }
 
+const { dualWriteToReportsTickets } = require('./reportService');
+
 module.exports = {
   LOCKED_COLUMNS,
   parseTicketExcel,
+  dualWriteToReportsTickets,
 };

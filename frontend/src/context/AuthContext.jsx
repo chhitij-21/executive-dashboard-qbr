@@ -106,6 +106,7 @@ export function AuthProvider({ children }) {
   }, [clients, activeClient]);
 
   const setActiveClient = (client) => {
+    console.log('AUTH CONTEXT UPDATED:', client);
     setActiveClientState(client);
     if (client?.id) {
       localStorage.setItem('portal_active_client_id', client.id);

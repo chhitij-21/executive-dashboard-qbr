@@ -968,8 +968,8 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
 
   // Requirement 2: Accept start_date / end_date (custom date range only)
   // Legacy periodMode/reportPeriod are kept as fallback for /api/switch-mode internal backward compat.
-  const startDate = (req.body.start_date || '').trim();
-  const endDate = (req.body.end_date || '').trim();
+  const startDate = (req.body.startDate || req.body.start_date || '').trim();
+  const endDate = (req.body.endDate || req.body.end_date || '').trim();
   const periodMode = req.body.periodMode || 'custom'; // legacy; not used by UI anymore
   const reportPeriod = req.body.reportPeriod || req.body.reportingPeriod || '';
 
@@ -1104,6 +1104,20 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
       error: null,
     });
     historyService.cleanupOldReports(3);
+
+    // Dual-write to reports_tickets for MMTC only (JFL returns early with zero DB calls)
+    try {
+      if (incidentFile?.path && fs.existsSync(incidentFile.path)) {
+        const { parseTicketExcel, dualWriteToReportsTickets } = require('./services/reportUpload');
+        const { rows } = parseTicketExcel(fs.readFileSync(incidentFile.path));
+        const canonical = clientService.resolveCanonicalClientId(clientId);
+        const pStart = startDate || (req.body.start_date || req.body.startDate || '').trim() || result?.report_period?.start_date || null;
+        const pEnd = endDate || (req.body.end_date || req.body.endDate || '').trim() || result?.report_period?.end_date || null;
+        await dualWriteToReportsTickets(canonical, rows, { start: pStart, end: pEnd });
+      }
+    } catch (e) {
+      console.warn('[upload] dual-write skipped:', e.message);
+    }
 
     // Delete temp upload files post-processing
     historyService.cleanupTempFiles([incidentFile.path, inventoryFile?.path]);
@@ -1333,6 +1347,7 @@ app.post('/api/upload-json', uploadJsonAuth, heavyRateLimit, async (req, res) =>
 
 // ── Dashboard JSON Endpoint ────────────────────────────────────────────────
 app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashboard'], requireAuth, requireClientAccess(), async (req, res) => {
+  console.log('API DASHBOARD REQ:', req.query);
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -1342,12 +1357,14 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
 
   const reqJobId = req.params.jobId || req.query?.jobId || 'latest';
   const siteFilter = req.query.site || req.query.location || 'ALL';
+  console.log('RESOLVING DASHBOARD FOR:', { clientId, reqJobId, siteFilter });
   let job = null;
   let dPath = null;
 
   if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
     // Select newest completed job strictly belonging to requested customer
     job = resolveLatestCompletedJob(clientId);
+    console.log('RESOLVED LATEST JOB:', job ? { jobId: job.jobId, clientId: job.clientId, dashboardPath: job.dashboardPath } : null);
     if (job) {
       const jobClientId = clientService.resolveCanonicalClientId(job.clientId);
       if (jobClientId !== clientId) {
@@ -1420,7 +1437,14 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
         filteredData.iq200Audit = continuousPipelineAudit(filteredData);
       } catch (_) {}
     }
-    res.json({ jobId: job?.jobId || reqJobId, clientId, ...filteredData });
+
+    const targetCustomerName = client?.name || (clientId === 'client-jfl' ? 'Jubilant Foodworks Ltd (JFL)' : (clientId === 'client-mmtcpamp' ? 'MMTC' : (rawData.customerName || 'Customer')));
+    filteredData.customerName = targetCustomerName;
+    if (filteredData.executiveSummary) {
+      filteredData.executiveSummary.customerName = targetCustomerName;
+    }
+
+    res.json({ jobId: job?.jobId || reqJobId, clientId, customerName: targetCustomerName, ...filteredData });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

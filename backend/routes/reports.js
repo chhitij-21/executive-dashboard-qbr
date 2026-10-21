@@ -50,7 +50,11 @@ router.post(
         return !acc || acc.includes('mmtc');
       });
 
-      const { insertedCount } = await persistTickets(req.targetClientId, mmtcRows.length > 0 ? mmtcRows : rows);
+      const uploadPeriod = {
+        start: req.body?.start_date || req.body?.start || null,
+        end: req.body?.end_date || req.body?.end || null,
+      };
+      const { insertedCount } = await persistTickets(req.targetClientId, mmtcRows.length > 0 ? mmtcRows : rows, uploadPeriod);
 
       return res.status(201).json({
         message: 'Tickets uploaded and validated successfully',
@@ -62,6 +66,115 @@ router.post(
     }
   }
 );
+
+function getZeroedReport(clientId) {
+  return {
+    summary: { total: 0, closed: 0, on_hold: 0, open: 0 },
+    sla: { met: 0, breached: 0, on_hold: 0, by_type: { Incident: 0, CR: 0, RF: 0, Upgrade: 0 } },
+    channel: { meraki_alerts: 0, meraki_emails: 0, security_alerts: 0, security_emails: 0 },
+    rca_breakdown: [],
+    isp_pct: { rca_denom: 0, channel_denom: 0 },
+    isp_location: [],
+    top_sites: [],
+    hold_tickets: [],
+    cr_tickets: [],
+    cr_summary: { meraki_crs: 0, security_crs: 0, security_emails: 0, total_crs: 0 },
+    meta: {
+      client_id: clientId,
+      start: null,
+      end: null,
+      label: 'No data',
+      uploaded_at: null,
+    },
+  };
+}
+
+/**
+ * GET /api/reports/:clientId/latest
+ * Fetches computed 8-block report data for the most recent upload batch.
+ */
+router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
+  // Guard: MMTC only, JFL rejected
+  if (req.targetClientId !== 'client-mmtcpamp') {
+    return res.status(403).json({ error: 'JFL not in scope' });
+  }
+
+  const clientId = 'mmtc';
+
+  try {
+    let db = null;
+    try {
+      db = require('../config/database');
+    } catch (_) {}
+
+    if (!db || typeof db.execute !== 'function') {
+      return res.status(200).json(getZeroedReport(clientId));
+    }
+
+    // Find latest uploaded_at batch timestamp
+    const maxRes = await db.execute(
+      'SELECT MAX(uploaded_at) AS latest FROM reports_tickets WHERE client_id = ?',
+      [clientId]
+    );
+
+    const latestUploadedAt = maxRes?.rows?.[0]?.latest || maxRes?.rows?.[0]?.[0];
+    if (!latestUploadedAt) {
+      return res.status(200).json(getZeroedReport(clientId));
+    }
+
+    // Load all tickets from this latest batch
+    const batchRes = await db.execute(
+      'SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND uploaded_at = ?',
+      [clientId, latestUploadedAt]
+    );
+
+    const rows = batchRes?.rows || [];
+    if (rows.length === 0) {
+      return res.status(200).json(getZeroedReport(clientId));
+    }
+
+    const tickets = rows.map((r) => {
+      const raw = r.payload_json || r[0];
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    });
+
+    const firstWithStart = rows.find(r => r.period_start || r[1]);
+    const firstWithEnd = rows.find(r => r.period_end || r[2]);
+    let start = firstWithStart ? (firstWithStart.period_start || firstWithStart[1]) : null;
+    let end = firstWithEnd ? (firstWithEnd.period_end || firstWithEnd[2]) : null;
+
+    const { buildReport, parseTicketDate } = require('../services/reportService');
+
+    // TASK 1c: If period_start/end are null in DB, derive them from the min/max of Created Time in the tickets array
+    if (!start || !end) {
+      const dates = tickets
+        .map((t) => parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime))
+        .filter(Boolean)
+        .sort((a, b) => a - b);
+
+      if (dates.length > 0) {
+        if (!start) start = dates[0].toISOString().slice(0, 10);
+        if (!end) end = dates[dates.length - 1].toISOString().slice(0, 10);
+      } else {
+        if (!start) start = new Date().toISOString().slice(0, 10);
+        if (!end) end = start;
+      }
+    }
+
+    const report = buildReport(clientId, start, end, { tickets });
+    report.meta = {
+      ...report.meta,
+      client_id: clientId,
+      start,
+      end,
+      uploaded_at: latestUploadedAt,
+    };
+
+    return res.status(200).json(report);
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed retrieving latest report.', details: err.message });
+  }
+});
 
 /**
  * GET /api/reports/:clientId

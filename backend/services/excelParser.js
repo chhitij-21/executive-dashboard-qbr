@@ -47,11 +47,58 @@ function getColVal(row, candidates) {
 /**
  * JFL-specific sheet detection for the two-file setup.
  */
-function detectSheets(workbookData) {
+function isRemovedSheet(name) {
+  if (!name) return false;
+  const s = String(name).trim().toLowerCase();
+  return /remove.*network|decommission|retired|removed\b|scrap|disposed|old\b/i.test(s);
+}
+
+/**
+ * JFL-specific sheet detection for the two-file setup.
+ * Supports options.isInventory to explicitly target active inventory sheets.
+ */
+function detectSheets(workbookData, options = {}) {
   const sheets = workbookData.__sheetNames || [];
+
+  // Check if workbook is explicitly or implicitly an inventory workbook
+  const hasUpdatedInvSheet = sheets.some((s) => /updated.?inventory/i.test(s));
+  const hasOnlyInvSheets = sheets.length > 0 && sheets.every((s) => {
+    const l = s.trim().toLowerCase();
+    return /inventory|ftd|fmc|location|devices/i.test(l) || isRemovedSheet(s);
+  });
+  const isInventoryWb = options.isInventory === true || hasUpdatedInvSheet || (options.isInventory !== false && hasOnlyInvSheets);
+
+  if (isInventoryWb) {
+    // Inventory workbook: NO incident sheet.
+    // Active inventory sheets are all sheets that are NOT removed/decommissioned and NOT uptime/summary sheets.
+    const activeLocationSheets = sheets.filter((s) => {
+      const lower = s.trim().toLowerCase();
+      if (isRemovedSheet(s)) return false;
+      return (
+        !lower.startsWith('all location') &&
+        !lower.includes('uptime') &&
+        !lower.startsWith('rca') &&
+        !lower.startsWith('device wise')
+      );
+    });
+
+    const uptimeSheet = sheets.find((s) => s.trim().toLowerCase().startsWith('all location'))
+      || sheets.find((s) => s.trim().toLowerCase().includes('uptime'))
+      || null;
+
+    console.log('[excelParser] Inventory workbook detected — active location sheets:', activeLocationSheets.join(', '));
+
+    return {
+      incidentSheet: null,
+      uptimeSheet,
+      locationSheets: activeLocationSheets.length > 0 ? activeLocationSheets : sheets.filter((s) => !isRemovedSheet(s)),
+      allSheets: sheets,
+    };
+  }
 
   const rankIncidentSheet = (name) => {
     const s = String(name || '').trim();
+    if (isRemovedSheet(s)) return 999;
     const lower = s.toLowerCase();
     if (/^raw\b/i.test(s)) return 1;  // starts with "raw" word
     if (lower.includes('rollover')) return 2;
@@ -71,6 +118,7 @@ function detectSheets(workbookData) {
 
   // Also require at least one expected column on the picked sheet.
   const countIncidentColumns = (sheetName) => {
+    if (isRemovedSheet(sheetName)) return 0;
     const rows = workbookData[sheetName] || [];
     if (!rows.length) return 0;
     const first = rows[0] || {};
@@ -107,6 +155,7 @@ function detectSheets(workbookData) {
   // Fallback: If no sheet matched by name rank, search ALL sheets for the one with the highest incident column count
   if (!matchedIncidentSheet) {
     const candidates = sheets
+      .filter(name => !isRemovedSheet(name))
       .map(name => ({ name, colCount: countIncidentColumns(name), rowCount: (workbookData[name] || []).length }))
       .filter(x => x.colCount > 0)
       .sort((a, b) => b.colCount - a.colCount || b.rowCount - a.rowCount);
@@ -131,6 +180,7 @@ function detectSheets(workbookData) {
   // Otherwise, all non-summary/non-uptime sheets in the workbook are location inventory sheets.
   const locationSheets = sheets.filter((s) => {
     const lower = s.trim().toLowerCase();
+    if (isRemovedSheet(s)) return false;
     if (matchedIncidentSheet && s === matchedIncidentSheet) return false;
     return (
       !lower.startsWith('all location') &&
@@ -143,7 +193,7 @@ function detectSheets(workbookData) {
   return {
     incidentSheet,
     uptimeSheet,
-    locationSheets: locationSheets.length > 0 ? locationSheets : sheets,
+    locationSheets: locationSheets.length > 0 ? locationSheets : sheets.filter((s) => !isRemovedSheet(s)),
     allSheets: sheets,
   };
 }
@@ -194,6 +244,9 @@ function isGenericLocation(loc) {
   if (/raw/i.test(str) || /^sheet\d*$/i.test(str) || /sla/i.test(str) || /jfl/i.test(str) || /incident/i.test(str) || /july|august|september|october|november|december|january|february|march|april|may|june/i.test(str)) return true;
   if (str.includes('sla_compliance') || str.includes('sla compliance') || str.includes('report') || str.includes('compliance')) return true;
   if (str.includes('inventory india') || str === 'mmtc inventory india' || str === 'inventory') return true;
+  if (/remove.*network|decommission|retired|removed\b/i.test(str)) return true;
+  if (/updated.?inventory/i.test(str)) return true;
+  if (/ftd|fmc/i.test(str)) return true;
   // Hardware models, chassis, and appliances are device specifications, not geographic site locations
   if (/catalyst|chassis|firepower|firewall|appliance|switch\b|meraki|mx68|mx75|ms425|ms250|ms120|mr\d|model\b/i.test(str) && !/plant|office|head[\s_-]?office|ho|sec70|delhi|mumbai|bangalore/i.test(str)) return true;
 
@@ -205,28 +258,37 @@ function isGenericLocation(loc) {
  */
 function mergeInventorySheets(workbookData, locationSheets) {
   const deviceMap = {};
+  const safeSheets = (locationSheets || []).filter((s) => !isRemovedSheet(s));
 
-  locationSheets.forEach((sheet) => {
+  safeSheets.forEach((sheet) => {
     const rows = workbookData[sheet] || [];
     rows.forEach((row, idx) => {
       const serial = String(
         getColVal(row, [
           'Cloud ID', 'CloudID', 'Cloud_ID', 'Cloud-ID',
           'Serial No.', 'Serial No', 'SerialNo', 'Serial Number', 'SerialNumber', 'Serial_No', 'Serial_Number',
+          'Product Detail Name/Serial No.', 'Product Detail Name / Serial No.', 'Product Detail Name/Serial No', 'Product Detail Name',
+          'PAK/Serial Number', 'PAK/Serial No.', 'PAK/Serial', 'PAK / Serial Number', 'PAK', 'Serial Number / PAK',
           'Device Serial', 'Device Serial Number', 'Device Serial No', 'Device_Serial', 'DeviceID', 'Device ID',
           'Serial', 'Serial #', 'Serial/Subscription', 'Asset Tag', 'Asset Serial', 'Service Tag', 'MAC Address', 'Host', 'Hostname'
         ])
       ).trim();
       if (!serial) return;
 
-      const rawLoc = getColVal(row, ['Location', 'Site', 'Site Name', 'SiteID', 'Site ID', 'Location Name', 'City', 'Branch', 'Store', 'Facility', 'Network', 'Network Name']);
+      const rawLoc = getColVal(row, [
+        'Installed Location', 'Installed Site', 'Installed City',
+        'Location', 'Site', 'Site Name', 'SiteID', 'Site ID', 'Location Name', 'City', 'Branch', 'Store', 'Facility', 'Network', 'Network Name'
+      ]);
       const normLoc = rawLoc ? normalizeSiteName(rawLoc) : (isGenericLocation(sheet) ? 'Unknown' : normalizeSiteName(sheet));
 
       const host = String(getColVal(row, ['Hostname', 'Host Name', 'Device Hostname', 'Host', 'Device Host', 'Device Name', 'Node Name', 'Name'])).trim();
       const rack = String(getColVal(row, ['Rack no.', 'Rack', 'Rack Number', 'Rack No', 'Rack No.', 'RackID', 'Rack ID'])).trim();
       const core = String(getColVal(row, ['Core/Non Core', 'Core Non Core', 'Core_Non_Core', 'Core / Non Core', 'Core Status'])).trim();
-      const model = String(getColVal(row, ['Model', 'Model Name', 'Device Model', 'Hardware Model'])).trim();
-      let devType = String(getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Device_Type', 'Hardware Type', 'Model Type'])).trim();
+      const model = String(getColVal(row, [
+        'Model', 'Model Name', 'Device Model', 'Hardware Model',
+        'Product Number', 'Product Description', 'Part Number', 'OEM Part Number'
+      ])).trim();
+      let devType = String(getColVal(row, ['Device Type', 'DeviceType', 'Type', 'Device_Type', 'Hardware Type', 'Model Type', 'Product Type'])).trim();
       if (!devType || devType === 'Meraki Managed Services' || devType === 'N/A' || devType === 'Unknown') {
         const combined = `${host} ${serial} ${model} ${getColVal(row, ['Subject', 'Category', 'Sub Category'])}`.toLowerCase();
         if (/\bap\b|access|ap\d|q5aa|\bmr\d*|\bmr-?\d+/i.test(combined)) devType = 'AP';
@@ -538,7 +600,6 @@ function analyzeWorkbookSchema(filePath) {
   const fileName = path.basename(filePath);
 
   const wb = loadWorkbook(filePath);
-  const detected = detectSheets(wb);
 
   const sheetsInfo = wb.__sheetNames.map((sheetName) => {
     const rows = wb[sheetName] || [];
@@ -560,8 +621,11 @@ function analyzeWorkbookSchema(filePath) {
 
   // Schema classification: determine whether workbook is an Inventory file or Incident file
   const firstSheetCols = sheetsInfo[0]?.columns || [];
-  const isInventoryFile = firstSheetCols.some((c) => /serial|model|hostname|rack|core/i.test(c)) &&
-    !firstSheetCols.some((c) => /ticket|resolution|downtime|sla/i.test(c));
+  const hasInvSheet = wb.__sheetNames.some((s) => /updated.?inventory|inventory/i.test(s));
+  const isInventoryFile = hasInvSheet || (firstSheetCols.some((c) => /serial|model|hostname|rack|core|installed location|pak/i.test(c)) &&
+    !firstSheetCols.some((c) => /ticket|resolution|downtime|sla status|rca/i.test(c)));
+
+  const detected = detectSheets(wb, { isInventory: isInventoryFile });
 
   if (isInventoryFile) {
     const devices = mergeInventorySheets(wb, detected.locationSheets);
@@ -569,7 +633,7 @@ function analyzeWorkbookSchema(filePath) {
     const apCount = devices.filter((d) => /ap|access/i.test(d.DeviceType || '')).length;
     const swCount = devices.filter((d) => /sw|switch/i.test(d.DeviceType || '')).length;
     const coreCount = devices.filter((d) => /core/i.test(d.CoreNonCore || '') && !/non/i.test(d.CoreNonCore || '')).length;
-    const siteNames = [...new Set(devices.map((d) => d.Location).filter(Boolean))];
+    const siteNames = [...new Set(devices.map((d) => d.Location).filter((l) => l && l !== 'Unknown'))];
 
     return {
       fileName,
@@ -710,6 +774,7 @@ module.exports = {
   analyzeWorkbookSchema,
   normalizeSiteName,
   isGenericLocation,
+  isRemovedSheet,
   resolveSiteFromText,
   SITE_ALIASES,
 };

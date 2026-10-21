@@ -149,9 +149,11 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     if (inventoryFile) form.append('inventory', inventoryFile);
     form.append('clientId', activeClient.id);
     form.append('location', activeLocation || 'All Locations');
-    // Requirement 2: Send start_date / end_date instead of periodMode/reportPeriod
+    // Requirement 2: Send start_date / end_date and startDate / endDate
     form.append('start_date', startDate);
     form.append('end_date',   endDate);
+    form.append('startDate',  startDate);
+    form.append('endDate',    endDate);
     form.append('uploadedBy', user?.name || 'System User');
 
     try {

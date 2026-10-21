@@ -96,6 +96,8 @@ describe('Multi-Tenant Isolation & Role-Based Authorization Suite (18 Scenarios)
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.clientId, 'client-mmtcpamp');
+    assert.equal(body.customerName, 'MMTC');
+    assert.equal(body.executiveSummary?.customerName, 'MMTC');
   });
 
   // Scenario 6: GET /api/dashboard with admin auth and clientId=client-mmtc -> 200 resolves canonical

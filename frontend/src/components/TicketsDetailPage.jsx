@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import AISectionSummary from './AISectionSummary';
 import { ChartsSection } from './ChartsSection';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * TicketsDetailPage — Proactive Ticket Analytics & Operational SLA Portal
  * Consumes canonical SSOT qbrData object passed via `data` prop.
  */
 export default function TicketsDetailPage({ data, initialSubTab }) {
+  const { activeClient } = useAuth();
   const [activeTab, setActiveTab] = useState(initialSubTab || 'engineer'); // 'engineer' | 'site' | 'reasons' | 'raw'
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -38,7 +40,7 @@ export default function TicketsDetailPage({ data, initialSubTab }) {
   const holdReasons = pro.holdReasons || [];
   const rawIncidents = [...(data.incidents || []), ...(data.otherActivities || [])];
   const periodLabel = data.report_period?.display_label || data.reportingPeriod || 'Selected Period';
-  const customerName = data.customerName || 'Jubilant Foodworks Ltd (JFL)';
+  const customerName = activeClient?.name || data.customerName || 'Customer';
 
   // Filtered raw incidents for Tab 4
   const filteredIncidents = useMemo(() => {

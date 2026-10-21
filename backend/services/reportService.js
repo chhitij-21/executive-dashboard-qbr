@@ -187,6 +187,11 @@ function parseTicketDate(val) {
   if (typeof val === 'string') {
     const s = val.trim();
     if (!s) return null;
+    const num = Number(s);
+    if (!isNaN(num) && num > 30000 && num < 100000) {
+      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+      return isNaN(d.getTime()) ? null : d;
+    }
     if (/^\d{2}-\d{2}-\d{4}/.test(s)) {
       const parts = s.split(' ');
       const [day, mon, yr] = parts[0].split('-');
@@ -213,7 +218,13 @@ function parseTicketDate(val) {
 function getBaselineTickets() {
   if (_cachedMmtcTickets) return _cachedMmtcTickets;
 
-  const xlsxPath = path.resolve(process.cwd(), 'SLA_Compliance_Report.xlsx');
+  let xlsxPath = path.resolve(process.cwd(), 'SLA_Compliance_Report.xlsx');
+  if (!fs.existsSync(xlsxPath)) {
+    xlsxPath = path.resolve(__dirname, '..', '..', 'SLA_Compliance_Report.xlsx');
+  }
+  if (!fs.existsSync(xlsxPath)) {
+    xlsxPath = path.resolve(process.cwd(), '..', 'SLA_Compliance_Report.xlsx');
+  }
   if (fs.existsSync(xlsxPath)) {
     try {
       const wb = xlsx.readFile(xlsxPath);
@@ -255,13 +266,14 @@ function buildReport(clientId, start, end, options = {}) {
   const endDt = new Date(`${end}T23:59:59.999`);
 
   const windowTickets = allTickets.filter(t => {
-    const d = parseTicketDate(t['Created Time']);
+    const d = parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime);
     if (!d) return false;
     return d >= startDt && d <= endDt;
   });
 
   let totalClosed = 0;
   let totalOnHold = 0;
+  let totalOpen = 0;
   let slaMet = 0;
   let slaBreached = 0;
   let slaOnHold = 0;
@@ -280,8 +292,9 @@ function buildReport(clientId, start, end, options = {}) {
 
   windowTickets.forEach(t => {
     const status = (t['Status'] || t.status || '').toString().trim().toLowerCase();
-    if (status === 'closed') totalClosed++;
-    if (status === 'on hold') totalOnHold++;
+    if (status === 'closed' || status === 'resolved') totalClosed++;
+    else if (status === 'on hold' || status === 'hold') totalOnHold++;
+    else totalOpen++;
 
     // Channel
     const chType = classifyChannel(t);
@@ -301,9 +314,9 @@ function buildReport(clientId, start, end, options = {}) {
     else if (slaRes.bucket === 'SLA Breached') slaBreached++;
     else if (slaRes.bucket === 'On Hold') slaOnHold++;
 
-    // RCA Breakdown (closed tickets with non-empty RCA)
+    // RCA Breakdown (non-empty RCA, closed tickets only)
     const rca = (t['RCA'] || t.rca || '').toString().trim();
-    if (rca && status === 'closed') {
+    if (rca && (status === 'closed' || status === 'resolved')) {
       if (!rcaMap[rca]) {
         rcaMap[rca] = { tickets: 0, downtime_min: 0 };
       }
@@ -313,7 +326,7 @@ function buildReport(clientId, start, end, options = {}) {
     }
 
     // ISP Location Analysis
-    if (rca === 'ISP Issue') {
+    if (rca === 'ISP Issue' && (status === 'closed' || status === 'resolved')) {
       ispCount++;
       const site = extractSiteFromDeviceName(t['Device Name']);
       siteMap[site] = (siteMap[site] || 0) + 1;
@@ -360,11 +373,55 @@ function buildReport(clientId, start, end, options = {}) {
     ispLocation = top15;
   }
 
+  // TASK 2b (Data Shape): hold_tickets: { ticket_number, subject, reason, rollover, created_date } (Filter Status == 'On Hold')
+  const holdTickets = allTickets
+    .filter(t => {
+      const status = (t['Status'] || t.status || '').toString().trim().toLowerCase();
+      if (status !== 'on hold' && status !== 'hold') return false;
+      const d = parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime);
+      return !d || d <= endDt;
+    })
+    .map(t => {
+      const d = parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime);
+      const isRollover = d ? d < startDt : false;
+      return {
+        ticket_number: String(t['Ticket Number'] || t.ticket_number || t.TicketNumber || '').trim(),
+        subject: String(t['Subject'] || t.subject || '').trim(),
+        reason: String(t['Hold Reason'] || t['Reason for Hold'] || t.hold_reason || t.HoldReason || 'Unspecified').trim(),
+        rollover: isRollover ? 'Rollover' : 'On Hold',
+        created_date: d ? d.toISOString().slice(0, 10) : String(t['Created Time'] || t.created_time || t.CreatedTime || '').trim(),
+      };
+    });
+
+  // TASK 2b (Data Shape): cr_tickets: { s_no, subject, category, sub_category, status } (Filter SubCategory == 'Change Request')
+  const crCandidates = windowTickets.filter(t => {
+    const sc = (t['Sub Category'] || t.subCategory || t['SubCategory'] || t.sub_category || '').toString().trim().toLowerCase();
+    return sc === 'change request' || classifyTicketType(t) === 'CR';
+  });
+
+  const crTickets = crCandidates.map((t, idx) => ({
+    s_no: idx + 1,
+    subject: String(t['Subject'] || t.subject || '').trim(),
+    category: String(t['Category'] || t.category || '').trim(),
+    sub_category: String(t['Sub Category'] || t.subCategory || t['SubCategory'] || t.sub_category || 'Change Request').trim(),
+    status: String(t['Status'] || t.status || 'Closed').trim(),
+  }));
+
+  const merakiCrs = crTickets.filter(c => /meraki/i.test(c.category)).length;
+  const securityCrs = crTickets.filter(c => /security/i.test(c.category)).length;
+  const crSummary = {
+    meraki_crs: merakiCrs,
+    security_crs: securityCrs,
+    security_emails: channelCounts.security_emails,
+    total_crs: crTickets.length,
+  };
+
   const report = {
     summary: {
       total: totalTickets,
       closed: totalClosed,
       on_hold: totalOnHold,
+      open: totalOpen,
     },
     sla: {
       met: slaMet,
@@ -380,6 +437,9 @@ function buildReport(clientId, start, end, options = {}) {
     },
     isp_location: ispLocation,
     top_sites: ispLocation,
+    hold_tickets: holdTickets,
+    cr_tickets: crTickets,
+    cr_summary: crSummary,
     meta: {
       client_id: clientId,
       start,
@@ -414,35 +474,121 @@ function toAiPayload(report) {
  * Persists an array of ticket rows to Turso database reports_tickets table.
  * @param {string} clientId
  * @param {Array<object>} tickets
+ * @param {object} [period] Optional { start, end }
  * @returns {Promise<{ insertedCount: number }>}
  */
-async function persistTickets(clientId, tickets) {
+async function persistTickets(clientId, tickets, period = {}) {
   let count = 0;
   if (!database || typeof database.execute !== 'function') {
     return { insertedCount: tickets.length };
   }
 
-  for (const t of tickets) {
-    const ticketNo = t['Ticket Number'] || t.ticket_number;
-    if (!ticketNo) continue;
-    const slaRes = computeSla(t);
-    const ticketType = classifyTicketType(t);
-    const now = new Date().toISOString();
+  const now = new Date().toISOString();
+  let start = period?.start || period?.start_date || null;
+  let end = period?.end || period?.end_date || null;
 
-    try {
-      await database.execute(
-        `INSERT OR REPLACE INTO reports_tickets 
-         (client_id, ticket_number, payload_json, bucket, ticket_type, uploaded_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [clientId, String(ticketNo), JSON.stringify(t), slaRes.bucket, ticketType, now]
-      );
-      count++;
-    } catch (e) {
-      // Continue inserting remaining rows
+  if (!start || !end) {
+    const dates = tickets
+      .map(t => parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime))
+      .filter(Boolean)
+      .sort((a, b) => a - b);
+    if (dates.length > 0) {
+      if (!start) start = dates[0].toISOString().slice(0, 10);
+      if (!end) end = dates[dates.length - 1].toISOString().slice(0, 10);
     }
   }
 
+  const chunkSize = 25;
+  for (let i = 0; i < tickets.length; i += chunkSize) {
+    const chunk = tickets.slice(i, i + chunkSize);
+    await Promise.all(
+      chunk.map(async (t) => {
+        const ticketNo = t['Ticket Number'] || t.ticket_number || t.TicketNumber;
+        if (!ticketNo) return;
+        const slaRes = computeSla(t);
+        const ticketType = classifyTicketType(t);
+        try {
+          await database.execute(
+            `INSERT OR REPLACE INTO reports_tickets 
+             (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [clientId, String(ticketNo), start, end, JSON.stringify(t), slaRes.bucket, ticketType, now]
+          );
+          count++;
+        } catch (e) {
+          // Continue inserting remaining rows
+        }
+      })
+    );
+  }
+
   return { insertedCount: count };
+}
+
+/**
+ * Dual-writes parsed tickets to reports_tickets table for MMTC client only.
+ * Guaranteed early return for JFL with ZERO database calls (JFL safety invariant).
+ * @param {string} clientId Canonical or raw client identifier
+ * @param {Array<object>} tickets Parsed ticket rows
+ * @param {object} [period] Optional { start, end }
+ * @returns {Promise<{ written: number, skipped?: string }>}
+ */
+async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
+  const canonical = resolveClientId(clientId);
+  if (canonical !== 'mmtc') {
+    return { written: 0, skipped: 'not-mmtc' };
+  }
+
+  if (!database || typeof database.execute !== 'function') {
+    return { written: Array.isArray(tickets) ? tickets.length : 0 };
+  }
+
+  // 1. Delete previous entries for client_id='mmtc'
+  await database.execute('DELETE FROM reports_tickets WHERE client_id = ?', ['mmtc']);
+
+  // 2. Insert or replace each ticket
+  let count = 0;
+  const list = Array.isArray(tickets) ? tickets : [];
+  let start = period?.start || period?.start_date || null;
+  let end = period?.end || period?.end_date || null;
+  const now = new Date().toISOString();
+
+  if (!start || !end) {
+    const dates = list
+      .map(t => parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime))
+      .filter(Boolean)
+      .sort((a, b) => a - b);
+    if (dates.length > 0) {
+      if (!start) start = dates[0].toISOString().slice(0, 10);
+      if (!end) end = dates[dates.length - 1].toISOString().slice(0, 10);
+    }
+  }
+
+  for (const t of list) {
+    const ticketNo = t['Ticket Number'] || t.ticket_number || t.TicketNumber;
+    if (!ticketNo) continue;
+    const slaRes = computeSla(t);
+    const ticketType = classifyTicketType(t);
+
+    await database.execute(
+      `INSERT OR REPLACE INTO reports_tickets 
+       (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'mmtc',
+        String(ticketNo),
+        start,
+        end,
+        JSON.stringify(t),
+        slaRes.bucket,
+        ticketType,
+        now,
+      ]
+    );
+    count++;
+  }
+
+  return { written: count };
 }
 
 /**
@@ -459,25 +605,65 @@ async function buildReportAsync(clientId, start, end, options = {}) {
   }
 
   // Attempt reading from DB first
-  if (database && typeof database.execute === 'function') {
-    try {
-      const res = await database.execute(
-        'SELECT payload_json FROM reports_tickets WHERE client_id = ?',
-        [clientId]
-      );
-      if (res && res.rows && res.rows.length > 0) {
-        const dbTickets = res.rows.map(r => {
-          const raw = r.payload_json || r[0];
-          return typeof raw === 'string' ? JSON.parse(raw) : raw;
-        });
-        return buildReport(clientId, start, end, { ...options, tickets: dbTickets });
-      }
-    } catch (e) {
-      // Fall through to baseline
+  if (database && typeof database.execute !== 'function') {
+    return buildReport(clientId, start, end, options);
+  }
+
+  try {
+    const res = await database.execute(
+      'SELECT payload_json FROM reports_tickets WHERE client_id = ?',
+      [clientId]
+    );
+    if (res && res.rows && res.rows.length > 0) {
+      const dbTickets = res.rows.map(r => {
+        const raw = r.payload_json || r[0];
+        return typeof raw === 'string' ? JSON.parse(raw) : raw;
+      });
+      return buildReport(clientId, start, end, { ...options, tickets: dbTickets });
     }
+  } catch (e) {
+    // Fall through to baseline
   }
 
   return buildReport(clientId, start, end, options);
+}
+
+// Mirror of frontend/src/utils/reportHelpers.js::buildDeterministicSummary.
+// Keep in sync — both are tested independently (backend T12/T13,
+// frontend via Vite).
+function buildDeterministicSummary(report) {
+  if (!report || !report.summary || !report.summary.total) {
+    const start = report?.meta?.start || '';
+    const end = report?.meta?.end || '';
+    if (start && end) {
+      return `No tickets received between ${start} and ${end}.`;
+    }
+    return 'No tickets received in this period.';
+  }
+
+  const total = report.summary.total;
+  const met = report.sla?.met ?? 0;
+  const breached = report.sla?.breached ?? 0;
+  const onHold = report.sla?.on_hold ?? 0;
+  const start = report.meta?.start || '';
+  const end = report.meta?.end || '';
+  const periodStr = start && end ? ` between ${start} and ${end}` : '';
+
+  const rcaList = Array.isArray(report.rca_breakdown) ? report.rca_breakdown : [];
+  const topRca = rcaList[0];
+  const topRcaStr = topRca ? `Top driver: ${topRca.rca} (${topRca.tickets} tickets).` : '';
+
+  const ispPctVal = report.isp_pct?.channel_denom ?? report.isp_pct?.rca_denom ?? 0;
+  const ispPercent = (typeof ispPctVal === 'number' && !isNaN(ispPctVal)) ? ispPctVal.toFixed(2) : '0.00';
+  const ispStr = `Meraki-ISP: ${ispPercent}% of tickets were ISP-related and were closed within the agreed SLA.`;
+
+  const sitesList = Array.isArray(report.top_sites) && report.top_sites.length > 0
+    ? report.top_sites
+    : (Array.isArray(report.isp_location) ? report.isp_location : []);
+  const top3Sites = sitesList.slice(0, 3).map((s) => s.site || s.name || s).filter(Boolean);
+  const sitesStr = top3Sites.length > 0 ? ` Most affected sites: ${top3Sites.join(', ')}.` : '';
+
+  return `MMTC received ${total} tickets${periodStr}. ${met} SLA met, ${breached} breached, ${onHold} on hold. ${topRcaStr} ${ispStr}${sitesStr}`.replace(/\s+/g, ' ').trim();
 }
 
 module.exports = {
@@ -490,4 +676,7 @@ module.exports = {
   buildReportAsync,
   toAiPayload,
   persistTickets,
+  dualWriteToReportsTickets,
+  buildDeterministicSummary,
+  parseTicketDate,
 };

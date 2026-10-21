@@ -11,7 +11,7 @@ import AISectionSummary from './AISectionSummary';
 export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets }) {
   const { activeClient } = useAuth();
   const periodLabel = data?.report_period?.display_label || data?.reportingPeriod || 'Selected Period';
-  const customerName = data?.customerName || activeClient?.name || 'Customer';
+  const customerName = activeClient?.name || data?.customerName || 'Customer';
   const overall = data?.proactiveTicketAnalytics?.overall || {};
   const topEngineers = (data?.proactiveTicketAnalytics?.byEngineer || []).slice(0, 5);
 

@@ -529,7 +529,7 @@ EXECUTIVE METRICS (SSOT — 100% verified):
 - Overall Proactive Switch Uptime: ${exec.proactiveSwitchUptime || 'N/A'}%
 - Infrastructure Health Score: ${exec.healthScore || 'N/A'}/100 (${exec.healthLabel || 'N/A'})
 - Incident-Free Devices: ${exec.incidentFreePercent || 'N/A'}%
-- Overall SLA Compliance: ${exec.slaCompliance || 'N/A'}%
+- Ticket SLA Compliance is ${exec.slaCompliance || 'N/A'}% (Overall SLA Compliance: ${exec.slaCompliance || 'N/A'}%)
 - Devices Breaching SLA: ${breachDevices.length}
 - Sites Breaching SLA: ${breachSites.length}
 - Total Incidents: ${exec.totalIncidents || 0} (Critical: ${exec.criticalIncidents || 0}, Major: ${exec.majorIncidents || 0}, Minor: ${exec.minorIncidents || 0})

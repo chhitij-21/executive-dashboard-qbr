@@ -40,9 +40,18 @@ const {
   computeSla,
   extractSiteFromDeviceName,
   buildReport,
+  buildDeterministicSummary,
 } = reportService;
 
-const { parseTicketExcel } = reportUpload;
+const { parseTicketExcel, dualWriteToReportsTickets } = reportUpload;
+
+let reportHelpers = {};
+try {
+  reportHelpers = require('../../frontend/src/utils/reportHelpers');
+} catch (e) {
+  reportHelpers = {};
+}
+const { isTabHiddenForClient } = reportHelpers;
 
 describe('Phase 1 — MMTC Reports Suite (TDD)', () => {
   let server;
@@ -445,4 +454,212 @@ describe('Phase 1 — MMTC Reports Suite (TDD)', () => {
     const goodUploadJson = await goodUploadRes.json();
     assert.ok(goodUploadJson.insertedCount >= 1 || goodUploadJson.totalRows >= 1);
   });
+
+  // ── T12. buildDeterministicSummary — non-empty case ──────────────────────
+  it('T12. buildDeterministicSummary returns structured text matching July live fixture', () => {
+    assert.equal(typeof buildDeterministicSummary, 'function', 'buildDeterministicSummary must be a function');
+    const liveFixturePath = path.resolve(__dirname, 'fixtures/mmtc_july_live.json');
+    const tickets = JSON.parse(fs.readFileSync(liveFixturePath, 'utf8'));
+    const report = buildReport('mmtc', '2026-07-01', '2026-07-31', { tickets });
+    const summary = buildDeterministicSummary(report);
+
+    assert.ok(typeof summary === 'string' && summary.trim().length > 0, 'Summary must be non-empty string');
+    assert.ok(summary.includes('124'), 'Summary must include total ticket count 124');
+    assert.ok(summary.includes('ISP Issue'), 'Summary must include top driver ISP Issue');
+    assert.ok(summary.includes('92.74'), 'Summary must include ISP% 92.74');
+    assert.doesNotMatch(summary, /empty/i, 'Summary must not contain "empty"');
+    assert.doesNotMatch(summary, /no data/i, 'Summary must not contain "no data"');
+    assert.doesNotMatch(summary, /configuration missing/i, 'Summary must not contain "configuration missing"');
+  });
+
+  // ── T13. buildDeterministicSummary — empty fixture ───────────────────────
+  it('T13. buildDeterministicSummary on empty fixture returns fallback without NaN or throwing', () => {
+    assert.equal(typeof buildDeterministicSummary, 'function', 'buildDeterministicSummary must be a function');
+    const emptyReport = {
+      summary: { total: 0, closed: 0, on_hold: 0 },
+      sla: { met: 0, breached: 0, on_hold: 0, by_type: {} },
+      channel: {},
+      rca_breakdown: [],
+      isp_pct: { rca_denom: 0, channel_denom: 0 },
+      top_sites: [],
+      meta: { start: '2026-01-01', end: '2026-01-05' },
+    };
+    const summary = buildDeterministicSummary(emptyReport);
+    assert.ok(typeof summary === 'string', 'Summary must be a string');
+    assert.ok(summary.includes('No tickets'), 'Summary must mention "No tickets"');
+    assert.doesNotMatch(summary, /NaN/, 'Summary must not contain NaN');
+  });
+
+  // ── T14. dualWriteToReportsTickets — MMTC case ───────────────────────────
+  it('T14. dualWriteToReportsTickets writes to reports_tickets for MMTC with DELETE then INSERTs', async () => {
+    assert.equal(typeof dualWriteToReportsTickets, 'function', 'dualWriteToReportsTickets must be a function');
+    const dbMockCalls = [];
+    let db = null;
+    try {
+      db = require('../config/database');
+    } catch (_) {}
+    const origExecute = db?.execute;
+
+    try {
+      if (db) {
+        db.execute = async (sql, params) => {
+          dbMockCalls.push({ sql, params });
+          return { rows: [] };
+        };
+      }
+
+      const sampleTickets = [
+        { 'Ticket Number': 'T1', 'Created Time': '2026-07-02 10:00', Status: 'Closed', Channel: 'Alert', Category: 'Meraki' },
+        { 'Ticket Number': 'T2', 'Created Time': '2026-07-03 11:00', Status: 'Closed', Channel: 'Email', Category: 'Meraki' },
+        { 'Ticket Number': 'T3', 'Created Time': '2026-07-04 12:00', Status: 'Closed', Channel: 'Alert', Category: 'Security' },
+        { 'Ticket Number': 'T4', 'Created Time': '2026-07-05 13:00', Status: 'Closed', Channel: 'Email', Category: 'Security' },
+        { 'Ticket Number': 'T5', 'Created Time': '2026-07-06 14:00', Status: 'Closed', Channel: 'Alert', Category: 'Meraki' },
+      ];
+
+      const res = await dualWriteToReportsTickets('mmtc', sampleTickets, { start: '2026-07-01', end: '2026-07-31' });
+      assert.equal(res.written, 5, 'Must return written: 5');
+
+      const deleteCalls = dbMockCalls.filter(c => c.sql.toUpperCase().includes('DELETE FROM REPORTS_TICKETS'));
+      assert.ok(deleteCalls.length >= 1, 'Must call DELETE FROM reports_tickets');
+      assert.equal(deleteCalls[0].params[0], 'mmtc', 'DELETE must target client_id=mmtc');
+
+      const insertCalls = dbMockCalls.filter(c => c.sql.toUpperCase().includes('INSERT OR REPLACE INTO REPORTS_TICKETS'));
+      assert.equal(insertCalls.length, 5, 'Must execute 5 INSERT calls');
+    } finally {
+      if (db && origExecute) db.execute = origExecute;
+    }
+  });
+
+  // ── T15. dualWriteToReportsTickets — JFL safety ──────────────────────────
+  it('T15. dualWriteToReportsTickets safely returns early for JFL with ZERO database calls', async () => {
+    assert.equal(typeof dualWriteToReportsTickets, 'function', 'dualWriteToReportsTickets must be a function');
+    const dbMockCalls = [];
+    let db = null;
+    try {
+      db = require('../config/database');
+    } catch (_) {}
+    const origExecute = db?.execute;
+
+    try {
+      if (db) {
+        db.execute = async (sql, params) => {
+          dbMockCalls.push({ sql, params });
+          return { rows: [] };
+        };
+      }
+
+      const sampleTickets = [
+        { 'Ticket Number': 'JFL-1', Status: 'Closed' },
+      ];
+
+      const res = await dualWriteToReportsTickets('jfl', sampleTickets, { start: '2026-07-01', end: '2026-07-31' });
+      assert.equal(res.written, 0, 'Must return written: 0');
+      assert.equal(res.skipped, 'not-mmtc', 'Must return skipped: not-mmtc');
+      assert.equal(dbMockCalls.length, 0, 'Must make ZERO database calls for JFL');
+
+      const resClientJfl = await dualWriteToReportsTickets('client-jfl', sampleTickets, { start: '2026-07-01', end: '2026-07-31' });
+      assert.equal(resClientJfl.written, 0);
+      assert.equal(resClientJfl.skipped, 'not-mmtc');
+      assert.equal(dbMockCalls.length, 0, 'Must make ZERO database calls for client-jfl');
+    } finally {
+      if (db && origExecute) db.execute = origExecute;
+    }
+  });
+
+  // ── T16. GET /api/reports/mmtc/latest — no uploads ───────────────────────
+  it('T16. GET /api/reports/mmtc/latest returns 200 with zeroed report when no uploads exist', async () => {
+    let db = null;
+    try {
+      db = require('../config/database');
+    } catch (_) {}
+    // Ensure reports_tickets for mmtc is empty
+    if (db && typeof db.execute === 'function') {
+      await db.execute('DELETE FROM reports_tickets WHERE client_id = ?', ['mmtc']).catch(() => {});
+    }
+
+    const res = await fetch(`${baseUrl}/api/reports/mmtc/latest`, {
+      headers: { Authorization: `Bearer ${mmtcToken}` },
+    });
+    assert.equal(res.status, 200, 'Endpoint must return 200');
+    const json = await res.json();
+    assert.equal(json.summary?.total, 0, 'Total tickets must be 0');
+    assert.equal(json.meta?.uploaded_at, null, 'meta.uploaded_at must be null');
+  });
+
+  // ── T17. GET /api/reports/mmtc/latest — with July fixture loaded ──────────
+  it('T17. GET /api/reports/mmtc/latest returns 200 and latest batch data when uploads exist', async () => {
+    const liveFixturePath = path.resolve(__dirname, 'fixtures/mmtc_july_live.json');
+    const tickets = JSON.parse(fs.readFileSync(liveFixturePath, 'utf8'));
+    const { persistTickets } = reportService;
+    assert.equal(typeof persistTickets, 'function');
+
+    await persistTickets('mmtc', tickets);
+
+    const res = await fetch(`${baseUrl}/api/reports/mmtc/latest`, {
+      headers: { Authorization: `Bearer ${mmtcToken}` },
+    });
+    assert.equal(res.status, 200, 'Endpoint must return 200');
+    const json = await res.json();
+    assert.equal(json.summary?.total, 124, 'Total tickets must be 124 from latest upload');
+    assert.ok(typeof json.meta?.uploaded_at === 'string' && json.meta.uploaded_at.length > 0, 'meta.uploaded_at must be ISO string');
+  });
+
+  // ── T18. GET /api/reports/jfl/latest — JFL rejected (403) ────────────────
+  it('T18. GET /api/reports/jfl/latest is strictly rejected with 403 Forbidden', async () => {
+    const res = await fetch(`${baseUrl}/api/reports/jfl/latest`, {
+      headers: { Authorization: `Bearer ${jflToken}` },
+    });
+    assert.equal(res.status, 403, 'JFL client access to reports must return 403');
+  });
+
+  // ── T19. frontend isTabHiddenForClient helper ────────────────────────────
+  it('T19. isTabHiddenForClient correctly identifies hidden tabs for MMTC vs JFL', () => {
+    assert.equal(typeof isTabHiddenForClient, 'function', 'isTabHiddenForClient must be a function');
+    assert.equal(isTabHiddenForClient('client-mmtcpamp', 'sites'), true);
+    assert.equal(isTabHiddenForClient('client-mmtcpamp', 'switches'), true);
+    assert.equal(isTabHiddenForClient('client-mmtcpamp', 'aps'), true);
+    assert.equal(isTabHiddenForClient('client-mmtcpamp', 'executive'), false);
+    assert.equal(isTabHiddenForClient('client-jfl', 'sites'), false);
+    assert.equal(isTabHiddenForClient('client-jfl', 'switches'), false);
+    assert.equal(isTabHiddenForClient('client-jfl', 'aps'), false);
+  });
+
+  // ── T20. buildReport date filtering & hold_tickets / cr_tickets data shape (Phase 1 & 2) ──
+  it('T20. buildReport strictly filters by date window (Sept window returns ~103 incidents, hold_tickets and cr_tickets)', () => {
+    assert.equal(typeof buildReport, 'function', 'buildReport must be a function');
+    const report = buildReport('mmtc', '2026-09-01', '2026-09-30');
+
+    assert.ok(report, 'Report must be generated');
+    assert.notEqual(report.summary.total, 349, 'Must not dump all 349 tickets into Sept report');
+    assert.ok(report.summary.total >= 100 && report.summary.total <= 110, `Sept total tickets must be ~103-105, got ${report.summary.total}`);
+    assert.equal(report.sla.by_type.Incident, 103, `Sept incidents must be 103, got ${report.sla.by_type.Incident}`);
+
+    // TASK 2b: Data Shape checks
+    assert.ok(Array.isArray(report.hold_tickets), 'report.hold_tickets must be an array');
+    assert.ok(Array.isArray(report.cr_tickets), 'report.cr_tickets must be an array');
+
+    // Also verify CR tickets data shape with window having CR tickets (e.g. August 2026)
+    const augReport = buildReport('mmtc', '2026-08-01', '2026-08-31');
+    assert.ok(Array.isArray(augReport.cr_tickets), 'augReport.cr_tickets must be an array');
+    assert.ok(augReport.cr_tickets.length > 0, 'August window must have CR tickets');
+    augReport.cr_tickets.forEach((cr, idx) => {
+      assert.equal(cr.s_no, idx + 1, 'cr_ticket must have 1-based s_no');
+      assert.ok('subject' in cr, 'cr_ticket must have subject');
+      assert.ok('category' in cr, 'cr_ticket must have category');
+      assert.ok('sub_category' in cr, 'cr_ticket must have sub_category');
+      assert.ok('status' in cr, 'cr_ticket must have status');
+    });
+
+    // Also verify hold_tickets shape when present
+    if (report.hold_tickets.length > 0) {
+      report.hold_tickets.forEach(ht => {
+        assert.ok('ticket_number' in ht, 'hold_ticket must have ticket_number');
+        assert.ok('subject' in ht, 'hold_ticket must have subject');
+        assert.ok('reason' in ht, 'hold_ticket must have reason');
+        assert.ok('rollover' in ht, 'hold_ticket must have rollover');
+        assert.ok('created_date' in ht, 'hold_ticket must have created_date');
+      });
+    }
+  });
 });
+

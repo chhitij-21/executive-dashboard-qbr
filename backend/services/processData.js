@@ -37,6 +37,7 @@ const ruleEngine = require('./ruleEngine');
 const { generatePPT } = require('./pptGenerator');
 const { generatePDF } = require('./pdfGenerator');
 const { continuousPipelineAudit } = require('./ai/iq200Validator');
+const clientService = require('./clientService');
 
 // Helper for returning structured failure results
 function fail(outputDir, errorCode, message, log) {
@@ -370,7 +371,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const SLA_TARGET = ruleEngine.getSLATarget(effectivePeriodMode);
   // Incident Resolution SLA target (hours) — distinct from uptime SLA
   const INCIDENT_SLA_TARGET_HOURS = ruleEngine.getIncidentSLATargetHours();
-  const CUSTOMER_NAME = options.clientName || 'Jubilant Foodworks Ltd (JFL)';
+  const clientConfig = options.clientId ? clientService.getClientById(options.clientId) : null;
+  const CUSTOMER_NAME = options.clientName || clientConfig?.name || (options.clientId === 'client-mmtcpamp' ? 'MMTC' : 'Jubilant Foodworks Ltd (JFL)');
   const REPORTING_PERIOD = activeReportingPeriod;
 
   log(`Rules loaded from: ${ruleConfigFile}. Uptime SLA Target: ${SLA_TARGET}% | Incident Resolution SLA: ${INCIDENT_SLA_TARGET_HOURS}h`);
@@ -397,6 +399,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const isIncidentWb = (wb) => {
     if (!wb || !wb.__sheetNames) return false;
     const names = wb.__sheetNames.map((s) => s.trim().toLowerCase());
+    if (names.some((s) => /updated.?inventory/i.test(s))) return false;
     if (names.some((s) => s === 'raw' || s === 'jfl' || s.includes('incident') || s.includes('compliance') || s.includes('sla'))) {
       return true;
     }
@@ -446,7 +449,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── 4. Build device list ──────────────────────────────────────────────────
   let devices = [];
   if (invWb) {
-    const invSheetMap = detectSheets(invWb);
+    const invSheetMap = detectSheets(invWb, { isInventory: true });
     devices = mergeInventorySheets(invWb, invSheetMap.locationSheets);
     log(`Inventory devices merged: ${devices.length} from ${invSheetMap.locationSheets.length} sheets`);
   }
@@ -724,20 +727,6 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     return false;
   };
 
-  function deriveSubCategory(item) {
-    const desc = String(item.Description || item.Subject || '').toLowerCase();
-    const rca = String(item.RCA || '').toLowerCase();
-    const sub = String(item.SubCategory || item['Sub Category'] || item['Sub-Category'] || '').trim();
-    if (sub && sub.toLowerCase() !== 'meraki managed services' && sub.toLowerCase() !== 'n/a') return sub;
-    if (/licence|license/i.test(desc)) return 'License Request';
-    if (/asset scan/i.test(desc)) return 'Asset Task';
-    if (/whitelist|mac address|ip whitelist/i.test(desc)) return 'Request Fulfillment';
-    if (/bescom|shutdown|power load|ad disjoined|authentication/i.test(desc)) return 'Maintenance Task';
-    if (/scheduled maintenance/i.test(desc)) return 'Scheduled Maintenance';
-    if (/change|request|fulfillment/i.test(rca) || /new configuration/i.test(rca)) return 'Request Fulfillment';
-    return 'Change Request';
-  }
-
   // Change Requests and non-hardware tasks are segregated from hardware Incidents per business spec
   const rawOtherActivities = incidents
     .filter(isOtherActivity)
@@ -767,12 +756,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       const dt = parseAnyDate(raw);
       if (!dt) return false;
 
-      const rawStatus = String(inc.Status || '').trim().toLowerCase();
-      const isOpenOrOnHold = !rawStatus || /open|pending|on[\s-]?hold|hold|wip|in[\s-]?progress|assigned/i.test(rawStatus);
-
-      if (isOpenOrOnHold) {
-        return dt <= rangeEnd;
-      }
+      // Bug 8 fix: Do not leak past open tickets into custom reporting window
       return dt >= rangeStart && dt <= rangeEnd;
     });
 
@@ -1675,9 +1659,9 @@ function buildAllAnalytics(devices, incidents, allLocMap, log, reportingPeriod, 
   const siteSummary = buildSiteSummary(devices, switches, aps, incidents, reportingPeriod, periodOptions, customerName);
   const switchAn = buildSwitchAnalytics(switches, incidents, periodOptions);
   const apAn = buildAPAnalytics(aps, incidents, activeDevices);
-  const incAn = buildIncidentAnalytics(incidents, activeDevices);
+  const incAn = buildIncidentAnalytics(incidents, activeDevices, periodOptions);
   const rcaAn = buildRCAAnalytics(incidents);
-  const slaAn = buildSLAAnalytics(activeDevices, incidents);
+  const slaAn = buildSLAAnalytics(activeDevices, incidents, periodOptions);
   const proactiveTicketAnalytics = buildProactiveTicketAnalytics(incidents, otherActivities);
 
   const activeLabel = reportPeriodMeta?.display_label || reportingPeriod;
@@ -1735,6 +1719,7 @@ function computeHoldDowntime(i) {
 // ── Executive Summary ──────────────────────────────────────────────────────
 
 function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDevices, reportingPeriod, customerName, periodOptions = {}) {
+  const IS_JFL_CLIENT = /jfl|jubilant/i.test(customerName || '') || periodOptions?.clientId === 'client-jfl';
   const total = activeDevices.length;
   const uptimes = activeDevices.map(d => d.__effectiveUptime ?? 100);
   const overallUptime = total > 0 ? avg(uptimes).toFixed(2) : '100.00';
@@ -1745,10 +1730,33 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
 
   const healthScore = ruleEngine.calculateHealthScore(parseFloat(overallUptime), parseFloat(incidentFreePct));
   const slaBreaches = activeDevices.filter(d => d.__slaBreach).length;
-  const slaPct = total > 0 ? (((total - slaBreaches) / total) * 100).toFixed(2) : '100.00';
+  const devSlaPct = total > 0 ? Math.max(0, Math.min(100, ((total - slaBreaches) / total) * 100)).toFixed(2) : '100.00';
+
+  // Bug 2: Compute Ticket-based SLA compliance for non-JFL clients (or when ticket SLA is present)
+  const metTickets = incidents.filter(i => {
+    const s = String(i.sla_status || i['SLA Status'] || i.ResolutionSLAStatusRaw || '').trim().toLowerCase();
+    return s === 'sla met' || s === 'met';
+  }).length;
+  const breachedTickets = incidents.filter(i => {
+    const s = String(i.sla_status || i['SLA Status'] || i.ResolutionSLAStatusRaw || '').trim().toLowerCase();
+    return s === 'sla breached' || s === 'breached';
+  }).length;
+  const ticketSlaTotal = metTickets + breachedTickets;
+
+  let slaPct;
+  if (!IS_JFL_CLIENT && ticketSlaTotal > 0) {
+    slaPct = ((metTickets / ticketSlaTotal) * 100).toFixed(2);
+  } else if (ticketSlaTotal > 0 && (!devSlaPct || devSlaPct === '100.00' && breachedTickets > 0)) {
+    slaPct = ((metTickets / ticketSlaTotal) * 100).toFixed(2);
+  } else {
+    slaPct = devSlaPct;
+  }
 
   const sevSplit = splitBySeverity(incidents);
-  const sites = new Set(activeDevices.map(d => d.SiteID || d.Location).filter(Boolean));
+  // Bug 4: Union of inventory sites and incident sites
+  const invSites = activeDevices.map(d => d.SiteID || d.Location).filter(s => s && !isGenericLocation(s));
+  const incSites = incidents.map(i => i.SiteID || i.Location).filter(s => s && !isGenericLocation(s));
+  const sites = new Set([...invSites, ...incSites]);
 
   const rcaBrk = classifyRCALocal(incidents);
   const primaryRca = rcaBrk.length > 0 ? rcaBrk[0].rca : 'None';
@@ -1765,8 +1773,6 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
   const uniqueAPsWithIncidents = new Set(apIncidents.map(i => i.DeviceID || i.SerialNo)).size;
   const apRcaBrk = classifyRCALocal(apIncidents);
   const primaryRcaAPs = apRcaBrk.length > 0 && apRcaBrk[0].rca !== 'Unknown' ? apRcaBrk[0].rca : 'Stable Operations (No Incidents)';
-
-  const IS_JFL_CLIENT = /jfl|jubilant/i.test(customerName || '') || periodOptions?.clientId === 'client-jfl';
 
   // ── Switch Incident Uptime (SSOT Executive Level) ──
   const swIncRows = incidents.filter(i => {
@@ -1796,9 +1802,9 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
 
   return {
     isJFLClient: IS_JFL_CLIENT,
-    customerName: customerName || 'Jubilant Foodworks Ltd (JFL)',
+    customerName: customerName || (periodOptions?.clientId === 'client-mmtcpamp' ? 'MMTC' : 'Jubilant Foodworks Ltd (JFL)'),
     reportingPeriod: reportingPeriod || 'User Selected Period',
-    totalSites: sites.size,
+    totalSites: sites.size > 0 ? sites.size : (total > 0 ? 1 : 0),
     totalDevices: total,
     totalStockDevices: stockDevices.length,
     totalSwitches: switches.length,
@@ -1823,6 +1829,32 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
     majorIncidents: sevSplit.major,
     minorIncidents: sevSplit.minor,
   };
+}
+
+function deriveSubCategory(item) {
+  const desc = String(item.Description || item.Subject || '').toLowerCase();
+  const rca = String(item.RCA || '').toLowerCase();
+  const sub = String(item.SubCategory || item['Sub Category'] || item['Sub-Category'] || '').trim();
+  const cat = String(item.Category || '').toLowerCase();
+  const devType = String(item.DeviceType || '').toLowerCase();
+  const fullText = `${desc} ${rca} ${sub.toLowerCase()} ${cat} ${devType}`;
+
+  // Dynamic upgrade classification (Bug 7)
+  if (/upgrade|upgradation/i.test(fullText) || /ios/i.test(sub)) {
+    if (/meraki/i.test(fullText)) return 'Meraki Firmware Upgrade';
+    if (/fmc|ftd|firewall|security/i.test(fullText)) return 'FMC/FTD Upgrade';
+    if (/switch|catalyst|ios/i.test(fullText)) return 'Switch IOS Upgrade';
+    return 'Firmware Upgrade';
+  }
+
+  if (sub && sub.toLowerCase() !== 'meraki managed services' && sub.toLowerCase() !== 'n/a') return sub;
+  if (/licence|license/i.test(desc)) return 'License Request';
+  if (/asset scan/i.test(desc)) return 'Asset Task';
+  if (/whitelist|mac address|ip whitelist/i.test(desc)) return 'Request Fulfillment';
+  if (/bescom|shutdown|power load|ad disjoined|authentication/i.test(desc)) return 'Maintenance Task';
+  if (/scheduled maintenance/i.test(desc)) return 'Scheduled Maintenance';
+  if (/change|request|fulfillment/i.test(rca) || /new configuration/i.test(rca)) return 'Request Fulfillment';
+  return 'Change Request';
 }
 
 function buildProactiveTicketAnalytics(incidents, otherActivities = []) {
@@ -1975,9 +2007,11 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
       || devToSiteMap[inc.Hostname]
       || null;
 
-    const targetSite = (site && !isGenericLocation(site) && sitesMap[site]) ? site : null;
-    if (targetSite) {
-      sitesMap[targetSite].incidents.push(inc);
+    if (site && !isGenericLocation(site)) {
+      if (!sitesMap[site]) {
+        sitesMap[site] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
+      }
+      sitesMap[site].incidents.push(inc);
     }
   });
 
@@ -2395,19 +2429,66 @@ function calculateMTTRHours(incidents) {
   return (totalHours / count).toFixed(1);
 }
 
-function buildIncidentAnalytics(incidents, devices) {
+function parseIncidentDate(ct) {
+  if (!ct) return null;
+  if (ct instanceof Date) return isNaN(ct.getTime()) ? null : ct;
+  if (typeof ct === 'number') return excelDateToJS(ct);
+  if (typeof ct === 'string') {
+    const num = Number(ct);
+    if (!isNaN(num) && num > 30000 && num < 100000) {
+      return excelDateToJS(num);
+    }
+    const d = new Date(ct);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+function buildIncidentAnalytics(incidents, devices, periodOptions = {}) {
   const sevSplit = splitBySeverity(incidents);
   const mttrHours = calculateMTTRHours(incidents);
 
   const monthMap = {};
   incidents.forEach(inc => {
-    const ct = inc.CreatedTime;
+    const ct = inc['Created Time'] || inc.CreatedTime || inc.created_time || inc.OpenTime || inc.open_time;
     if (!ct) return;
-    const d = typeof ct === 'number' ? excelDateToJS(ct) : new Date(ct);
-    if (isNaN(d.getTime())) return;
+    const d = parseIncidentDate(ct);
+    if (!d || isNaN(d.getTime())) return;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     monthMap[key] = (monthMap[key] || 0) + 1;
   });
+
+  // Zero-fill missing intervening months between earliest and latest (or options start/end)
+  const existingMonths = Object.keys(monthMap).sort();
+  let startMonth = existingMonths[0];
+  let endMonth = existingMonths[existingMonths.length - 1];
+
+  const opts = (periodOptions && typeof periodOptions === 'object') ? periodOptions : {};
+  if (opts.startDate && opts.endDate) {
+    const sD = new Date(opts.startDate);
+    const eD = new Date(opts.endDate);
+    if (!isNaN(sD.getTime()) && !isNaN(eD.getTime())) {
+      const sKey = `${sD.getUTCFullYear()}-${String(sD.getUTCMonth() + 1).padStart(2, '0')}`;
+      const eKey = `${eD.getUTCFullYear()}-${String(eD.getUTCMonth() + 1).padStart(2, '0')}`;
+      if (!startMonth || sKey < startMonth) startMonth = sKey;
+      if (!endMonth || eKey > endMonth) endMonth = eKey;
+    }
+  }
+
+  if (startMonth && endMonth && startMonth <= endMonth) {
+    let [curY, curM] = startMonth.split('-').map(Number);
+    const [endY, endM] = endMonth.split('-').map(Number);
+    while (curY < endY || (curY === endY && curM <= endM)) {
+      const mKey = `${curY}-${String(curM).padStart(2, '0')}`;
+      if (!monthMap[mKey]) monthMap[mKey] = 0;
+      curM++;
+      if (curM > 12) {
+        curM = 1;
+        curY++;
+      }
+    }
+  }
+
   const monthlyTrend = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b))
     .map(([month, count]) => ({ month, count }));
 
@@ -2457,7 +2538,7 @@ function buildRCAAnalytics(incidents) {
 
 // ── SLA Analytics ──────────────────────────────────────────────────────────
 
-function buildSLAAnalytics(devices, incidents) {
+function buildSLAAnalytics(devices, incidents, periodOptions = {}) {
   const total = devices.length;
   const breaches = devices.filter(d => d.__slaBreach).length;
   const overallSLAPercent = total > 0 ? (((total - breaches) / total) * 100).toFixed(2) : '100.00';
@@ -2489,19 +2570,64 @@ function buildSLAAnalytics(devices, incidents) {
 
   const monthDevMap = {};
   incidents.forEach(inc => {
-    const ct = inc.CreatedTime;
+    const ct = inc['Created Time'] || inc.CreatedTime || inc.created_time || inc.OpenTime || inc.open_time;
     if (!ct) return;
-    const d = typeof ct === 'number' ? excelDateToJS(ct) : new Date(ct);
-    if (isNaN(d.getTime())) return;
+    const d = parseIncidentDate(ct);
+    if (!d || isNaN(d.getTime())) return;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (!monthDevMap[key]) monthDevMap[key] = new Set();
-    if (inc.DeviceID) monthDevMap[key].add(inc.DeviceID);
+    if (!monthDevMap[key]) monthDevMap[key] = { devIds: new Set(), met: 0, breached: 0 };
+    if (inc.DeviceID) monthDevMap[key].devIds.add(inc.DeviceID);
+    if (inc.sla_status === 'SLA Met') monthDevMap[key].met++;
+    else if (inc.sla_status === 'SLA Breached') monthDevMap[key].breached++;
   });
+
+  // Zero-fill missing months
+  const existingSlaMonths = Object.keys(monthDevMap).sort();
+  let slaStartMonth = existingSlaMonths[0];
+  let slaEndMonth = existingSlaMonths[existingSlaMonths.length - 1];
+
+  const sOpts = (periodOptions && typeof periodOptions === 'object') ? periodOptions : {};
+  if (sOpts.startDate && sOpts.endDate) {
+    const sD = new Date(sOpts.startDate);
+    const eD = new Date(sOpts.endDate);
+    if (!isNaN(sD.getTime()) && !isNaN(eD.getTime())) {
+      const sKey = `${sD.getUTCFullYear()}-${String(sD.getUTCMonth() + 1).padStart(2, '0')}`;
+      const eKey = `${eD.getUTCFullYear()}-${String(eD.getUTCMonth() + 1).padStart(2, '0')}`;
+      if (!slaStartMonth || sKey < slaStartMonth) slaStartMonth = sKey;
+      if (!slaEndMonth || eKey > slaEndMonth) slaEndMonth = eKey;
+    }
+  }
+
+  if (slaStartMonth && slaEndMonth && slaStartMonth <= slaEndMonth) {
+    let [curY, curM] = slaStartMonth.split('-').map(Number);
+    const [endY, endM] = slaEndMonth.split('-').map(Number);
+    while (curY < endY || (curY === endY && curM <= endM)) {
+      const mKey = `${curY}-${String(curM).padStart(2, '0')}`;
+      if (!monthDevMap[mKey]) monthDevMap[mKey] = { devIds: new Set(), met: 0, breached: 0 };
+      curM++;
+      if (curM > 12) {
+        curM = 1;
+        curY++;
+      }
+    }
+  }
+
   const monthlySLATrend = Object.entries(monthDevMap).sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, devIds]) => ({
-      month,
-      slaPercent: total > 0 ? (((total - devIds.size) / total) * 100).toFixed(2) : '100.00',
-    }));
+    .map(([month, stats]) => {
+      let pct;
+      if (stats.met + stats.breached > 0) {
+        pct = (stats.met / (stats.met + stats.breached)) * 100;
+      } else if (total > 0) {
+        const compliant = Math.max(0, total - stats.devIds.size);
+        pct = (compliant / total) * 100;
+      } else {
+        pct = 100;
+      }
+      return {
+        month,
+        slaPercent: Math.max(0, Math.min(100, pct)).toFixed(2),
+      };
+    });
 
   return {
     overallSLAPercent,
@@ -2637,7 +2763,8 @@ function filterDashboardBySite(data, siteFilter) {
   const aps = activeDevices.filter((d) => /ap|access.?point|wireless/i.test(String(d.DeviceType || '')));
 
   const reportingPeriod = data.reportingPeriod || 'Q1 FY2026';
-  const customerName = data.customerName || data.executiveSummary?.customerName || 'Jubilant Foodworks Ltd (JFL)';
+  const targetClientName = (data.clientId === 'client-mmtcpamp' || data.executiveSummary?.clientId === 'client-mmtcpamp') ? 'MMTC' : null;
+  const customerName = targetClientName || data.customerName || data.executiveSummary?.customerName || 'Jubilant Foodworks Ltd (JFL)';
 
   // Preserve original period options from the full dataset so uptime labels/targets,
   // the SLA target, and the available-minutes window remain correct for the drill-down.
@@ -2670,9 +2797,9 @@ function filterDashboardBySite(data, siteFilter) {
 
   const switchAn = buildSwitchAnalytics(switches, enrichedIncidents, periodOptions);
   const apAn = buildAPAnalytics(aps, enrichedIncidents, activeDevices);
-  const incAn = buildIncidentAnalytics(enrichedIncidents, activeDevices);
+  const incAn = buildIncidentAnalytics(enrichedIncidents, activeDevices, periodOptions);
   const rcaAn = buildRCAAnalytics(enrichedIncidents);
-  const slaAn = buildSLAAnalytics(activeDevices, enrichedIncidents);
+  const slaAn = buildSLAAnalytics(activeDevices, enrichedIncidents, periodOptions);
 
   // Filter otherActivities by site for accurate site-level grand total
   const filteredOtherActivities = (data.otherActivities || []).filter((oa) => {
@@ -2709,5 +2836,9 @@ module.exports = {
   normalizeSiteName,
   buildSiteSummary,
   validateAnalytics,
+  buildExecutiveSummary,
+  buildIncidentAnalytics,
+  buildSLAAnalytics,
+  deriveSubCategory,
 };
 

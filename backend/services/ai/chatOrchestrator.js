@@ -57,7 +57,7 @@ function buildNativeSsotFallback(prompt, qbrData) {
   text += `* **Proactive Switch Uptime**: **${exec.proactiveSwitchUptime || '100.00'}%**\n`;
   text += `* **JFL Switch Uptime**: **${exec.jflSwitchUptime || '100.00'}%**\n`;
   text += `* **Overall Health Score**: **${exec.healthScore || 100}** (${exec.healthLabel || 'Excellent'})\n`;
-  text += `* **SLA Compliance**: **${exec.slaCompliance || '100.00'}%** (Target: ${exec.slaTarget || 99.30}%)\n`;
+  text += `* **SLA Compliance**: **${exec.slaCompliance || '100.00'}%** (Ticket SLA Compliance is ${exec.slaCompliance || '100.00'}%, Target: ${exec.slaTarget || 99.30}%)\n`;
 
   return text;
 }

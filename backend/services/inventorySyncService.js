@@ -502,10 +502,11 @@ function selectInventorySheet(wb) {
   const updated = names.find((n) => /updated.?inventory/i.test(n));
   if (updated && (wb[updated] || []).length > 0) return updated;
 
-  // 2. Fallback: sheet with most rows
+  // 2. Fallback: sheet with most rows (excluding removed sheets)
   let best = null,
     bestCount = 0;
   for (const n of names) {
+    if (/remove.*network|decommission|retired|removed\b/i.test(n)) continue;
     const c = (wb[n] || []).length;
     if (c > bestCount) {
       best = n;
@@ -632,15 +633,35 @@ function mapJFLRow(row) {
 }
 
 function mapMMTCRow(row) {
+  const rawSerial = row['Cloud ID'] ||
+    row['Product Detail Name/Serial No.'] ||
+    row['Product Detail Name / Serial No.'] ||
+    row['PAK/Serial Number'] ||
+    row['PAK/Serial No.'] ||
+    row['Serial No.'] ||
+    row['Serial No'] ||
+    row['Serial Number'];
+
+  const rawNetwork = row['Network'] ||
+    row['Network Name'] ||
+    row['Installed Location'] ||
+    row['Location'] ||
+    row['Site'];
+
+  const rawModel = row['Model'] ||
+    row['Product Number'] ||
+    row['Product Description'] ||
+    row['Device Model'];
+
   return {
     client_id: 'mmtc',
-    serial_no: normalizeSerial(row['Cloud ID']),
-    mac_address: cleanStr(row['MAC address']),
+    serial_no: normalizeSerial(rawSerial),
+    mac_address: cleanStr(row['MAC address'] || row['MAC Address']),
     cloud_id: null,
-    hostname: null,
-    device_type: deriveDeviceType(row['Model']),
-    model: cleanStr(row['Model']),
-    site_id: deriveMMTCSite(row['Network']),
+    hostname: cleanStr(row['Hostname'] || row['Host']),
+    device_type: deriveDeviceType(rawModel),
+    model: cleanStr(rawModel),
+    site_id: deriveMMTCSite(rawNetwork),
     rack_location: null,
     status: 'active',
   };
@@ -653,41 +674,52 @@ async function parseUploadedInventory(filePath, clientId) {
     throw new Error(`Invalid clientId: ${clientId}. Must be 'jfl' or 'mmtc'`);
   }
   const wb = loadWorkbook(filePath);
-  const sheetName = selectInventorySheet(wb);
-  const rows = wb[sheetName] || [];
+  const names = wb.__sheetNames || [];
   const mapper = clientId === 'jfl' ? mapJFLRow : mapMMTCRow;
+
+  // Multi-sheet MMTC support: include active sheets, exclude removed sheets
+  const isMultiSheetMMTC = clientId === 'mmtc' && names.some((n) => /updated.?inventory/i.test(n));
+  let targetSheets = [];
+  if (isMultiSheetMMTC) {
+    targetSheets = names.filter((n) => !/remove.*network|decommission|retired|removed\b/i.test(n));
+  } else {
+    targetSheets = [selectInventorySheet(wb)];
+  }
 
   const devices = [];
   const warnings = [];
   const seenSerials = new Set();
 
-  for (const row of rows) {
-    const hasAnyValue = Object.entries(row).some(
-      ([k, v]) => !k.startsWith('__') && v !== '' && v !== null && v !== undefined
-    );
-    if (!hasAnyValue) continue;
-
-    const device = mapper(row);
-
-    if (!device.serial_no) {
-      warnings.push({
-        row: row.__source?.row,
-        sheet: row.__source?.sheet,
-        reason: 'empty serial number',
-      });
-      continue;
-    }
-
-    if (seenSerials.has(device.serial_no)) {
-      throw new Error(
-        `Duplicate serial number in ${clientId} upload: ${device.serial_no} (row ${row.__source?.row})`
+  for (const sheetName of targetSheets) {
+    const rows = wb[sheetName] || [];
+    for (const row of rows) {
+      const hasAnyValue = Object.entries(row).some(
+        ([k, v]) => !k.startsWith('__') && v !== '' && v !== null && v !== undefined
       );
+      if (!hasAnyValue) continue;
+
+      const device = mapper(row);
+
+      if (!device.serial_no) {
+        warnings.push({
+          row: row.__source?.row,
+          sheet: row.__source?.sheet,
+          reason: 'empty serial number',
+        });
+        continue;
+      }
+
+      if (seenSerials.has(device.serial_no)) {
+        throw new Error(
+          `Duplicate serial number in ${clientId} upload: ${device.serial_no} (row ${row.__source?.row})`
+        );
+      }
+      seenSerials.add(device.serial_no);
+      devices.push(device);
     }
-    seenSerials.add(device.serial_no);
-    devices.push(device);
   }
 
-  return { devices, warnings, sheetUsed: sheetName };
+  return { devices, warnings, sheetUsed: targetSheets.join(', ') };
 }
 
 /**

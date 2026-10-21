@@ -5,11 +5,13 @@ import {
   PieChart, Pie, Cell, Legend, ReferenceLine
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../context/AuthContext';
 
 const PIE_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 export function ChartsSection({ qbrData, showHeader = true }) {
   const { t } = useTranslation();
+  const { activeClient } = useAuth();
 
   // 1. Engineer SLA Performance & Breaches (SLA Met vs SLA Breached)
   const engineerSlaData = useMemo(() => {
@@ -70,7 +72,7 @@ export function ChartsSection({ qbrData, showHeader = true }) {
 
   if (!qbrData) return null;
 
-  const customerName = (qbrData?.customerName || 'Jubilant Foodworks Ltd (JFL)').toUpperCase();
+  const customerName = (activeClient?.name || qbrData?.customerName || 'Customer').toUpperCase();
   const periodLabel = qbrData?.report_period?.display_label || qbrData?.reportingPeriod || '1 September 2026 – 30 September 2026';
   const slaTarget = parseFloat(qbrData?.executiveSummary?.slaTarget || 99.3);
 
