@@ -7,8 +7,17 @@ frontend/dist/
 dist/
 build/
 
-# Generated Reports (runtime output)
-reports/
+# Generated Reports (runtime output) — exclude large binaries only
+# Only dashboard_data.json per job is tracked; all other output is runtime-generated
+reports/**/*.pptx
+reports/**/*.pdf
+reports/**/*.xlsx
+reports/**/*.xls
+reports/**/ppt_validation_report.json
+reports/**/data_quality_report.md
+reports/**/processing_log.md
+reports/**/validation_report.md
+reports/**/error_report.md
 tmp/
 tmp_*/
 templates/extracted_media/
@@ -18,8 +27,8 @@ data/incoming/
 data/users.json
 data/mitigation_cache.json
 
-# Runtime history (regenerated at runtime)
-data/reports_metadata.json
+# IMPORTANT: data/reports_metadata.json is NOW TRACKED so Render can
+# resolve jobs via resolveLatestCompletedJob. Do NOT add it back here.
 
 # Keep seed data — clients.json needed on first boot
 !data/clients.json
