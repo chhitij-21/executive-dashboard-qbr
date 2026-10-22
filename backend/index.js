@@ -1372,12 +1372,25 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
     const canonicalPath = path.resolve('data', 'dashboard_data.json');
     const bundledPath = path.resolve('data', 'bundled_default', 'dashboard_data.json');
 
-    // Priority 1: Canonical FIRST
-    if (fs.existsSync(canonicalPath)) {
+    // Priority 1: Canonical FIRST (if matching requested customer)
+    let canonicalMatches = false;
+    const testCanonical = (p) => {
+      try {
+        const c = JSON.parse(fs.readFileSync(p, 'utf8'));
+        const cid = c.clientId ? clientService.resolveCanonicalClientId(c.clientId) : 'client-jfl';
+        return cid === clientId;
+      } catch (_) { return false; }
+    };
+
+    if (fs.existsSync(canonicalPath) && testCanonical(canonicalPath)) {
       dPath = canonicalPath;
-    } else if (fs.existsSync(bundledPath)) {
+      canonicalMatches = true;
+    } else if (fs.existsSync(bundledPath) && testCanonical(bundledPath)) {
       dPath = bundledPath;
-    } else {
+      canonicalMatches = true;
+    }
+
+    if (!canonicalMatches) {
       // Priority 2: Fallback to historical job
       job = resolveLatestCompletedJob(clientId);
       if (job) {
@@ -1386,6 +1399,10 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
           return res.status(403).json({ error: 'Customer isolation violation: Job does not belong to requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
         }
         dPath = job.dashboardPath;
+      } else if (fs.existsSync(canonicalPath)) {
+        dPath = canonicalPath;
+      } else if (fs.existsSync(bundledPath)) {
+        dPath = bundledPath;
       }
     }
   } else {

@@ -1434,6 +1434,62 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     log(`Historical tickets query note: ${histErr.message}`);
   }
 
+  // Local historical reports fallback if database query returns empty (Task 3)
+  if (historicalIncidents.length === 0) {
+    try {
+      const clientService = require('./clientService');
+      const canonicalClient = clientService.resolveCanonicalClientId(targetClientId || CUSTOMER_NAME || 'client-jfl');
+      const seenTicketIds = new Set();
+      incidents.forEach(inc => {
+        const id = inc['Ticket Number'] || inc.ticket_number || inc.TicketNumber || inc.IncidentID || inc.id;
+        if (id) seenTicketIds.add(String(id).trim());
+      });
+
+      const candidateFiles = [];
+      const reportsDir = path.resolve(__dirname, '..', '..', 'reports');
+      if (fs.existsSync(reportsDir)) {
+        const entries = fs.readdirSync(reportsDir, { withFileTypes: true });
+        for (const ent of entries) {
+          if (ent.isDirectory()) {
+            const p = path.join(reportsDir, ent.name, 'dashboard_data.json');
+            if (fs.existsSync(p)) candidateFiles.push(p);
+          }
+        }
+      }
+
+      const canonicalFiles = [
+        path.resolve(__dirname, '..', '..', 'data', 'dashboard_data.json'),
+        path.resolve(__dirname, '..', '..', 'data', 'bundled_default', 'dashboard_data.json'),
+      ];
+      for (const cp of canonicalFiles) {
+        if (fs.existsSync(cp) && !candidateFiles.includes(cp)) candidateFiles.push(cp);
+      }
+
+      for (const filePath of candidateFiles) {
+        try {
+          const raw = fs.readFileSync(filePath, 'utf8');
+          const parsed = JSON.parse(raw);
+          const fileClient = clientService.resolveCanonicalClientId(parsed.clientId || parsed.client_info?.id || parsed.customerName || 'client-jfl');
+          if (fileClient === canonicalClient && Array.isArray(parsed.incidents)) {
+            parsed.incidents.forEach(inc => {
+              const id = inc['Ticket Number'] || inc.ticket_number || inc.TicketNumber || inc.IncidentID || inc.id;
+              const key = id ? String(id).trim() : null;
+              if (!key || !seenTicketIds.has(key)) {
+                if (key) seenTicketIds.add(key);
+                historicalIncidents.push(inc);
+              }
+            });
+          }
+        } catch (_) {}
+      }
+      if (historicalIncidents.length > 0) {
+        log(`Loaded ${historicalIncidents.length} historical incidents from local reports cache as fallback`);
+      }
+    } catch (fbErr) {
+      log(`Local historical fallback note: ${fbErr.message}`);
+    }
+  }
+
   const analyticsPeriodOptions = {
     ...periodOptions,
     clientId: targetClientId,
@@ -1951,6 +2007,10 @@ function deriveSubCategory(item) {
   if (/bescom|shutdown|power load|ad disjoined|authentication/i.test(desc)) return 'Maintenance Task';
   if (/scheduled maintenance/i.test(desc)) return 'Scheduled Maintenance';
   if (/change|request|fulfillment/i.test(rca) || /new configuration/i.test(rca)) return 'Request Fulfillment';
+  const priority = String(item.Priority || '').toLowerCase();
+  if (priority === 'core' || priority === 'non-core') {
+    return 'Incident';
+  }
   return 'Change Request';
 }
 
@@ -2100,24 +2160,46 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
 
   incidents.forEach(inc => {
     const rawSite = String(inc.SiteID || inc.Location || '').trim();
-    const site = (!isGenericLocation(rawSite) ? normalizeSiteName(rawSite) : null)
+    let site = (!isGenericLocation(rawSite) ? normalizeSiteName(rawSite) : null)
       || devToSiteMap[inc.DeviceID]
       || devToSiteMap[inc.SerialNo]
       || devToSiteMap[inc.Hostname]
-      || null;
+      || 'Unmapped / Other';
 
-    if (site && !isGenericLocation(site)) {
-      if (!sitesMap[site]) {
-        sitesMap[site] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
-      }
-      sitesMap[site].incidents.push(inc);
+    if (!site || isGenericLocation(site) || ['Unknown', 'Unassigned / Other', 'Unassigned', 'Other'].includes(site)) {
+      site = 'Unmapped / Other';
     }
+
+    if (!sitesMap[site]) {
+      sitesMap[site] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
+    }
+    sitesMap[site].incidents.push(inc);
   });
 
+  const UNMAPPED_KEY = 'Unmapped / Other';
   const EXCLUDED_BUCKETS = new Set(['Unknown', 'Unassigned / Other', 'Unassigned', 'Other']);
+  for (const [key, val] of Object.entries(sitesMap)) {
+    if (key !== UNMAPPED_KEY && (isGenericLocation(key) || EXCLUDED_BUCKETS.has(key))) {
+      if (!sitesMap[UNMAPPED_KEY]) {
+        sitesMap[UNMAPPED_KEY] = { devices: [], activeDevices: [], stockDevices: [], switches: [], aps: [], incidents: [] };
+      }
+      sitesMap[UNMAPPED_KEY].devices.push(...val.devices);
+      sitesMap[UNMAPPED_KEY].activeDevices.push(...val.activeDevices);
+      sitesMap[UNMAPPED_KEY].stockDevices.push(...val.stockDevices);
+      sitesMap[UNMAPPED_KEY].switches.push(...val.switches);
+      sitesMap[UNMAPPED_KEY].aps.push(...val.aps);
+      sitesMap[UNMAPPED_KEY].incidents.push(...val.incidents);
+      delete sitesMap[key];
+    }
+  }
 
   return Object.entries(sitesMap)
-    .filter(([siteId]) => !isGenericLocation(siteId) && !EXCLUDED_BUCKETS.has(siteId))
+    .filter(([siteId, s]) => {
+      if (siteId === UNMAPPED_KEY) {
+        return (s.devices.length > 0 || s.incidents.length > 0);
+      }
+      return !isGenericLocation(siteId);
+    })
     .map(([siteId, s]) => {
       const swJflUps = s.switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
       const swProUps = s.switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));

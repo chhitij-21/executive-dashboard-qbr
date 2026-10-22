@@ -409,6 +409,14 @@ function parseIncidentSheet(rows) {
       const devNameVal = getColVal(row, ['Device Name']);
       if (devNameVal && !isGenericLocation(devNameVal)) {
         rawLoc = devNameVal;
+        if (/ind-ggn|ggn/i.test(rawLoc)) {
+          rawLoc = 'Greater Noida';
+        } else if (/ind-pvc-/i.test(rawLoc)) {
+          const pvcMatch = String(rawLoc).match(/ind-pvc-([a-z0-9]+)/i);
+          if (pvcMatch && pvcMatch[1]) {
+            rawLoc = pvcMatch[1];
+          }
+        }
       }
     }
     // Blank out non-site placeholders so they never become bogus locations.

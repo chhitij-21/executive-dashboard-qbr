@@ -177,9 +177,9 @@ function getDeviceSeverity(deviceType, isCoreDevice) {
  */
 function splitBySeverity(incidents) {
   const sevValues = rules.incident_severity_values || {
-    critical: ['P1', 'Critical', 'High'],
+    critical: ['P1', 'Critical', 'High', 'Core'],
     major: ['P2', 'Major', 'Medium'],
-    minor: ['P3', 'Minor', 'Low'],
+    minor: ['P3', 'Minor', 'Low', 'Non-Core'],
   };
 
   let critical = 0, major = 0, minor = 0;

@@ -59,9 +59,9 @@ severity_device_mapping:
 
 # Maps raw severity text from incidents sheet to standard labels
 incident_severity_values:
-  critical: ["P1", "Critical", "CRITICAL", "High", "HIGH", "1"]
+  critical: ["P1", "Critical", "CRITICAL", "High", "HIGH", "1", "Core"]
   major:    ["P2", "Major", "MAJOR", "Medium", "MEDIUM", "2"]
-  minor:    ["P3", "Minor", "MINOR", "Low", "LOW", "3"]
+  minor:    ["P3", "Minor", "MINOR", "Low", "LOW", "3", "Non-Core"]
 
 # ── RCA Category Mapping ──────────────────────────────────────────────────────
 # Maps raw Excel RCA text → one of 6 standard categories
