@@ -1,11 +1,12 @@
-// frontend/src/components/Sidebar.jsx
 import React from 'react';
 import {
   Home,
   UploadCloud,
   AlertTriangle,
   Database,
-  Settings
+  Settings,
+  Clock,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, onTabChange, onSelectTab }) {
@@ -21,8 +22,10 @@ export default function Sidebar({ activeTab, onTabChange, onSelectTab }) {
   const navItems = [
     { id: 'overview', label: 'Overview', icon: Home },
     { id: 'upload', label: 'Upload Data', icon: UploadCloud },
+    { id: 'history', label: 'Report History', icon: Clock },
     { id: 'incidents', label: 'Proactive Tickets & Engineer SLA Performance', icon: AlertTriangle },
     { id: 'inventory', label: 'Device Inventory', icon: Database },
+    { id: 'vulnerabilities', label: 'Vulnerabilities', icon: ShieldAlert },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 

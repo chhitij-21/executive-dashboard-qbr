@@ -1,10 +1,9 @@
-// frontend/src/components/Topbar.jsx
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, ChevronDown, Building2 } from 'lucide-react';
+import { Calendar, ChevronDown, Building2, LogOut } from 'lucide-react';
 
 export default function Topbar({ onOpenUpload, data }) {
-  const { user, clients, activeClient, setActiveClient } = useAuth();
+  const { user, clients, activeClient, setActiveClient, logout } = useAuth();
 
   const handleClientChange = (e) => {
     const selected = clients.find((c) => c.id === e.target.value);
@@ -183,6 +182,37 @@ export default function Topbar({ onOpenUpload, data }) {
             </div>
           </div>
         </div>
+
+        {/* Prominent Manual Logout Button */}
+        <button
+          onClick={logout}
+          title="Sign out of portal"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            padding: '0.45rem 0.85rem',
+            borderRadius: '0.5rem',
+            backgroundColor: '#fee2e2',
+            color: '#b91c1c',
+            border: '1px solid #fecaca',
+            fontSize: '0.825rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease, color 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#fca5a5';
+            e.currentTarget.style.color = '#7f1d1d';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#fee2e2';
+            e.currentTarget.style.color = '#b91c1c';
+          }}
+        >
+          <LogOut size={15} />
+          <span>Logout</span>
+        </button>
       </div>
     </header>
   );

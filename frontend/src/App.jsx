@@ -1471,21 +1471,23 @@ function MainPortal() {
           )}
 
           {tab === 'history' && (
-            <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
-              <ReportHistory
-                onViewDashboard={(jid) => {
-                  setJobId(jid);
-                  setStatus('completed');
-                  setTab('dashboard');
-                }}
-                onReportDeleted={(jid) => {
-                  if (jobId === jid) {
-                    setJobId(null);
-                    setDashboardData(null);
-                  }
-                }}
-              />
-            </div>
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <ReportHistory
+                  onViewDashboard={(jid) => {
+                    setJobId(jid);
+                    setStatus('completed');
+                    setTab('dashboard');
+                  }}
+                  onReportDeleted={(jid) => {
+                    if (jobId === jid) {
+                      setJobId(null);
+                      setDashboardData(null);
+                    }
+                  }}
+                />
+              </div>
+            </ErrorBoundary>
           )}
 
           {(tab === 'settings' || tab === 'clients') && (

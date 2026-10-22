@@ -219,9 +219,38 @@ export function AuthProvider({ children }) {
     setUser(null);
     setSession(null);
     setToken(null);
-    localStorage.removeItem('portal_user');
-    localStorage.removeItem('portal_token');
+    localStorage.clear();
+    sessionStorage.clear();
   };
+
+  // Inactivity Timer (10 Minutes / 600,000 ms)
+  useEffect(() => {
+    if (!user) return;
+
+    let timeoutId = null;
+
+    const handleInactivity = () => {
+      logout();
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = '/';
+    };
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleInactivity, 600000);
+    };
+
+    resetTimer();
+
+    const activityEvents = ['mousemove', 'keydown', 'click', 'scroll'];
+    activityEvents.forEach((event) => window.addEventListener(event, resetTimer));
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      activityEvents.forEach((event) => window.removeEventListener(event, resetTimer));
+    };
+  }, [user]);
 
   return (
     <AuthContext.Provider
