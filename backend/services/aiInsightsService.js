@@ -155,7 +155,7 @@ function generateFallbackInsights(section, data) {
   const slaAnalytics = data?.slaAnalytics || {};
   const pro = data?.proactiveTicketAnalytics || {};
 
-  const slaTarget = Number(slaAnalytics.slaTarget ?? exec.slaTarget ?? ruleEngine?.getSLATarget?.() ?? 99.3);
+  const slaTarget = Number(slaAnalytics.slaTarget ?? exec.slaTarget ?? ruleEngine?.getSLATarget?.() ?? 0);
   const slaCompliance = Number(exec.slaCompliance ?? exec.slaComplianceRate ?? (pro.overall ? pro.overall.slaPercent : 100));
   const healthScore = Number(exec.healthScore ?? 100);
   const healthLabel = exec.healthLabel || (healthScore >= 90 ? 'Optimal' : healthScore >= 80 ? 'Good' : 'Degraded');

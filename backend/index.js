@@ -555,9 +555,9 @@ function resolveLatestCompletedJob(clientId) {
   };
 
   const sorted = Array.from(uniqueMap.values()).sort((a, b) => {
-    const tb = parseSafe(b.uploadTimestamp);
     const ta = parseSafe(a.uploadTimestamp);
-    if (tb !== null && ta !== null) return tb - ta;
+    const tb = parseSafe(b.uploadTimestamp);
+    if (ta !== null && tb !== null) return tb - ta; // true descending
     if (tb !== null) return 1;
     if (ta !== null) return -1;
     return 0;
@@ -1369,22 +1369,23 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
   let dPath = null;
 
   if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
-    // Select newest completed job strictly belonging to requested customer
-    job = resolveLatestCompletedJob(clientId);
-    console.log('RESOLVED LATEST JOB:', job ? { jobId: job.jobId, clientId: job.clientId, dashboardPath: job.dashboardPath } : null);
-    if (job) {
-      const jobClientId = clientService.resolveCanonicalClientId(job.clientId);
-      if (jobClientId !== clientId) {
-        return res.status(403).json({ error: 'Customer isolation violation: Job does not belong to requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
-      }
-      dPath = job.dashboardPath;
-    } else if (clientId === 'client-jfl') {
-      const canonicalPath = path.resolve('data', 'dashboard_data.json');
-      const bundledPath = path.resolve('data', 'bundled_default', 'dashboard_data.json');
-      if (fs.existsSync(canonicalPath)) {
-        dPath = canonicalPath;
-      } else if (fs.existsSync(bundledPath)) {
-        dPath = bundledPath;
+    const canonicalPath = path.resolve('data', 'dashboard_data.json');
+    const bundledPath = path.resolve('data', 'bundled_default', 'dashboard_data.json');
+
+    // Priority 1: Canonical FIRST
+    if (fs.existsSync(canonicalPath)) {
+      dPath = canonicalPath;
+    } else if (fs.existsSync(bundledPath)) {
+      dPath = bundledPath;
+    } else {
+      // Priority 2: Fallback to historical job
+      job = resolveLatestCompletedJob(clientId);
+      if (job) {
+        const jobClientId = clientService.resolveCanonicalClientId(job.clientId);
+        if (jobClientId !== clientId) {
+          return res.status(403).json({ error: 'Customer isolation violation: Job does not belong to requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+        }
+        dPath = job.dashboardPath;
       }
     }
   } else {
@@ -1446,12 +1447,23 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
     }
 
     const targetCustomerName = client?.name || (clientId === 'client-jfl' ? 'Jubilant Foodworks Ltd (JFL)' : (clientId === 'client-mmtcpamp' ? 'MMTC' : (rawData.customerName || 'Customer')));
-    filteredData.customerName = targetCustomerName;
-    if (filteredData.executiveSummary) {
-      filteredData.executiveSummary.customerName = targetCustomerName;
-    }
+    try {
+      filteredData.customerName = targetCustomerName;
+      if (filteredData.executiveSummary) {
+        filteredData.executiveSummary.customerName = targetCustomerName;
+      }
+    } catch (_) {}
 
-    res.json({ jobId: job?.jobId || reqJobId, clientId, customerName: targetCustomerName, ...filteredData });
+    res.json({
+      ...filteredData,
+      jobId: job?.jobId || reqJobId,
+      clientId,
+      customerName: targetCustomerName,
+      executiveSummary: filteredData.executiveSummary ? {
+        ...filteredData.executiveSummary,
+        customerName: targetCustomerName,
+      } : filteredData.executiveSummary,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

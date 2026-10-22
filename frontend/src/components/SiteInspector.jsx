@@ -527,7 +527,6 @@ export default function SiteInspector({
             <KpiCard title="AP Incidents" value={incidentBreakdown.apIncidents} />
             <KpiCard title="Switch Incidents" value={incidentBreakdown.switchIncidents} />
             <KpiCard title="Unique APs Impacted" value={incidentBreakdown.uniqueAPsCount} />
-            <KpiCard title="Primary RCA Driver" value={incidentBreakdown.topRca} />
           </div>
           {siteIncidents.length > 0 && (
             <DataTable

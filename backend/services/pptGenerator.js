@@ -40,13 +40,8 @@ const reconciliationEngine = require('./reconciliationEngine');
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-// FINDING-010 FIX: SLA_TARGET is no longer hardcoded here.
-// It is read from data.slaAnalytics.slaTarget which is set by processData.js
-// using the period-aware ruleEngine.getSLATarget(periodMode).
-// A module-level fallback is kept only for backward compatibility with old data.
-const SLA_TARGET_FALLBACK = 99.3;
-// Mutable: overwritten at start of buildPresentation() from the canonical data value.
-let SLA_TARGET = SLA_TARGET_FALLBACK;
+// FINDING-010 FIX: SLA_TARGET is read dynamically via ruleEngine.getSLATarget().
+let SLA_TARGET = ruleEngine.getSLATarget();
 
 
 const TARGET_SITES_FALLBACK = [
@@ -160,8 +155,7 @@ function pct(v) {
 function uptimeColor(rawValue, slaTarget) {
   const n = parseFloat(String(rawValue ?? ''));
   if (isNaN(n)) return C.TEXT_MUTED;
-  // FINDING-010 FIX: Use the passed slaTarget from data, not a hardcoded constant.
-  return n < (slaTarget ?? SLA_TARGET_FALLBACK) ? C.RED : C.GREEN;
+  return n < (slaTarget ?? ruleEngine.getSLATarget()) ? C.RED : C.GREEN;
 }
 
 function rowFill(idx) {
@@ -532,8 +526,7 @@ async function buildPresentation(data, outputPath, options = {}) {
 
   // FINDING-010 FIX: Resolve SLA_TARGET from the processed data (set by processData.js).
   // This guarantees the PPT uses the same threshold that was used to determine breaches.
-  // eslint-disable-next-line no-global-assign
-  SLA_TARGET = parseFloat(slaAn.slaTarget || exec.slaTarget) || SLA_TARGET_FALLBACK;
+  SLA_TARGET = parseFloat(slaAn.slaTarget || exec.slaTarget) || ruleEngine.getSLATarget();
 
   const customerName = data.customerName || exec.customerName || 'Client';
   const clientShort = (/mmtc/i.test(customerName) || data.clientId === 'client-mmtcpamp') ? 'MMTC' : ((/jfl/i.test(customerName) || data.clientId === 'client-jfl') ? 'JFL' : customerName);
