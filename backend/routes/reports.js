@@ -114,11 +114,12 @@ router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
     const requestedJobId = (req.query?.jobId || '').toString().trim();
     let rows = [];
     let batchTimestamp = null;
+    const testFilter = process.env.NODE_ENV !== 'test' ? " AND ticket_number NOT LIKE 'TEST-%'" : "";
 
     if (requestedJobId && requestedJobId !== 'latest' && requestedJobId !== 'default') {
       // 1. If req.query.jobId is provided and not 'latest', filter reports_tickets by that specific job_id (or uploaded_at batch).
       const jobRes = await db.execute(
-        'SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND (job_id = ? OR uploaded_at = ?)',
+        `SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND (job_id = ? OR uploaded_at = ?) AND period_start IS NOT NULL AND payload_json IS NOT NULL AND payload_json != 'null'${testFilter}`,
         [clientId, requestedJobId, requestedJobId]
       );
       rows = jobRes?.rows || [];
@@ -130,7 +131,7 @@ router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
           const job = historyService.getReportByJobId(requestedJobId);
           if (job?.uploadTimestamp) {
             const tsRes = await db.execute(
-              'SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND uploaded_at = ?',
+              `SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND uploaded_at = ? AND period_start IS NOT NULL AND payload_json IS NOT NULL AND payload_json != 'null'${testFilter}`,
               [clientId, job.uploadTimestamp]
             );
             rows = tsRes?.rows || [];
@@ -142,7 +143,7 @@ router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
     // Only fallback to MAX(uploaded_at) if jobId is 'latest' or missing or no rows were found
     if (rows.length === 0) {
       const maxRes = await db.execute(
-        'SELECT MAX(uploaded_at) AS latest FROM reports_tickets WHERE client_id = ?',
+        `SELECT MAX(uploaded_at) AS latest FROM reports_tickets WHERE client_id = ? AND period_start IS NOT NULL AND payload_json IS NOT NULL AND payload_json != 'null'${testFilter}`,
         [clientId]
       );
 
@@ -153,7 +154,7 @@ router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
 
       batchTimestamp = latestUploadedAt;
       const batchRes = await db.execute(
-        'SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND uploaded_at = ?',
+        `SELECT payload_json, period_start, period_end, uploaded_at FROM reports_tickets WHERE client_id = ? AND uploaded_at = ? AND period_start IS NOT NULL AND payload_json IS NOT NULL AND payload_json != 'null'${testFilter}`,
         [clientId, latestUploadedAt]
       );
       rows = batchRes?.rows || [];
@@ -191,6 +192,11 @@ router.get('/:clientId/latest', requireAuth, guard, async (req, res) => {
         if (!start) start = new Date().toISOString().slice(0, 10);
         if (!end) end = start;
       }
+    }
+
+    // Reject if all tickets are test rows
+    if (tickets.length === 0 || (process.env.NODE_ENV !== 'test' && tickets.every(t => String(t['Ticket Number'] || t.ticket_number || '').startsWith('TEST-')))) {
+      return res.status(200).json(getZeroedReport(clientId));
     }
 
     const report = buildReport(clientId, start, end, { tickets });

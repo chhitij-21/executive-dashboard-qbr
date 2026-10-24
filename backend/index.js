@@ -1150,7 +1150,11 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
         const canonical = clientService.resolveCanonicalClientId(clientId);
         const pStart = startDate || (req.body.start_date || req.body.startDate || '').trim() || result?.report_period?.start_date || null;
         const pEnd = endDate || (req.body.end_date || req.body.endDate || '').trim() || result?.report_period?.end_date || null;
-        await dualWriteToReportsTickets(canonical, rows, { start: pStart, end: pEnd, jobId });
+        const realTickets = (rows || []).filter(t => {
+          const tn = String(t['Ticket Number'] || t.ticket_number || '');
+          return tn && !tn.startsWith('TEST-');
+        });
+        await dualWriteToReportsTickets(canonical, realTickets, { start: pStart, end: pEnd, jobId });
       }
     } catch (e) {
       console.warn('[upload] dual-write skipped:', e.message);
