@@ -585,11 +585,7 @@ async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
   const jobId = period?.jobId || period?.job_id || null;
 
   // 1. Delete previous entries
-  if (jobId) {
-    await database.execute('DELETE FROM reports_tickets WHERE client_id = ? AND job_id = ?', ['mmtc', jobId]);
-  } else {
-    await database.execute('DELETE FROM reports_tickets WHERE client_id = ?', ['mmtc']);
-  }
+  await database.execute('DELETE FROM reports_tickets WHERE client_id = ?', ['mmtc']);
 
   // 2. Insert or replace each ticket
   let count = 0;

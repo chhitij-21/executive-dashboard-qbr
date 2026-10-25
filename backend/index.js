@@ -1150,14 +1150,28 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
         const canonical = clientService.resolveCanonicalClientId(clientId);
         const pStart = startDate || (req.body.start_date || req.body.startDate || '').trim() || result?.report_period?.start_date || null;
         const pEnd = endDate || (req.body.end_date || req.body.endDate || '').trim() || result?.report_period?.end_date || null;
+        const isTestEnv = process.env.NODE_ENV === 'test';
+        const { parseTicketDate } = require('./services/reportService');
+        const dStart = pStart ? new Date(`${pStart}T00:00:00Z`) : null;
+        const dEnd = pEnd ? new Date(`${pEnd}T23:59:59Z`) : null;
+
         const realTickets = (rows || []).filter(t => {
+          const acc = (t['Account Name'] || '').toString().toLowerCase();
+          if (acc && !acc.includes('mmtc')) return false;
           const tn = String(t['Ticket Number'] || t.ticket_number || '');
-          return tn && !tn.startsWith('TEST-');
+          if (!tn) return false;
+          if (isTestEnv && tn.startsWith('TEST-')) return false;
+          if (dStart && dEnd) {
+            const d = parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime);
+            if (d && (d < dStart || d > dEnd)) return false;
+          }
+          return true;
         });
+        console.log('[upload] parsed tickets:', rows.length, 'real tickets:', realTickets.length);
         await dualWriteToReportsTickets(canonical, realTickets, { start: pStart, end: pEnd, jobId });
       }
     } catch (e) {
-      console.warn('[upload] dual-write skipped:', e.message);
+      console.error('[upload] dual-write failed:', e.message);
     }
 
     // Delete temp upload files post-processing
