@@ -91,7 +91,10 @@ export default function Sidebar({ activeTab, onTabChange, onSelectTab }) {
         >
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const isActive =
+              activeTab === item.id ||
+              (item.id === 'overview' && activeTab === 'dashboard') ||
+              (item.id === 'incidents' && activeTab === 'tickets');
             return (
               <button
                 key={item.id}

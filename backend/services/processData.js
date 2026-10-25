@@ -478,7 +478,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   }
 
   // ── 5. Parse incidents ────────────────────────────────────────────────────
-  let incidents = parseIncidentSheet(rawIncidentRows);
+  let incidents = parseIncidentSheet(rawIncidentRows, options);
 
   // Normalize site names on raw incidents to avoid premature Nagpur / Unknown misattribution
   incidents.forEach((inc) => {
@@ -588,8 +588,30 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const blankAccountIncidents = [];
   const unknownAccounts = new Set();
 
+  // Pre-computed Set of valid MMTC account names for fast O(1) lookup
+  const mmtcAccounts = new Set([
+    'MMTC',
+    'MMTC-PAMP',
+    'MMTC-PAMP India Pvt. Ltd.',
+    'MMTC-PAMP India Pvt Ltd',
+    'MMTC-PAMP India Private Limited',
+    'mmtc',
+    'mmtcpamp',
+    'mmtc-pamp',
+    'mmtc-pamp india',
+    'mmtc pamp',
+    'mmtc pamp india',
+    'mmtc-pamp india pvt ltd',
+    'mmtc-pamp india pvt. ltd.',
+    'mmtc-pamp india private limited',
+    'client-mmtcpamp',
+    'client-mmtc',
+  ]);
+
+  const isMMTC = targetClientId.includes('mmtc');
+
   for (const inc of incidents) {
-    const rawAcc = String(inc.AccountName || '').trim();
+    const rawAcc = String(inc['Account Name'] || inc.AccountName || '').trim();
     const normAcc = rawAcc.toLowerCase();
 
     if (!normAcc) {
@@ -597,16 +619,25 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
       continue;
     }
 
-    if (aliasToClientId.has(normAcc)) {
-      const mappedId = aliasToClientId.get(normAcc);
-      if (mappedId === targetClientId) {
+    if (isMMTC) {
+      if (mmtcAccounts.has(rawAcc) || mmtcAccounts.has(normAcc)) {
         matchingIncidents.push(inc);
       } else {
+        unknownAccounts.add(rawAcc);
         otherCustomerIncidents.push(inc);
       }
     } else {
-      unknownAccounts.add(rawAcc);
-      otherCustomerIncidents.push(inc);
+      if (aliasToClientId.has(normAcc)) {
+        const mappedId = aliasToClientId.get(normAcc);
+        if (mappedId === targetClientId) {
+          matchingIncidents.push(inc);
+        } else {
+          otherCustomerIncidents.push(inc);
+        }
+      } else {
+        unknownAccounts.add(rawAcc);
+        otherCustomerIncidents.push(inc);
+      }
     }
   }
 

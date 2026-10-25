@@ -26,7 +26,7 @@ export default function ReportsView({ jobId = 'latest' }) {
 
   const formatPeriodDate = (dStr) => {
     if (!dStr) return '';
-    if (/^\d{4}-\d{2}-\d{2}/.test(dStr)) {
+    if (typeof dStr === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dStr)) {
       const parts = dStr.slice(0, 10).split('-');
       const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const mIdx = parseInt(parts[1], 10) - 1;
@@ -35,7 +35,14 @@ export default function ReportsView({ jobId = 'latest' }) {
         return `${day} ${months[mIdx]} ${parts[0]}`;
       }
     }
-    return dStr;
+    try {
+      const d = new Date(dStr);
+      if (!isNaN(d.getTime())) {
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+      }
+    } catch (_) {}
+    return String(dStr);
   };
 
   const fetchLatestReport = async () => {
@@ -66,8 +73,8 @@ export default function ReportsView({ jobId = 'latest' }) {
     fetchLatestReport();
   }, [jobId]);
 
-  const start = formatPeriodDate(report?.meta?.start) || '1 September 2026';
-  const end = formatPeriodDate(report?.meta?.end) || '30 September 2026';
+  const start = formatPeriodDate(report?.meta?.start || report?.meta?.period_start) || '';
+  const end = formatPeriodDate(report?.meta?.end || report?.meta?.period_end) || '';
   const channel = report?.channel || {};
   const rcaList = Array.isArray(report?.rca_breakdown) ? report.rca_breakdown : [];
   const holdTickets = Array.isArray(report?.hold_tickets) ? report.hold_tickets : [];
@@ -84,7 +91,7 @@ export default function ReportsView({ jobId = 'latest' }) {
       {/* ── 1. Header: Reporting Period: {start} to {end} (Large, bold) ── */}
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: 'var(--text-primary, #111827)', margin: 0 }}>
-          Reporting Period: {start} to {end}
+          Reporting Period: {start && end ? `${start} to ${end}` : (start || end || 'N/A')}
         </h1>
       </div>
 
@@ -100,6 +107,14 @@ export default function ReportsView({ jobId = 'latest' }) {
         </div>
       )}
 
+      {report && report.summary && report.summary.total === 0 ? (
+        <div style={{ padding: '3rem 2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', color: '#64748b', margin: '2rem 0' }}>
+          <p style={{ fontSize: '1.15rem', fontWeight: 600, color: '#334155', margin: 0 }}>
+            No tickets received in this period
+          </p>
+        </div>
+      ) : (
+        <>
       {/* ── 2. Channel KPIs: 4 Purple Boxes ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" style={{ marginBottom: '2rem' }}>
         <div className="mmtc-purple-box">
@@ -190,7 +205,11 @@ export default function ReportsView({ jobId = 'latest' }) {
                 ))}
                 <tr style={{ background: '#7b1c5a', color: 'white', fontWeight: 700 }}>
                   <td colSpan="3" style={{ color: 'white' }}>Grand Total</td>
-                  <td style={{ color: 'white' }}>{report?.isp_grand_total ?? 0}</td>
+                  <td style={{ color: 'white' }}>
+                    {report?.isp_grand_total !== undefined && report?.isp_grand_total !== null
+                      ? report.isp_grand_total
+                      : (report?.isp_location_breakdown || report?.isp_device_breakdown || []).reduce((acc, r) => acc + (Number(r.total) || 0), 0)}
+                  </td>
                 </tr>
               </>
             )}
@@ -339,6 +358,8 @@ export default function ReportsView({ jobId = 'latest' }) {
           {execSummary || 'No data to summarize for this range.'}
         </p>
       </div>
+        </>
+      )}
     </div>
   );
 }

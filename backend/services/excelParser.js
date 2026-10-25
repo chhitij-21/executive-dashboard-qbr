@@ -381,8 +381,34 @@ function formatExcelDate(val) {
  * Ticket Number and Incident Number are kept as separate fields so that
  * display_reference can choose: show Ticket if present, else show Incident ID.
  */
-function parseIncidentSheet(rows) {
-  return rows.map((row, idx) => {
+function parseIncidentSheet(rows, options = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  const targetClient = String(options.clientId || options.client || '').toLowerCase();
+  const filterMMTC = targetClient.includes('mmtc') || (!targetClient && rows.some(r => {
+    const acc = String(r['Account Name'] || r['AccountName'] || r['Customer Name'] || r['Customer'] || r['Account'] || '');
+    return /mmtc/i.test(acc);
+  }));
+
+  // Detect account column name once to avoid repeated candidate array lookups
+  const firstRow = rows[0] || {};
+  const accountKey = Object.keys(firstRow).find(k =>
+    /^(account\s*name|accountname|customer\s*name|customer|account)$/i.test(k.trim())
+  );
+
+  const results = [];
+  for (let idx = 0; idx < rows.length; idx++) {
+    const row = rows[idx];
+    if (!row || typeof row !== 'object') continue;
+
+    if (filterMMTC && accountKey) {
+      const accVal = String(row[accountKey] || '').trim();
+      // Skip JFL and other accounts immediately to save memory and CPU
+      if (accVal && !/mmtc/i.test(accVal)) {
+        continue;
+      }
+    }
+
     const ticketNo = String(
       getColVal(row, [
         'Ticket Number', 'TicketNumber', 'Ticket No', 'TicketNo', 'Ticket #', 'Ticket', 'Ticket ID', 'TicketID', 'Ticket_Number', 'Case Number', 'Case ID', 'Ref No', 'Reference'
@@ -448,7 +474,9 @@ function parseIncidentSheet(rows) {
       /change\s*request|change\s*management|request\s*fulfillment/i.test(desc) ||
       /request\s*fulfillment/i.test(subCat);
 
-    return {
+    const accValResolved = getColVal(row, ['Account Name', 'AccountName', 'Customer Name', 'Customer', 'Account']);
+
+    results.push({
       IncidentNumber: incidentId,
       TicketNumber: ticketNo,
       DeviceID: devId,
@@ -558,13 +586,15 @@ function parseIncidentSheet(rows) {
       ResolutionTimeHours: getColVal(row, ['Resolution Time (Hrs)', 'ResolutionTimeHours', 'Duration Hours']),
       ReplacedSerial: getColVal(row, ['Faulty Serial no', 'Faulty Serial No', 'Faulty Serial', 'Faulty Serial Number', 'Replaced Serial', 'Replaced Serial Number', 'Old Serial', 'Replaced Device', 'Replaced Serial No']),
       NewSerial: getColVal(row, ['New Serial', 'Replacement Serial', 'New Serial No', 'New Serial Number']),
-      AccountName: getColVal(row, ['Account Name', 'AccountName', 'Customer Name', 'Customer', 'Account']),
+      'Account Name': accValResolved,
+      AccountName: accValResolved,
       ProactiveUptimePct: getColVal(row, ['Proactive -Uptime%', 'Proactive Uptime %', 'Proactive Uptime', 'Proactive-Uptime%', 'Average of Proactive -Uptime%']),
       JFLUptimePct: getColVal(row, ['JFL -Uptime %', 'JFL Uptime %', 'JFL Uptime', 'JFL-Uptime %', 'Average of JFL -Uptime %']),
       AgreedResolutionSLAMin: getColVal(row, ['Agreed Resolution SLA (min)', 'Agreed SLA (min)']),
       __source: row.__source,
-    };
-  });
+    });
+  }
+  return results;
 }
 
 /**

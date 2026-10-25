@@ -1329,7 +1329,7 @@ function MainPortal() {
         color: '#0f172a',
       }}
     >
-      <Sidebar activeTab={tab} onSelectTab={setTab} />
+      <Sidebar activeTab={tab} onTabChange={setTab} onSelectTab={setTab} />
 
       <div
         style={{
