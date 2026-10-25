@@ -225,11 +225,11 @@ router.get('/:clientId', requireAuth, guard, async (req, res) => {
     return res.status(403).json({ error: 'JFL not in scope' });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400 * 1000).toISOString().slice(0, 10);
-
-  const start = (req.query.start || thirtyDaysAgo).toString().trim();
-  const end = (req.query.end || today).toString().trim();
+  const start = (req.query.start || req.body?.startDate || '').toString().trim();
+  const end = (req.query.end || req.body?.endDate || '').toString().trim();
+  if (!start || !end) {
+    return res.status(400).json({ error: 'Start date and end date are required', code: 'MISSING_DATE_RANGE' });
+  }
   const label = req.query.label ? req.query.label.toString().trim() : '';
 
   try {

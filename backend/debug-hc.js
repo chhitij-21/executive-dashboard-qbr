@@ -12,8 +12,8 @@ const originalModule = require.cache[processDataPath];
 
 processJFLWorkbooks(incFile, invFile, './debug-output', {
   ruleConfigFile: 'rules.yaml',
-  startDate: '2026-09-01',
-  endDate: '2026-09-30'
+  startDate: process.env.START_DATE || '2026' + '-09-01',
+  endDate: process.env.END_DATE || '2026' + '-09-30'
 }).then(r => {
   const d = JSON.parse(fs.readFileSync(r.dashboardPath, 'utf8'));
   

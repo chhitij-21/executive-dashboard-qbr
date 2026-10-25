@@ -77,12 +77,13 @@ function reconcileDashboardAndPPT(qbrData, pptData, outputDir = null) {
   const sumRcaCounts = rcaBrk.reduce((acc, r) => acc + (r.count || 0), 0);
   const sumSiteIncidents = qSites.reduce((acc, s) => acc + (s.incidentCount || 0), 0);
   const siteIdSet = new Set(qSites.map(s => String(s.siteId || '').toLowerCase()));
-  const unmappedIncidents = Array.isArray(qbrData.incidents)
-    ? qbrData.incidents.filter(i => {
+  const hasUnmappedInSiteSummary = qSites.some(s => String(s.siteId || '').toLowerCase() === 'unmapped / other');
+  const unmappedIncidents = (hasUnmappedInSiteSummary || !Array.isArray(qbrData.incidents))
+    ? 0
+    : qbrData.incidents.filter(i => {
         const loc = String(i.Location || i.SiteID || '').trim().toLowerCase();
         return !loc || !siteIdSet.has(loc);
-      }).length
-    : 0;
+      }).length;
 
   recordCheck('RCA_Total_Equals_TotalIncidents', 'Phase 10 Identity', exec.totalIncidents, sumRcaCounts, 'rcaAnalytics.sumRcaCounts');
   recordCheck('Site_Incidents_Total_Equals_TotalIncidents', 'Phase 10 Identity', exec.totalIncidents, sumSiteIncidents + unmappedIncidents, 'siteSummary.sumSiteIncidents + unmappedIncidents');

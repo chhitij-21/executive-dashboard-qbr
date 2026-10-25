@@ -72,7 +72,9 @@ function chunkArray(arr, size) {
   return chunks;
 }
 
-// Corporate colour palette — McKinsey / Bain Executive Standard Palette
+// Corporate colour palette — Dynamically resolved per tenant (JFL Blue vs MMTC Purple)
+const getThemeFor = (data = {}) => (/jfl|jubilant/i.test(data.customerName || data.client_info?.name || '') || data.clientId === 'client-jfl') ? '1e3a8a' : '7b1c5a';
+
 const C = {
   NAVY:         '1E293B', // Slate-800 (Softer dark tone)
   NAVY_LIGHT:   '334155',
@@ -105,6 +107,31 @@ const C = {
   ACCENT_GOLD:  'F59E0B',
   FONT_PRIMARY: 'Segoe UI',
 };
+
+function applyTheme(data = {}) {
+  const theme = getThemeFor(data);
+  if (theme === '1e3a8a') {
+    C.NAVY              = '1E293B';
+    C.NAVY_LIGHT        = '334155';
+    C.NAVY_MID          = '1E293B';
+    C.BLUE              = '2563EB';
+    C.BLUE_ACCENT       = '3B82F6';
+    C.BLUE_LIGHT        = 'EFF6FF';
+    C.HEADER_FILL       = '1E293B';
+    C.TABLE_HEADER_FILL = '2563EB';
+    C.BG_DARK           = '1E293B';
+  } else {
+    C.NAVY              = '7B1C5A';
+    C.NAVY_LIGHT        = '581845';
+    C.NAVY_MID          = '7B1C5A';
+    C.BLUE              = '9D2270';
+    C.BLUE_ACCENT       = 'C2185B';
+    C.BLUE_LIGHT        = 'FCE4EC';
+    C.HEADER_FILL       = '7B1C5A';
+    C.TABLE_HEADER_FILL = '7B1C5A';
+    C.BG_DARK           = '2A0820';
+  }
+}
 
 // Paths resolved relative to this file
 const LOGO_PATH  = path.resolve(__dirname, '../../templates/extracted_media/image2.png');
@@ -504,7 +531,9 @@ function addNarrativeBox(slide, y, bullets, title) {
 
 async function buildPresentation(data, outputPath, options = {}) {
   _slideNum = 0;
-  const pres = new PptxGenJS();
+  applyTheme(data);
+  try {
+    const pres = new PptxGenJS();
   pres.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5 inches
 
   const exec        = data.executiveSummary || {};
@@ -567,8 +596,9 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Slide 1: Cover
   buildCoverSlide(pres, exec, displayPeriod);
 
-  // Slide 2: Executive Summary Table — All Sites (Reference PDF Structure)
-  buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents, clientShort, isJFL);
+  if (isJFL) {
+    // Slide 2: Executive Summary Table — All Sites (Reference PDF Structure)
+    buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents, clientShort, isJFL);
 
   // Slide 3: Executive Summary Overview
   buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown);
@@ -633,9 +663,281 @@ async function buildPresentation(data, outputPath, options = {}) {
   buildAppendixNoticeSlide(pres, exec);
 
   // Thank You Slide
-  buildThankYouSlide(pres, exec);
+    buildThankYouSlide(pres, exec);
+  } else {
+    // MMTC-PAMP Enterprise Reporting Slides (MMTC-Only Flow)
+    buildMmtcKpiSlide(pres, data, displayPeriod);
+    buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents, clientShort, isJFL);
+    buildMmtcRCAPieChartSlide(pres, rcaBreakdown, displayPeriod);
+    buildMmtcISPLocationSlide(pres, data.isp_location_breakdown || [], displayPeriod);
+    buildMmtcHoldTicketsSlide(pres, data.hold_tickets || [], displayPeriod);
+    buildMmtcCRDetailsSlide(pres, data.cr_tickets || [], displayPeriod);
+    buildSLASlide(pres, exec, siteSummary, slaAn, clientShort, isJFL);
+    buildThankYouSlide(pres, exec);
+  }
 
   await pres.writeFile({ fileName: outputPath });
+  } finally {
+    applyTheme({ clientId: 'client-jfl' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MMTC-Specific Slide Builders (Isolated Enterprise Flow)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildMmtcKpiSlide(pres, data, displayPeriod) {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'EXECUTIVE KPI SUMMARY', `Operational Performance Overview  ·  ${displayPeriod}`, _slideNum);
+
+  const totalTkts = data.summary?.total ?? data.executiveSummary?.totalIncidents ?? (data.incidents || []).length;
+  const closedTkts = data.summary?.closed ?? (data.incidents || []).filter(i => /closed|resolved/i.test(i.Status || '')).length;
+  const holdTkts = data.summary?.on_hold ?? (data.hold_tickets || []).length;
+  const slaMetCount = data.sla?.met ?? (data.incidents || []).filter(i => i.sla_status === 'SLA Met').length;
+  const slaCompliancePct = totalTkts > 0 ? ((slaMetCount / totalTkts) * 100).toFixed(1) + '%' : '0.0%';
+
+  const kpis = [
+    { label: 'TOTAL TICKETS',   value: String(totalTkts), color: C.NAVY  },
+    { label: 'CLOSED TICKETS',  value: String(closedTkts), color: C.GREEN },
+    { label: 'SLA COMPLIANCE',  value: slaCompliancePct,  color: parseFloat(slaCompliancePct) >= 99.0 ? C.GREEN : C.RED },
+    { label: 'ON HOLD TICKETS', value: String(holdTkts),  color: C.AMBER },
+  ];
+
+  const cardW = 2.85;
+  const cardH = 1.6;
+  const startX = 0.65;
+  const gapX = 0.21;
+  const startY = 1.5;
+
+  kpis.forEach((k, idx) => {
+    const x = startX + idx * (cardW + gapX);
+    s.addShape('roundRect', {
+      x,
+      y: startY,
+      w: cardW,
+      h: cardH,
+      fill: { color: C.CARD_BG },
+      line: { color: C.CARD_BORDER, pt: 1 },
+      rectRadius: 0.08,
+    });
+
+    s.addText(k.value, {
+      x: x + 0.05, y: startY + 0.15, w: cardW - 0.1, h: cardH * 0.45,
+      fontSize: 24, bold: true, color: k.color, align: 'center', fontFace: C.FONT_PRIMARY,
+    });
+
+    s.addText(k.label, {
+      x: x + 0.05, y: startY + cardH * 0.6, w: cardW - 0.1, h: cardH * 0.3,
+      fontSize: 9, bold: true, color: C.TEXT_MUTED, align: 'center', fontFace: C.FONT_PRIMARY,
+    });
+  });
+}
+
+function buildMmtcISPLocationSlide(pres, ispLocations = [], displayPeriod = '') {
+  const items = Array.isArray(ispLocations) ? ispLocations : [];
+  const pageSize = 12;
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const colW = [1.0, 2.5, 3.5, 3.5, 1.93];
+  const headers = [
+    th('#', 'center'),
+    th('Month', 'center'),
+    th('Location', 'left'),
+    th('Device Name', 'left'),
+    th('Total ISP Incidents', 'center'),
+  ];
+
+  for (let page = 0; page < totalPages; page++) {
+    _slideNum++;
+    const s = pres.addSlide();
+    s.background = { color: C.BG_LIGHT };
+    const pageSub = totalPages > 1 ? `ISP Link Disruption Breakdown by Site (Page ${page + 1} of ${totalPages})` : 'ISP Link Disruption Breakdown by Site';
+    addHeader(pres, s, 'ISP LOCATION ANALYSIS', pageSub, _slideNum);
+
+    const chunk = items.slice(page * pageSize, (page + 1) * pageSize);
+    let rows = [];
+
+    if (chunk.length === 0) {
+      rows.push([
+        td('—', 'FFFFFF', { align: 'center', color: C.TEXT_MUTED }),
+        td('—', 'FFFFFF', { align: 'center', color: C.TEXT_MUTED }),
+        td('No ISP tickets found', 'FFFFFF', { align: 'left', color: C.TEXT_DARK, bold: true }),
+        td('—', 'FFFFFF', { align: 'left', color: C.TEXT_MUTED }),
+        td('0', 'FFFFFF', { align: 'center', color: C.GREEN, bold: true }),
+      ]);
+    } else {
+      rows = chunk.map((item, idx) => {
+        const fill = rowFill(idx);
+        return [
+          td(String(item.s_no || (page * pageSize + idx + 1)), fill, { align: 'center', color: C.TEXT_MUTED }),
+          td(item.month || '—', fill, { align: 'center', color: C.TEXT_DARK }),
+          td(item.location || item.site || 'Unknown', fill, { bold: true, color: C.NAVY, align: 'left' }),
+          td(item.device_name || item.location || '—', fill, { color: C.TEXT_DARK, align: 'left' }),
+          td(String(item.total ?? 0), fill, { align: 'center', bold: true, color: (item.total || 0) > 3 ? C.RED : C.AMBER }),
+        ];
+      });
+    }
+
+    s.addTable([headers, ...rows], {
+      x: 0.45, y: 1.2, w: 12.43,
+      colW, fontSize: 9.5, rowH: 0.4,
+      border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
+    });
+  }
+}
+
+function buildMmtcHoldTicketsSlide(pres, holdTickets = [], displayPeriod = '') {
+  const items = Array.isArray(holdTickets) ? holdTickets : [];
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const colW = [1.8, 4.0, 3.2, 1.8, 1.63];
+  const headers = [
+    th('Ticket #', 'left'),
+    th('Subject', 'left'),
+    th('Reason for Hold', 'left'),
+    th('Status / Rollover', 'center'),
+    th('Created Date', 'center'),
+  ];
+
+  for (let page = 0; page < totalPages; page++) {
+    _slideNum++;
+    const s = pres.addSlide();
+    s.background = { color: C.BG_LIGHT };
+    const pageSub = totalPages > 1 ? `Open & Rollover Tickets with Pending Client / 3rd Party Action (Page ${page + 1} of ${totalPages})` : 'Open & Rollover Tickets with Pending Client / 3rd Party Action';
+    addHeader(pres, s, 'HOLD WITH ROLLOVER TICKETS', pageSub, _slideNum);
+
+    const chunk = items.slice(page * pageSize, (page + 1) * pageSize);
+    let rows = [];
+
+    if (chunk.length === 0) {
+      rows.push([
+        td('—', 'FFFFFF', { align: 'left', color: C.TEXT_MUTED }),
+        td('No tickets currently on hold', 'FFFFFF', { align: 'left', color: C.GREEN, bold: true }),
+        td('—', 'FFFFFF', { align: 'left', color: C.TEXT_MUTED }),
+        td('—', 'FFFFFF', { align: 'center', color: C.TEXT_MUTED }),
+        td('—', 'FFFFFF', { align: 'center', color: C.TEXT_MUTED }),
+      ]);
+    } else {
+      rows = chunk.map((item, idx) => {
+        const fill = rowFill(idx);
+        return [
+          td(item.ticket_number || `HOLD-${idx + 1}`, fill, { bold: true, color: C.NAVY, align: 'left', fontSize: 8.5 }),
+          td(String(item.subject || '—').substring(0, 48), fill, { color: C.TEXT_DARK, align: 'left', fontSize: 8.5 }),
+          td(item.reason || 'Unspecified', fill, { color: C.TEXT_MID, align: 'left', fontSize: 8.5 }),
+          td(item.rollover || 'On Hold', fill, { align: 'center', bold: true, color: C.AMBER, fontSize: 8.5 }),
+          td(item.created_date || '—', fill, { align: 'center', color: C.TEXT_MUTED, fontSize: 8.5 }),
+        ];
+      });
+    }
+
+    s.addTable([headers, ...rows], {
+      x: 0.45, y: 1.2, w: 12.43,
+      colW, fontSize: 9, rowH: 0.44,
+      border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
+    });
+  }
+}
+
+function buildMmtcCRDetailsSlide(pres, crTickets = [], displayPeriod = '') {
+  const items = Array.isArray(crTickets) ? crTickets : [];
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const colW = [0.8, 5.0, 2.5, 2.5, 1.63];
+  const headers = [
+    th('#', 'center'),
+    th('Subject', 'left'),
+    th('Category', 'left'),
+    th('Sub Category', 'left'),
+    th('Status', 'center'),
+  ];
+
+  for (let page = 0; page < totalPages; page++) {
+    _slideNum++;
+    const s = pres.addSlide();
+    s.background = { color: C.BG_LIGHT };
+    const pageSub = totalPages > 1 ? `Meraki and Security Managed Services: CR Details (Page ${page + 1} of ${totalPages})` : 'Meraki and Security Managed Services: CR Details';
+    addHeader(pres, s, 'MERAKI & SECURITY MANAGED SERVICES: CR DETAILS', pageSub, _slideNum);
+
+    const chunk = items.slice(page * pageSize, (page + 1) * pageSize);
+    let rows = [];
+
+    if (chunk.length === 0) {
+      rows.push([
+        td('—', 'FFFFFF', { align: 'center', color: C.TEXT_MUTED }),
+        td('No Change Request (CR) tickets found', 'FFFFFF', { align: 'left', color: C.TEXT_DARK, bold: true }),
+        td('—', 'FFFFFF', { align: 'left', color: C.TEXT_MUTED }),
+        td('—', 'FFFFFF', { align: 'left', color: C.TEXT_MUTED }),
+        td('—', 'FFFFFF', { align: 'center', color: C.TEXT_MUTED }),
+      ]);
+    } else {
+      rows = chunk.map((item, idx) => {
+        const fill = rowFill(idx);
+        return [
+          td(String(item.s_no || (page * pageSize + idx + 1)), fill, { align: 'center', color: C.TEXT_MUTED }),
+          td(String(item.subject || '—').substring(0, 55), fill, { bold: true, color: C.TEXT_DARK, align: 'left', fontSize: 8.5 }),
+          td(item.category || 'Managed Services', fill, { color: C.NAVY, align: 'left', fontSize: 8.5 }),
+          td(item.sub_category || 'Change Request', fill, { color: C.TEXT_MID, align: 'left', fontSize: 8.5 }),
+          td(item.status || 'Closed', fill, { align: 'center', bold: true, color: C.GREEN, fontSize: 8.5 }),
+        ];
+      });
+    }
+
+    s.addTable([headers, ...rows], {
+      x: 0.45, y: 1.2, w: 12.43,
+      colW, fontSize: 9, rowH: 0.44,
+      border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
+    });
+  }
+}
+
+function buildMmtcRCAPieChartSlide(pres, rcaBreakdown = [], displayPeriod = '') {
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(pres, s, 'ROOT CAUSE ANALYSIS (RCA) DISTRIBUTION', 'Pareto Breakdown of Reported Tickets by Primary Failure Driver', _slideNum);
+
+  const validRca = (Array.isArray(rcaBreakdown) ? rcaBreakdown : []).filter(r => (r.count || r.tickets || 0) > 0);
+  const rcaLabels = validRca.map(r => String(r.rca || r.category || 'Unknown').substring(0, 24));
+  const rcaValues = validRca.map(r => Number(r.count || r.tickets || 0));
+
+  if (rcaValues.length > 0 && rcaLabels.length > 0) {
+    s.addChart(pres.ChartType.pie, [
+      {
+        name: 'RCA Distribution',
+        labels: rcaLabels,
+        values: rcaValues,
+      }
+    ], {
+      x: 0.65, y: 1.4, w: 6.2, h: 5.2,
+      chartColors: ['7B1C5A', '9D2270', 'C2185B', 'E91E63', 'F06292', 'F8BBD0', '2563EB', '10B981'],
+      showLegend: true,
+      legendPos: 'b',
+      dataLabelFontSize: 9,
+      dataLabelColor: C.TEXT_DARK,
+      showPercent: true,
+    });
+  } else {
+    s.addText('No data available for this period', { x: 2, y: 3, w: 9, h: 1, align: 'center', fontSize: 14, color: C.TEXT_MUTED });
+  }
+
+  const headers = [th('RCA Category', 'left'), th('Tickets', 'center'), th('Share %', 'center')];
+  const totalTickets = rcaValues.reduce((a, b) => a + b, 0) || 1;
+  const rows = validRca.map((r, idx) => {
+    const count = Number(r.count || r.tickets || 0);
+    const pctStr = `${((count / totalTickets) * 100).toFixed(1)}%`;
+    return [
+      td(r.rca || 'Unknown', rowFill(idx), { align: 'left', bold: true, color: C.NAVY }),
+      td(String(count), rowFill(idx), { align: 'center', bold: true, color: C.BLUE }),
+      td(pctStr, rowFill(idx), { align: 'center', color: C.TEXT_DARK }),
+    ];
+  });
+
+  s.addTable([headers, ...rows], {
+    x: 7.2, y: 1.4, w: 5.48, colW: [2.8, 1.2, 1.48],
+    fontSize: 9.5, rowH: 0.38,
+    border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1088,23 +1390,27 @@ function buildSiteUptimeChartSlide(pres, siteSummary, displayPeriod, clientShort
     chartData.push({ name: `${clientShort} Switch Uptime %`, labels: siteLabels, values: jflVals });
   }
 
-  s.addChart(pres.ChartType.bar, chartData, {
-    x: 0.45, y: 1.15, w: 12.43, h: 4.8,
-    barDir: 'col',
-    chartColors: isJFL ? [C.BLUE_ACCENT, C.GREEN] : [C.BLUE_ACCENT],
-    showValue: true,
-    dataLabelFontSize: 8.5,
-    dataLabelColor: C.TEXT_DARK,
-    valAxisMaxVal: 100,
-    valAxisMinVal: 90,
-    showLegend: isJFL,
-    legendPos: 't',
-    catAxisLabelFontSize: 8.5,
-    valAxisLabelFontSize: 8.5,
-    valAxisLabelColor: C.TEXT_MUTED,
-    catAxisLabelColor: C.TEXT_DARK,
-    valGridLine: { style: 'solid', color: C.DIVIDER },
-  });
+  if (siteLabels.length > 0 && proVals.length > 0) {
+    s.addChart(pres.ChartType.bar, chartData, {
+      x: 0.45, y: 1.15, w: 12.43, h: 4.8,
+      barDir: 'col',
+      chartColors: isJFL ? [C.BLUE_ACCENT, C.GREEN] : [C.BLUE_ACCENT],
+      showValue: true,
+      dataLabelFontSize: 8.5,
+      dataLabelColor: C.TEXT_DARK,
+      valAxisMaxVal: 100,
+      valAxisMinVal: 90,
+      showLegend: isJFL,
+      legendPos: 't',
+      catAxisLabelFontSize: 8.5,
+      valAxisLabelFontSize: 8.5,
+      valAxisLabelColor: C.TEXT_MUTED,
+      catAxisLabelColor: C.TEXT_DARK,
+      valGridLine: { style: 'solid', color: C.DIVIDER },
+    });
+  } else {
+    s.addText('No data available for this period', { x: 2, y: 3, w: 9, h: 1, align: 'center', fontSize: 14, color: C.TEXT_MUTED });
+  }
 
   s.addText(`Contractual SLA Target: ${SLA_TARGET.toFixed(2)}% | Availability reflects net operational minutes during period: ${displayPeriod}.`, {
     x: 0.45, y: 6.2, w: 12.43, h: 0.35,
@@ -1175,18 +1481,22 @@ function buildInventorySlide(pres, exec, siteSummary, devices) {
     ? [C.BLUE_ACCENT, C.TEAL, C.AMBER]
     : [C.BLUE_ACCENT, C.TEAL];
 
-  s.addChart(pres.ChartType.doughnut, [
-    { name: 'Estate Distribution', labels: invChartLabels, values: invChartVals }
-  ], {
-    x: 7.55, y: 2.55, w: 5.3, h: 3.6,
-    chartColors: invChartColors,
-    holeSize: 55,
-    showLegend: true,
-    legendPos: 'b',
-    dataLabelFontSize: 9.5,
-    dataLabelColor: C.TEXT_DARK,
-    showValue: true,
-  });
+  if (invChartVals.some(v => v > 0) && invChartLabels.length > 0) {
+    s.addChart(pres.ChartType.doughnut, [
+      { name: 'Estate Distribution', labels: invChartLabels, values: invChartVals }
+    ], {
+      x: 7.55, y: 2.55, w: 5.3, h: 3.6,
+      chartColors: invChartColors,
+      holeSize: 55,
+      showLegend: true,
+      legendPos: 'b',
+      dataLabelFontSize: 9.5,
+      dataLabelColor: C.TEXT_DARK,
+      showValue: true,
+    });
+  } else {
+    s.addText('No data available for this period', { x: 7.55, y: 3.5, w: 5.3, h: 1, align: 'center', fontSize: 14, color: C.TEXT_MUTED });
+  }
 
   const narrative = [
     `Total monitored device estate: ${devices.length} devices across ${exec.totalSites || 8} sites.`,
@@ -1235,20 +1545,24 @@ function buildIncidentOverviewSlide(pres, incidents, siteSummary, exec, targetSi
 
   addSectionDivider(s, 2.22, 'Incidents by Site');
 
-  s.addChart('bar', [{ name: 'Incidents', labels: siteLabels, values: siteVals }], {
-    x: 0.45, y: 2.6, w: 7.5, h: 3.4,
-    barDir: 'col',
-    chartColors: [C.BLUE_ACCENT],
-    dataLabelFontSize: 9,
-    dataLabelColor: C.TEXT_DARK,
-    showValue: true,
-    catAxisLabelFontSize: 9,
-    valAxisLabelFontSize: 9,
-    valAxisLabelColor: C.TEXT_MUTED,
-    catAxisLabelColor: C.TEXT_DARK,
-    showLegend: false,
-    valGridLine: { style: 'solid', color: C.DIVIDER },
-  });
+  if (siteLabels.length > 0 && siteVals.some(v => v > 0)) {
+    s.addChart('bar', [{ name: 'Incidents', labels: siteLabels, values: siteVals }], {
+      x: 0.45, y: 2.6, w: 7.5, h: 3.4,
+      barDir: 'col',
+      chartColors: [C.BLUE_ACCENT],
+      dataLabelFontSize: 9,
+      dataLabelColor: C.TEXT_DARK,
+      showValue: true,
+      catAxisLabelFontSize: 9,
+      valAxisLabelFontSize: 9,
+      valAxisLabelColor: C.TEXT_MUTED,
+      catAxisLabelColor: C.TEXT_DARK,
+      showLegend: false,
+      valGridLine: { style: 'solid', color: C.DIVIDER },
+    });
+  } else {
+    s.addText('No data available for this period', { x: 0.45, y: 3.5, w: 7.5, h: 1, align: 'center', fontSize: 13, color: C.TEXT_MUTED });
+  }
 
   // Priority breakdown Donut Chart (right side)
   addSectionDivider(s, 2.22, 'Incidents by Priority Breakdown');
@@ -1257,18 +1571,22 @@ function buildIncidentOverviewSlide(pres, incidents, siteSummary, exec, targetSi
   const p2Count = incidents.filter(i => /p2|major/i.test(i.Priority || '')).length;
   const otherCount = Math.max(0, totalInc - (p1Count + p2Count));
 
-  s.addChart('doughnut', [
-    { name: 'Priority Distribution', labels: ['P1 Critical', 'P2 Major', 'P3/P4 Standard'], values: [p1Count || 0.001, p2Count || 0.001, otherCount || 1] }
-  ], {
-    x: 8.2, y: 2.6, w: 4.6, h: 3.4,
-    chartColors: [C.RED, C.AMBER, C.BLUE_ACCENT],
-    holeSize: 60,
-    showLegend: true,
-    legendPos: 'b',
-    dataLabelFontSize: 10,
-    dataLabelColor: C.TEXT_DARK,
-    showValue: true,
-  });
+  if (totalInc > 0) {
+    s.addChart('doughnut', [
+      { name: 'Priority Distribution', labels: ['P1 Critical', 'P2 Major', 'P3/P4 Standard'], values: [p1Count || 0.001, p2Count || 0.001, otherCount || 1] }
+    ], {
+      x: 8.2, y: 2.6, w: 4.6, h: 3.4,
+      chartColors: [C.RED, C.AMBER, C.BLUE_ACCENT],
+      holeSize: 60,
+      showLegend: true,
+      legendPos: 'b',
+      dataLabelFontSize: 10,
+      dataLabelColor: C.TEXT_DARK,
+      showValue: true,
+    });
+  } else {
+    s.addText('No data available for this period', { x: 8.2, y: 3.5, w: 4.6, h: 1, align: 'center', fontSize: 13, color: C.TEXT_MUTED });
+  }
 
   const maxSite  = Object.entries(incBySite).sort((a, b) => b[1] - a[1])[0];
   const narrative = [
@@ -1293,20 +1611,24 @@ function buildRCASlide(pres, rcaBreakdown, incidents, exec) {
   const rcaLabels = top8.map(r => r.rca.substring(0, 22));
   const rcaVals   = top8.map(r => r.count);
 
-  s.addChart(pres.ChartType?.bar || 'bar', [{ name: 'Incidents', labels: rcaLabels, values: rcaVals }], {
-    x: 0.45, y: 1.05, w: 7.8, h: 4.0,
-    barDir: 'bar',
-    chartColors: [C.BLUE_ACCENT],
-    showValue: true,
-    dataLabelFontSize: 9,
-    dataLabelColor: C.TEXT_LIGHT,
-    catAxisLabelFontSize: 9,
-    valAxisLabelFontSize: 9,
-    valAxisLabelColor: C.TEXT_MUTED,
-    catAxisLabelColor: C.TEXT_DARK,
-    showLegend: false,
-    valGridLine: { style: 'solid', color: C.DIVIDER },
-  });
+  if (rcaLabels.length > 0 && rcaVals.some(v => v > 0)) {
+    s.addChart(pres.ChartType?.bar || 'bar', [{ name: 'Incidents', labels: rcaLabels, values: rcaVals }], {
+      x: 0.45, y: 1.05, w: 7.8, h: 4.0,
+      barDir: 'bar',
+      chartColors: [C.BLUE_ACCENT],
+      showValue: true,
+      dataLabelFontSize: 9,
+      dataLabelColor: C.TEXT_LIGHT,
+      catAxisLabelFontSize: 9,
+      valAxisLabelFontSize: 9,
+      valAxisLabelColor: C.TEXT_MUTED,
+      catAxisLabelColor: C.TEXT_DARK,
+      showLegend: false,
+      valGridLine: { style: 'solid', color: C.DIVIDER },
+    });
+  } else {
+    s.addText('No data available for this period', { x: 0.45, y: 2.5, w: 7.8, h: 1, align: 'center', fontSize: 13, color: C.TEXT_MUTED });
+  }
 
   // RCA detail table header (right-aligned, no full-width overlay)
   s.addShape('rect', {
@@ -2619,4 +2941,14 @@ function td(text, fill, opts = {}) {
 // Exports
 // ─────────────────────────────────────────────────────────────────────────────
 
-module.exports = { generatePPT, resolveSlide37List };
+module.exports = {
+  generatePPT,
+  resolveSlide37List,
+  getThemeFor,
+  applyTheme,
+  buildMmtcKpiSlide,
+  buildMmtcISPLocationSlide,
+  buildMmtcHoldTicketsSlide,
+  buildMmtcCRDetailsSlide,
+  buildMmtcRCAPieChartSlide,
+};

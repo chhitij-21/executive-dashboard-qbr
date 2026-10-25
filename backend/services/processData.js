@@ -769,13 +769,14 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     .filter(isOtherActivity)
     .filter(inc => {
       if (!startDate || !endDate) return true;
-      const raw = inc.CreatedDate || inc.OpenedAt || inc.ReportedDate || inc['Open Time'] || inc.CreatedTime || inc.OpenTime || inc['Created Date'] || inc['Open Date'];
+      const raw = inc['Created Time'] || inc.CreatedTime || inc.OpenTime || inc.CreatedDate || inc.OpenedAt || inc.ReportedDate || inc['Open Time'] || inc['Created Date'] || inc['Open Date'];
       if (!raw || raw === 'N/A') return true;
-      const sDate = new Date(startDate.includes('T') ? startDate : startDate + 'T00:00:00Z');
-      const eDate = new Date(endDate.includes('T') ? endDate : endDate + 'T23:59:59.999Z');
-      const d = parseAnyDate(raw) || new Date(raw);
-      if (!d || isNaN(d.getTime())) return true; // Keep if no date available
-      return d >= sDate && d <= eDate;
+      const { parseTicketDate } = require('./reportService');
+      const sDate = parseTicketDate(startDate.includes('T') || startDate.includes(' ') ? startDate : startDate + ' 00:00:00');
+      const eDate = parseTicketDate(endDate.includes('T') || endDate.includes(' ') ? endDate : endDate + ' 23:59:59.999');
+      const d = parseTicketDate(raw);
+      if (!d || isNaN(d.getTime())) return false;
+      return (!sDate || d >= sDate) && (!eDate || d <= eDate);
     });
   incidents = incidents.filter(i => !isOtherActivity(i));
   log(`Incidents for target customer (excluding Change Requests): ${incidents.length}`);
@@ -784,26 +785,23 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── 5b. Date-range filtering (Requirement 2 & 3) ─────────────────────────
   // Only filter when explicit startDate / endDate are provided.
   if (startDate && endDate) {
-    const rangeStart = new Date(startDate + 'T00:00:00Z');
-    const rangeEnd = new Date(endDate + 'T23:59:59Z');
+    const { parseTicketDate } = require('./reportService');
+    const rangeStart = parseTicketDate(startDate.includes('T') || startDate.includes(' ') ? startDate : startDate + ' 00:00:00');
+    const rangeEnd = parseTicketDate(endDate.includes('T') || endDate.includes(' ') ? endDate : endDate + ' 23:59:59.999');
 
     const inRangeIncidents = incidents.filter(inc => {
-      const raw = inc.CreatedTime || inc.OpenTime || inc.created_at || inc['Created Date'] || inc['Open Date'];
-      if (!raw || raw === 'N/A') return false;
-      const dt = parseAnyDate(raw);
-      if (!dt) return false;
+      const raw = inc['Created Time'] || inc.CreatedTime || inc['Open Time'] || inc.OpenTime || inc.created_at || inc.CreatedDate || inc.OpenedAt || inc.ReportedDate || inc['Created Date'] || inc['Open Date'];
+      if (!raw || raw === 'N/A') return true;
+      const dt = parseTicketDate(raw);
+      if (!dt || isNaN(dt.getTime())) return false;
 
       // Bug 8 fix: Do not leak past open tickets into custom reporting window
-      return dt >= rangeStart && dt <= rangeEnd;
+      return (!rangeStart || dt >= rangeStart) && (!rangeEnd || dt <= rangeEnd);
     });
 
     log(`Date-range filter [${startDate} → ${endDate}]: ${inRangeIncidents.length} incidents within range (out of ${incidents.length} total)`);
 
-    if (inRangeIncidents.length > 0) {
-      incidents = inRangeIncidents;
-    } else {
-      log(`WARNING: 0 incidents fell within date range (${startDate} to ${endDate}). Processing all ${incidents.length} incidents so data is populated.`);
-    }
+    incidents = inRangeIncidents;
   }
 
   // If reportPeriodMeta is still not constructed, extract min/max dates from incidents
@@ -1540,7 +1538,17 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   if (isMmtc) {
     const allInc = Array.isArray(incidents) ? incidents : [];
     const otherAct = Array.isArray(otherActivities) ? otherActivities : [];
-    const combinedTickets = [...allInc, ...otherAct];
+    let combinedTickets = [...allInc, ...otherAct];
+    if (startDate && endDate) {
+      const { parseTicketDate } = require('./reportService');
+      const rStart = new Date(startDate + 'T00:00:00Z');
+      const rEnd = new Date(endDate + 'T23:59:59.999Z');
+      combinedTickets = combinedTickets.filter(t => {
+        const dt = parseTicketDate(t['Created Time'] || t.CreatedTime || t.OpenTime || t.created_at);
+        if (!dt) return false;
+        return dt >= rStart && dt <= rEnd;
+      });
+    }
 
     if (!qbrData.hold_tickets) {
       qbrData.hold_tickets = combinedTickets
@@ -1579,6 +1587,37 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
         security_emails: 0,
         total_crs: qbrData.cr_tickets.length,
       };
+    }
+
+    // MMTC-ONLY: ISP Issue Location-wise Breakdown (locked business rule)
+    if (!qbrData.isp_location_breakdown) {
+      const { parseTicketDate } = require('./reportService');
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const ispLocationMap = {};
+
+      combinedTickets.forEach(t => {
+        const rca = String(t.RCA || t['RCA 2'] || t['Root Cause'] || '').trim();
+        if (/isp/i.test(rca)) {
+          const locName = String(t.SiteID || t.Location || 'Unknown').trim();
+          const d = parseTicketDate(t['Created Time'] || t.CreatedTime || t.OpenTime);
+          const mName = d && !isNaN(d.getTime()) ? months[d.getMonth()] : 'Unknown';
+
+          if (!ispLocationMap[locName]) {
+            ispLocationMap[locName] = { month: mName, location: locName, device_name: locName, total: 0 };
+          }
+          ispLocationMap[locName].total++;
+        }
+      });
+
+      qbrData.isp_location_breakdown = Object.values(ispLocationMap)
+        .sort((a, b) => b.total - a.total)
+        .map((item, idx) => ({
+          s_no: idx + 1,
+          month: item.month,
+          location: item.location,
+          device_name: item.device_name,
+          total: item.total,
+        }));
     }
   }
   log('Analytics complete');
@@ -1929,7 +1968,7 @@ function buildExecutiveSummary(activeDevices, switches, aps, incidents, stockDev
 
   let slaPct;
   if (!isJflClient) {
-    slaPct = ticketSlaTotal > 0 ? ((metTickets / ticketSlaTotal) * 100).toFixed(2) : '100.00';
+    slaPct = ticketSlaTotal > 0 ? ((metTickets / ticketSlaTotal) * 100).toFixed(2) : '0.00';
   } else if (ticketSlaTotal > 0 && (!devSlaPct || (devSlaPct === '100.00' && breachedTickets > 0))) {
     slaPct = ((metTickets / ticketSlaTotal) * 100).toFixed(2);
   } else {
@@ -2502,7 +2541,7 @@ function buildSwitchAnalytics(switches, incidents, periodOptions = {}) {
     unknown: slaUnknown,
     percentMet: switchIncidents.length > 0
       ? ((slaMet / switchIncidents.length) * 100).toFixed(1)
-      : '100.0',
+      : '0.0',
   };
 
   // RCA breakdown for Switch incidents
@@ -2602,7 +2641,7 @@ function buildAPAnalytics(aps, incidents, allDevices) {
         met, breached, open, unknown,
         percentMet: details.length > 0
           ? ((met / details.length) * 100).toFixed(1)
-          : '100.0',
+          : '0.0',
       };
     })(),
   };

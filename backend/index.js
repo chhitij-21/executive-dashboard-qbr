@@ -1000,6 +1000,10 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
   // Legacy periodMode/reportPeriod are kept as fallback for /api/switch-mode internal backward compat.
   const startDate = (req.body.startDate || req.body.start_date || '').trim();
   const endDate = (req.body.endDate || req.body.end_date || '').trim();
+  if (!startDate || !endDate) {
+    historyService.cleanupTempFiles([incidentFile?.path, inventoryFile?.path]);
+    return res.status(400).json({ error: 'Start date and end date are required', code: 'MISSING_DATE_RANGE' });
+  }
   const periodMode = req.body.periodMode || 'custom'; // legacy; not used by UI anymore
   const reportPeriod = req.body.reportPeriod || req.body.reportingPeriod || '';
 
@@ -1633,7 +1637,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
     }
 
     // 2. Client ID extraction & resolution
-    const rawClientId = String(req.query.clientId || req.headers['x-client-id'] || authorizedClientId || '').trim();
+    const rawClientId = String(req.query.clientId || req.headers['x-client-id'] || authorizedClientId || (authUser?.assignedClient && authUser.assignedClient !== 'all' ? authUser.assignedClient : '') || '').trim();
     if (!rawClientId) {
       return res.status(400).json({ error: 'Customer identifier (clientId) is required for report download.', code: 'MISSING_CLIENT_ID' });
     }
@@ -1790,7 +1794,19 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
             targetPath = freshPptPath;
           } catch (pptGenErr) {
             console.error('[server] On-the-fly Executive PPT Report generation failed:', pptGenErr.message);
-            return res.status(500).json({ error: `PPT generation failed: ${pptGenErr.message}` });
+            const cachedPpt = (job?.pptPath && fs.existsSync(job.pptPath)) ? job.pptPath : (() => {
+              try {
+                const files = fs.readdirSync(jobOutputDir);
+                const ppt = files.find(f => f.endsWith('.pptx'));
+                return ppt ? path.join(jobOutputDir, ppt) : null;
+              } catch (_) { return null; }
+            })();
+            if (cachedPpt && fs.existsSync(cachedPpt)) {
+              console.log('[server] Falling back to existing cached PPT:', cachedPpt);
+              targetPath = cachedPpt;
+            } else {
+              return res.status(500).json({ error: `PPT generation failed: ${pptGenErr.message}` });
+            }
           }
         } else {
           return res.status(404).json({ error: 'Dashboard data not found for PPT generation. Please re-upload your files.', code: 'DATASET_NOT_FOUND' });

@@ -215,6 +215,30 @@ function parseTicketDate(val) {
 }
 
 /**
+ * Formats YYYY-MM-DD range into clean display period (e.g., "September 2026" or "15 August 2026 to 25 August 2026").
+ * @param {string} startDate
+ * @param {string} endDate
+ * @returns {string}
+ */
+function formatPeriod(startDate, endDate) {
+  if (!startDate || !endDate) return 'Custom Period';
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const s = new Date(startDate + 'T00:00:00Z');
+  const e = new Date(endDate + 'T00:00:00Z');
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return `${startDate} to ${endDate}`;
+  const sDay = s.getUTCDate();
+  const sMonth = months[s.getUTCMonth()];
+  const sYear = s.getUTCFullYear();
+  const eDay = e.getUTCDate();
+  const eMonth = months[e.getUTCMonth()];
+  const eYear = e.getUTCFullYear();
+  if (sMonth === eMonth && sYear === eYear && sDay === 1 && eDay >= 28) {
+    return `${sMonth} ${sYear}`;
+  }
+  return `${sDay} ${sMonth} ${sYear} to ${eDay} ${eMonth} ${eYear}`;
+}
+
+/**
  * Loads baseline tickets from SLA_Compliance_Report.xlsx if not cached.
  * @returns {Array<object>}
  */
@@ -480,7 +504,7 @@ function buildReport(clientId, start, end, options = {}) {
       client_id: clientId,
       start,
       end,
-      label: options.label || `${start} to ${end}`,
+      label: options.label || `MMTC · ${formatPeriod(start, end)}`,
     },
   };
 
@@ -687,7 +711,7 @@ function buildDeterministicSummary(report) {
   const met = report.sla?.met ?? 0;
   const breached = report.sla?.breached ?? 0;
   const totalSla = met + breached;
-  const slaPercentage = totalSla > 0 ? ((met / totalSla) * 100).toFixed(2) : '100.00';
+  const slaPercentage = totalSla > 0 ? ((met / totalSla) * 100).toFixed(2) : '0.00';
 
   const rcaList = Array.isArray(report.rca_breakdown) ? report.rca_breakdown : [];
   const topRca = rcaList[0]?.rca || 'None';
@@ -713,4 +737,5 @@ module.exports = {
   dualWriteToReportsTickets,
   buildDeterministicSummary,
   parseTicketDate,
+  formatPeriod,
 };
