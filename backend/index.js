@@ -764,12 +764,13 @@ app.post(['/api/ai/section-summary', '/ai/section-summary'], requireAuth, requir
 });
 
 // ── Enterprise AI Insights Endpoint (Virtual CTO AI Engine) ────────────────
-const { generateEnterpriseInsights } = require('./services/aiInsightsService');
+const { generateEnterpriseInsights: mmtcInsights } = require('./services/mmtcInsightsService');
+const { generateEnterpriseInsights: jflInsights } = require('./services/aiInsightsService');
 
 app.post(['/api/ai/insights', '/ai/insights'], requireAuth, requireClientAccess((req) => req.body?.clientId || req.query?.clientId || req.headers['x-client-id'] || (req.user?.assignedClient !== 'all' ? req.user?.assignedClient : 'client-jfl')), async (req, res) => {
   try {
     const { section, data: bodyData, jobId } = req.body || {};
-    const clientId = req.targetClientId;
+    const clientId = req.targetClientId || req.body?.clientId || req.user?.assignedClient || '';
 
     let targetData = bodyData;
     if (!targetData) {
@@ -797,7 +798,11 @@ app.post(['/api/ai/insights', '/ai/insights'], requireAuth, requireClientAccess(
       }
     }
 
-    const insights = await generateEnterpriseInsights({
+    const insightsFn = (clientId === 'client-mmtcpamp' || clientId === 'client-mmtc' || /mmtc/i.test(clientId))
+      ? mmtcInsights
+      : jflInsights;
+
+    const insights = await insightsFn({
       section: section || 'overview',
       data: targetData,
       clientId,

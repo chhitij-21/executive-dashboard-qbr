@@ -334,7 +334,7 @@ export default function OverviewDashboard({ data, onNavigate }) {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>SLA Compliance</span>
+            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>TICKET SLA COMPLIANCE</span>
             <div
               style={{
                 padding: '0.5rem',
@@ -365,6 +365,9 @@ export default function OverviewDashboard({ data, onNavigate }) {
                 {slaDiffText}
               </span>
               <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Target: {targetSLA.toFixed(2)}%</span>
+            </div>
+            <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
+              Device Uptime SLA: {data?.slaAnalytics?.overallSLAPercent != null ? Number(data.slaAnalytics.overallSLAPercent).toFixed(2) : (targetSLA || 100).toFixed(2)}%
             </div>
           </div>
         </div>

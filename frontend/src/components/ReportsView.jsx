@@ -163,6 +163,17 @@ export default function ReportsView({ jobId = 'latest' }) {
             )}
           </tbody>
         </table>
+        {(() => {
+          const rcaTotal = (report?.rca_breakdown || []).reduce((s, x) => s + (x.tickets || 0), 0);
+          const total = report?.summary?.total || 0;
+          const missing = Math.max(0, total - rcaTotal);
+          if (missing <= 0) return null;
+          return (
+            <div style={{ padding: '0.75rem', fontSize: '0.8125rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.5rem' }}>
+              Note: RCA breakdown covers {rcaTotal} of {total} tickets. {missing} ticket(s) (on hold / open) do not have RCA assigned.
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── 3b. ISP Device Table: ISP Issue – Device Wise Breakdown ── */}
@@ -273,8 +284,8 @@ export default function ReportsView({ jobId = 'latest' }) {
         </table>
       </div>
 
-      {/* ── 5. CR KPIs: 4 Purple Boxes (Meraki CRs, Security CRs, Security Email, Total CRs) ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" style={{ marginBottom: '2rem' }}>
+      {/* ── 5. CR KPIs: 3 Purple Boxes (Meraki CRs, Security CRs, Total CRs) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4" style={{ marginBottom: '2rem' }}>
         <div className="mmtc-purple-box">
           <h2>{crSummary.meraki_crs ?? 0}</h2>
           <p>Meraki CRs</p>
@@ -282,10 +293,6 @@ export default function ReportsView({ jobId = 'latest' }) {
         <div className="mmtc-purple-box">
           <h2>{crSummary.security_crs ?? 0}</h2>
           <p>Security CRs</p>
-        </div>
-        <div className="mmtc-purple-box">
-          <h2>{crSummary.security_emails ?? channel.security_emails ?? 0}</h2>
-          <p>Security Email</p>
         </div>
         <div className="mmtc-purple-box">
           <h2>{crSummary.total_crs ?? crTickets.length}</h2>
@@ -356,6 +363,9 @@ export default function ReportsView({ jobId = 'latest' }) {
         </h3>
         <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6, color: '#1f2937' }}>
           {execSummary || 'No data to summarize for this range.'}
+        </p>
+        <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: '#6b7280', fontStyle: 'italic' }}>
+          Note: Device uptime SLA available in Overview tab.
         </p>
       </div>
         </>

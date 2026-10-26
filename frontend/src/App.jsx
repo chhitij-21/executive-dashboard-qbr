@@ -1201,7 +1201,7 @@ function MainPortal() {
             />
             <h3 className="section-title">SLA Analytics (Active Operational Devices)</h3>
             <div className="kpi-grid">
-              <KpiCard title="Overall SLA Compliance" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" />
+              <KpiCard title="DEVICE UPTIME SLA" value={slaAn.overallSLAPercent ?? '100.00'} unit="%" />
               {/* Device SLA Status: single clean Met/Breached indicator — no raw % target shown */}
               <div className="kpi-card" style={{
                 borderLeft: `4px solid ${parseFloat(slaAn.overallSLAPercent ?? 100) >= parseFloat(slaAn.slaTarget ?? 99.3)
@@ -1254,10 +1254,16 @@ function MainPortal() {
               selectedSite={selectedSite}
             />
             <h3 className="section-title">Other Activity — Change Requests, Maintenance, Request Fulfillment & Non-Hardware Tickets</h3>
-            <div className="kpi-grid">
+            <div className={`kpi-grid ${activeClient?.id === 'client-mmtcpamp' ? 'grid-cols-4' : 'grid-cols-3'}`} style={activeClient?.id === 'client-mmtcpamp' ? { gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' } : undefined}>
               <KpiCard title="Total Other Activity Tickets" value={otherActivityIncidents.length} />
               <KpiCard title="Change Requests & Fulfillment" value={otherActivityIncidents.filter(i => i.IsChangeRequest || /change|fulfillment|license|licence|whitelist|request|configuration/i.test((i.SubCategory || '') + ' ' + (i.Category || '') + ' ' + (i.Description || '') + ' ' + (i.RCA || ''))).length} />
               <KpiCard title="Maintenance & Asset Tasks" value={otherActivityIncidents.filter(i => /asset|maintenance|credentials|shutdown|power load|ad disjoined|scheduled/i.test((i.SubCategory || '') + ' ' + (i.Category || '') + ' ' + (i.Description || '') + ' ' + (i.RCA || ''))).length} />
+              {activeClient?.id === 'client-mmtcpamp' && (
+                <KpiCard
+                  title="Upgrades"
+                  value={otherActivityIncidents.filter(o => /upgrade/i.test(o.SubCategory || o.sub_category || o.subCategory || '')).length}
+                />
+              )}
             </div>
 
             {otherActivityIncidents.length > 0 ? (

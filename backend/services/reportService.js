@@ -456,7 +456,7 @@ function buildReport(clientId, start, end, options = {}) {
     return sc === 'change request' || classifyTicketType(t) === 'CR';
   });
 
-  const crTickets = crCandidates.map((t, idx) => ({
+  let crTickets = crCandidates.map((t, idx) => ({
     s_no: idx + 1,
     subject: String(t['Subject'] || t.subject || '').trim(),
     category: String(t['Category'] || t.category || '').trim(),
@@ -464,14 +464,40 @@ function buildReport(clientId, start, end, options = {}) {
     status: String(t['Status'] || t.status || 'Closed').trim(),
   }));
 
-  const merakiCrs = crTickets.filter(c => /meraki/i.test(c.category)).length;
-  const securityCrs = crTickets.filter(c => /security/i.test(c.category)).length;
+  // If crTickets is empty but security_emails > 0, populate from window tickets
+  if (crTickets.length === 0 && channelCounts.security_emails > 0) {
+    let idx = 0;
+    windowTickets.forEach(t => {
+      if (classifyChannel(t) === 'security_emails') {
+        idx++;
+        crTickets.push({
+          s_no: idx,
+          subject: t['Subject'] || t.subject || 'N/A',
+          category: t['Category'] || 'Security',
+          sub_category: t['Sub Category'] || 'Change Request',
+          status: t['Status'] || 'Closed',
+        });
+      }
+    });
+  }
+
+  // Only real CRs (sub_category === 'Change Request')
+  const realCrs = (crTickets || []).filter(c => 
+    String(c.sub_category || '').trim().toLowerCase() === 'change request'
+  );
+  
+  const merakiCrs = realCrs.filter(c => /meraki/i.test(c.category || '')).length;
+  const securityCrs = realCrs.filter(c => /security/i.test(c.category || '')).length;
+  
   const crSummary = {
-    meraki_crs: merakiCrs,
-    security_crs: securityCrs,
-    security_emails: channelCounts.security_emails,
-    total_crs: crTickets.length,
+    meraki_crs: merakiCrs,       // 0
+    security_crs: securityCrs,   // 0
+    security_emails: channelCounts.security_emails,  // 4 (channel metric, NOT CR)
+    total_crs: realCrs.length,   // 0 (no real CRs)
   };
+  
+  // Overwrite cr_tickets with only real CRs
+  crTickets = realCrs;
 
   const report = {
     summary: {
@@ -708,10 +734,19 @@ function buildDeterministicSummary(report) {
   }
 
   const total = report.summary.total;
-  const met = report.sla?.met ?? 0;
-  const breached = report.sla?.breached ?? 0;
+  const met = report?.sla?.met ?? 0;
+  const breached = report?.sla?.breached ?? 0;
+  const onHold = report?.sla?.on_hold ?? 0;
+
   const totalSla = met + breached;
-  const slaPercentage = totalSla > 0 ? ((met / totalSla) * 100).toFixed(2) : '0.00';
+  const slaPercentage = totalSla > 0 ? ((met / totalSla) * 100).toFixed(2) : '100.00';
+
+  let breakdown = `${met} met SLA, ${breached} breached`;
+  if (onHold > 0) breakdown += `, ${onHold} on hold`;
+
+  if (onHold === 0 && breached === 0) {
+    breakdown = `${met} met the SLA and ${breached} were breached`;
+  }
 
   const rcaList = Array.isArray(report.rca_breakdown) ? report.rca_breakdown : [];
   const topRca = rcaList[0]?.rca || 'None';
@@ -721,7 +756,12 @@ function buildDeterministicSummary(report) {
   const topIspDevice = ispList[0]?.device_name || 'None';
   const topIspCount = ispList[0]?.total ?? 0;
 
-  return `MMTC received a total of ${total} tickets. Out of these, ${met} met the SLA and ${breached} were breached. The primary RCA driver was ${topRca} (${topRcaCount} tickets). The top ISP-affected device was ${topIspDevice} with ${topIspCount} tickets. Overall Ticket SLA Compliance stands at ${slaPercentage}%.`;
+  let rcaIspPart = '';
+  if (topRca !== 'None' || topIspDevice !== 'None') {
+    rcaIspPart = ` The primary RCA driver was ${topRca} (${topRcaCount} tickets). The top ISP-affected device was ${topIspDevice} with ${topIspCount} tickets.`;
+  }
+
+  return `MMTC received a total of ${total} tickets. Out of these, ${breakdown}.${rcaIspPart} Overall Ticket SLA Compliance stands at ${slaPercentage}%.`;
 }
 
 module.exports = {
