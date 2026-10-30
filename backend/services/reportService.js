@@ -637,7 +637,7 @@ async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
   // 1. Delete previous entries
   await database.execute('DELETE FROM reports_tickets WHERE client_id = ?', ['mmtc']);
 
-  // 2. Insert or replace each ticket
+  // 2. Prepare all statements in memory (no await here)
   let count = 0;
   const list = Array.isArray(tickets) ? tickets : [];
   let start = period?.start || period?.start_date || null;
@@ -655,17 +655,18 @@ async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
     }
   }
 
+  const statements = [];
   for (const t of list) {
     const ticketNo = t['Ticket Number'] || t.ticket_number || t.TicketNumber;
     if (!ticketNo) continue;
     const slaRes = computeSla(t, clientId);
     const ticketType = classifyTicketType(t);
 
-    await database.execute(
-      `INSERT OR REPLACE INTO reports_tickets 
+    statements.push({
+      sql: `INSERT OR REPLACE INTO reports_tickets 
        (client_id, ticket_number, period_start, period_end, payload_json, bucket, ticket_type, uploaded_at, job_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+      args: [
         'mmtc',
         String(ticketNo),
         start,
@@ -676,8 +677,21 @@ async function dualWriteToReportsTickets(clientId, tickets, period = {}) {
         now,
         jobId,
       ]
-    );
+    });
     count++;
+  }
+
+  // 3. Execute all in one network round-trip
+  if (statements.length > 0) {
+    if (typeof database.batch === 'function') {
+      await database.batch(statements);
+    } else if (database.db && typeof database.db.batch === 'function') {
+      await database.db.batch(statements);
+    } else {
+      for (const stmt of statements) {
+        await database.execute(stmt);
+      }
+    }
   }
 
   return { written: count };

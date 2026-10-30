@@ -1565,11 +1565,18 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
         }));
     }
 
-    if (!qbrData.cr_tickets) {
-      const crCandidates = combinedTickets.filter(t => {
+    if (!qbrData.cr_tickets || qbrData.cr_tickets.length === 0) {
+      let crCandidates = combinedTickets.filter(t => {
         const sc = String(t.SubCategory || t['Sub Category'] || t.Category || '').trim().toLowerCase();
         return sc.includes('change request') || sc === 'cr';
       });
+
+      if (crCandidates.length === 0 && Array.isArray(otherActivities)) {
+        crCandidates = otherActivities.filter(t => {
+          const sc = String(t.SubCategory || t['Sub Category'] || t.Category || '').trim().toLowerCase();
+          return sc.includes('change request') || sc === 'cr';
+        });
+      }
 
       qbrData.cr_tickets = crCandidates.map((t, idx) => ({
         s_no: idx + 1,

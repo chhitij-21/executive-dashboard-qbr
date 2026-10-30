@@ -671,7 +671,18 @@ async function buildPresentation(data, outputPath, options = {}) {
     buildMmtcRCAPieChartSlide(pres, rcaBreakdown, displayPeriod);
     buildMmtcISPLocationSlide(pres, data.isp_location_breakdown || [], displayPeriod);
     buildMmtcHoldTicketsSlide(pres, data.hold_tickets || [], displayPeriod);
-    buildMmtcCRDetailsSlide(pres, data.cr_tickets || [], displayPeriod);
+    const mmtcCrTickets = (Array.isArray(data.cr_tickets) && data.cr_tickets.length > 0)
+      ? data.cr_tickets
+      : (data.otherActivities || [])
+          .filter(a => String(a['Sub Category'] || a.SubCategory || a.Category || '').trim().toLowerCase().includes('change request'))
+          .map((t, idx) => ({
+            s_no: idx + 1,
+            subject: String(t.Subject || t.Description || t.subject || 'Operational Task').trim(),
+            category: String(t.Category || t.category || 'Managed Services').trim(),
+            sub_category: String(t.SubCategory || t['Sub Category'] || 'Change Request').trim(),
+            status: String(t.Status || t.status || 'Closed').trim(),
+          }));
+    buildMmtcCRDetailsSlide(pres, mmtcCrTickets, displayPeriod);
     buildSLASlide(pres, exec, siteSummary, slaAn, clientShort, isJFL);
     buildThankYouSlide(pres, exec);
   }
@@ -692,11 +703,14 @@ function buildMmtcKpiSlide(pres, data, displayPeriod) {
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s, 'EXECUTIVE KPI SUMMARY', `Operational Performance Overview  ·  ${displayPeriod}`, _slideNum);
 
-  const totalTkts = data.summary?.total ?? data.executiveSummary?.totalIncidents ?? (data.incidents || []).length;
+  const exec = data.executiveSummary || {};
+  const totalTkts = data.summary?.total ?? exec.totalIncidents ?? (data.incidents || []).length;
   const closedTkts = data.summary?.closed ?? (data.incidents || []).filter(i => /closed|resolved/i.test(i.Status || '')).length;
   const holdTkts = data.summary?.on_hold ?? (data.hold_tickets || []).length;
   const slaMetCount = data.sla?.met ?? (data.incidents || []).filter(i => i.sla_status === 'SLA Met').length;
-  const slaCompliancePct = totalTkts > 0 ? ((slaMetCount / totalTkts) * 100).toFixed(1) + '%' : '0.0%';
+  const slaCompliancePct = (exec.slaCompliance !== undefined && exec.slaCompliance !== null)
+    ? pct(exec.slaCompliance)
+    : (totalTkts > 0 ? ((slaMetCount / totalTkts) * 100).toFixed(1) + '%' : '0.0%');
 
   const kpis = [
     { label: 'TOTAL TICKETS',   value: String(totalTkts), color: C.NAVY  },
@@ -1101,7 +1115,7 @@ function buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown)
   // 8 KPI cards in 2 rows of 4
   const kpis = [
     { label: 'Total Sites',        value: fmt(exec.totalSites),         color: C.NAVY  },
-    { label: 'Active Devices',     value: fmt(exec.totalDevices),        color: C.BLUE  },
+    { label: 'Total Devices',      value: fmt(exec.totalDevices),        color: C.BLUE  },
     { label: 'Total Switches',     value: fmt(exec.totalSwitches),       color: C.STEEL },
     { label: 'Access Points',      value: fmt(exec.totalAPs),            color: C.TEAL  },
     { label: 'Overall Uptime',     value: pct(exec.overallUptime),       color: parseFloat(exec.overallUptime) >= SLA_TARGET ? C.GREEN : C.RED },
@@ -1467,19 +1481,36 @@ function buildInventorySlide(pres, exec, siteSummary, devices) {
   }
 
   // Inventory Doughnut Chart (PPT-3)
-  const swCount = exec.totalSwitches || devices.filter(d => /^sw$/i.test(d.DeviceType || '') || (d.DeviceType || '').toLowerCase().includes('switch')).length;
-  const apCount = exec.totalAPs || devices.filter(d => /^ap$/i.test(d.DeviceType || '') || (d.DeviceType || '').toLowerCase().includes('access')).length;
+  const totalActive = activeDevices.length;
+  const swCount = exec.totalSwitches || devices.filter(d => !d.__isStock && (/^sw$/i.test(d.DeviceType || '') || (d.DeviceType || '').toLowerCase().includes('switch'))).length;
+  const apCount = exec.totalAPs || devices.filter(d => !d.__isStock && (/^ap$/i.test(d.DeviceType || '') || (d.DeviceType || '').toLowerCase().includes('access'))).length;
+  const otherActiveCount = Math.max(0, totalActive - (swCount + apCount));
   const stockCount = stockDevices.length;
 
-  const invChartLabels = stockCount > 0 
-    ? ['Active Switches', 'Active APs', 'Stock Spares']
-    : ['Active Switches', 'Active APs'];
-  const invChartVals = stockCount > 0
-    ? [swCount, apCount, stockCount]
-    : [swCount, apCount];
-  const invChartColors = stockCount > 0
-    ? [C.BLUE_ACCENT, C.TEAL, C.AMBER]
-    : [C.BLUE_ACCENT, C.TEAL];
+  const invChartLabels = [];
+  const invChartVals = [];
+  const invChartColors = [];
+
+  if (swCount > 0) {
+    invChartLabels.push('Active Switches');
+    invChartVals.push(swCount);
+    invChartColors.push(C.BLUE_ACCENT);
+  }
+  if (apCount > 0) {
+    invChartLabels.push('Active APs');
+    invChartVals.push(apCount);
+    invChartColors.push(C.TEAL);
+  }
+  if (otherActiveCount > 0) {
+    invChartLabels.push('Other Active');
+    invChartVals.push(otherActiveCount);
+    invChartColors.push(C.PURPLE);
+  }
+  if (stockCount > 0) {
+    invChartLabels.push('Stock Spares');
+    invChartVals.push(stockCount);
+    invChartColors.push(C.AMBER);
+  }
 
   if (invChartVals.some(v => v > 0) && invChartLabels.length > 0) {
     s.addChart(pres.ChartType.doughnut, [
@@ -1517,14 +1548,14 @@ function buildIncidentOverviewSlide(pres, incidents, siteSummary, exec, targetSi
   addHeader(pres, s, 'INCIDENT OVERVIEW', 'Total Incident Volume, Site Distribution & Category Breakdown', _slideNum);
 
   const totalInc = incidents.length;
-  const openInc  = incidents.filter(i => !/closed|resolved/i.test(i.Status || '')).length;
-  const closedInc = totalInc - openInc;
+  const closedInc = incidents.filter(i => /closed|resolved/i.test(i.Status || '')).length;
+  const openInc = Math.max(0, totalInc - closedInc);
   const criticalInc = incidents.filter(i => /p1|critical/i.test(i.Priority || '')).length;
 
   const kpis = [
     { label: 'Total Incidents', value: fmt(totalInc),    color: C.NAVY  },
     { label: 'Open',            value: fmt(openInc),     color: openInc > 0 ? C.AMBER : C.GREEN },
-    { label: 'Closed/Resolved', value: fmt(closedInc),   color: C.GREEN },
+    { label: 'Closed',          value: fmt(closedInc),   color: C.GREEN },
     { label: 'Critical (P1)',   value: fmt(criticalInc), color: criticalInc > 0 ? C.RED : C.GREEN },
   ];
   kpis.forEach((k, i) => addKpiCard(s, 0.45 + i * 3.22, 1.05, 3.05, 1.05, k.label, k.value, k.color));
@@ -1605,11 +1636,38 @@ function buildRCASlide(pres, rcaBreakdown, incidents, exec) {
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s, 'ROOT CAUSE ANALYSIS — PARETO', 'Top Incident Drivers by Frequency & Cumulative Percentage', _slideNum);
 
-  const top8 = rcaBreakdown.slice(0, 8);
+  const totalInc = incidents.length || exec.totalIncidents || 0;
+
+  // Build RCA table data dynamically: top categories + Uncategorized if remainder exists
+  let tableRca = [];
+  if (rcaBreakdown.length > 8) {
+    const top7 = rcaBreakdown.slice(0, 7);
+    const sumTop7 = top7.reduce((acc, r) => acc + (r.count || 0), 0);
+    const uncategorized = totalInc - sumTop7;
+    tableRca = [...top7];
+    if (uncategorized > 0) {
+      tableRca.push({
+        rca: 'Uncategorized',
+        count: uncategorized,
+        pct: totalInc > 0 ? ((uncategorized / totalInc) * 100).toFixed(1) : '0.0',
+      });
+    }
+  } else {
+    tableRca = [...rcaBreakdown];
+    const sumCategories = tableRca.reduce((acc, r) => acc + (r.count || 0), 0);
+    const uncategorized = totalInc - sumCategories;
+    if (uncategorized > 0) {
+      tableRca.push({
+        rca: 'Uncategorized',
+        count: uncategorized,
+        pct: totalInc > 0 ? ((uncategorized / totalInc) * 100).toFixed(1) : '0.0',
+      });
+    }
+  }
 
   // Horizontal bar chart for RCA
-  const rcaLabels = top8.map(r => r.rca.substring(0, 22));
-  const rcaVals   = top8.map(r => r.count);
+  const rcaLabels = tableRca.map(r => r.rca.substring(0, 22));
+  const rcaVals   = tableRca.map(r => r.count);
 
   if (rcaLabels.length > 0 && rcaVals.some(v => v > 0)) {
     s.addChart(pres.ChartType?.bar || 'bar', [{ name: 'Incidents', labels: rcaLabels, values: rcaVals }], {
@@ -1641,12 +1699,12 @@ function buildRCASlide(pres, rcaBreakdown, incidents, exec) {
   });
   const COL_W = [3.1, 1.0, 0.85];
   const headers = [th('Root Cause', 'left'), th('Count', 'center'), th('%', 'center')];
-  const rows = top8.map((rca, idx) => {
+  const rows = tableRca.map((rca, idx) => {
     const fill = rowFill(idx);
     return [
       td(rca.rca.substring(0, 28), fill, { color: C.TEXT_DARK, align: 'left', fontSize: 9 }),
       td(String(rca.count), fill, { align: 'center', bold: true, color: C.BLUE }),
-      td(`${rca.pct}%`, fill, { align: 'center', bold: true, color: rca.count === rcaBreakdown[0]?.count ? C.RED : C.TEXT_DARK }),
+      td(`${rca.pct}%`, fill, { align: 'center', bold: true, color: rca.count === tableRca[0]?.count ? C.RED : C.TEXT_DARK }),
     ];
   });
   s.addTable([headers, ...rows], {
@@ -1694,24 +1752,24 @@ function buildRCAHeatmapSlide(pres, siteSummary, incidents, rcaBreakdown) {
   const maxVal = Math.max(1, ...Object.values(matrix).flatMap(r => Object.values(r)));
 
   // Draw heatmap grid
-  const cellW = 1.85, cellH = 0.52;
-  const startX = 2.3, startY = 1.1;
+  const cellW = 1.76, cellH = 0.50;
+  const startX = 2.2, startY = 1.1;
 
-  // RCA column headers
+  // RCA column headers (untruncated)
   topRCAs.forEach((rca, ci) => {
     s.addShape('rect', {
-      x: startX + ci * cellW, y: startY, w: cellW - 0.05, h: 0.42,
+      x: startX + ci * cellW, y: startY, w: cellW - 0.05, h: 0.52,
       fill: { color: C.NAVY },
     });
-    s.addText(rca.substring(0, 18), {
-      x: startX + ci * cellW + 0.05, y: startY + 0.06, w: cellW - 0.12, h: 0.3,
+    s.addText(rca, {
+      x: startX + ci * cellW + 0.04, y: startY + 0.04, w: cellW - 0.08, h: 0.44,
       fontSize: 7.5, bold: true, color: C.TEXT_LIGHT, align: 'center', fontFace: 'Calibri', wrap: true,
     });
   });
 
   // Site rows + cells
   validSites.forEach((site, ri) => {
-    const ry = startY + 0.47 + ri * cellH;
+    const ry = startY + 0.56 + ri * cellH;
 
     s.addShape('rect', {
       x: 0.3, y: ry, w: 1.95, h: cellH - 0.04,
@@ -1768,36 +1826,24 @@ function buildSLASlide(pres, exec, siteSummary, slaAn, clientShort = 'Client', i
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s, 'SLA PERFORMANCE DASHBOARD', `SLA Target: ${SLA_TARGET}%  ·  ${exec.reportingPeriod || 'Q1 FY2026'}`, _slideNum);
 
-  const slaComp = parseFloat(exec.slaCompliance) || 100;
+  const slaComp = (exec.slaCompliance !== undefined && exec.slaCompliance !== null && !isNaN(parseFloat(exec.slaCompliance)))
+    ? parseFloat(exec.slaCompliance)
+    : 100;
   const slaColor = slaComp >= 99.5 ? C.GREEN : slaComp >= 99.0 ? C.AMBER : C.RED;
 
-  // Executive SLA Doughnut Gauge Chart
-  s.addShape('roundRect', { x: 0.45, y: 1.05, w: 3.2, h: 2.9, fill: { color: C.CARD_BG }, line: { color: slaColor, pt: 2 }, rectRadius: 0.12 });
-  
-  const marginPct = Math.max(0.01, 100 - slaComp);
-  s.addChart('doughnut', [
-    { name: 'SLA Gauge', labels: ['SLA Achieved', 'Margin'], values: [slaComp, marginPct] }
-  ], {
-    x: 0.55, y: 1.1, w: 3.0, h: 2.3,
-    chartColors: [slaColor, C.DIVIDER],
-    holeSize: 70,
-    showLegend: false,
-    showValue: false,
-  });
-
-  s.addText(`${slaComp.toFixed(2)}%`, { x: 0.55, y: 1.85, w: 3.0, h: 0.5, fontSize: 24, bold: true, color: slaColor, align: 'center', fontFace: C.FONT_PRIMARY });
-  s.addText(slaComp >= SLA_TARGET ? '✓ SLA MET' : '🚨 SLA BREACH', { x: 0.55, y: 2.6, w: 3.0, h: 0.3, fontSize: 11, bold: true, color: slaColor, align: 'center', fontFace: C.FONT_PRIMARY, charSpacing: 1 });
-
-  // SLA metrics row
+  // 4 Dedicated KPI Cards across the top (Dedicated text box per metric)
   const slaKpis = [
+    { label: 'SLA Compliance',    value: pct(slaComp),                  color: slaColor },
     { label: 'Overall Uptime',    value: pct(exec.overallUptime),       color: C.GREEN },
     { label: 'Incident-Free %',   value: pct(exec.incidentFreePercent), color: C.GREEN },
     { label: 'SLA Target',        value: `${SLA_TARGET}%`,              color: C.NAVY  },
   ];
-  slaKpis.forEach((k, i) => addKpiCard(s, 3.85 + i * 3.1, 1.05, 2.95, 1.35, k.label, k.value, k.color));
+  const cardW = 2.95;
+  const gapX = 0.20;
+  slaKpis.forEach((k, i) => addKpiCard(s, 0.45 + i * (cardW + gapX), 1.05, cardW, 1.25, k.label, k.value, k.color));
 
   // Per-site SLA table with visual status badges
-  addSectionDivider(s, 2.55, 'Site-wise SLA Compliance Overview');
+  addSectionDivider(s, 2.45, 'Site-wise SLA Compliance Overview');
 
   const validSites = siteSummary.filter(st => {
     const n = String(st.siteId || '').toLowerCase();
@@ -1812,7 +1858,9 @@ function buildSLASlide(pres, exec, siteSummary, slaAn, clientShort = 'Client', i
     th('Site', 'left'), th('Devices', 'center'), th('Proactive Switch Uptime', 'center'),
     th('Incident-Free %', 'center'), th('SLA Status', 'center'),
   ];
-  const rows = validSites.slice(0, 9).map((site, idx) => {
+
+  // Render ALL sites dynamically without truncation (no .slice(0, 9))
+  const rows = validSites.map((site, idx) => {
     const fill    = rowFill(idx);
     const jflVal  = parseFloat(site.jflSwitchUptime || site.switchUptime) || 100;
     const proVal  = parseFloat(site.proactiveSwitchUptime || site.switchUptime) || 100;
@@ -1830,26 +1878,31 @@ function buildSLASlide(pres, exec, siteSummary, slaAn, clientShort = 'Client', i
       ];
     } else {
       return [
-        td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left' }),
-        td(fmt(site.deviceCount), fill, { align: 'center' }),
-        td(pct(site.proactiveSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
-        td(pct(site.incidentFreePercent), fill, { align: 'center', bold: true, color: incFree >= 90 ? C.GREEN : C.AMBER }),
-        td(statusPill, fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED }),
+        td(String(site.siteId), fill, { bold: true, color: C.NAVY, align: 'left', fontSize: 8 }),
+        td(fmt(site.deviceCount), fill, { align: 'center', fontSize: 8 }),
+        td(pct(site.proactiveSwitchUptime || site.switchUptime), fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED, fontSize: 8 }),
+        td(pct(site.incidentFreePercent), fill, { align: 'center', bold: true, color: incFree >= 90 ? C.GREEN : C.AMBER, fontSize: 8 }),
+        td(statusPill, fill, { align: 'center', bold: true, color: slaOk ? C.GREEN : C.RED, fontSize: 8 }),
       ];
     }
   });
 
+  const rowH = validSites.length > 10 ? 0.18 : 0.40;
+  const tableFontSize = validSites.length > 10 ? 8 : 11;
+
   s.addTable([headers, ...rows], {
-    x: 0.45, y: 2.95, w: 12.43, colW: COL_W,
-    fontSize: 12, rowH: 0.44, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
+    x: 0.45, y: 2.80, w: 12.43, colW: COL_W,
+    fontSize: tableFontSize, rowH, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
 
-  const narrative = [
-    `Overall SLA compliance: ${slaComp.toFixed(2)}% against a ${SLA_TARGET}% target.`,
-    slaComp >= SLA_TARGET ? `All sites are operating within contractual SLA thresholds for the reporting period.` : `SLA compliance is below target. Immediate remediation is recommended.`,
-    `Network uptime averaged ${pct(exec.overallUptime)} across all monitored infrastructure.`,
-  ];
-  addNarrativeBox(s, 6.78, narrative, 'SLA Performance Insight');
+  if (validSites.length <= 10) {
+    const narrative = [
+      `Overall SLA compliance: ${slaComp.toFixed(2)}% against a ${SLA_TARGET}% target.`,
+      slaComp >= SLA_TARGET ? `All sites are operating within contractual SLA thresholds for the reporting period.` : `SLA compliance is below target. Immediate remediation is recommended.`,
+      `Network uptime averaged ${pct(exec.overallUptime)} across all monitored infrastructure.`,
+    ];
+    addNarrativeBox(s, 6.78, narrative, 'SLA Performance Insight');
+  }
 }
 
 // ── Slide 11: Ticket Analytics ─────────────────────────────────────────────
@@ -1859,17 +1912,20 @@ function buildTicketAnalyticsSlide(pres, incidents, siteSummary, exec) {
   s.background = { color: C.BG_LIGHT };
   addHeader(pres, s, 'TICKET ANALYTICS', 'Incident Ticket Volume, Priority Distribution & Resolution Performance', _slideNum);
 
-  const totalTkts  = incidents.length;
-  const openTkts   = incidents.filter(i => !/closed|resolved/i.test(i.Status || '')).length;
-  const closedTkts = totalTkts - openTkts;
-  const p1Tkts     = incidents.filter(i => /p1|critical/i.test(i.Priority || '')).length;
-  const p2Tkts     = incidents.filter(i => /p2|major/i.test(i.Priority || '')).length;
+  const totalInc = incidents.length;
+  const closedInc = incidents.filter(i => /closed|resolved/i.test(i.Status || '')).length;
+  const openInc = Math.max(0, totalInc - closedInc);
+  const criticalInc = incidents.filter(i => /p1|critical/i.test(i.Priority || '')).length;
+  const totalTkts = totalInc;
+  const closedTkts = closedInc;
+  const openTkts = openInc;
+  const p1Tkts = criticalInc;
 
   const kpis = [
-    { label: 'Total Tickets',   value: fmt(totalTkts),  color: C.NAVY  },
-    { label: 'Open',            value: fmt(openTkts),   color: openTkts > 0 ? C.AMBER : C.GREEN },
-    { label: 'Closed',          value: fmt(closedTkts), color: C.GREEN },
-    { label: 'Critical (P1)',   value: fmt(p1Tkts),     color: p1Tkts > 0 ? C.RED : C.GREEN },
+    { label: 'Total Incidents', value: fmt(totalInc),    color: C.NAVY  },
+    { label: 'Open',            value: fmt(openInc),     color: openInc > 0 ? C.AMBER : C.GREEN },
+    { label: 'Closed',          value: fmt(closedInc),   color: C.GREEN },
+    { label: 'Critical (P1)',   value: fmt(criticalInc), color: criticalInc > 0 ? C.RED : C.GREEN },
   ];
   kpis.forEach((k, i) => addKpiCard(s, 0.45 + i * 3.22, 1.05, 3.05, 1.05, k.label, k.value, k.color));
 
@@ -2080,7 +2136,7 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSit
   const siteProUptime = parseFloat(site.proactiveSwitchUptime || site.switchUptime) || 100;
   const targetUptime = isJFL ? siteJflUptime : siteProUptime;
   const kpis = [
-    { label: 'Active Devices', value: fmt(site.deviceCount),                                         color: C.NAVY  },
+    { label: 'Total Devices',  value: fmt(site.deviceCount),                                         color: C.NAVY  },
     { label: 'Switches',       value: fmt(site.switchCount),                                          color: C.BLUE  },
     { label: 'Access Points',  value: fmt(site.apCount),                                              color: C.STEEL },
     { label: isJFL ? `${clientShort} Uptime` : 'Proactive Uptime', value: pct(isJFL ? (site.jflSwitchUptime || site.switchUptime) : (site.proactiveSwitchUptime || site.switchUptime)), color: targetUptime >= SLA_TARGET ? C.GREEN : C.RED },
@@ -2331,7 +2387,7 @@ function buildHealthySiteSlide(pres, siteKey, site, siteSws, siteAps, siteNum) {
   );
 
   const kpis = [
-    { label: 'Active Devices', value: fmt(site.deviceCount),            color: C.NAVY  },
+    { label: 'Total Devices',  value: fmt(site.deviceCount),            color: C.NAVY  },
     { label: 'Switches / APs', value: `${fmt(site.switchCount)} / ${fmt(site.apCount)}`, color: C.BLUE },
     { label: 'Switch Uptime',  value: pct(site.switchUptime),           color: C.GREEN },
     { label: 'Incident-Free %',value: pct(site.incidentFreePercent),    color: C.GREEN },
@@ -2828,7 +2884,7 @@ function buildOtherActivitySlide(pres, otherActivities = [], displayPeriod) {
   }
   const pageSize = 12;
   const totalPages = Math.max(1, Math.ceil(displayList.length / pageSize));
-  const COL_W = [2.8, 1.4, 1.4, 1.4, 1.0, 1.5, 1.0, 1.93];
+  const COL_W = [2.5, 1.6, 1.4, 1.3, 0.9, 1.4, 0.9, 2.43];
   const headers = [
     th('Subject', 'left'), th('Sub Category', 'left'), th('Device Name', 'left'),
     th('Device Serial', 'left'), th('Device Type', 'center'), th('Hostname', 'left'),

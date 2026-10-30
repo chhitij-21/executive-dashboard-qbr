@@ -63,6 +63,27 @@ async function execute(query, params = []) {
 }
 
 /**
+ * Execute a batch of SQL statements in a single transaction against the Turso database.
+ * @param {Array<string|object>} statements Array of SQL queries or statement objects
+ * @param {string} [mode='deferred'] Transaction mode ('deferred' | 'immediate' | 'exclusive')
+ * @returns {Promise<Array<object>>} Batch query result set
+ */
+async function batch(statements, mode = 'deferred') {
+  if (module.exports.execute !== execute) {
+    const results = [];
+    for (const stmt of statements) {
+      const sql = typeof stmt === 'string' ? stmt : stmt.sql;
+      const args = typeof stmt === 'string' ? [] : (stmt.args || []);
+      results.push(await module.exports.execute(sql, args));
+    }
+    return results;
+  }
+  assertConfigured();
+  const client = getClient();
+  return await client.batch(statements, mode);
+}
+
+/**
  * Check health and connectivity to the Turso database.
  * @returns {Promise<{healthy: boolean, timestamp: string, rows?: number, error?: string}>}
  */
@@ -89,5 +110,6 @@ module.exports = {
   getClient,
   assertConfigured,
   execute,
+  batch,
   healthCheck,
 };
