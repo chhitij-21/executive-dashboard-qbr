@@ -391,6 +391,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     return fail(outputDir, 'parse_error', `Cannot parse file 1: ${e.message}`, log);
   }
 
+
   if (inventoryFilePath) {
     try {
       wb2 = loadWorkbook(inventoryFilePath);
@@ -666,10 +667,43 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   incidents = matchingIncidents;
   log(`Strict customer isolation: validated ${incidents.length} incidents for ${CUSTOMER_NAME} (${targetClientId}).`);
 
-  // Fallback: If inventory is still 0, extract from incidents or load baseline
+  // Fallback: If inventory is still 0, load baseline or extract from incidents
   if (devices.length === 0) {
-    if (incidents.length > 0) {
-      log(`No inventory found. Extracting devices dynamically from ${incidents.length} incidents.`);
+    try {
+      const baselinePaths = [
+        path.resolve(__dirname, '..', '..', 'data', 'bundled_default', 'dashboard_data.json'),
+        path.resolve(__dirname, '..', '..', 'data', 'dashboard_data.json'),
+      ];
+      for (const p of baselinePaths) {
+        if (fs.existsSync(p)) {
+          const raw = fs.readFileSync(p, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.devices) && parsed.devices.length > 0 && (!parsed.clientId || parsed.clientId === targetClientId)) {
+            log(`Loaded ${parsed.devices.length} baseline inventory devices from ${path.basename(p)}`);
+            devices = parsed.devices.map(d => ({
+              DeviceID: d.DeviceID || d.SerialNo || d.Hostname,
+              SerialNo: d.SerialNo || d.DeviceID || d.Hostname,
+              Hostname: d.Hostname || d.DeviceID || d.SerialNo,
+              Location: normalizeSiteName(d.Location || d.SiteID || 'Unknown'),
+              SiteID: normalizeSiteName(d.SiteID || d.Location || 'Unknown'),
+              DeviceType: d.DeviceType || 'SW',
+              Rack: d.Rack || '',
+              CoreNonCore: d.CoreNonCore || 'Non-Core',
+              Model: d.Model || '',
+              NetworkName: d.NetworkName || '',
+              ReplacedSerial: d.ReplacedSerial || '',
+              __isStock: Boolean(d.__isStock),
+            }));
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      log(`WARNING: Could not load baseline inventory: ${err.message}`);
+    }
+
+    if (devices.length === 0 && incidents.length > 0) {
+      log(`No baseline inventory found. Extracting devices dynamically from ${incidents.length} incidents.`);
       const extractedDevs = new Map();
       incidents.forEach(inc => {
         const id = inc.DeviceID || inc.SerialNo || inc.Hostname;
@@ -692,39 +726,6 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
         }
       });
       devices = Array.from(extractedDevs.values());
-    } else {
-      try {
-        const baselinePaths = [
-          path.resolve(__dirname, '..', '..', 'data', 'bundled_default', 'dashboard_data.json'),
-          path.resolve(__dirname, '..', '..', 'data', 'dashboard_data.json'),
-        ];
-        for (const p of baselinePaths) {
-          if (fs.existsSync(p)) {
-            const raw = fs.readFileSync(p, 'utf8');
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed.devices) && parsed.devices.length > 0 && (!parsed.clientId || parsed.clientId === targetClientId)) {
-              log(`Loaded ${parsed.devices.length} baseline inventory devices from ${path.basename(p)}`);
-              devices = parsed.devices.map(d => ({
-                DeviceID: d.DeviceID || d.SerialNo || d.Hostname,
-                SerialNo: d.SerialNo || d.DeviceID || d.Hostname,
-                Hostname: d.Hostname || d.DeviceID || d.SerialNo,
-                Location: normalizeSiteName(d.Location || d.SiteID || 'Unknown'),
-                SiteID: normalizeSiteName(d.SiteID || d.Location || 'Unknown'),
-                DeviceType: d.DeviceType || 'SW',
-                Rack: d.Rack || '',
-                CoreNonCore: d.CoreNonCore || 'Non-Core',
-                Model: d.Model || '',
-                NetworkName: d.NetworkName || '',
-                ReplacedSerial: d.ReplacedSerial || '',
-                __isStock: Boolean(d.__isStock),
-              }));
-              break;
-            }
-          }
-        }
-      } catch (err) {
-        log(`WARNING: Could not load baseline inventory: ${err.message}`);
-      }
     }
   }
 
@@ -1058,10 +1059,47 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const matchedType = devTypeMap[sKey] || devTypeMap[hKey] || devTypeMap[dKey];
 
     let resolvedDeviceType = inc.DeviceType || matchedType || '';
+
+    const typeText = `${inc.Subject || ''} ${inc.Description || ''} ${inc.Category || ''} ${inc.SubCategory || ''} ${inc.Hostname || ''} ${inc.SerialNo || ''}`.toLowerCase();
+    const resolutionText = `${inc.Resolution || ''}`.toLowerCase();
+    const rcaText = `${inc.RCA || ''}`.toLowerCase();
+
     if (!resolvedDeviceType || resolvedDeviceType === 'N/A' || resolvedDeviceType === 'Unknown') {
-      const combined = `${inc.Hostname} ${inc.SerialNo} ${inc.DeviceID} ${inc.Description || ''} ${inc.Subject || ''} ${inc.Category || ''}`.toLowerCase();
-      if (/\bap\b|access|ap\d|q5aa/i.test(combined)) resolvedDeviceType = 'AP';
-      else resolvedDeviceType = 'SW';
+      if (/printer|scanner|print\s*server|\bups\b|uninterruptible/i.test(typeText)) {
+        resolvedDeviceType = 'OTHER';
+      } else if (/\bfmc\b|\bftd\b|\bfirepower\b|\bfirewall\b|\bise\b|identity\s*services|\bwlc\b|wireless\s*lan\s*controller|load\s*balancer/i.test(typeText)) {
+        resolvedDeviceType = 'OTHER';
+      } else if (/\bap\b|access\s*point|ap\d|q5aa|q5ar|q3kg/i.test(typeText)) {
+        resolvedDeviceType = 'AP';
+      } else {
+        resolvedDeviceType = 'SW';
+      }
+    } else if (resolvedDeviceType === 'SW') {
+      // 1. Subject/Type explicitly mentions firewall/ISE/WLC
+      const subjectMentionsFirewall = /\bfirewall\b|\bfmc\b|\bftd\b|\bise\b/i.test(typeText);
+      
+      // 2. Resolution EXPLICITLY indicates external/firewall issue (phrase-level match)
+      //    These phrases are SPECIFIC — they only appear when the issue is external.
+      //    Generic words like "check" or "verify" alone DO NOT trigger this.
+      const rawRes = inc.Resolution || (rawIncidentRows.find(r => String(r['Ticket Number'] || r.TicketNumber || '') === String(inc.TicketNumber || ''))?.Resolution) || '';
+      if (!inc.Resolution && rawRes) inc.Resolution = rawRes;
+      const resolutionLower = rawRes.toLowerCase();
+      const resolutionIndicatesExternal =
+        /check\s+your\s+firewall/i.test(resolutionLower) ||
+        /kindly\s+check\s+your\s+firewall/i.test(resolutionLower) ||
+        /from\s+your\s+end/i.test(resolutionLower) ||
+        /no\s+issue\s+from\s+(meraki|our)\s+side/i.test(resolutionLower) ||
+        /not\s+an\s+issue\s+from\s+(meraki|our)\s+side/i.test(resolutionLower) ||
+        /customer\s+(side|firewall)\s+(issue|problem|configuration)/i.test(resolutionLower) ||
+        /firewall\s+(configuration|side|issue)/i.test(resolutionLower);
+      
+      // 3. RCA is Configuration Errors (broader indication of external config issue)
+      const rcaIsConfig = /configuration\s*errors/i.test(rcaText);
+      const resolutionMentionsFirewall = /firewall/i.test(resolutionLower);
+      
+      if (subjectMentionsFirewall || resolutionIndicatesExternal || (rcaIsConfig && resolutionMentionsFirewall)) {
+        resolvedDeviceType = 'OTHER';
+      }
     }
     inc.DeviceType = resolvedDeviceType;
 
@@ -1212,6 +1250,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // Aggregate downtime & hold time per device ID/Serial/Hostname from raw incidents
   const incDowntimeMap = {};
   incidents.forEach((inc) => {
+    if (String(inc.DeviceType || '').toUpperCase() === 'OTHER') return;
     let actMin = Math.max(0, parseFloat(inc.ActualResolutionMin || inc['Actual Resolution Time (min)']) || 0);
     let totMin = Math.max(0, parseFloat(inc.TotalResolutionMin || inc['Total Resolution Time (min)']) || 0);
     let holdMin = Math.max(0, parseFloat(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)']) || 0);
@@ -2281,29 +2320,22 @@ function buildSiteSummary(allDevices, switches, aps, incidents, reportingPeriod,
       const swJflUps = s.switches.map(d => d.__jflUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
       const swProUps = s.switches.map(d => d.__proactiveUptime).filter(v => v !== null && v !== undefined && !isNaN(v));
 
-      // ── Switch Incident Uptime (Site Summary Level) ──
-      const swIncRows = s.incidents.filter(i => {
-        const dt = String(i.DeviceType || '').trim().toUpperCase();
-        return dt === 'SW' || dt === 'SWITCH';
-      });
+      // Site-level JFL uptime = average of per-device uptimes (matches rack table)
+      const switchDevicesForUptime = (s.switches || []).filter(d =>
+        d.__jflUptime !== undefined && d.__jflUptime !== null && !isNaN(parseFloat(d.__jflUptime))
+      );
+      const jflUptimeValues = switchDevicesForUptime.map(d => parseFloat(d.__jflUptime)).filter(v => !isNaN(v));
+      const jflPct = jflUptimeValues.length > 0
+        ? (jflUptimeValues.reduce((a, b) => a + b, 0) / jflUptimeValues.length).toFixed(2)
+        : '100.00';
 
-      const switchesCount = s.switches.length;
-      const availMinsPerSwitch = periodOptions.windowMinutes || 44640;
-      const totalAvailMins = switchesCount * availMinsPerSwitch;
+      const proUptimeValues = switchDevicesForUptime.map(d => parseFloat(d.__proactiveUptime)).filter(v => !isNaN(v));
+      const proPct = proUptimeValues.length > 0
+        ? (proUptimeValues.reduce((a, b) => a + b, 0) / proUptimeValues.length).toFixed(2)
+        : '100.00';
 
-      let proactiveSwitchUptime = '100.00';
-      let jflSwitchUptime = isJFL ? '100.00' : null;
-
-      if (totalAvailMins > 0) {
-        const totalDownMins = swIncRows.reduce((sum, i) => sum + computeActualDowntime(i), 0);
-        const totalHoldMins = swIncRows.reduce((sum, i) => sum + computeHoldDowntime(i), 0);
-
-        const proPct = Math.max(0, Math.min(100, ((totalAvailMins - totalDownMins) / totalAvailMins) * 100));
-        const jflPct = Math.max(0, Math.min(100, ((totalAvailMins - totalHoldMins) / totalAvailMins) * 100));
-
-        proactiveSwitchUptime = proPct.toFixed(2);
-        jflSwitchUptime = isJFL ? jflPct.toFixed(2) : null;
-      }
+      let proactiveSwitchUptime = proPct;
+      let jflSwitchUptime = isJFL ? jflPct : null;
 
       const apSerialsAndHosts = new Set([
         ...s.aps.map(d => String(d.DeviceID || '').toLowerCase()),

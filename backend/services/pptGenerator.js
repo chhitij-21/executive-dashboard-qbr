@@ -2197,17 +2197,33 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   );
 
   const at100 = siteSws.filter(sw => (sw.__effectiveUptime ?? 100) >= 100).length;
-  const swUp = isJFL
-    ? parseFloat(site.jflSwitchUptime || site.switchUptime || site.overallUptime || '100.00')
-    : parseFloat(site.proactiveSwitchUptime || site.switchUptime || site.overallUptime || '100.00');
 
-  const kpis = [
-    { label: 'Avg Switch Uptime', value: `${swUp.toFixed(2)}%`, color: swUp >= SLA_TARGET ? C.GREEN : C.RED },
-    { label: 'Switches @ 100%',   value: fmt(at100),             color: C.TEAL  },
-    { label: 'Total APs',         value: fmt(siteAps.length),    color: C.STEEL },
-    { label: 'Total Incidents',   value: fmt(siteIncs.length),   color: siteIncs.length > 0 ? C.AMBER : C.GREEN },
-  ];
-  kpis.forEach((k, i) => addKpiCard(s, 0.45 + i * 3.22, 1.05, 3.05, 1.0, k.label, k.value, k.color));
+  const addKpiCards = (slide, uptimeCards) => {
+    const all = [
+      ...uptimeCards,
+      { label: 'Switches @ 100%',   value: fmt(at100),             color: C.TEAL  },
+      { label: 'Total APs',         value: fmt(siteAps.length),    color: C.STEEL },
+      { label: 'Total Incidents',   value: fmt(siteIncs.length),   color: siteIncs.length > 0 ? C.AMBER : C.GREEN },
+    ];
+    const totalW = 12.43;
+    const gap = 0.15;
+    const cardW = (totalW - (all.length - 1) * gap) / all.length;
+    all.forEach((k, i) => addKpiCard(slide, 0.45 + i * (cardW + gap), 1.05, cardW, 1.0, k.label, k.value, k.color));
+  };
+
+  if (isJFL) {
+    const jflUp = parseFloat(site.jflSwitchUptime || '100.00');
+    const proUp = parseFloat(site.proactiveSwitchUptime || '100.00');
+    addKpiCards(s, [
+      { label: 'Avg JFL Switch Uptime', value: `${jflUp.toFixed(2)}%`, color: jflUp >= SLA_TARGET ? C.GREEN : C.RED },
+      { label: 'Avg Proactive Switch Uptime', value: `${proUp.toFixed(2)}%`, color: proUp >= SLA_TARGET ? C.GREEN : C.RED },
+    ]);
+  } else {
+    const swUp = parseFloat(site.proactiveSwitchUptime || '100.00');
+    addKpiCards(s, [
+      { label: 'Avg Switch Uptime', value: `${swUp.toFixed(2)}%`, color: swUp >= SLA_TARGET ? C.GREEN : C.RED },
+    ]);
+  }
 
   // Expanded Rack-wise Switch Uptime Summary Table
   addSectionDivider(s, 2.18, 'Expanded Rack-wise Switch Uptime Summary');
@@ -2227,38 +2243,60 @@ function buildSiteOperationsSlide(pres, siteKey, site, siteSws, siteIncs, siteAp
   sortedRacks.forEach((rack) => {
     const swList = rackMap[rack];
     swList.forEach((sw, devIdx) => {
-      const rawUp = sw.__proactiveUptime !== undefined ? sw.__proactiveUptime : (sw.proactiveUptime ?? 100);
-      const upNum = parseFloat(rawUp);
-      const is100 = upNum >= 100;
-      const isFirstInRack = devIdx === 0;
+      const idx = expandedRows.length;
+      const upRawPro = sw.__proactiveUptime !== undefined ? sw.__proactiveUptime : (sw.proactiveUptime ?? 100);
+      const upRawJfl = sw.__jflUptime !== undefined ? sw.__jflUptime : (sw.jflUptime ?? 100);
+      const upNumPro = parseFloat(upRawPro);
+      const upNumJfl = parseFloat(upRawJfl);
 
-      expandedRows.push([
-        td(isFirstInRack ? String(currentRackNum) : '', rowFill(expandedRows.length), { align: 'center', bold: true, color: C.TEXT_MUTED, fontSize: 9, margin: [5, 5, 5, 5] }),
-        td(rack, rowFill(expandedRows.length), { color: C.TEXT_DARK, fontSize: 9, margin: [5, 5, 5, 5] }),
-        td(sw.SerialNo || sw.DeviceID || 'N/A', rowFill(expandedRows.length), { color: C.BLUE, fontSize: 8.5, bold: true, wrap: true, margin: [5, 5, 5, 5] }),
-        td(`${upNum.toFixed(2)}%`, rowFill(expandedRows.length), { align: 'center', bold: true, color: uptimeColor(upNum), fontSize: 9, margin: [5, 5, 5, 5] }),
-        td(is100 ? 'Stable Operations (100% Uptime)' : 'Operational', rowFill(expandedRows.length), { align: 'center', bold: true, color: is100 ? C.GREEN : C.AMBER, fontSize: 8.5, margin: [5, 5, 5, 5] }),
-      ]);
+      const is100 = (isJFL ? upNumJfl : upNumPro) >= 100;
+      const operatingStatus = is100 ? 'Stable Operations (100% Uptime)' : 'Operational';
+
+      const rowCells = isJFL
+        ? [
+            td(idx + 1),
+            td(sw.Rack || sw['Rack Number'] || 'N/A'),
+            td(sw.SerialNo || sw.DeviceID),
+            td(`${upNumJfl.toFixed(2)}%`, null, { align: 'center', color: upNumJfl >= SLA_TARGET ? C.GREEN : C.RED, bold: true }),
+            td(`${upNumPro.toFixed(2)}%`, null, { align: 'center', color: upNumPro >= SLA_TARGET ? C.GREEN : C.RED, bold: true }),
+            td(operatingStatus)
+          ]
+        : [
+            td(idx + 1),
+            td(sw.Rack || sw['Rack Number'] || 'N/A'),
+            td(sw.SerialNo || sw.DeviceID),
+            td(`${upNumPro.toFixed(2)}%`, null, { align: 'center', color: upNumPro >= SLA_TARGET ? C.GREEN : C.RED, bold: true }),
+            td(operatingStatus)
+          ];
+      expandedRows.push(rowCells);
     });
     currentRackNum++;
   });
 
-  const headers = [
-    th('S.No.', 'center'), th('RACK NUMBER', 'left'), th('SERIAL NUMBER(S)', 'left'),
-    th('MONTHLY UPTIME %', 'center'), th('OPERATING STATUS', 'center'),
-  ];
+  const tableHeaders = isJFL
+    ? [th('S.No.'), th('RACK NUMBER'), th('SERIAL NUMBER(S)'), th('JFL UPTIME %'), th('PROACTIVE UPTIME %'), th('OPERATING STATUS')]
+    : [th('S.No.'), th('RACK NUMBER'), th('SERIAL NUMBER(S)'), th('MONTHLY UPTIME %'), th('OPERATING STATUS')];
 
-  const COL_W = [0.9, 2.6, 3.4, 2.2, 3.33];
+  const COL_W = isJFL ? [0.8, 2.3, 3.1, 1.8, 1.8, 2.63] : [0.9, 2.6, 3.4, 2.2, 3.33];
 
-  const fallbackSw = [[
-    td('1', 'FFFFFF', { align: 'center', margin: [5, 5, 5, 5] }),
-    td('Main Rack', 'FFFFFF', { margin: [5, 5, 5, 5] }),
-    td('N/A', 'FFFFFF', { margin: [5, 5, 5, 5] }),
-    td('100.00%', 'FFFFFF', { align: 'center', color: C.GREEN, margin: [5, 5, 5, 5] }),
-    td('Stable Operations (100% Uptime)', 'FFFFFF', { align: 'center', color: C.GREEN, margin: [5, 5, 5, 5] }),
-  ]];
+  const fallbackSw = isJFL
+    ? [[
+        td('1'),
+        td('Main Rack'),
+        td('N/A'),
+        td('100.00%', null, { align: 'center', color: C.GREEN, bold: true }),
+        td('100.00%', null, { align: 'center', color: C.GREEN, bold: true }),
+        td('Stable Operations (100% Uptime)')
+      ]]
+    : [[
+        td('1'),
+        td('Main Rack'),
+        td('N/A'),
+        td('100.00%', null, { align: 'center', color: C.GREEN, bold: true }),
+        td('Stable Operations (100% Uptime)')
+      ]];
 
-  s.addTable([headers, ...(expandedRows.length > 0 ? expandedRows.slice(0, 7) : fallbackSw)], {
+  s.addTable([tableHeaders, ...(expandedRows.length > 0 ? expandedRows.slice(0, 7) : fallbackSw)], {
     x: 0.45, y: 2.50, w: 12.43, colW: COL_W,
     fontSize: 8.5, rowH: 0.42, border: { type: 'solid', color: C.CARD_BORDER, pt: 0.75 }, fontFace: C.FONT_PRIMARY,
   });
@@ -2979,17 +3017,16 @@ function th(text, align = 'center') {
 }
 
 function td(text, fill, opts = {}) {
+  const cellOptions = {
+    fontFace: C.FONT_PRIMARY, valign: 'middle',
+    fontSize: 9,
+    margin: [5, 5, 5, 5],
+    ...opts,
+  };
+  if (fill) cellOptions.fill = { color: fill };
   return {
-    // PptxGenJS will auto-detect URLs/hyperlinks in plain text strings and underline them.
-    // Using an array of run objects with hyperlink: false prevents this behavior for all cell text.
     text: [{ text: String(text), options: { hyperlink: false } }],
-    options: {
-      fill: { color: fill },
-      fontFace: C.FONT_PRIMARY, valign: 'middle',
-      fontSize: 9,
-      margin: [5, 5, 5, 5],
-      ...opts,
-    },
+    options: cellOptions,
   };
 }
 
