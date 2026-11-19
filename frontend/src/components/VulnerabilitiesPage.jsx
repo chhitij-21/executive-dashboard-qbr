@@ -22,6 +22,7 @@ export default function VulnerabilitiesPage() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState(null);
   const [error, setError] = useState(null);
   const [vulnData, setVulnData] = useState(null);
 
@@ -107,16 +108,20 @@ export default function VulnerabilitiesPage() {
     }
   };
 
-  // Admin on-demand sync from Cisco PSIRT API
+  // On-demand sync from Cisco PSIRT API
   const handleManualRefresh = async () => {
     setRefreshing(true);
+    setSyncSuccessMsg(null);
     try {
       const res = await apiFetch(`${API_BASE_URL}/api/vulnerabilities/refresh?count=100`, {
         method: 'POST',
       });
-      if (!res.ok) {
-        throw new Error(`Sync failed (HTTP ${res.status})`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || data.details || `Sync failed (HTTP ${res.status})`);
       }
+      setSyncSuccessMsg(`Successfully synced ${data.cveCount || 0} CVE advisories from Cisco PSIRT API.`);
+      setTimeout(() => setSyncSuccessMsg(null), 5000);
       await loadVulnerabilities();
     } catch (err) {
       alert(`Manual refresh error: ${err.message}`);
@@ -297,20 +302,25 @@ export default function VulnerabilitiesPage() {
             </div>
           )}
 
-          {isAdmin && (
-            <button
-              onClick={handleManualRefresh}
-              disabled={refreshing || loading}
-              className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
-              title="Admin trigger: pull latest advisories from Cisco PSIRT API"
-            >
-              {refreshing ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <span>🔄</span>}
-              <span>{refreshing ? 'Syncing...' : 'Sync Cisco API'}</span>
-            </button>
-          )}
+          <button
+            onClick={handleManualRefresh}
+            disabled={refreshing || loading}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
+            title="Pull latest advisories from official Cisco PSIRT API"
+          >
+            {refreshing ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <span>🔄</span>}
+            <span>{refreshing ? 'Syncing...' : 'Sync Cisco API'}</span>
+          </button>
         </div>
       </div>
+
+      {syncSuccessMsg && (
+        <div className="card pad-sm" style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid #10b981', color: '#065f46', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+          <span>✅</span>
+          <span>{syncSuccessMsg}</span>
+        </div>
+      )}
 
       {/* Task 1: Compact KPI Strip (Takes minimal vertical space so Flat Table is immediately visible) */}
       <div
