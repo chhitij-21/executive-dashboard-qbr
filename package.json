@@ -12,7 +12,7 @@
     "dev:frontend": "npx vite --config frontend/vite.config.js",
     "build": "npm install --prefer-offline && cd backend && npm install --prefer-offline && cd .. && cd frontend && npm install --include=dev --prefer-offline && npm run build",
     "start": "node --env-file-if-exists=.env backend/index.js",
-    "test": "node --test backend/tests/*.test.js",
+    "test": "node --test backend/tests/*.test.js backend/tests/ai/*.test.js",
     "parity": "node scripts/deployment-parity.js",
     "reconcile": "node scripts/ssot-reconciler.js"
   },
