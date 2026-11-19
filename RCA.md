@@ -69,6 +69,40 @@
 - `backend/tests/vulnerabilities.test.js`: All 3 parts must pass cleanly.
 - Live API benchmark: `POST /api/vulnerabilities/refresh` must complete under 5 seconds.
 - Exact data assertions:
-  - JFL inventory scopes to ~72 matching CVEs.
-  - MMTC inventory scopes to ~67 matching CVEs, including ~51 FMC/FTD CVEs.
+  - JFL inventory scopes to ~85 matching CVEs (including 20 Meraki).
+  - MMTC inventory scopes to ~80 matching CVEs (including 20 Meraki and 52 FMC/FTD).
+
+---
+
+## 5. Root Cause Analysis: Meraki Vulnerabilities Visibility & Isolation
+
+### 5.1 Symptoms & User Complaint
+The user reported: `"still meraki vulnerabities is not showing please check multiple times and resolve this with NO HALLUCINATION NO DIVERSION HIGH ACCURACY HIGH IQ-200 ROBUST STRICT"`.
+
+### 5.2 Root Cause Investigation & Findings
+1. **Generic PSIRT Endpoint Incompleteness**:
+   - The generic `/security/advisories/v2/latest/100` Cisco PSIRT endpoint returned only 1 Meraki advisory (`cisco-sa-hardening-meraki-os-drbEX9GH` with 7 CVEs).
+   - Dedicated Meraki advisories (such as `cisco-sa-meraki-mx-vpn-dos-sM5GCfm7`, `cisco-sa-meraki-mx-vpn-dos-QTRHzG2`, `cisco-sa-meraki-mx-vpn-dos-vNRpDvfb`, and older MX/MS/MR firmware advisories) require calling the Cisco PSIRT product endpoint `/security/advisories/v2/product?product=meraki`.
+   - Without querying the product endpoint, 13 Meraki CVEs were absent from the cached dataset.
+2. **Date Range Clipping**:
+   - All 20 Meraki CVEs in Cisco PSIRT were published on `2026-10-07` or earlier.
+   - When the user selected `Last 7 Days` (Nov 12–19) or `Last 30 Days` (Oct 20–Nov 19), 100% of Meraki advisories were filtered out because `2026-10-07` is older than 30 days.
+3. **Sorting & Pagination Position**:
+   - In MMTC, with default sorting by CVSS or Date, Firepower/FTD advisories published in late October/November occupied ranks 1–18. Meraki advisories sat at rank 19–38 (Page 2+), so on Page 1 zero Meraki CVEs appeared.
+   - In Global view, Meraki advisories sat at rank 60 (Page 4) or rank 94 (Page 7).
+4. **Multi-Platform IOS XE Isolation**:
+   - In `backend/routes/vulnerabilities.js`, multi-platform advisories mentioning both Meraki and IOS XE (e.g. `cisco-sa-snort-dos-9D3hJLuj`) were leaking into purely Meraki inventories where `Cisco IOS XE` was not an active family.
+
+### 5.3 Implemented Fix
+1. **Product Endpoint Ingestion**: Added `fetchAdvisoriesByProduct('meraki')` in `backend/services/ciscoPsirtClient.js` and merged it into `fetchAndSave()` in `backend/services/vulnerabilityFetcher.js`, expanding the Meraki catalog to 20 verified CVEs.
+2. **Dedicated Meraki KPI Card**: Added a 6th card in the top summary strip of `frontend/src/components/VulnerabilitiesPage.jsx` showing `Cisco Meraki (20)` with one-click filtering.
+3. **Product Filter Buttons with Dynamic Counts**:
+   - `All (85)` | `Cisco Meraki (20)` | `Catalyst / IOS XE (14)` | `Firepower / FTD (52)` | `ISE (4)`.
+4. **Smart Date Protection**:
+   - Clicking `Cisco Meraki` automatically switches the time preset to `All Time` if the current date filter would hide Meraki CVEs.
+   - If an empty table occurs when `selectedProduct === 'MERAKI'`, a prominent button `"Show All Meraki Advisories (All Time)"` is rendered.
+5. **Visual Meraki Badge**:
+   - Every Meraki row in the table now carries a prominent, sharp blue `MERAKI` badge next to the product name.
+6. **Multi-Tenant Strict Isolation**:
+   - In `backend/routes/vulnerabilities.js`, when an inventory has Meraki but lacks `Cisco IOS XE`, cross-platform IOS XE advisories are excluded, fulfilling repo test invariants.
 

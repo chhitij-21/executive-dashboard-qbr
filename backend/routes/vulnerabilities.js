@@ -28,22 +28,22 @@ const router = express.Router();
 function mapModelToOsFamily(model) {
   if (!model || typeof model !== 'string') return null;
   const m = model.trim().toUpperCase();
-  if (m.startsWith('MS') || m.startsWith('MX') || m.startsWith('MR')) {
+  if (m.includes('MERAKI') || m.startsWith('MS') || m.startsWith('MX') || m.startsWith('MR') || m.startsWith('MG') || m.startsWith('MV')) {
     return 'Meraki';
   }
-  if (m.startsWith('C9') || m.startsWith('CW') || m.startsWith('ISR') || m.startsWith('ASR')) {
+  if (m.startsWith('C9') || m.startsWith('CW') || m.startsWith('ISR') || m.startsWith('ASR') || m.includes('CATALYST') || m.includes('IOS XE') || m.includes('IOS-XE')) {
     return 'Cisco IOS XE';
   }
   if (m.startsWith('WS-C') || m.startsWith('C1-C')) {
     return 'Cisco IOS';
   }
-  if (m.startsWith('FPR') || m.startsWith('ASA')) {
+  if (m.startsWith('FPR') || m.startsWith('ASA') || m.includes('FIREPOWER') || m.includes('FTD')) {
     return 'Cisco FTD';
   }
   if (m.startsWith('FMC')) {
     return 'Cisco FMC';
   }
-  if (m.startsWith('SNS') || m.startsWith('ISE')) {
+  if (m.startsWith('SNS') || m.startsWith('ISE') || m.includes('IDENTITY SERVICES ENGINE')) {
     return 'Cisco ISE';
   }
   return null;
@@ -201,6 +201,9 @@ router.get('/', async (req, res) => {
         filteredCves = filteredCves.filter((item) =>
           activeFamilies.some((fam) => cveMatchesOsFamily(item, fam))
         );
+        if (!activeFamilies.includes('Cisco IOS XE')) {
+          filteredCves = filteredCves.filter((item) => !(item.product || '').toLowerCase().includes('ios xe'));
+        }
       }
     }
 
@@ -292,3 +295,6 @@ router.get('/refresh', optionalAuthForRefresh, handleRefresh);
 router.post('/refresh', optionalAuthForRefresh, handleRefresh);
 
 module.exports = router;
+module.exports.mapModelToOsFamily = mapModelToOsFamily;
+module.exports.cveMatchesOsFamily = cveMatchesOsFamily;
+module.exports.getClientDashboardData = getClientDashboardData;

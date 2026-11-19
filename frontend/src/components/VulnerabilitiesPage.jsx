@@ -31,6 +31,8 @@ export default function VulnerabilitiesPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedSeverity, setSelectedSeverity] = useState('ALL'); // 'ALL', 'CRITICAL', 'HIGH', 'MEDIUM'
+  const [selectedProduct, setSelectedProduct] = useState('ALL'); // 'ALL', 'MERAKI', 'CATALYST', 'FIREPOWER', 'ISE'
+  const [sortField, setSortField] = useState('DATE'); // Default: 'DATE' (Newest First) so latest Meraki/Cisco CVEs appear on Page 1
   const [showInformational, setShowInformational] = useState(false); // Default: UNCHECKED (hides NA / Informational)
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -180,6 +182,15 @@ export default function VulnerabilitiesPage() {
           if ((item.severity || '').toUpperCase() !== selectedSeverity) return false;
         }
 
+        // Quick Product filter
+        if (selectedProduct !== 'ALL') {
+          const prodTxt = `${item.product || ''} ${item.vulnerabilityImpact || ''}`.toLowerCase();
+          if (selectedProduct === 'MERAKI' && !prodTxt.includes('meraki')) return false;
+          if (selectedProduct === 'CATALYST' && !prodTxt.includes('catalyst') && !prodTxt.includes('ios xe') && !prodTxt.includes('ios-xe')) return false;
+          if (selectedProduct === 'FIREPOWER' && !prodTxt.includes('ftd') && !prodTxt.includes('fmc') && !prodTxt.includes('firepower') && !prodTxt.includes('adaptive security appliance') && !prodTxt.includes('secure firewall')) return false;
+          if (selectedProduct === 'ISE' && !prodTxt.includes('identity services engine') && !prodTxt.includes('ise')) return false;
+        }
+
         // Search query (CVE, Product, Impact)
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
@@ -192,24 +203,70 @@ export default function VulnerabilitiesPage() {
         return true;
       })
       .sort((a, b) => {
-        // Default sorting:
-        // 1. CVSS Score (Descending) — highest first
+        if (sortField === 'DATE') {
+          const dateA = a.advisoryDate || '';
+          const dateB = b.advisoryDate || '';
+          const cmp = dateB.localeCompare(dateA);
+          if (cmp !== 0) return cmp;
+          const cvssA = parseFloat(a.cvss) || 0;
+          const cvssB = parseFloat(b.cvss) || 0;
+          return cvssB - cvssA;
+        }
+        // CVSS Score (Descending) — highest first
         const cvssA = parseFloat(a.cvss) || 0;
         const cvssB = parseFloat(b.cvss) || 0;
         if (cvssB !== cvssA) {
           return cvssB - cvssA;
         }
-        // 2. If CVSS tied, sort by Advisory Date (Descending)
         const dateA = a.advisoryDate || '';
         const dateB = b.advisoryDate || '';
         return dateB.localeCompare(dateA);
       });
-  }, [vulnData, effectiveDateRange, selectedSeverity, showInformational, searchQuery]);
+  }, [vulnData, effectiveDateRange, selectedSeverity, selectedProduct, sortField, showInformational, searchQuery]);
 
   // Reset pagination when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [datePreset, startDate, endDate, selectedSeverity, showInformational, searchQuery, pageSize]);
+  }, [datePreset, startDate, endDate, selectedSeverity, selectedProduct, sortField, showInformational, searchQuery, pageSize]);
+
+  // Product inventory breakdown counts (for filter pills and Meraki KPI card)
+  const productCounts = useMemo(() => {
+    const all = (vulnData?.vulnerabilities || vulnData?.cveList || []).filter((item) => {
+      if (!showInformational) {
+        const sev = (item.severity || '').toLowerCase();
+        const cve = (item.cveId || '').toUpperCase();
+        if (sev === 'informational' || cve === 'NA' || cve === 'N/A') return false;
+      }
+      return true;
+    });
+
+    let meraki = 0;
+    let catalyst = 0;
+    let firepower = 0;
+    let ise = 0;
+
+    for (const item of all) {
+      const prodTxt = `${item.product || ''} ${item.vulnerabilityImpact || ''}`.toLowerCase();
+      if (prodTxt.includes('meraki')) meraki++;
+      if (prodTxt.includes('catalyst') || prodTxt.includes('ios xe') || prodTxt.includes('ios-xe')) catalyst++;
+      if (prodTxt.includes('ftd') || prodTxt.includes('fmc') || prodTxt.includes('firepower') || prodTxt.includes('adaptive security appliance') || prodTxt.includes('secure firewall')) firepower++;
+      if (prodTxt.includes('identity services engine') || prodTxt.includes('ise')) ise++;
+    }
+
+    return { all: all.length, meraki, catalyst, firepower, ise };
+  }, [vulnData, showInformational]);
+
+  // Quick switch for product filtering with smart date protection
+  const handleSelectProduct = (productId) => {
+    setSelectedProduct(productId);
+    setCurrentPage(1);
+    // If the active date preset would hide all advisories for the chosen product, auto-switch to ALL
+    if (productId !== 'ALL' && datePreset !== 'ALL') {
+      setDatePreset('ALL');
+      setStartDate('');
+      setEndDate('');
+    }
+  };
 
   // Overall KPI metrics (compact summary)
   const kpis = useMemo(() => {
@@ -326,7 +383,7 @@ export default function VulnerabilitiesPage() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
           gap: '0.75rem',
           marginBottom: '1rem',
         }}
@@ -342,6 +399,34 @@ export default function VulnerabilitiesPage() {
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>P2 Medium / Low</span>
           <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{kpis.p2Count || 0}</span>
+        </div>
+        {/* Dedicated Cisco Meraki Card */}
+        <div
+          onClick={() => handleSelectProduct(selectedProduct === 'MERAKI' ? 'ALL' : 'MERAKI')}
+          style={{
+            background: selectedProduct === 'MERAKI' ? 'rgba(2, 132, 199, 0.15)' : 'var(--bg-card)',
+            border: selectedProduct === 'MERAKI' ? '1.5px solid #0284c7' : '1px solid var(--border)',
+            borderRadius: '6px',
+            padding: '0.55rem 0.85rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+          title="Click to view Cisco Meraki advisories (MX / MS / MR)"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase' }}>
+              Cisco Meraki
+            </span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+              {selectedProduct === 'MERAKI' ? 'Active Filter ✕' : 'Click to Filter'}
+            </span>
+          </div>
+          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0284c7' }}>
+            {productCounts.meraki}
+          </span>
         </div>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Affected Products</span>
@@ -409,6 +494,61 @@ export default function VulnerabilitiesPage() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Quick Product Filter Strip with dynamic counts */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>PRODUCT:</span>
+            {[
+              { id: 'ALL', label: `All (${productCounts.all})` },
+              { id: 'MERAKI', label: `Cisco Meraki (${productCounts.meraki})` },
+              { id: 'CATALYST', label: `Catalyst / IOS XE (${productCounts.catalyst})` },
+              { id: 'FIREPOWER', label: `Firepower / FTD (${productCounts.firepower})` },
+              { id: 'ISE', label: `ISE (${productCounts.ise})` },
+            ].map((p) => {
+              const isActive = selectedProduct === p.id;
+              const isMerakiBtn = p.id === 'MERAKI';
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleSelectProduct(p.id)}
+                  type="button"
+                  style={{
+                    padding: '0.22rem 0.65rem',
+                    fontSize: '0.78rem',
+                    borderRadius: '9999px',
+                    fontWeight: isActive ? 700 : 500,
+                    border: isActive
+                      ? isMerakiBtn ? '1.5px solid #0284c7' : '1.5px solid var(--accent-blue)'
+                      : '1px solid var(--border)',
+                    background: isActive
+                      ? isMerakiBtn ? 'rgba(2, 132, 199, 0.2)' : 'rgba(37, 99, 235, 0.15)'
+                      : 'var(--bg-secondary)',
+                    color: isActive
+                      ? isMerakiBtn ? '#0284c7' : 'var(--accent-blue)'
+                      : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sort Control */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }}>
+            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>SORT:</span>
+            <select
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value)}
+              className="nav-select"
+              style={{ fontSize: '0.78rem', padding: '0.22rem 0.5rem', borderRadius: '6px' }}
+            >
+              <option value="DATE">Newest Date First</option>
+              <option value="CVSS">Highest CVSS First</option>
+            </select>
           </div>
 
           {/* Show Informational Advisories Toggle */}
@@ -481,11 +621,37 @@ export default function VulnerabilitiesPage() {
           <div className="card pad-md" style={{ marginBottom: '1.75rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                  Active CVE Advisories Register ({totalEntries} Records)
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                    Active CVE Advisories Register ({totalEntries} Records)
+                  </h3>
+                  {selectedProduct !== 'ALL' && (
+                    <span
+                      style={{
+                        background: selectedProduct === 'MERAKI' ? '#0284c7' : 'var(--accent-blue)',
+                        color: '#ffffff',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        padding: '0.15rem 0.55rem',
+                        borderRadius: '9999px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                      }}
+                    >
+                      Filtered: {selectedProduct === 'MERAKI' ? 'Cisco Meraki' : selectedProduct}
+                      <button
+                        onClick={() => setSelectedProduct('ALL')}
+                        style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 0, fontSize: '0.8rem', lineHeight: 1 }}
+                        title="Clear product filter"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Sorted by CVSS Score (descending) & Advisory Date. Dense printable format with active telemetry links.
+                  Sorted by {sortField === 'DATE' ? 'Advisory Date (newest first)' : 'CVSS Score (descending)'}. Dense printable format with active telemetry links.
                 </span>
               </div>
             </div>
@@ -538,15 +704,31 @@ export default function VulnerabilitiesPage() {
                   {paginatedRows.length === 0 ? (
                     <tr>
                       <td colSpan={8} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
-                        {vulnData?.filteredCount === 0 || (!loading && (vulnData?.vulnerabilities || vulnData?.cveList || []).length === 0)
-                          ? 'No known vulnerabilities found for the current inventory.'
-                          : 'No advisories found matching the selected filters.'}
+                        {selectedProduct === 'MERAKI' && datePreset !== 'ALL' ? (
+                          <div>
+                            <p style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                              No Cisco Meraki advisories in the selected date range ({datePreset}).
+                            </p>
+                            <button
+                              onClick={() => setDatePreset('ALL')}
+                              className="btn btn-primary"
+                              style={{ fontSize: '0.8rem', padding: '0.35rem 0.85rem' }}
+                            >
+                              Show All Meraki Advisories (All Time)
+                            </button>
+                          </div>
+                        ) : vulnData?.filteredCount === 0 || (!loading && (vulnData?.vulnerabilities || vulnData?.cveList || []).length === 0) ? (
+                          'No known vulnerabilities found for the current inventory.'
+                        ) : (
+                          'No advisories found matching the selected filters.'
+                        )}
                       </td>
                     </tr>
                   ) : (
                     paginatedRows.map((row, idx) => {
                       const sNo = (currentPage - 1) * pageSize + idx + 1;
                       const isEven = idx % 2 === 0;
+                      const isMerakiRow = (row.product || '').toLowerCase().includes('meraki');
                       return (
                         <tr
                           key={`${row.cveId}-${idx}`}
@@ -562,11 +744,29 @@ export default function VulnerabilitiesPage() {
                           <td style={{ padding: '0.55rem 0.6rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', borderRight: '1px solid var(--border)' }}>
                             {row.advisoryDate}
                           </td>
-                          {/* Truncated product display with hover tooltip */}
+                          {/* Truncated product display with hover tooltip & Meraki badge */}
                           <td
                             style={{ padding: '0.55rem 0.6rem', color: 'var(--text-primary)', fontWeight: 500, maxWidth: '220px', borderRight: '1px solid var(--border)' }}
                             title={row.product}
                           >
+                            {isMerakiRow && (
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  background: '#0284c7',
+                                  color: '#ffffff',
+                                  fontSize: '0.66rem',
+                                  fontWeight: 700,
+                                  padding: '0.1rem 0.35rem',
+                                  borderRadius: '4px',
+                                  marginRight: '0.4rem',
+                                  verticalAlign: 'middle',
+                                  letterSpacing: '0.02em',
+                                }}
+                              >
+                                MERAKI
+                              </span>
+                            )}
                             {formatProductDisplay(row.product)}
                           </td>
                           {/* CVE ID with clickable link to Cisco advisory */}
@@ -654,6 +854,7 @@ export default function VulnerabilitiesPage() {
                     <option value={15}>15</option>
                     <option value={25}>25</option>
                     <option value={50}>50</option>
+                    <option value={100}>100</option>
                   </select>
                 </div>
 

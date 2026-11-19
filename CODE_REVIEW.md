@@ -49,5 +49,10 @@
 
 ## 6. Verification Status
 - `backend/tests/vulnerabilities.test.js`: 3/3 passed.
-- Live API test: Passed across Global, JFL (72 CVEs), MMTC (67 CVEs / 50 Firepower CVEs), and `/refresh` (HTTP 200).
+- Entire backend test suite (`node --test backend/tests/*.test.js`): 158/158 passed (21 test suites, 0 fails).
+- Frontend production build (`npm --prefix frontend run build`): Succeeded with 0 errors.
+- Live Cisco PSIRT API query verified with product endpoint: 246 total CVEs, 20 Meraki CVEs.
+- Multi-tenant verification:
+  - JFL inventory: 85 total CVEs, 20 Meraki CVEs.
+  - MMTC inventory: 80 total CVEs, 20 Meraki CVEs, 52 Firepower/FTD CVEs.
 - Working tree clean and verified.

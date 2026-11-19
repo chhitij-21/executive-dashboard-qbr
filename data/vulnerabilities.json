@@ -1,7 +1,7 @@
 {
-  "lastFetched": "2026-11-19T01:57:42.651Z",
-  "advisoryCount": 100,
-  "cveCount": 233,
+  "lastFetched": "2026-11-19T02:21:18.039Z",
+  "advisoryCount": 108,
+  "cveCount": 246,
   "sources": [
     {
       "name": "Cisco PSIRT openVuln API",
@@ -18,7 +18,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Vulnerability in Oracle OpenJDK (Java4Shell) Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to a version that includes the patched Oracle OpenJDK release specified in the November 2026 advisory.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-nov2026-java-rce-eCa6ss9z"
     },
@@ -31,7 +31,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco products to the fixed software versions listed in the November 2026 ClamAV security advisory to resolve the vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -44,7 +44,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to the fixed software version listed in the Cisco Security Advisory to resolve the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -57,7 +57,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco products to the fixed software versions listed in the Cisco Security Advisory to resolve the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -70,7 +70,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to the fixed software version listed in the Cisco Security Advisory to resolve the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -83,7 +83,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco products to the fixed software versions listed in the Cisco Security Advisory to resolve the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -96,7 +96,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to the fixed software version listed in the Cisco Security Advisory to resolve the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -109,7 +109,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco products to the fixed software versions listed in the Cisco Security Advisory to resolve the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -122,7 +122,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco products to the fixed software versions listed in the Cisco Security Advisory to resolve the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -135,7 +135,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to the fixed software release listed in the Cisco Security Advisory for CVE-2026-76515 to remediate the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -148,7 +148,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "ClamAV Vulnerabilities Affecting Cisco Products: November 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco products to the fixed software versions listed in the Cisco Security Advisory to remediate the ClamAV vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-multi-e93M3vdA"
     },
@@ -161,7 +161,7 @@
       "cvss": 7.4,
       "vulnerabilityImpact": "Vulnerabilities in Node.js and Brotli Affecting Cisco Products: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco products to the fixed software versions listed in the October 2026 Cisco Security Advisory to resolve the Node.js and Brotli vulnerabilities.",
+      "smartMitigation": "Upgrade Cisco IOS XE to current deferred/recommended maintenance release branch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-oct2026-node-js-Jj3SQ19u"
     },
@@ -174,7 +174,7 @@
       "cvss": 7.4,
       "vulnerabilityImpact": "Vulnerabilities in Node.js and Brotli Affecting Cisco Products: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to the fixed software version specified in the October 2026 Cisco Security Advisory to remediate the Node.js and Brotli vulnerabilities.",
+      "smartMitigation": "Upgrade Cisco IOS XE to current deferred/recommended maintenance release branch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-oct2026-node-js-Jj3SQ19u"
     },
@@ -187,7 +187,7 @@
       "cvss": 7.4,
       "vulnerabilityImpact": "Vulnerabilities in Node.js and Brotli Affecting Cisco Products: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to the fixed software version listed in the Cisco Security Advisory for CVE-2026-106069.",
+      "smartMitigation": "Upgrade Cisco IOS XE to current deferred/recommended maintenance release branch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-oct2026-node-js-Jj3SQ19u"
     },
@@ -200,7 +200,7 @@
       "cvss": 7.4,
       "vulnerabilityImpact": "Vulnerabilities in Node.js and Brotli Affecting Cisco Products: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to the fixed software version specified in the October 2026 Cisco Security Advisory for Node.js and Brotli vulnerabilities.",
+      "smartMitigation": "Upgrade Cisco IOS XE to current deferred/recommended maintenance release branch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-oct2026-node-js-Jj3SQ19u"
     },
@@ -213,7 +213,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Cisco Informational for Emergency Distrust of eMudhra Root and Intermediate Certificate Authorities",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Configure the `crypto ca trustpoint` command to explicitly distrust the eMudhra root and intermediate certificates on all affected Cisco devices.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-emudhra-info-ScS22A1r"
     },
@@ -226,7 +226,7 @@
       "cvss": 7.5,
       "vulnerabilityImpact": "Cisco BroadWorks Out-of-Band Blind XML External Entity Injection Vulnerability",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade Cisco BroadWorks to a version that contains the fix for CVE-2026-20320 as specified in the Cisco Security Advisory.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-bworks-xxe-uwUd7CEt"
     },
@@ -239,7 +239,7 @@
       "cvss": 4.3,
       "vulnerabilityImpact": "Cisco Identity Services Engine Authorization Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade Cisco Identity Services Engine to a fixed release version as specified in the Cisco Security Advisory.",
+      "smartMitigation": "Upgrade Cisco Identity Services Engine (ISE) to latest patch or maintenance release.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-auth-bypass-1-MxcTNgwx"
     },
@@ -252,7 +252,7 @@
       "cvss": 4.3,
       "vulnerabilityImpact": "Cisco Identity Services Engine Authorization Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade Cisco Identity Services Engine to version 3.3(1) or later to remediate the authorization bypass vulnerabilities.",
+      "smartMitigation": "Upgrade Cisco Identity Services Engine (ISE) to latest patch or maintenance release.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-auth-bypass-1-MxcTNgwx"
     },
@@ -265,7 +265,7 @@
       "cvss": 4.3,
       "vulnerabilityImpact": "Cisco Identity Services Engine Authorization Bypass Vulnerabilities",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade Cisco Identity Services Engine to a fixed release version as specified in the Cisco Security Advisory for CVE-2026-20286.",
+      "smartMitigation": "Upgrade Cisco Identity Services Engine (ISE) to latest patch or maintenance release.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-auth-bypass-1-MxcTNgwx"
     },
@@ -278,7 +278,7 @@
       "cvss": 9.6,
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade your Cisco Meraki devices to the latest available firmware version that includes the October 2026 security hardening release.",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
     },
@@ -291,7 +291,7 @@
       "cvss": 9.6,
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade your Cisco Meraki devices to the latest available firmware release that includes the October 2026 security hardening updates.",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
     },
@@ -304,7 +304,7 @@
       "cvss": 9.6,
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade your Cisco Meraki devices to the latest available firmware version that includes the October 2026 security hardening release.",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
     },
@@ -317,7 +317,7 @@
       "cvss": 9.6,
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade your Cisco Meraki devices to the latest security-hardened firmware release available in the Meraki Dashboard to remediate the vulnerabilities addressed in the October 2026 advisory.",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
     },
@@ -330,7 +330,7 @@
       "cvss": 9.6,
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade your Cisco Meraki devices to the latest available firmware version that includes the October 2026 security hardening release.",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
     },
@@ -343,7 +343,7 @@
       "cvss": 9.6,
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade your Cisco Meraki devices to the latest available firmware release that includes the October 2026 security hardening updates.",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
     },
@@ -356,7 +356,7 @@
       "cvss": 9.6,
       "vulnerabilityImpact": "Cisco Meraki Security Hardening Release: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade your Cisco Meraki devices to the latest Meraki Dashboard OS release that includes the October 2026 security hardening updates.",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH"
     },
@@ -369,7 +369,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Vulnerabilities in PHP Affecting Cisco Products: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco product to the fixed software version specified in the Cisco Security Advisory for CVE-2026-109618.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-php-october26-Jj384Daq"
     },
@@ -382,7 +382,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Vulnerabilities in PHP Affecting Cisco Products: October 2026",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade the affected Cisco products to the fixed software versions listed in the October 2026 PHP Security Advisory to remediate the vulnerabilities.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-php-october26-Jj384Daq"
     },
@@ -395,7 +395,7 @@
       "cvss": 5.3,
       "vulnerabilityImpact": "Cisco Identity Services Engine Authorization Bypass Vulnerability",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Upgrade Cisco Identity Services Engine to a fixed release listed in the Cisco Security Advisory cisco-sa-ise-cert-mE9BD5GO.",
+      "smartMitigation": "Upgrade Cisco Identity Services Engine (ISE) to latest patch or maintenance release.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-cert-mE9BD5GO"
     },
@@ -408,7 +408,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of November 4, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Configure the `crypto ca trustpoint` command to explicitly distrust the eMudhra root and intermediate certificates on all affected Cisco devices.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-I8z3n6lK"
     },
@@ -863,7 +863,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of October 21, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Configure the `crypto ca trustpoint` command to explicitly distrust the eMudhra root and intermediate certificates on all affected Cisco devices.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-QGwHnJ6k"
     },
@@ -1071,7 +1071,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of October 7, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Configure the `crypto ca trustpoint` command to explicitly distrust the eMudhra root and intermediate certificates on all affected Cisco devices.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-fBn58ELx"
     },
@@ -1877,7 +1877,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of September 16, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Configure the `crypto ca trustpoint` command to explicitly distrust the eMudhra root and intermediate certificates on all affected Cisco devices.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-jfxK98ZP"
     },
@@ -2735,7 +2735,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of September 2, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Configure the `crypto ca trustpoint` command to explicitly distrust the eMudhra root and intermediate certificates on all affected Cisco devices.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-f2SiMFxl"
     },
@@ -2826,7 +2826,7 @@
       "cvss": 0,
       "vulnerabilityImpact": "Cisco Advance Notification for Publication of August 19, 2026, Security Advisories",
       "fixedRelease": "Refer to advisory",
-      "smartMitigation": "Configure the `crypto ca trustpoint` command to explicitly distrust the eMudhra root and intermediate certificates on all affected Cisco devices.",
+      "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P2",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-LDquvx5d"
     },
@@ -3037,6 +3037,175 @@
       "smartMitigation": "Upgrade device firmware to the latest recommended release or apply vendor patch.",
       "priority": "P1",
       "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-clamav-WuuvVd26"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-sM5GCfm7",
+      "advisoryDate": "2025-06-18",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2025-20271",
+      "severity": "High",
+      "cvss": 8.6,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series AnyConnect VPN with Client Certificate Authentication Denial of Service Vulnerability",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-sM5GCfm7"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-QTRHzG2",
+      "advisoryDate": "2024-10-02",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2024-20498",
+      "severity": "High",
+      "cvss": 8.6,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series Teleworker Gateway AnyConnect VPN Denial of Service Vulnerabilities",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-QTRHzG2"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-QTRHzG2",
+      "advisoryDate": "2024-10-02",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2024-20499",
+      "severity": "High",
+      "cvss": 8.6,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series Teleworker Gateway AnyConnect VPN Denial of Service Vulnerabilities",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-QTRHzG2"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-QTRHzG2",
+      "advisoryDate": "2024-10-02",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2024-20500",
+      "severity": "High",
+      "cvss": 8.6,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series Teleworker Gateway AnyConnect VPN Denial of Service Vulnerabilities",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-QTRHzG2"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-QTRHzG2",
+      "advisoryDate": "2024-10-02",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2024-20501",
+      "severity": "High",
+      "cvss": 8.6,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series Teleworker Gateway AnyConnect VPN Denial of Service Vulnerabilities",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-QTRHzG2"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-QTRHzG2",
+      "advisoryDate": "2024-10-02",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2024-20502",
+      "severity": "High",
+      "cvss": 8.6,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series Teleworker Gateway AnyConnect VPN Denial of Service Vulnerabilities",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-QTRHzG2"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-QTRHzG2",
+      "advisoryDate": "2024-10-02",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2024-20513",
+      "severity": "High",
+      "cvss": 8.6,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series Teleworker Gateway AnyConnect VPN Denial of Service Vulnerabilities",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-QTRHzG2"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-by-QWUkqV7X",
+      "advisoryDate": "2024-10-02",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2024-20509",
+      "severity": "Medium",
+      "cvss": 5.8,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series Teleworker Gateway AnyConnect VPN Session Takeover and Denial of Service Vulnerability",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P2",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-by-QWUkqV7X"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-vNRpDvfb",
+      "advisoryDate": "2025-04-02",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2025-20212",
+      "severity": "High",
+      "cvss": 7.7,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z Series AnyConnect VPN Denial of Service Vulnerability",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-vNRpDvfb"
+    },
+    {
+      "advisoryId": "cisco-sa-meraki-mx-vpn-dos-vnESbgBf",
+      "advisoryDate": "2022-10-19",
+      "product": "Cisco Meraki MX Firmware",
+      "cveId": "CVE-2022-20933",
+      "severity": "High",
+      "cvss": 8.6,
+      "vulnerabilityImpact": "Cisco Meraki MX and Z3 Teleworker Gateway VPN Denial of Service Vulnerability",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-meraki-mx-vpn-dos-vnESbgBf"
+    },
+    {
+      "advisoryId": "cisco-sa-snort-dos-9D3hJLuj",
+      "advisoryDate": "2022-01-19",
+      "product": "Cisco IOS XE Software, Cisco Meraki MX Firmware, Cisco Secure Firewall Threat Defense (FTD) Software, Cisco Cyber Vision, Cisco UTD SNORT IPS Engine Software, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.1, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.2, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.3, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.4, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.5, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.6, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.7, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.8, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.10, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.11, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.9, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.12, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.13, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.14, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.15, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.16, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.17, Cisco Secure Firewall Threat Defense (FTD) Software 6.2.3.18, Cisco Secure Firewall Threat Defense (FTD) Software 6.6.0, Cisco Secure Firewall Threat Defense (FTD) Software 6.6.0.1, Cisco Secure Firewall Threat Defense (FTD) Software 6.6.1, Cisco Secure Firewall Threat Defense (FTD) Software 6.6.3, Cisco Secure Firewall Threat Defense (FTD) Software 6.6.4, Cisco Secure Firewall Threat Defense (FTD) Software 6.6.5, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.1, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.3, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.2, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.4, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.5, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.6, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.7, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.8, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.9, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.10, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.11, Cisco Secure Firewall Threat Defense (FTD) Software 6.4.0.12, Cisco Secure Firewall Threat Defense (FTD) Software 7.0.0, Cisco Secure Firewall Threat Defense (FTD) Software 7.0.0.1",
+      "cveId": "CVE-2022-20685",
+      "severity": "High",
+      "cvss": 7.5,
+      "vulnerabilityImpact": "Multiple Cisco Products Snort Modbus Denial of Service Vulnerability",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P1",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-snort-dos-9D3hJLuj"
+    },
+    {
+      "advisoryId": "Cisco-SA-20141223-CVE-2014-7999",
+      "advisoryDate": "2014-12-23",
+      "product": "Cisco Meraki MS Firmware, Cisco Meraki MR Firmware, Cisco Meraki MX Firmware",
+      "cveId": "CVE-2014-7999",
+      "severity": "Medium",
+      "cvss": 5.2,
+      "vulnerabilityImpact": "Cisco Meraki Local Management Interface Firmware Installation Vulnerability",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P2",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/Cisco-SA-20141223-CVE-2014-7999"
+    },
+    {
+      "advisoryId": "Cisco-SA-20141223-CVE-2014-7993",
+      "advisoryDate": "2014-12-23",
+      "product": "Cisco Meraki MS Firmware, Cisco Meraki MR Firmware, Cisco-Meraki MX Firmware",
+      "cveId": "CVE-2014-7993",
+      "severity": "Medium",
+      "cvss": 6.1,
+      "vulnerabilityImpact": "Cisco Meraki HTTP Handler Local Information Disclosure Vulnerability",
+      "fixedRelease": "Refer to advisory",
+      "smartMitigation": "Upgrade Cisco Meraki device firmware to latest stable release in Dashboard.",
+      "priority": "P2",
+      "advisoryLink": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/Cisco-SA-20141223-CVE-2014-7993"
     }
   ]
 }

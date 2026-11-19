@@ -138,6 +138,18 @@ async function fetchLatestAdvisories(count = 100) {
 }
 
 /**
+ * Fetches advisories for a specific product string (e.g. 'meraki', 'catalyst', etc.).
+ *
+ * @param {string} product
+ * @returns {Promise<Array<Object>>}
+ */
+async function fetchAdvisoriesByProduct(product) {
+  const url = `${API_BASE}/security/advisories/v2/product?product=${encodeURIComponent(product)}`;
+  const data = await requestWithRetry(url);
+  return data.advisories || [];
+}
+
+/**
  * Fetches advisories published within a given date range.
  *
  * @param {string} startDate - YYYY-MM-DD
@@ -175,6 +187,7 @@ module.exports = {
   API_BASE,
   getAccessToken,
   fetchLatestAdvisories,
+  fetchAdvisoriesByProduct,
   fetchAdvisoriesByDateRange,
   fetchAllAdvisoriesPaged,
   clearTokenCache,
