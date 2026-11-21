@@ -495,7 +495,26 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   log(`Rules loaded from: ${ruleConfigFile}. Uptime SLA Target: ${SLA_TARGET}% | Incident Resolution SLA: ${INCIDENT_SLA_TARGET_HOURS}h`);
 
-  options.onProgress?.('parsing_excel', 'Parsing Excel workbooks...');
+  const notifyProgress = (pctOrStep, msg, stg) => {
+    if (typeof options.onProgress === 'function') {
+      try {
+        if (typeof pctOrStep === 'number') {
+          options.onProgress(pctOrStep, msg, stg || 'processing');
+        } else {
+          options.onProgress(pctOrStep, msg);
+        }
+      } catch (_) {}
+    }
+  };
+
+  const checkCancelled = () => {
+    if (options.signal?.aborted) {
+      throw new Error('Job cancelled');
+    }
+  };
+
+  notifyProgress(15, 'Parsing Excel workbooks...', 'parsing_excel');
+  checkCancelled();
 
   // ── 1 & 2. Parse workbooks with automatic role detection ─────────────────
   let incWb, invWb;
@@ -672,7 +691,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     }
   }
 
-  options.onProgress?.('filtering_data', 'Filtering Data & Computing Metrics...');
+  notifyProgress(35, 'Filtering Data & Computing Metrics...', 'filtering_data');
+  checkCancelled();
 
   // Register client names and codes from clients.json dynamically
   try {
@@ -728,6 +748,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const isMMTC = targetClientId.includes('mmtc');
 
   for (const inc of incidents) {
+    checkCancelled();
     const rawAcc = String(inc['Account Name'] || inc.AccountName || '').trim();
     const normAcc = rawAcc.toLowerCase();
 
@@ -1589,7 +1610,8 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── RMA Reconciliation (for ALL clients: JFL, MMTC, etc.) ──
   reconcileRMA(devices, incidents);
 
-  options.onProgress?.('filtering_data', 'Filtering data & calculating uptime metrics...');
+  notifyProgress(60, 'Filtering data & calculating uptime metrics...', 'filtering_data');
+  checkCancelled();
   // ── 8. Build all analytics ────────────────────────────────────────────────
   log('Building analytics sections...');
 
@@ -1860,28 +1882,41 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   const pptPath = path.join(outputDir, `${clientPrefix}_QBR_${Date.now()}.pptx`);
 
   const dashPath = path.join(outputDir, 'dashboard_data.json');
+  const dashTmpPath = path.join(outputDir, `dashboard_data_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.tmp`);
   const jsonPayloadStr = JSON.stringify(qbrData, null, 2);
-  fs.writeFileSync(dashPath, jsonPayloadStr);
-  log('Dashboard JSON saved to job folder');
+  fs.writeFileSync(dashTmpPath, jsonPayloadStr);
+  try {
+    fs.renameSync(dashTmpPath, dashPath);
+  } catch (_) {
+    fs.copyFileSync(dashTmpPath, dashPath);
+    try { fs.unlinkSync(dashTmpPath); } catch (_) {}
+  }
+  log('Dashboard JSON saved atomically to job folder');
 
-  options.onProgress?.('generating_ppt', 'Generating QBR PowerPoint Presentation...');
+  checkCancelled();
+  notifyProgress(75, 'Generating QBR PowerPoint Presentation...', 'generating_ppt');
   // ── 11. PPT Report Generation ──────────────────────────────────────
   // Asynchronous non-blocking PPT generation so API response returns immediately
-  const pptPromise = generatePPT(qbrData, templatePath, pptPath)
+  const pptPromise = generatePPT(qbrData, templatePath, pptPath, {
+    signal: options.signal,
+    onProgress: (pct, msg, stg) => notifyProgress(pct, msg, stg),
+  })
     .then(() => {
       try { log(`PPT generated: ${pptPath}`); } catch (_) { }
     })
     .catch((e) => {
       try { log(`PPT generation notice: ${e.message}`); } catch (_) { }
+      if (options.waitForPPT) throw e;
     });
 
   if (options.waitForPPT) {
     await pptPromise;
   }
 
+  checkCancelled();
   writeFile(outputDir, 'error_report.md', '# Error Report\n\nNo errors.');
 
-  options.onProgress?.('completed', 'QBR Report & PowerPoint Generated Successfully!');
+  notifyProgress(100, 'QBR Report & PowerPoint Generated Successfully!', 'completed');
   log('Pipeline complete ✓');
   return {
     success: true,

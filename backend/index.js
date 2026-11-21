@@ -111,6 +111,140 @@ const inventorySyncRouter = require('./routes/inventorySync');
 app.use('/api/inventory', inventorySyncRouter);
 const reportsRouter = require('./routes/reports');
 app.use(['/api/reports', '/reports'], reportsRouter);
+const jobRoutes = require('./routes/jobRoutes');
+app.use(['/api/jobs', '/jobs'], jobRoutes);
+
+const queueService = require('./services/queueService');
+queueService.initialize().catch((err) => {
+  console.warn('[server] QueueService initialization warning:', err.message);
+});
+
+queueService.registerProcessor(async (jobState, jobData) => {
+  if (!jobData) return;
+  const jobId = jobState.jobId;
+  const clientId = jobState.clientId;
+  const client = clientService.getClientById(clientId);
+  const clientName = jobData.clientName || client?.name || 'Client';
+
+  const unlock = await queueService.acquireTenantLock(clientId, jobId);
+
+  try {
+    await queueService.executeWithWatchdog(jobId, clientId, async (signal) => {
+      await queueService.updateProgress(jobId, 10, 'upload_validation', 'Validating staged input files...');
+
+      const dirs = clientService.ensureTenantDirs(clientId);
+      const outputDir = path.join(dirs.reportsDir, `job_${jobId}`);
+      if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+      await queueService.updateProgress(jobId, 25, 'parsing_excel', 'Parsing Excel workbooks...');
+
+      const result = await processJFLWorkbooks(jobData.incidentPath, jobData.inventoryPath, outputDir, {
+        clientId,
+        clientName,
+        ruleConfigFile: jobData.ruleConfigFile || client?.ruleConfigFile,
+        startDate: jobData.startDate,
+        endDate: jobData.endDate,
+        reportingPeriod: jobData.reportingPeriod,
+        periodMode: jobData.periodMode,
+        customSheetMapping: jobData.customSheetMapping,
+        signal,
+        waitForPPT: true,
+        onProgress: async (pct, msg, stg) => {
+          await queueService.updateProgress(jobId, pct, stg, msg);
+        },
+      });
+
+      if (!result || !result.success) {
+        throw new Error(result?.error || 'Report processing failed validation.');
+      }
+
+      const dashboardPath = result?.dashboardPath || path.join(outputDir, 'dashboard_data.json');
+      const pptPath = result?.pptPath || path.join(outputDir, `${client?.code || 'CLIENT'}_QBR_Report.pptx`);
+
+      jobs[jobId] = {
+        jobId,
+        clientId,
+        status: 'completed',
+        dashboardPath,
+        pptPath,
+        reportPath: result?.reportPath || null,
+        dataQualityPath: result?.dataQualityPath || null,
+        processingLogPath: result?.processingLogPath || null,
+      };
+
+      historyService.recordReport({
+        jobId,
+        clientId,
+        clientName,
+        location: jobData.location || 'All Locations',
+        reportPeriod: jobData.historyPeriodLabel || jobData.reportingPeriod,
+        uploadedBy: jobData.uploadedBy || 'System User',
+        status: 'completed',
+        dashboardPath,
+        pptPath,
+        reportPath: result?.reportPath || null,
+        dataQualityPath: result?.dataQualityPath || null,
+        processingLogPath: result?.processingLogPath || null,
+        error: null,
+      });
+      historyService.cleanupOldReports(3);
+
+      // Dual-write to reports_tickets for MMTC only
+      try {
+        if (jobData.incidentPath && fs.existsSync(jobData.incidentPath)) {
+          const { parseTicketExcel, dualWriteToReportsTickets } = require('./services/reportUpload');
+          const { rows } = parseTicketExcel(fs.readFileSync(jobData.incidentPath));
+          const canonical = clientService.resolveCanonicalClientId(clientId);
+          const pStart = jobData.startDate || null;
+          const pEnd = jobData.endDate || null;
+          const isTestEnv = process.env.NODE_ENV === 'test';
+          const { parseTicketDate } = require('./services/reportService');
+          const dStart = pStart ? new Date(`${pStart}T00:00:00Z`) : null;
+          const dEnd = pEnd ? new Date(`${pEnd}T23:59:59Z`) : null;
+
+          const realTickets = (rows || []).filter(t => {
+            const acc = (t['Account Name'] || '').toString().toLowerCase();
+            if (acc && !acc.includes('mmtc')) return false;
+            const tn = String(t['Ticket Number'] || t.ticket_number || '');
+            if (!tn) return false;
+            if (isTestEnv && tn.startsWith('TEST-')) return false;
+            if (dStart && dEnd) {
+              const d = parseTicketDate(t['Created Time'] || t.created_time || t.CreatedTime);
+              if (d && (d < dStart || d > dEnd)) return false;
+            }
+            return true;
+          });
+          await dualWriteToReportsTickets(canonical, realTickets, { start: pStart, end: pEnd, jobId });
+        }
+      } catch (e) {
+        console.error('[upload-worker] dual-write failed:', e.message);
+      }
+
+      await queueService.completeJob(jobId, {
+        resultUrl: `/api/dashboard?jobId=${jobId}`,
+        downloadUrl: `/api/ppt/download/${jobId}`,
+      });
+
+      await queueService.cleanupStagedFiles(jobId);
+    });
+  } catch (err) {
+    console.error(`[upload-worker] Job ${jobId} failed:`, err);
+    await queueService.failJob(jobId, err);
+    historyService.recordReport({
+      jobId,
+      clientId,
+      clientName,
+      location: jobData.location || 'All Locations',
+      reportPeriod: jobData.historyPeriodLabel || jobData.reportingPeriod,
+      uploadedBy: jobData.uploadedBy || 'System User',
+      status: 'failed',
+      error: queueService.sanitizeErrorMessage(err),
+    });
+    await queueService.cleanupStagedFiles(jobId);
+  } finally {
+    unlock();
+  }
+});
 
 /**
  * validateDateRange — Server-side date validation for report generation requests.
@@ -1109,6 +1243,55 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
     }
   }
 
+  const isSync = req.query.sync === 'true';
+
+  if (!isSync) {
+    const stagedDir = path.resolve(__dirname, `../uploads/staged/${jobId}`);
+    if (!fs.existsSync(stagedDir)) fs.mkdirSync(stagedDir, { recursive: true });
+
+    const stagedIncidentPath = path.join(stagedDir, `incident_${path.basename(incidentFile.path)}.xlsx`);
+    fs.copyFileSync(incidentFile.path, stagedIncidentPath);
+
+    let stagedInventoryPath = null;
+    if (inventoryFile) {
+      stagedInventoryPath = path.join(stagedDir, `inventory_${path.basename(inventoryFile.path)}.xlsx`);
+      fs.copyFileSync(inventoryFile.path, stagedInventoryPath);
+    }
+
+    historyService.cleanupTempFiles([incidentFile.path, inventoryFile?.path]);
+
+    const enqueuePayload = {
+      jobId,
+      clientId,
+      clientName,
+      fileNames: [incidentFile.originalname || 'incidents.xlsx', inventoryFile?.originalname].filter(Boolean),
+      reportPeriod: {
+        startDate,
+        endDate,
+        periodMode,
+        reportingPeriod: reportPeriod || historyPeriodLabel,
+      },
+    };
+
+    const enqueueJobData = {
+      incidentPath: stagedIncidentPath,
+      inventoryPath: stagedInventoryPath,
+      location,
+      uploadedBy,
+      ruleConfigFile: client?.ruleConfigFile,
+      startDate,
+      endDate,
+      reportingPeriod: reportPeriod || historyPeriodLabel,
+      periodMode,
+      customSheetMapping,
+      clientName,
+      historyPeriodLabel,
+    };
+
+    const queuedJob = await queueService.enqueueJob(enqueuePayload, enqueueJobData);
+    return res.status(202).json(queuedJob);
+  }
+
   try {
     const result = await processJFLWorkbooks(incidentFile.path, inventoryFile ? inventoryFile.path : null, outputDir, {
       clientId,
@@ -1527,8 +1710,10 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
     // Verify artifact ownership if job-scoped
     if (job && job.jobId) {
       const expectedJobDir = path.resolve(REPORTS_DIR, `job_${job.jobId}`);
+      const expectedTenantJobDir = path.resolve('data', 'tenants', clientId, 'reports', `job_${job.jobId}`);
       const resolvedArtifact = path.resolve(dPath);
-      const isUnderJobDir = resolvedArtifact.startsWith(expectedJobDir + path.sep) || resolvedArtifact === expectedJobDir;
+      const isUnderJobDir = resolvedArtifact.startsWith(expectedJobDir + path.sep) || resolvedArtifact === expectedJobDir
+        || resolvedArtifact.startsWith(expectedTenantJobDir + path.sep) || resolvedArtifact === expectedTenantJobDir;
       if (!isUnderJobDir) {
         return res.status(403).json({ error: 'Artifact ownership mismatch for requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
       }
@@ -2117,7 +2302,9 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
       const resolvedTarget = path.resolve(targetPath);
       const resolvedJobDir = path.resolve(jobOutputDir);
-      const isUnderJobDir = resolvedTarget.startsWith(resolvedJobDir + path.sep) || resolvedTarget === resolvedJobDir;
+      const resolvedTenantJobDir = path.resolve('data', 'tenants', clientId, 'reports', `job_${activeJobId}`);
+      const isUnderJobDir = resolvedTarget.startsWith(resolvedJobDir + path.sep) || resolvedTarget === resolvedJobDir
+        || resolvedTarget.startsWith(resolvedTenantJobDir + path.sep) || resolvedTarget === resolvedTenantJobDir;
       if (!isUnderJobDir) {
         console.error(`[server] SECURITY: Path traversal / job ownership violation. Requested: ${resolvedTarget}`);
         return res.status(403).json({ error: 'Artifact ownership mismatch for requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
@@ -2154,7 +2341,9 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 
     const resolvedTarget = path.resolve(targetPath);
     const resolvedJobDir = path.resolve(jobOutputDir);
-    const isUnderJobDir = resolvedTarget.startsWith(resolvedJobDir + path.sep) || resolvedTarget === resolvedJobDir;
+    const resolvedTenantJobDir = path.resolve('data', 'tenants', clientId, 'reports', `job_${activeJobId}`);
+    const isUnderJobDir = resolvedTarget.startsWith(resolvedJobDir + path.sep) || resolvedTarget === resolvedJobDir
+      || resolvedTarget.startsWith(resolvedTenantJobDir + path.sep) || resolvedTarget === resolvedTenantJobDir;
 
     if (!isUnderJobDir) {
       console.error(`[server] SECURITY: Artifact does not belong to job directory: ${resolvedTarget}`);
@@ -2169,7 +2358,22 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
   }
 };
 
-app.get(['/api/ppt/:jobId', '/ppt/:jobId', '/api/ppt', '/ppt'], sendFileHelper('pptPath', 'QBR_Report.pptx'));
+app.get(['/api/ppt/download/:jobId', '/api/ppt/:jobId', '/ppt/:jobId', '/api/ppt', '/ppt'], sendFileHelper('pptPath', 'QBR_Report.pptx'));
+app.get(['/api/status/:jobId', '/status/:jobId'], requireAuth, async (req, res) => {
+  const job = await queueService.getJob(req.params.jobId);
+  if (job) {
+    return res.json({
+      status: job.status,
+      progress: job.progress,
+      step: job.stage,
+      stepLabel: job.message,
+      error: job.error,
+    });
+  }
+  const legacyJob = jobs[req.params.jobId];
+  if (legacyJob) return res.json(legacyJob);
+  return res.status(404).json({ error: 'Job not found' });
+});
 app.get(['/api/report/:jobId', '/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
 app.get(['/api/error-report/:jobId', '/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
 app.get(['/api/data-quality/:jobId', '/data-quality/:jobId'], sendFileHelper('dataQualityPath', 'data_quality_report.md'));

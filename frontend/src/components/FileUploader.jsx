@@ -26,6 +26,8 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const [validationWarnings, setValidationWarnings] = useState([]);
   const [errorMsg, setErrorMsg] = useState(null);
   const [currentJobId, setCurrentJobId] = useState(null);
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [aiAuditResult, setAiAuditResult] = useState(null);
   const [inventoryAuditResult, setInventoryAuditResult] = useState(null);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -34,6 +36,39 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
   const incidentRef = useRef(null);
   const inventoryRef = useRef(null);
+
+  // Resume active job polling or clear on client switch
+  useEffect(() => {
+    if (!activeClient?.id) return;
+    const storedClient = localStorage.getItem('active_qbr_job_client');
+    const storedJobId = localStorage.getItem('active_qbr_job_id');
+    const storedStartedAt = Number(localStorage.getItem('active_qbr_job_started_at') || 0);
+
+    if (storedClient && storedClient !== activeClient.id) {
+      localStorage.removeItem('active_qbr_job_id');
+      localStorage.removeItem('active_qbr_job_client');
+      localStorage.removeItem('active_qbr_job_started_at');
+      if (status === 'processing') {
+        setStatus('idle');
+        setCurrentJobId(null);
+        setProgressPercent(0);
+      }
+      return;
+    }
+
+    if (storedJobId && storedClient === activeClient.id) {
+      const elapsed = Date.now() - storedStartedAt;
+      if (elapsed < 5 * 60 * 1000) {
+        setCurrentJobId(storedJobId);
+        setStatus('processing');
+        setStageText('Resuming active report generation...');
+      } else {
+        localStorage.removeItem('active_qbr_job_id');
+        localStorage.removeItem('active_qbr_job_client');
+        localStorage.removeItem('active_qbr_job_started_at');
+      }
+    }
+  }, [activeClient?.id]);
 
   // Automated background AI Excel Audit & Schema Pre-Validation whenever incidentFile changes
   useEffect(() => {
@@ -228,27 +263,23 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
         return;
       }
 
-      if (json.status === 'completed' || json.success) {
+      if (json.status === 'completed') {
         setStatus('completed');
+        setProgressPercent(100);
         setCurrentStepIndex(3);
         setStageText('QBR Report & PowerPoint Generated Successfully!');
+        localStorage.removeItem('active_qbr_job_id');
+        localStorage.removeItem('active_qbr_job_client');
+        localStorage.removeItem('active_qbr_job_started_at');
         if (onJobCompleted) onJobCompleted(json.jobId);
       } else {
-        const initialStep = json.step || json.status;
-        if (initialStep === 'parsing_excel') {
-          setCurrentStepIndex(0);
-          setStageText(json.stepLabel || 'Parsing Excel...');
-        } else if (initialStep === 'filtering_data') {
-          setCurrentStepIndex(1);
-          setStageText(json.stepLabel || 'Filtering Data...');
-        } else if (initialStep === 'generating_ppt') {
-          setCurrentStepIndex(2);
-          setStageText(json.stepLabel || 'Generating PPT...');
-        } else {
-          setCurrentStepIndex(2);
-          setStageText('Generating QBR PowerPoint Presentation...');
-        }
+        setStatus('processing');
         setCurrentJobId(json.jobId);
+        setProgressPercent(json.progress || 5);
+        setStageText(json.message || 'Job queued. Processing will begin shortly...');
+        localStorage.setItem('active_qbr_job_id', json.jobId);
+        localStorage.setItem('active_qbr_job_client', activeClient.id);
+        localStorage.setItem('active_qbr_job_started_at', String(Date.now()));
         if (onJobStarted) onJobStarted(json.jobId);
       }
     } catch (err) {
@@ -260,62 +291,106 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     }
   };
 
-  // Poll job status with exponential backoff (FINDING-038 FIX).
-  // Starts at 1s, doubles each retry up to 10s max to reduce server load on free-tier.
+  const handleCancelJob = async () => {
+    if (!currentJobId) return;
+    setIsCancelling(true);
+    try {
+      const clientQuery = activeClient?.id ? `?clientId=${encodeURIComponent(activeClient.id)}` : '';
+      const res = await apiFetch(`${API_BASE_URL}/api/jobs/${currentJobId}${clientQuery}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setStatus('failed');
+        setErrorMsg('Job cancelled by user.');
+        localStorage.removeItem('active_qbr_job_id');
+        localStorage.removeItem('active_qbr_job_client');
+        localStorage.removeItem('active_qbr_job_started_at');
+      }
+    } catch (err) {
+      console.error('Failed to cancel job:', err);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // Poll job status with hard 5-minute timeout safeguard (Item #10)
   useEffect(() => {
     if (!currentJobId || status !== 'processing') return;
 
     let isSubscribed = true;
     let timerId = null;
-    let pollInterval = 1000; // Start at 1 second
-    const MAX_INTERVAL = 10000; // Cap at 10 seconds
+    let pollInterval = 1500;
+    const MAX_INTERVAL = 4000;
+    const jobStartTime = Number(localStorage.getItem('active_qbr_job_started_at') || Date.now());
 
     const checkStatus = async () => {
+      if (Date.now() - jobStartTime > 5 * 60 * 1000) {
+        if (!isSubscribed) return;
+        setStatus('failed');
+        setErrorMsg('Job taking too long. Please check history or try again.');
+        localStorage.removeItem('active_qbr_job_id');
+        localStorage.removeItem('active_qbr_job_client');
+        localStorage.removeItem('active_qbr_job_started_at');
+        return;
+      }
+
       try {
         const clientQuery = activeClient?.id ? `?clientId=${encodeURIComponent(activeClient.id)}` : '';
-        const res = await apiFetch(`${API_BASE_URL}/api/status/${currentJobId}${clientQuery}`);
+        let res = await apiFetch(`${API_BASE_URL}/api/jobs/${currentJobId}${clientQuery}`);
         if (!res.ok) {
-          if (isSubscribed) {
-            pollInterval = Math.min(pollInterval * 2, MAX_INTERVAL);
-            timerId = setTimeout(checkStatus, pollInterval);
+          res = await apiFetch(`${API_BASE_URL}/api/status/${currentJobId}${clientQuery}`);
+          if (!res.ok) {
+            if (isSubscribed) {
+              pollInterval = Math.min(pollInterval * 1.5, MAX_INTERVAL);
+              timerId = setTimeout(checkStatus, pollInterval);
+            }
+            return;
           }
-          return;
         }
         const data = await res.json();
+        const job = data.job || data;
 
         if (!isSubscribed) return;
 
-        if (data.status === 'completed') {
+        if (job.status === 'completed') {
           setStatus('completed');
+          setProgressPercent(100);
           setCurrentStepIndex(4);
           setStageText('QBR Report & PowerPoint Generated Successfully!');
+          localStorage.removeItem('active_qbr_job_id');
+          localStorage.removeItem('active_qbr_job_client');
+          localStorage.removeItem('active_qbr_job_started_at');
           if (onJobCompleted) onJobCompleted(currentJobId);
-        } else if (data.status === 'failed' || data.status === 'error') {
+        } else if (job.status === 'failed' || job.status === 'error') {
           setStatus('failed');
           setCurrentStepIndex(-1);
-          setErrorMsg(data.error || 'Report generation failed. Please check your input files.');
+          setErrorMsg(job.error || 'Report generation failed. Please check your input files.');
+          localStorage.removeItem('active_qbr_job_id');
+          localStorage.removeItem('active_qbr_job_client');
+          localStorage.removeItem('active_qbr_job_started_at');
         } else {
-          // Sync sequential steps with backend status / step
-          const stepKey = data.step || data.status;
-          if (stepKey === 'parsing_excel') {
+          if (typeof job.progress === 'number') {
+            setProgressPercent(job.progress);
+          }
+          if (job.message || job.stepLabel) {
+            setStageText(job.message || job.stepLabel);
+          }
+          const stepKey = job.stage || job.step || job.status;
+          if (stepKey === 'parsing_excel' || stepKey === 'upload_validation') {
             setCurrentStepIndex(0);
-            setStageText(data.stepLabel || 'Parsing Excel...');
-          } else if (stepKey === 'filtering_data') {
+          } else if (stepKey === 'filtering_data' || stepKey === 'data_processing') {
             setCurrentStepIndex(1);
-            setStageText(data.stepLabel || 'Filtering Data...');
-          } else if (stepKey === 'generating_ppt') {
+          } else if (stepKey === 'generating_ppt' || stepKey === 'ppt_generation') {
             setCurrentStepIndex(2);
-            setStageText(data.stepLabel || 'Generating PPT...');
           }
 
-          // Still processing — apply backoff
-          pollInterval = Math.min(pollInterval * 1.5, MAX_INTERVAL);
+          pollInterval = Math.min(pollInterval * 1.2, MAX_INTERVAL);
           timerId = setTimeout(checkStatus, Math.round(pollInterval));
         }
       } catch (err) {
         console.error('Job status check error:', err);
         if (isSubscribed) {
-          pollInterval = Math.min(pollInterval * 2, MAX_INTERVAL);
+          pollInterval = Math.min(pollInterval * 1.5, MAX_INTERVAL);
           timerId = setTimeout(checkStatus, pollInterval);
         }
       }
@@ -327,7 +402,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       isSubscribed = false;
       if (timerId) clearTimeout(timerId);
     };
-  }, [currentJobId, status, onJobCompleted]);
+  }, [currentJobId, status, onJobCompleted, activeClient?.id]);
 
 
   return (
@@ -692,13 +767,50 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
             flexDirection: 'column',
             gap: '1rem'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div className="spinner"></div>
-              <div className="processing-text">
-                <h4 style={{ margin: 0, color: '#1d4ed8' }}>{stageText}</h4>
-                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#3b82f6' }}>
-                  Processing workbooks • Applying rules • Calculating uptime & SLA metrics • Building PowerPoint presentation
-                </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div className="spinner"></div>
+                <div className="processing-text">
+                  <h4 style={{ margin: 0, color: '#1d4ed8' }}>{stageText}</h4>
+                  <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#3b82f6' }}>
+                    Processing workbooks • Applying rules • Calculating uptime & SLA metrics • Building PowerPoint presentation
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelJob}
+                disabled={isCancelling}
+                style={{
+                  background: '#fee2e2',
+                  color: '#b91c1c',
+                  border: '1px solid #fca5a5',
+                  padding: '0.45rem 0.9rem',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: isCancelling ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {isCancelling ? 'Cancelling...' : '✕ Cancel Job'}
+              </button>
+            </div>
+
+            {/* Live Progress Bar */}
+            <div style={{ marginTop: '0.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#1e40af', fontWeight: 600, marginBottom: '0.35rem' }}>
+                <span>Progress</span>
+                <span>{progressPercent}%</span>
+              </div>
+              <div style={{ width: '100%', height: '8px', background: '#dbeafe', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${progressPercent}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #3b82f6, #1d4ed8)',
+                  borderRadius: '4px',
+                  transition: 'width 0.4s ease',
+                }} />
               </div>
             </div>
 

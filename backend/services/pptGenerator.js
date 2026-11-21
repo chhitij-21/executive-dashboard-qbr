@@ -153,14 +153,20 @@ try {
 
 async function generatePPT(data, _templatePath, outputPath, options = {}) {
   const targetPath = (!outputPath && typeof _templatePath === 'string') ? _templatePath : outputPath;
+  if (options.signal?.aborted) throw new Error('Job cancelled');
   console.log('[pptGenerator] Mapping canonical snapshot to PPT presentation model...');
+  options.onProgress?.(80, 'Mapping canonical snapshot to presentation model...', 'generating_ppt');
   const pptData = pptDataMapper.mapSnapshotToPPTData(data);
 
+  if (options.signal?.aborted) throw new Error('Job cancelled');
   console.log('[pptGenerator] Running pre-generation automated data reconciliation...');
+  options.onProgress?.(83, 'Running automated data reconciliation...', 'generating_ppt');
   const outputDir = path.dirname(targetPath);
   reconciliationEngine.reconcileDashboardAndPPT(data, pptData, outputDir);
 
+  if (options.signal?.aborted) throw new Error('Job cancelled');
   console.log('[pptGenerator] Generating Board-Level Executive QBR PPT...');
+  options.onProgress?.(86, 'Generating presentation slides...', 'generating_ppt');
   await buildPresentation(data, targetPath, options);
   console.log('[pptGenerator] PPT written to:', targetPath);
 }
@@ -647,18 +653,23 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Per-site suite for ALL sites (Overview, Operations, Tickets & RCA)
   // PPT-4 Fix: If >10 sites (e.g. MMTC), generate 1 Overview slide per site to prevent slide bloat (<50 slides)
   const isMultiSiteBloat = targetSites.length > 10;
-  targetSites.forEach((siteKey, siteIdx) => {
+  for (let siteIdx = 0; siteIdx < targetSites.length; siteIdx++) {
+    if (options.signal?.aborted) throw new Error('Job cancelled');
+    const siteKey = targetSites[siteIdx];
     const siteData = findSite(siteSummary, siteKey);
     const siteSws  = siteSwsMap[siteKey]  || [];
     const siteIncs = siteIncsMap[siteKey] || [];
     const siteAps  = siteApsMap[siteKey]  || [];
+
+    const sitePct = Math.min(96, 86 + Math.floor((siteIdx / Math.max(1, targetSites.length)) * 10));
+    options.onProgress?.(sitePct, `Building slide for site: ${siteKey}`, 'generating_ppt');
 
     buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1, targetSites.length, clientShort, isJFL, data.qoqComparison);
     if (!isMultiSiteBloat) {
       buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1, targetSites.length, clientShort, isJFL);
       buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1, targetSites.length, clientShort);
     }
-  });
+  }
 
   // AI Recommendations
   buildRecommendationsSlide(pres, exec, siteSummary, incidents, rcaBreakdown, clientShort);
@@ -705,7 +716,23 @@ async function buildPresentation(data, outputPath, options = {}) {
     buildThankYouSlide(pres, exec);
   }
 
-  await pres.writeFile({ fileName: outputPath });
+  if (options.signal?.aborted) throw new Error('Job cancelled');
+  options.onProgress?.(98, 'Writing PowerPoint file to disk...', 'generating_ppt');
+  const tmpOutputPath = `${outputPath.replace(/\.pptx$/i, '')}.${Date.now()}.${Math.random().toString(36).slice(2, 7)}.tmp.pptx`;
+  try {
+    await pres.writeFile({ fileName: tmpOutputPath });
+    try {
+      fs.renameSync(tmpOutputPath, outputPath);
+    } catch (_) {
+      fs.copyFileSync(tmpOutputPath, outputPath);
+      try { fs.unlinkSync(tmpOutputPath); } catch (_) {}
+    }
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpOutputPath)) fs.unlinkSync(tmpOutputPath);
+    } catch (_) {}
+    throw err;
+  }
   } finally {
     applyTheme({ clientId: 'client-jfl' });
   }

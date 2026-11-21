@@ -131,7 +131,19 @@ function loadHistory() {
 
 function saveHistory(history) {
   ensureDataDir();
-  fs.writeFileSync(METADATA_FILE, JSON.stringify(history, null, 2), 'utf8');
+  const tempPath = path.join(DATA_DIR, `reports_metadata.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}.json`);
+  const payload = JSON.stringify(history, null, 2);
+  fs.writeFileSync(tempPath, payload, 'utf8');
+  try {
+    fs.renameSync(tempPath, METADATA_FILE);
+  } catch (err) {
+    try {
+      fs.copyFileSync(tempPath, METADATA_FILE);
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    } catch (_) {
+      fs.writeFileSync(METADATA_FILE, payload, 'utf8');
+    }
+  }
 }
 
 function parseSafeTimestamp(ts) {

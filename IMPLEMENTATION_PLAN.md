@@ -1,306 +1,502 @@
-# Implementation Plan: Item #9 QoQ Compare (Quarter-over-Quarter Analytics Engine, PPT & UI)
+# Implementation Plan: Item #10 Async Queue (BullMQ + Redis with In-Memory Fallback)
 
 ## 1. Problem Statement & Architecture
-Enterprise executives reviewing quarterly business reviews require longitudinal comparative analytics to evaluate network reliability and SLA progression over time. Currently, reports are stored and viewed in isolation without structured quarterly indexing, period-over-period delta tracking, or PowerPoint comparative reporting. Item #9 delivers a complete end-to-end QoQ capability:
-1. **Strict Standard Quarter Validation**: Enforces exact Indian Fiscal Quarter boundaries (Q1: Apr 1–Jun 30, Q2: Jul 1–Sep 30, Q3: Oct 1–Dec 31, Q4: Jan 1–Mar 31). Non-aligned custom ranges (e.g., Aug 15–Nov 15) are tagged `quarter: 'CUSTOM'`, preventing mathematically corrupted delta calculations.
-2. **Robust Server Timezone Fallback**: String-based ISO date extraction (`YYYY-MM-DD`), mathematical IST offset (`UTC+05:30`) fallback when `Intl.DateTimeFormat('Asia/Kolkata')` is unavailable in minimal Docker/Alpine environments, and `tzdata` package documentation.
-3. **PPT Generation Integration (CRITICAL)**:
-   - `processData.js` resolves the previous quarter dataset and injects the computed `qoqComparison` into the single source of truth (`qbrData`) prior to passing it to `generatePPT`.
-   - `pptGenerator.js` leverages PptxGenJS to inject a dedicated **"QUARTER-OVER-QUARTER PERFORMANCE"** slide (with directional $\uparrow / \downarrow$ KPI delta cards, site movement table, and RCA shift summary) and injects site-level QoQ callouts into the per-site slide suite.
-4. **Site-Level QoQ Inspection (`SiteInspector.jsx`)**:
-   - When drilling into a specific site, `SiteInspector.jsx` displays site-level QoQ deltas and an executive narrative (e.g., *"This site's SLA dropped 2.10% vs last quarter"* or *"Uptime increased by +0.35% with 2 fewer incidents vs last quarter"*).
-5. **Deterministic QoQ Eligibility & UI Toggle State**:
-   - `/api/dashboard` delivers `is_standard_quarter: boolean`, `has_prior_quarter: boolean`, `qoq_disabled_reason: string | null`, and pre-computed `qoqComparison`.
-6. **Frontend State Reset on Client Switch**:
-   - `OverviewDashboard.jsx` explicitly resets `isQoQEnabled` to `false` whenever `activeClientId` changes, preventing stuck toggle states when switching between customers.
-7. **Division-by-Zero Proof RCA Calculations**:
-   - `qoqComparisonService.js` explicitly intercepts `priorCount === 0`, returning deterministic labels (`"New Occurrence (+100%)"` or `"Resolved (-100%)"`), strictly preventing `Infinity` or `NaN`.
-8. **Inline Delta Badges & Sparklines**:
-   - Displays inline $\uparrow / \downarrow$ directional delta badges and mini SVG sparklines on all 5 main KPI cards when enabled.
+Currently, when a user uploads Excel files to `/api/process-data` or `/api/upload`, data ingestion, Excel parsing, mathematical aggregation, QoQ diffing, and PowerPoint deck generation all execute synchronously within the Express request cycle. 
+- For multi-site workbooks with large incident sheets, this takes several seconds, blocking Node's event loop, risking HTTP timeout errors (especially behind reverse proxies, Cloudflare, or Render cold starts), and providing zero real-time progress feedback to the user.
+- Item #10 decouples file ingestion from computational processing by introducing an **Asynchronous Job Queue**:
+  - **Option A Selected**: **BullMQ** with Redis connection (`REDIS_URL`), paired with a robust **In-Memory Worker Fallback** when Redis is absent or offline.
+  - **HTTP 202 Accepted Pattern**: Uploads return a `jobId` immediately (< 200ms).
+  - **Real-Time Progress Polling**: The frontend displays an active progress bar and dynamic stage messages by polling `GET /api/jobs/:jobId`.
+  - **Zero Regressions**: Direct synchronous calls to `processData` remain supported for offline scripts and existing unit tests via `?sync=true` query parameter.
 
 ---
 
-## 2. Fiscal Calendar, Timezone Fallback & Boundary Spec
-### A. Server Timezone Fallback Strategy
-1. **ISO Calendar String Extraction (Primary)**:
-   For inputs like `YYYY-MM-DD`, year, month, and day are extracted directly via integer splitting:
-   ```javascript
-   const [y, m, d] = dateStr.split('-').map(Number);
-   ```
-   This is 100% immune to missing system locale or `tzdata` databases.
-2. **Mathematical IST Offset Fallback (Secondary)**:
-   For epoch timestamps or ISO strings with time components, calculate IST date parts using numerical offset arithmetic:
-   ```javascript
-   function getISTDateParts(timestamp) {
-     try {
-       const formatter = new Intl.DateTimeFormat('en-IN', {
-         timeZone: 'Asia/Kolkata',
-         year: 'numeric', month: 'numeric', day: 'numeric',
-       });
-       const parts = formatter.formatToParts(new Date(timestamp));
-       return {
-         year: Number(parts.find(p => p.type === 'year').value),
-         month: Number(parts.find(p => p.type === 'month').value),
-         day: Number(parts.find(p => p.type === 'day').value),
-       };
-     } catch (_) {
-       const istEpoch = new Date(timestamp).getTime() + (5.5 * 3600 * 1000);
-       const istDate = new Date(istEpoch);
-       return {
-         year: istDate.getUTCFullYear(),
-         month: istDate.getUTCMonth() + 1,
-         day: istDate.getUTCDate(),
-       };
-     }
-   }
-   ```
-3. **Container Environment Requirement**: Document and add `tzdata` in production Dockerfile (`apk add --no-cache tzdata` or `apt-get install -y tzdata`).
+## 2. Job State Schema & Query Location
 
-### B. Standard Quarter Boundaries (Indian Corporate FY: April 1 to March 31)
-- **Q1**: `start_date` = `YYYY-04-01`, `end_date` = `YYYY-06-30` $\rightarrow$ `quarter: 'Q1'`, `fiscal_year: 'FY' + year`, `is_standard_quarter: true`
-- **Q2**: `start_date` = `YYYY-07-01`, `end_date` = `YYYY-09-30` $\rightarrow$ `quarter: 'Q2'`, `fiscal_year: 'FY' + year`, `is_standard_quarter: true`
-- **Q3**: `start_date` = `YYYY-10-01`, `end_date` = `YYYY-12-31` $\rightarrow$ `quarter: 'Q3'`, `fiscal_year: 'FY' + year`, `is_standard_quarter: true`
-- **Q4**: `start_date` = `YYYY-01-01`, `end_date` = `YYYY-03-31` $\rightarrow$ `quarter: 'Q4'`, `fiscal_year: 'FY' + (year - 1)`, `is_standard_quarter: true`
+### A. Exact Job State Schema (Multi-File Capable)
+The job state object is standardized across both BullMQ and In-Memory queue implementations, supporting multi-file uploads (e.g., separate Inventory and Incident workbooks):
 
-### C. Custom Range Rejection (NO FORCED QUARTER)
-- Any non-aligned range (e.g. `2026-08-15` to `2026-11-15`, or `2026-07-01` to `2026-07-31`):
-  - `quarter: 'CUSTOM'`, `is_standard_quarter: false`, `fiscal_year: 'CUSTOM'`
-  - `qoq_disabled_reason: 'QoQ comparison is only available for standard quarterly periods.'`
-- Preceding Quarter Transition:
-  - `Q1 FY{Y}` $\rightarrow$ `Q4 FY{Y-1}`
-  - `Q2 FY{Y}` $\rightarrow$ `Q1 FY{Y}`
-  - `Q3 FY{Y}` $\rightarrow$ `Q2 FY{Y}`
-  - `Q4 FY{Y}` $\rightarrow$ `Q3 FY{Y}`
+```typescript
+interface JobState {
+  jobId: string;                     // Unique UUID v4 identifying the job
+  clientId: string;                  // Tenant identifier (e.g. 'client-jfl', 'client-mmtcpamp')
+  status: 'queued' | 'processing' | 'completed' | 'failed'; // High-level lifecycle status
+  progress: number;                  // Integer percentage (0 to 100)
+  stage: 'queued' | 'upload_validation' | 'excel_parsing' | 'data_processing' | 'ppt_generation' | 'finished';
+  message: string;                   // User-facing progress message (e.g. 'Parsing Excel workbook...')
+  resultUrl: string | null;          // Dashboard data endpoint: '/api/dashboard?jobId={jobId}'
+  downloadUrl: string | null;        // PowerPoint download endpoint: '/api/ppt/download/{jobId}'
+  error: string | null;              // Sanitized customer-ready error message if status === 'failed'
+  fileNames: string[] | null;        // Array of uploaded file names (e.g. ['Inventory_Master.xlsx', 'Incidents_Q2.xlsx'])
+  reportPeriod: {                    // Reporting period metadata
+    startDate: string;
+    endDate: string;
+    quarter?: string;
+    fiscalYear?: string;
+  } | null;
+  createdAt: string;                 // ISO 8601 creation timestamp
+  startedAt: string | null;          // ISO 8601 start timestamp
+  completedAt: string | null;        // ISO 8601 completion timestamp
+  durationMs: number | null;         // Execution duration in milliseconds
+}
+```
+
+### B. Where Job State is Queried From
+- **Queue Service Unified Registry (`backend/services/queueService.js`)**:
+  - **Redis Mode (Production)**: BullMQ persists job status, progress, and return values in Redis hash keys (`bull:qbr-processing:{jobId}`). State queries fetch directly from BullMQ's `Job.fromId(queue, jobId)`.
+  - **In-Memory Fallback Mode (Local Dev / CI / Fallback)**: Maintains an internal `Map<string, JobState>` for active and recent jobs.
+  - **Memory Eviction Policy**: Completed or failed jobs are automatically pruned from the in-memory Map after 1 hour, with a max capacity limit of 500 records.
+  - **Persistent History Sync**: Upon job completion, `queueService` commits the job metadata and summary into `data/reports_metadata.json` via `historyService`, guaranteeing that completed jobs remain retrievable across server restarts even in in-memory mode.
+- **Query Endpoint**: `GET /api/jobs/:jobId` (enforcing strict tenant isolation via `resolveTenantContext`).
 
 ---
 
-## 3. Detailed Files to Touch (Exact Paths & Scope)
+## 3. Progress Reporting Mechanism & API Endpoint Contract
 
-### 1. `backend/services/processData.js`
-- Implement `deriveQuarterAndFiscalYear(startDate, endDate, label, timestamp)`.
-- Attach `quarter`, `fiscal_year`, and `is_standard_quarter` to `report_period` and root `qbrData`.
-- **Pre-PPT QoQ Resolution**:
-  - Before step 10 & 11 (saving `dashboard_data.json` and calling `generatePPT`), check if `qbrData.report_period.is_standard_quarter === true`.
-  - If standard quarter, invoke `historyService.findPreviousQuarterReport(targetClientId, quarter, fiscalYear)`.
-  - When prior dataset exists, run `qoqComparisonService.compareQoQ(qbrData, priorQbrData)`.
-  - Inject `qbrData.qoqComparison` and `qbrData.has_prior_quarter = true` directly into `qbrData` so both `dashboard_data.json` and `generatePPT(...)` receive the enriched comparison data.
-  - If no prior data: `qbrData.has_prior_quarter = false`, `qbrData.qoq_disabled_reason = 'No previous quarterly data available (Initial QBR).'`.
+### A. Reporting Mechanism (Polling vs SSE)
+- **Selected Mechanism: REST Polling via `GET /api/jobs/:jobId`**:
+  - **Interval**: 1.5 – 2 seconds using recursive `setTimeout` in the frontend.
+  - **Hard Timeout**: 5 minutes (`300,000ms`). If processing exceeds 5 minutes, polling halts, local state is purged, and a diagnostic timeout state is shown.
+  - **Resilience**: 100% resilient across HTTP/2 proxies, firewalls, and serverless/Render environments where Server-Sent Events (SSE) connections frequently drop or buffer headers.
+  - **Backoff & Error Tolerance**: Resilient up to 5 consecutive network blips before flagging network disconnection.
 
-### 2. `backend/services/pptGenerator.js`
-- **Slide Builder Update & Safe Fallback Guard (`buildPresentation`)**:
-  - Implement strict fallback check:
+### B. Real Progress Reporting Wiring (`onProgress` Callbacks)
+To prevent the progress bar from jumping abruptly from 0% to 100%, real computation loops in `processData.js` and `pptGenerator.js` accept an `onProgress(percent, message, stage)` callback:
+1. **`processData.js` Progress Points**:
+   - **`15%`**: `upload_validation` – File signatures verified, date bounds validated.
+   - **`35%`**: `excel_parsing` – Inventory sheets and raw incident rows extracted.
+   - **`50%`**: `data_processing` – Device uptime, site SLA aggregation, and health scores computed.
+   - **`65%`**: `data_processing` – QoQ comparative analytics and RCA category shifts resolved.
+2. **`pptGenerator.js` Progress Points**:
+   - **`75%`**: `ppt_generation` – Title, executive summary, and QoQ comparative slides built.
+   - **`88%`**: `ppt_generation` – Site-by-site breakdowns and incident tables rendered.
+   - **`95%`**: `ppt_generation` – Presentation compiled and written to disk.
+   - **`100%`**: `finished` – Finalized and registered in history service.
+
+### C. API Endpoint Contract
+
+#### 1. `GET /api/jobs/:jobId` (Status & Progress)
+- **Method & Route**: `GET /api/jobs/:jobId`
+- **Headers**:
+  - `x-client-id: <clientId>` (or authenticated session JWT)
+- **Response `200 OK` (Processing)**:
+  ```json
+  {
+    "success": true,
+    "job": {
+      "jobId": "7a9b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+      "clientId": "client-jfl",
+      "status": "processing",
+      "progress": 65,
+      "stage": "data_processing",
+      "message": "Analyzing Quarter-over-Quarter movements and RCA shifts...",
+      "resultUrl": null,
+      "downloadUrl": null,
+      "error": null,
+      "fileNames": ["Inventory_Master.xlsx", "Incidents_Q2.xlsx"],
+      "createdAt": "2026-11-21T16:50:00.000Z",
+      "startedAt": "2026-11-21T16:50:00.500Z",
+      "completedAt": null,
+      "durationMs": null
+    }
+  }
+  ```
+- **Response `200 OK` (Completed)**:
+  ```json
+  {
+    "success": true,
+    "job": {
+      "jobId": "7a9b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+      "clientId": "client-jfl",
+      "status": "completed",
+      "progress": 100,
+      "stage": "finished",
+      "message": "Report processing and PowerPoint generation completed successfully.",
+      "resultUrl": "/api/dashboard?jobId=7a9b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+      "downloadUrl": "/api/ppt/download/7a9b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+      "error": null,
+      "fileNames": ["Inventory_Master.xlsx", "Incidents_Q2.xlsx"],
+      "createdAt": "2026-11-21T16:50:00.000Z",
+      "startedAt": "2026-11-21T16:50:00.500Z",
+      "completedAt": "2026-11-21T16:50:05.200Z",
+      "durationMs": 4700
+    }
+  }
+  ```
+- **Response `200 OK` (Failed - Sanitized Error)**:
+  ```json
+  {
+    "success": false,
+    "job": {
+      "jobId": "7a9b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+      "clientId": "client-jfl",
+      "status": "failed",
+      "progress": 35,
+      "stage": "excel_parsing",
+      "message": "Workbook validation failed: Missing required sheet 'Master'",
+      "resultUrl": null,
+      "downloadUrl": null,
+      "error": "Workbook validation failed: Missing required sheet 'Master'",
+      "fileNames": ["Inventory_Master.xlsx"],
+      "createdAt": "2026-11-21T16:50:00.000Z",
+      "startedAt": "2026-11-21T16:50:00.500Z",
+      "completedAt": "2026-11-21T16:50:02.100Z",
+      "durationMs": 1600
+    }
+  }
+  ```
+- **Response `404 Not Found`**: Returned if the `jobId` does not exist or belongs to another tenant (enforcing strict tenant isolation).
+
+#### 2. `DELETE /api/jobs/:jobId` (Job Cancellation Endpoint)
+- **Method & Route**: `DELETE /api/jobs/:jobId`
+- **Headers**:
+  - `x-client-id: <clientId>` (or authenticated session JWT)
+- **Behavior**:
+  - Verifies tenant isolation (`req.tenantId === job.clientId`).
+  - If job is in status `'queued'` or `'processing'`:
+    - Triggers `abortController.abort()` to interrupt active CPU processing loops.
+    - Cancels BullMQ job via `job.discard()` / `job.remove()`.
+    - Transitions job status to `'failed'` with error message: `'Job cancelled by user.'`.
+    - Unconditionally releases the tenant lock.
+    - Purges temporary staging directory and partial `.tmp` outputs.
+    - Returns **`200 OK`**:
+      ```json
+      {
+        "success": true,
+        "jobId": "7a9b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+        "message": "Job cancelled successfully."
+      }
+      ```
+  - If job is already in terminal state (`'completed'` or `'failed'`):
+    - Returns **`400 Bad Request`**: `{ "error": "Cannot cancel job in terminal state." }`.
+
+---
+
+## 4. Production Safeguards & Edge-Case Architecture
+
+### 1. Worker Hard Timeout (`MAX_JOB_EXECUTION_MS = 4 Minutes`)
+- **Problem**: If an Excel workbook causes an infinite loop, memory swapping, or unhandled promise deadlock, the worker could run indefinitely, keeping the tenant lock permanently held and starving the server.
+- **Solution**: Strict 4-Minute Execution Guard:
+  - In `queueService.js`, define:
     ```javascript
-    const shouldBuildQoQ = Boolean(
-      data.qoqComparison &&
-      data.qoqComparison.is_standard_quarter === true &&
-      data.qoqComparison.has_prior_quarter === true
-    );
+    const MAX_JOB_EXECUTION_MS = 4 * 60 * 1000; // 4 minutes
     ```
-  - **Graceful Fallback**: If `shouldBuildQoQ` is `false` (i.e. `qoqComparison` is null, `has_prior_quarter === false`, or `is_standard_quarter === false`), `buildQoQPerformanceSlide` is **gracefully SKIPPED** (not generated), preventing PPT generation from crashing on null data.
-  - If `shouldBuildQoQ` is `true`, generate the new dedicated slide:
-    `buildQoQPerformanceSlide(pres, data.qoqComparison, displayPeriod, clientShort, isJFL)`:
-    - **Header**: `QUARTER-OVER-QUARTER PERFORMANCE`, `Comparative Reliability & SLA Analytics vs ${qoqComparison.priorPeriod} · ${displayPeriod}`.
-    - **KPI Delta Cards**: 5 executive cards matching the web dashboard:
-      - Overall Switch Uptime % with $\uparrow / \downarrow$ delta badge
-      - JFL Switch Uptime % with $\uparrow / \downarrow$ delta badge
-      - Proactive Switch Uptime % with $\uparrow / \downarrow$ delta badge
-      - Total Incidents with $\uparrow / \downarrow$ delta badge (green for reduction)
-      - SLA Compliance % with $\uparrow / \downarrow$ delta badge
-    - **Site Performance Movement Table**:
-      - Columns: `Site | Prior Uptime | Current Uptime | Delta | Prior Incidents | Current Incidents | Status`
-      - Highlights top improved sites (green) and top degraded sites (red).
-    - **RCA Shift Summary Callout**:
-      - Lists key incident drivers that improved vs drivers that increased.
-  - **Site Overview Slide Enhancement & Fallback (`buildSiteOverviewSlide`)**:
-    - Only if `data.qoqComparison?.siteComparisons?.[siteKey]` exists, render site-level QoQ summary block:
-      `QoQ vs ${data.qoqComparison.priorPeriod}: ${siteQoQ.narrative}`.
-    - If `siteQoQ` is absent, cleanly omit the callout and render standard baseline site slides without throwing.
+  - When worker starts processing, schedule a hard watchdog timer tied to the job's `AbortController`:
+    ```javascript
+    const timeoutHandle = setTimeout(() => {
+      abortController.abort();
+      failJob(job.jobId, 'Job timed out');
+      releaseTenantLock(job.clientId, job.jobId);
+      cleanupStagedFiles(job.jobId);
+      console.warn(`[queueService] Job ${job.jobId} exceeded 4m execution timeout. Forcefully killed.`);
+    }, MAX_JOB_EXECUTION_MS);
+    ```
+  - On normal completion or error, `clearTimeout(timeoutHandle)` is invoked in `finally`.
+  - Guarantees that hanging jobs are killed, tenant locks are freed, and resources are recovered.
+
+### 2. Dashboard, History & Download Strict Tenant Isolation Verification
+- **Problem**: Querying endpoints with an explicit `jobId` parameter could leak another tenant's metrics or files if cross-tenant ownership is not verified.
+- **Solution**: Multi-Endpoint Tenant Isolation Guard in `backend/index.js`:
+  - **`GET /api/dashboard?jobId=:jobId`**:
+    - Queries `historyService.getReportByJobId(jobId)` or `queueService.getJob(jobId)`.
+    - Strictly checks `report.clientId === req.tenantId`.
+    - If mismatch: responds with **`403 Forbidden`** `{ "error": "Access denied: Report belongs to another tenant." }`.
+  - **`GET /api/reports/history`**:
+    - Filters loaded reports strictly by `record.clientId === req.tenantId`.
+    - Cross-tenant historical summaries are NEVER returned.
+  - **`GET /api/ppt/download/:jobId`**:
+    - Verifies `job.clientId === req.tenantId` before serving files. Mismatches return `403 Forbidden`.
+  - **`GET /api/ppt/latest`**:
+    - Filters latest completed report strictly matching `req.tenantId`.
+
+### 3. Customer-Safe Error Sanitization (Zero Stack Trace Leakage)
+- **Problem**: Exposing raw error strings (`ENOENT: no such file ... C:\Users\Chhitij\...`, internal driver exceptions, or stack traces) leaks internal server architecture and creates security vulnerabilities.
+- **Solution**: Strict Error Sanitization Guard:
+  - Inside `queueService.js`:
+    ```javascript
+    function sanitizeErrorMessage(err) {
+      if (!err) return 'Report generation failed. Please try again.';
+      const msg = typeof err === 'string' ? err : err.message || '';
+      
+      // Allow friendly domain validation messages
+      if (err.isUnrecoverable || err.name === 'UnrecoverableError' || msg.includes('Workbook validation') || msg.includes('Missing required sheet')) {
+        return msg;
+      }
+      if (msg === 'Job timed out' || msg === 'Job cancelled by user.') {
+        return msg;
+      }
+      
+      // Default sanitized fallback for unexpected runtime exceptions
+      return 'Report generation failed. Please try again.';
+    }
+    ```
+  - `job.error` strictly contains the sanitized string.
+  - Full diagnostic details (`err.stack`, memory usage) are logged strictly to server console/logs via `console.error('[queueService] Internal job error:', err)`.
+
+### 4. Deep Cancellation Checks in CPU-Bound Loops
+- **Problem**: Node.js is single-threaded. An `AbortController` will NOT magically interrupt heavy synchronous `for` loops in `processData.js` or `pptGenerator.js`. Without explicit checks, an aborted job will keep spinning CPU cycles to completion.
+- **Solution**: Pass `signal` (`AbortSignal`) down into core computational loops and evaluate cancellation checkpoints:
+  - Inside `processData.js`:
+    ```javascript
+    // Checkpoint 1: In workbook sheet extraction loop
+    for (const sheetName of workbook.SheetNames) {
+      if (options.signal?.aborted) throw new Error('Job cancelled');
+      // ... parse sheet
+    }
+    // Checkpoint 2: In device iteration & inventory mapping loop
+    for (const dev of devices) {
+      if (options.signal?.aborted) throw new Error('Job cancelled');
+      // ... process device
+    }
+    // Checkpoint 3: In site SLA calculation loop
+    for (const site of sites) {
+      if (options.signal?.aborted) throw new Error('Job cancelled');
+      // ... aggregate SLA
+    }
+    ```
+  - Inside `pptGenerator.js`:
+    ```javascript
+    // Checkpoint 4: In slide generation loop
+    for (const site of data.siteSummary) {
+      if (options.signal?.aborted) throw new Error('Job cancelled');
+      buildSiteOverviewSlide(pres, site, options);
+    }
+    ```
+  - Upon cancellation, the loop aborts instantly (< 1ms), throws `'Job cancelled'`, unwinds the execution stack, releases tenant locks, deletes staging and `.tmp` files, and halts compute.
+
+### 5. Zombie .tmp File Sweeper on Server Startup
+- **Problem**: If the server crashes or restarts midway through writing a `.tmp` file, orphaned files like `report.pptx.tmp.*` or `dashboard_data.json.tmp.*` linger on disk indefinitely, consuming disk space.
+- **Solution**: Multi-Directory Zombie .tmp Cleanup in `queueService.initialize()`:
+  - On server boot, recursively scan:
+    1. `data/tenants/*/reports/`
+    2. `data/tenants/*/`
+    3. `uploads/staged/`
+  - Match and delete any files matching `*.tmp.*` or ending in `.tmp`:
+    ```javascript
+    async function purgeOrphanedTmpFiles(dir) {
+      if (!fs.existsSync(dir)) return;
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await purgeOrphanedTmpFiles(fullPath);
+        } else if (entry.name.includes('.tmp')) {
+          await fs.promises.unlink(fullPath).catch(() => {});
+          console.log(`[queueService] Purged orphaned temp file: ${entry.name}`);
+        }
+      }
+    }
+    ```
+  - Reclaims disk space and guarantees zero corrupted temporary artifacts survive reboots.
+
+### 6. In-Memory Queue Eviction Policy (Memory Leak Prevention)
+- **Problem**: In long-running processes, the `InMemoryJobQueue` internal `Map<string, JobState>` will grow indefinitely as users upload files, eventually causing an Out-Of-Memory (OOM) crash.
+- **Solution**: Multi-Tiered Eviction Strategy:
+  - **1-Hour TTL on Completed/Failed Jobs**:
+    Upon reaching a terminal state (`completed` or `failed`), schedule automated eviction after 1 hour (`JOB_TTL_MS = 60 * 60 * 1000`):
+    ```javascript
+    setTimeout(() => {
+      this.jobs.delete(jobId);
+    }, JOB_TTL_MS).unref();
+    ```
+  - **Periodic Cleanup Sweeper**: A periodic timer running every 15 minutes sweeps `this.jobs` and purges any terminal jobs older than 1 hour.
+  - **Capacity Cap (Max 500 Jobs)**: If `this.jobs.size` exceeds 500, immediately evict the oldest completed or failed jobs (FIFO) to enforce a hard upper bound on memory consumption. Active/processing jobs are never evicted.
+  - Historical retrieval remains 100% intact through `data/reports_metadata.json`.
+
+### 7. Redis Connection Error Handling & Graceful Fallback
+- **Problem**: `ioredis` and BullMQ emit EventEmitter `'error'` events when Redis is unreachable, misconfigured, or disconnects mid-flight. In Node.js, unhandled `'error'` events throw an uncaught exception, crashing the entire web server.
+- **Solution**: Explicit Error Listeners & Safe Degradation:
+  - Attach mandatory `'error'` handlers to the Redis client and BullMQ instances immediately upon instantiation:
+    ```javascript
+    redisClient.on('error', (err) => {
+      console.warn('[queueService] Redis connection warning (falling back to in-memory queue):', err.message);
+    });
+    bullQueue.on('error', (err) => {
+      console.warn('[queueService] BullMQ Queue warning:', err.message);
+    });
+    bullWorker.on('error', (err) => {
+      console.warn('[queueService] BullMQ Worker warning:', err.message);
+    });
+    ```
+  - If Redis fails or disconnects during `enqueueJob`, the service catches the error, marks Redis as unhealthy, logs a non-fatal warning, and routes the job to `InMemoryJobQueue` seamlessly. The Node server never crashes.
+
+### 8. LocalStorage Client Switch Reset Guard
+- **Problem**: In `FileUploader.jsx`, if the user switches active client while an active `jobId` is stored in `localStorage`, resuming polling would fetch and display the wrong tenant's progress.
+- **Solution**: Strict Client Match Verification:
+  - On mount and in a `useEffect` watching `activeClientId`:
+    ```javascript
+    useEffect(() => {
+      const storedClient = localStorage.getItem('active_qbr_job_client');
+      if (storedClient && storedClient !== activeClientId) {
+        localStorage.removeItem('active_qbr_job_id');
+        localStorage.removeItem('active_qbr_job_client');
+        localStorage.removeItem('active_qbr_job_start');
+        setJobState(null);
+        setIsProcessing(false);
+        setPolling(false);
+      }
+    }, [activeClientId]);
+    ```
+
+### 9. Atomic Output Generation (`dashboard_data.json` & `.pptx`)
+- **Problem**: If the server crashes or an error occurs midway through generation, partially written corrupt files remain on disk.
+- **Solution**: Atomic Output Replacement with `.tmp` Cleanup:
+  - In `processData.js` and `pptGenerator.js`:
+    ```javascript
+    const tempPath = `${finalPath}.tmp.${jobId}`;
+    await writeOutput(tempPath, data);
+    fs.renameSync(tempPath, finalPath);
+    ```
+  - Leftover `.tmp` files are deleted on error or cancellation.
+
+### 10. Tenant-Partitioned Output Paths
+- **Directory Structure**:
+  - `data/tenants/{clientId}/reports/{jobId}/dashboard_data.json`
+  - `data/tenants/{clientId}/reports/{jobId}/report.pptx`
+  - Canonical copy: `data/tenants/{clientId}/dashboard_data.json`
+
+### 11. Retry-Aware Staged File Cleanup Policy
+- Staged files in `uploads/staged/{jobId}/` are preserved between transient retry attempts and deleted only when a job reaches `'completed'`, unrecoverable failure, exhausted retries, or cancellation.
+
+### 12. BullMQ `UnrecoverableError` for Fatal Client/Data Errors
+- Missing required sheets or corrupt file signatures immediately throw `UnrecoverableError`, skipping useless retries and cleaning up files immediately.
+
+### 13. Graceful Process Shutdown (`SIGTERM` / `SIGINT`)
+- Closes BullMQ worker and queue gracefully on `SIGTERM`/`SIGINT`, preventing orphaned Redis lock keys.
+
+### 14. Per-Tenant Concurrency & Race Condition Mutex Guard with TTL Deadlock Prevention
+- Enforces single-job concurrency per `clientId` with automatic 10-minute TTL release.
+
+### 15. Zombie Job Recovery on Server Startup
+- Boot sweeper marks abandoned `'processing'`/`'queued'` jobs as `'failed'` with `"Server restarted before job completed"`.
+
+### 16. Atomic History Writes (`reports_metadata.json`)
+- Writes metadata to `.tmp` file and atomically renames via `fs.renameSync` with in-memory mutex serialization.
+
+---
+
+## 5. Upload/Poll Flow Update (`/api/upload` & `/api/process-data`)
+
+### A. Backend Ingestion Flow (`POST /api/upload`)
+1. **File Ingestion & Signature Hardening**:
+   - Multer receives uploaded workbook(s).
+   - Hardened magic-byte validation (Item #5) inspects all file buffers.
+2. **Immediate Enqueue & 202 Accepted Response**:
+   - Controller allocates `jobId = uuidv4()`.
+   - Files stored in staging directory (`uploads/staged/{jobId}/`).
+   - Job enqueued via `queueService.enqueueJob({ jobId, clientId, fileNames, stagedFiles, options })`.
+   - Controller returns **HTTP `202 Accepted`** (< 200ms) with `{ jobId, pollUrl }`.
+3. **Background Worker Execution Pipeline**:
+   - Worker picks up job, starts 4-minute watchdog timer, acquires tenant lock:
+     1. **Stage 1 (15%)**: `upload_validation` – Checks signatures, date bounds, sheet presence. Checks `signal.aborted`.
+     2. **Stage 2 (35%)**: `excel_parsing` – Extracts inventory & incident rows via `processData.js` calling `onProgress(35, ...)`. Checks `signal.aborted`.
+     3. **Stage 3 (65%)**: `data_processing` – Computes SLAs, uptime formulas, QoQ deltas via `onProgress(65, ...)`. Writes output atomically to `data/tenants/{clientId}/reports/{jobId}/dashboard_data.json.tmp`. Checks `signal.aborted`.
+     4. **Stage 4 (85%)**: `ppt_generation` – Executes `pptGenerator.js` via `onProgress(85, ...)` writing atomically to `report.pptx.tmp`. Checks `signal.aborted`.
+     5. **Stage 5 (100%)**: `finished` – Renames `.tmp` files to final paths, registers report in `historyService`, clears watchdog timer, and marks job `'completed'`.
+4. **Cleanup & Lock Release**:
+   - Tenant lock released unconditionally in `finally`. Staged files cleaned up on completion or terminal error.
+
+### B. Frontend Upload & Polling Flow (`FileUploader.jsx` & `App.jsx`)
+1. **Submit**: User selects files, dates, and clicks "Process Report".
+2. **202 Response**: Receives `202 Accepted` with `{ jobId, pollUrl }`.
+3. **Active Processing State**:
+   - Saves `jobId`, client, & start time to `localStorage` and shows progress card.
+   - User can click "Cancel Upload" calling `DELETE /api/jobs/:jobId`.
+4. **Polling Loop**:
+   - Polls `GET /api/jobs/:jobId` every 1.5s with 5-minute timeout guard.
+5. **Completion Transition**:
+   - When completed, clears `localStorage`, shows 100%, updates `App.jsx` `jobId`, and navigates to `overview`.
+6. **Error Handling**:
+   - When failed or timed out, clears `localStorage` and shows sanitized error message with "Try Again" button.
+
+---
+
+## 6. Detailed Files to Touch (Exact Paths & Scope)
+
+### 1. `backend/services/queueService.js` (NEW FILE)
+- Dual-mode BullMQ + InMemory queue with 4-minute `MAX_JOB_EXECUTION_MS` hard timeout.
+- In-memory 1-hour TTL eviction & 500-job capacity cap.
+- Multi-file `fileNames: string[]` support.
+- Customer-safe `sanitizeErrorMessage(err)`.
+- Exports:
+  - `initialize()`: boots queue, runs `recoverZombieJobs()` and `purgeOrphanedTmpFiles()`.
+  - `enqueueJob(payload): Promise<JobState>`
+  - `getJob(jobId, clientId): Promise<JobState | null>`
+  - `cancelJob(jobId, clientId): Promise<boolean>`
+  - `updateProgress(jobId, progress, stage, message): Promise<void>`
+  - `completeJob(jobId, result): Promise<void>`
+  - `failJob(jobId, error): Promise<void>`
+  - `acquireTenantLock(clientId, jobId): Promise<() => void>`
+  - `cleanupStagedFiles(jobId): Promise<void>`
+  - `closeQueue(): Promise<void>`
+
+### 2. `backend/services/processData.js` & `backend/services/pptGenerator.js`
+- Accept `options.onProgress(percent, message, stage)` and `options.signal`.
+- Add cancellation checks `if (options.signal?.aborted) throw new Error('Job cancelled');` in CPU-bound loops.
+- Write output to `.tmp` files and atomically rename to final paths in `data/tenants/{clientId}/reports/{jobId}/`.
 
 ### 3. `backend/services/historyService.js`
-- **Data Migration in `loadHistory()`**:
-  - Automatically inspect all historical entries in `reports_metadata.json`. If missing `quarter`, parse dates and backfill `quarter`, `fiscal_year`, and `is_standard_quarter`.
-- **Strict Tenant Isolation in `findPreviousQuarterReport(clientId, currentQuarter, currentFiscalYear)`**:
-  - Calculates preceding quarter tuple (`Q1 FY{Y}` $\rightarrow$ `Q4 FY{Y-1}`, etc.).
-  - **Strict Multi-Tenant Filtering**: Scans completed records filtering strictly by `item.clientId === clientId`. Cross-tenant data leakage is strictly blocked: Tenant A (`client-jfl`) can NEVER match or access Tenant B's (`client-mmtcpamp`) historical data under any circumstance.
-  - If `clientId` is missing or no matching tenant record is found, fail closed and return `null`.
-  - When a matching report is found, load and return its parsed `dashboard_data.json`.
+- Atomic metadata writes via `saveHistoryAtomic` using `.tmp` file and `fs.renameSync` with in-memory mutex.
+- Strict tenant filtering in `getHistory(clientId)`.
 
-### 4. `backend/services/qoqComparisonService.js` (NEW FILE)
-- Pure comparison engine `compareQoQ(currentQbrData, priorQbrData)`:
-  - Fails closed if current or prior report is `is_standard_quarter === false`.
-  - Calculates high-level KPI deltas: Overall Uptime %, JFL Switch Uptime %, Proactive Switch Uptime %, SLA Compliance %, Total Incidents, Health Score, At Risk Devices.
-  - Directional Polarity: Incident reduction = `improved` (green), uptime reduction = `degraded` (red).
-  - **RCA Category Normalization (Deduplication & Sanitization)**:
-    - Normalizes raw RCA categories using `normalizeRcaCategory(cat)`:
-      `cat ? String(cat).trim().toLowerCase().replace(/\s+/g, ' ') : 'unspecified'`
-    - Treats `"Power"`, `"power"`, and `"Power "` as the identical canonical bucket, preserving the cleanest display label (Title Case).
-    - Prevents casing and whitespace mismatches from triggering false `"New Occurrence (+100%)"` flags.
-  - **Safe RCA Shift Analysis (Division-by-Zero Protected)**:
-    - `priorCount === 0 && currentCount > 0` $\rightarrow$ `pctChange: 100.0`, `changeLabel: 'New Occurrence (+100%)'`.
-    - `priorCount > 0 && currentCount === 0` $\rightarrow$ `pctChange: -100.0`, `changeLabel: 'Resolved (-100%)'`.
-    - `priorCount === 0 && currentCount === 0` $\rightarrow$ `pctChange: 0.0`, `changeLabel: 'Unchanged (0%)'`.
-    - Standard: `Number((((current - prior) / prior) * 100).toFixed(2))`.
-  - **Site-Level Comparison Map (`siteComparisons`)**:
-    - For every site in `currentQbrData.siteSummary`:
-      - Match against `priorQbrData.siteSummary` via normalized site name.
-      - Calculate `uptimeDelta = Number((currUptime - priorUptime).toFixed(2))`.
-      - Calculate `incidentDelta = currIncidents - priorIncidents`.
-      - Calculate `slaDelta = Number((currSla - priorSla).toFixed(2))`.
-      - Generate executive narrative string:
-        - If SLA dropped: `"This site's SLA dropped ${Math.abs(slaDelta)}% vs last quarter"`.
-        - If uptime increased & incidents reduced: `"Uptime increased by +${uptimeDelta}% with ${Math.abs(incidentDelta)} fewer incidents vs last quarter"`.
-        - If incidents increased: `"Incidents increased by +${incidentDelta} vs last quarter"`.
-        - If stable: `"Operational performance remained stable vs last quarter"`.
-      - Determine site status: `'improved' | 'degraded' | 'stable'`.
-  - Sparklines coordinate generator: `[{ period: 'Q1 FY2026', value: 99.5 }, { period: 'Q2 FY2026', value: 99.85 }]`.
+### 4. `backend/routes/jobRoutes.js` (NEW FILE)
+- `GET /api/jobs/:jobId`: Returns job status enforcing tenant isolation (`req.tenantId === job.clientId`).
+- `DELETE /api/jobs/:jobId`: Cancels active/queued job with tenant verification.
+- `GET /api/jobs`: Returns recent jobs for current tenant.
 
 ### 5. `backend/index.js`
-- **Legacy Reports On-the-Fly Computation & Cache Guard in `/api/dashboard`**:
-  - Existing legacy reports in `dashboard_data.json` do NOT have `qoqComparison` pre-computed.
-  - The `/api/dashboard` handler inspects incoming/loaded `qbrData`:
-    1. If `qbrData.report_period` lacks `quarter`, `fiscal_year`, or `is_standard_quarter`, derive them on-the-fly via `deriveQuarterAndFiscalYear(...)`.
-    2. If `qbrData.qoqComparison === undefined`:
-       - If `qbrData.report_period.is_standard_quarter === true`:
-         - Lookup prior quarter via `historyService.findPreviousQuarterReport(qbrData.clientId || 'client-jfl', quarter, fiscalYear)`.
-         - If prior dataset exists:
-           - Dynamically compute `qoqComparison = qoqComparisonService.compareQoQ(qbrData, priorReport)`.
-           - Attach `qbrData.qoqComparison = qoqComparison`, `qbrData.has_prior_quarter = true`.
-         - If no prior dataset found:
-           - Set `qbrData.qoqComparison = null`, `qbrData.has_prior_quarter = false`, `qbrData.qoq_disabled_reason = 'No previous quarterly data available (Initial QBR).'`.
-       - If `is_standard_quarter === false`:
-         - Set `qbrData.qoqComparison = null`, `qbrData.has_prior_quarter = false`, `qbrData.qoq_disabled_reason = 'QoQ comparison is only available for standard quarterly periods.'`.
-    3. Guarantees that `/api/dashboard` NEVER returns `undefined` for `qoqComparison` or crashes the frontend when viewing legacy reports.
-- In `/api/ppt/latest` & `/api/dashboard/latest`: ensure dynamically regenerated PPT files receive `qoqComparison`.
-- Endpoint `GET /api/qoq/compare` validates standard quarter boundaries, strictly enforces tenant context from `req.tenantId` / `req.query.clientId`, and returns comparison payload.
+- Mount `/api/jobs` routes.
+- Update `/api/upload` to return `202 Accepted` with `{ jobId, pollUrl }`.
+- Enforce `req.tenantId === job.clientId` on `/api/dashboard?jobId=:jobId`, returning 403 on mismatch.
+- Enforce `req.tenantId === job.clientId` on `/api/ppt/download/:jobId`, returning 403 on mismatch.
+- Scope `/api/reports/history` strictly to `req.tenantId`.
+- Retain synchronous fallback mode via `?sync=true`.
 
-### 6. `frontend/src/components/OverviewDashboard.jsx`
-- **Client Switch Reset**:
-  ```javascript
-  useEffect(() => {
-    setIsQoQEnabled(false);
-  }, [activeClientId, data?.clientId, data?.client_id, data?.customerName]);
-  ```
-- Read `data.is_standard_quarter`, `data.has_prior_quarter`, and `data.qoq_disabled_reason`.
-- Toggle switch disabled when `qoq_disabled_reason !== null`, showing title tooltip:
-  - If custom: `"QoQ comparison is only available for standard quarterly periods."`
-  - If initial: `"No previous quarterly data available (Initial QBR)."`
-- When enabled and toggled ON, render inline $\uparrow / \downarrow$ delta badges and mini SVG sparklines under each KPI card.
+### 6. `frontend/src/components/FileUploader.jsx`
+- 202 handling and active progress polling.
+- Store/restore active `jobId`, client, and start timestamp in `localStorage`.
+- Reset localStorage and cancel polling if `activeClientId` changes.
+- Add "Cancel" button to call `DELETE /api/jobs/:jobId`.
+- Enforce 5-minute hard polling timeout.
 
-### 7. `frontend/src/components/SiteInspector.jsx`
-- Extract `siteQoQ = data?.qoqComparison?.siteComparisons?.[siteId]`.
-- When `siteQoQ` exists:
-  - Render a prominent **QoQ Operational Progression Banner** right beneath the site header:
-    - Display prior period label, uptime delta badge, incident delta badge, SLA status progression.
-    - Highlight the dynamic narrative (e.g., *"This site's SLA dropped 2% vs last quarter"*).
-  - Attach inline delta badges to the site's KPI cards (`Incident Free %`, `Health Score`, `Active Operational Devices`).
+### 7. `frontend/src/App.jsx`
+- Handle job completion from `FileUploader`: updates `jobId`, refreshes data, transitions tab.
 
-### 8. `frontend/src/components/KpiCard.jsx`
-- Accept optional `sparklineData` array and `deltaBadge` object (`{ value, percent, direction, label }`).
-
-### 9. `frontend/src/components/QoQCompareModal.jsx` (NEW FILE)
-- Full side-by-side comparative modal. If opened for a `CUSTOM` period, displays informational alert explaining the requirement for standard quarters.
-- **RCA Category Shift Visual Table & Graceful Empty State**:
-  - Explicitly renders an RCA Shift table/cards showing:
-    - `Category Name` (canonical normalized title)
-    - `Prior Quarter Incidents`
-    - `Current Quarter Incidents`
-    - `Shift Delta` with visual arrows ($\uparrow$ increase / red, $\downarrow$ reduction / green, $\leftrightarrow$ unchanged / gray)
-    - `Percentage Change` (`-50.0%`, `+100% (New Occurrence)`, `Resolved (-100%)`, `0%`)
-  - **Graceful Empty State**: If no RCA categories shifted or `rcaShifts.length === 0`, display a prominent executive callout:
-    `"No significant RCA shifts detected between ${priorPeriod} and ${currentPeriod}. Root cause distribution remained consistent."`
-    Prevents empty table shells or broken UI layouts.
-
-### 10. `frontend/src/components/Topbar.jsx`
-- Add `<BarChart3 size={16} />` icon and `"QoQ Compare"` button (UTF-8 safe).
-
-### 11. Frontend Test Infrastructure Setup & Component Test (`frontend/src/__tests__/OverviewDashboard.test.jsx`)
-- **Frontend Test Environment Setup**:
-  - Install devDependencies in `frontend/`: `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`.
-  - Create `frontend/vitest.config.js` configuring jsdom test environment and `@testing-library/jest-dom` matchers.
-  - Add `"test": "vitest run"` script to `frontend/package.json` and add `"test:frontend": "cd frontend && npm test"` to root `package.json`.
-- **Real React Component Integration Test (`frontend/src/__tests__/OverviewDashboard.test.jsx`)**:
-  - Renders `<OverviewDashboard />` with mock dashboard data and `activeClientId="client-jfl"`.
-  - Simulates user clicking QoQ toggle to turn it ON (`isQoQEnabled = true`).
-  - Re-renders with changed prop `activeClientId="client-mmtcpamp"`.
-  - Verifies that `isQoQEnabled` automatically resets to `false` (toggle unchecked), ensuring real component-level verification in a simulated DOM environment.
-
-### 12. `backend/tests/qoqComparison.test.js` (NEW FILE)
-- TDD unit tests covering exact boundary validation, `CUSTOM` tagging for non-standard ranges, timezone math fallback, `historyService` migration, exact preceding quarter transitions, delta math, directional polarity, RCA category normalization, RCA division-by-zero protection, site-level delta calculations, and PPT presentation integration.
+### 8. `backend/tests/asyncQueue.test.js` (NEW FILE)
+- TDD test suite covering all 18 unit & integration requirements.
 
 ---
 
-## 4. Frontend Control Flow & Disabled State Matrix
-| Scenario | `is_standard_quarter` | `has_prior_quarter` | Toggle State | Tooltip Message |
-| :--- | :---: | :---: | :---: | :--- |
-| **Custom Date Range (e.g. 15 Aug – 15 Nov)** | `false` | `false` | **Disabled** | *"QoQ comparison is only available for standard quarterly periods."* |
-| **Single Month (e.g. 1 Jul – 31 Jul)** | `false` | `false` | **Disabled** | *"QoQ comparison is only available for standard quarterly periods."* |
-| **First Standard Quarter Upload (No Prior Data)** | `true` | `false` | **Disabled** | *"No previous quarterly data available (Initial QBR)."* |
-| **Standard Quarter with Prior Quarter on Record** | `true` | `true` | **Enabled** | *"Compare performance against preceding quarter."* |
-
----
-
-## 5. Risks and Edge Cases
-- **Legacy Reports Missing Pre-Computed QoQ Data**:
-  - *Risk*: Reports generated before Item #9 lack `qoqComparison` in their `dashboard_data.json`. Directly reading this in `/api/dashboard` would return `undefined` and crash the UI.
-  - *Mitigation*: On-the-fly lazy fallback in `/api/dashboard` detects missing comparison data on legacy reports and computes it via `historyService` before returning the response.
-- **RCA Shift Table Empty Shells**:
-  - *Risk*: When no categories shift between consecutive quarters, an empty table or broken UI shell is displayed.
-  - *Mitigation*: Graceful empty state alert in `QoQCompareModal.jsx` explaining that root cause distributions remained consistent.
-- **Frontend Test Runner Absence**:
-  - *Risk*: Absence of a DOM/Component test harness prevents testing real React state lifecycles and hook behaviors.
-  - *Mitigation*: Formal installation of `vitest`, `jsdom`, and `@testing-library/react` in `frontend/` to run genuine DOM component tests.
-- **RCA Category Fragmentation & False New Occurrences**:
-  - *Risk*: Discrepancies in casing or whitespace (e.g., `"Power"` vs `"power "` vs `"POWER"`) could falsely segment identical root causes, skewing pareto charts and producing false `"New Occurrence (+100%)"` flags.
-  - *Mitigation*: Mandatory `normalizeRcaCategory` trimming and case-folding in `qoqComparisonService.js` before grouping and diffing categories across quarters.
-- **Multi-Tenant Cross-Contamination**:
-  - *Risk*: A multi-tenant environment could leak Tenant B's uptime or incidents into Tenant A's QoQ comparison if history searches are unconstrained.
-  - *Mitigation*: Strict tenant filtering in `historyService.findPreviousQuarterReport` asserting exact `clientId` equality. Fail closed if tenant is missing.
-- **Performance Degradation & Computational Overhead**:
-  - *Risk*: Unconditionally running deep multi-site delta comparisons on every `/api/dashboard` request could degrade server latency.
-  - *Mitigation*: Lazy computation guard: only calculate `qoqComparison` when `has_prior_quarter === true`. Skip computation entirely for initial or custom quarter runs.
-- **PPT Slide Fallback & Crash Prevention (Missing / Custom Quarters)**:
-  - *Risk*: A client running their initial QBR report or using a custom date range has `qoqComparison: null` or `has_prior_quarter: false`. Dereferencing missing properties during presentation building will crash the PPT generator and corrupt export downloads.
-  - *Mitigation*: Strict Boolean guard `shouldBuildQoQ` in `pptGenerator.js`. If false, `buildQoQPerformanceSlide` is gracefully skipped, and per-site slides render standard baseline metrics with zero exceptions.
-- **PPT Slide Synchronization**:
-  - *Risk*: Pre-generated PPT does not include QoQ slide if generated before comparison completes.
-  - *Mitigation*: Comparison is computed directly inside `processData.js` *prior* to `generatePPT` invocation, ensuring 100% synchronization between dashboard JSON and PPT deck.
-- **Site-Level Name Mismatches**:
-  - *Risk*: A site might be named slightly differently across quarters (e.g. "Greater Noida" vs "GNoida").
-  - *Mitigation*: Site-level comparison in `qoqComparisonService.js` leverages canonical `normalizeSiteName` to ensure consistent entity resolution.
-- **Client Switch State Stagnation**:
-  - *Mitigation*: Explicit `useEffect` resets `isQoQEnabled` to `false` whenever `activeClientId` or `data.clientId` changes.
-- **RCA Division by Zero**:
-  - *Mitigation*: Guard clauses explicitly intercept `priorCount === 0`, returning deterministic labels and percentages without `Infinity` or `NaN`.
-- **Missing `tzdata` in Docker/Node**:
-  - *Mitigation*: Pure string splitting on `YYYY-MM-DD` and numerical offset math (`+5.5h`) guarantees zero reliance on operating system locale databases.
-
----
-
-## 6. Test Cases to Add / Update
-1. `backend/tests/qoqComparison.test.js`:
-   - Test 1: Standard Quarter Validation: `2026-04-01` to `2026-06-30` tags `Q1 FY2026` with `is_standard_quarter: true`.
-   - Test 2: Custom Period Validation: `2026-08-15` to `2026-11-15` tags `CUSTOM` with `is_standard_quarter: false` and disabled reason.
-   - Test 3: Monthly Range Validation: `2026-07-01` to `2026-07-31` tags `CUSTOM` with `is_standard_quarter: false`.
-   - Test 4: Timezone offset math fallback converts UTC boundary without `Intl` exception.
-   - Test 5: `historyService` legacy migration: backfills `quarter`, `fiscal_year`, and `is_standard_quarter` on unmigrated records.
-   - Test 6: `findPreviousQuarterReport` accurately finds preceding quarter (`Q1 FY26` $\rightarrow$ `Q4 FY25`, `Q2 FY26` $\rightarrow$ `Q1 FY26`) and refuses search if current is `CUSTOM`.
-   - Test 7: **Strict Multi-Tenant Isolation Test**: Verifies `findPreviousQuarterReport` for Tenant B (`client-mmtcpamp`) never returns Tenant A's (`client-jfl`) historical report even if Tenant A has data for that quarter.
-   - Test 8: `compareQoQ` calculates exact KPI deltas and directional polarity (`improved` vs `degraded`).
-   - Test 9: **RCA Normalization Test**: Proves that `"Power"`, `"power"`, and `"Power "` coalesce into a single category bucket without producing false "New Occurrence" records.
-   - Test 10: **RCA Division-by-Zero Test**: Prior count 0 $\rightarrow$ new occurrence (+100%), count drop to 0 $\rightarrow$ resolved (-100%), both 0 $\rightarrow$ 0% (no NaN or Infinity).
-   - Test 11: **Site-Level QoQ Calculation Test**: Computes site uptime delta, incident delta, and produces exact narrative (e.g. SLA drop).
-   - Test 12: `compareQoQ` generates sparkline coordinate series for all KPIs.
-   - Test 13: **Lazy Computation Performance Guard Test**: Verifies that `/api/dashboard` and QoQ engine skip heavy computation when `has_prior_quarter === false`.
-   - Test 14: **PPT Generation Integration Test**: Verifies `buildPresentation` with `qoqComparison` outputs the QoQ slide and site delta callouts cleanly without PptxGenJS errors.
-   - Test 15: **PPT Fallback Test for Missing / Initial / Custom Quarters**: Verifies that generating a PPT for a client with NO prior quarter (`qoqComparison: null`, `has_prior_quarter: false`, or `is_standard_quarter: false`) does not throw an error, gracefully skips the QoQ slide, and completes presentation generation successfully.
-   - Test 16: **Legacy Dataset On-the-Fly QoQ Computation Test**: Simulates loading an older `dashboard_data.json` without `qoqComparison`. Verifies `/api/dashboard` computes and returns valid comparison data on-the-fly without returning `undefined`.
-   - Test 17: API endpoint `GET /api/qoq/compare` returns 200 with structured comparison, site comparisons, sparklines, and disabled reasons.
-2. `frontend/src/__tests__/OverviewDashboard.test.jsx`:
-   - Test 18: **Real React Component Toggle Reset Test**: Renders `<OverviewDashboard />` using `@testing-library/react`. Toggles QoQ ON, triggers `activeClientId` prop change, and asserts the toggle state resets to `false`.
-3. Master regression:
-   - Ensure all 260+ existing tests pass, frontend Vitest tests pass, and frontend production build succeeds with 0 errors.
-
----
-
-## 7. Rollback Plan
-- Revert via `git checkout HEAD -- backend/ frontend/` back to commit `5b1267c`.
+## 7. Verification Plan
+1. **Unit & Integration Tests (`backend/tests/asyncQueue.test.js`)**:
+   - Test 1: Immediate `202 Accepted` return on upload with `fileNames` array.
+   - Test 2: Progress progression across stages (15% $\rightarrow$ 35% $\rightarrow$ 50% $\rightarrow$ 65% $\rightarrow$ 75% $\rightarrow$ 88% $\rightarrow$ 95% $\rightarrow$ 100%).
+   - Test 3: Multi-tenant job isolation (cross-tenant access to `/api/jobs/:jobId` returns 404).
+   - Test 4: Cross-tenant access to `/api/dashboard?jobId=:id` returns 403 Forbidden.
+   - Test 5: `/api/reports/history` returns only records matching authenticated `req.tenantId`.
+   - Test 6: Secure download endpoint `/api/ppt/download/:jobId` blocks cross-tenant access with 403 Forbidden.
+   - Test 7: Error sanitization: raw internal exceptions and stack traces are suppressed; user receives sanitized message.
+   - Test 8: Worker hard timeout: job running > 4 minutes is killed, marked as `"Job timed out"`, and tenant lock released.
+   - Test 9: Atomic output generation: `.tmp` files are renamed on success; deleted on failure.
+   - Test 10: Tenant partitioning: artifacts reside strictly inside `data/tenants/{clientId}/reports/{jobId}/`.
+   - Test 11: Job cancellation: `DELETE /api/jobs/:jobId` aborts execution, frees lock, and purges `.tmp` files.
+   - Test 12: Deep loop cancellation: abort signal halts execution during CPU loops in `processData` and `generatePPT`.
+   - Test 13: Zombie .tmp sweeper deletes orphaned `.tmp` files across tenant directories on startup.
+   - Test 14: In-memory queue eviction purges jobs older than 1 hour and respects 500-item capacity cap.
+   - Test 15: Per-tenant mutex serializes concurrent uploads for the same client.
+   - Test 16: Tenant lock TTL forcefully releases hung lock after 10-minute timeout.
+   - Test 17: Retry-aware staged file preservation across attempts.
+   - Test 18: `UnrecoverableError` fails immediately without retrying and cleans up staged files.
+   - Test 19: Atomic metadata write handles simultaneous concurrent saves safely.
+   - Test 20: Zombie job recovery scans and marks orphaned jobs as failed on startup.
+   - Test 21: Graceful shutdown hook terminates worker and queue connections cleanly.
+   - Test 22: Redis error listener intercepts connection drop and switches to in-memory fallback.
+2. **Frontend Component Tests (`frontend/src/__tests__/FileUploader.test.jsx`)**:
+   - Test 23: Switching client clears `localStorage` job keys and resets upload progress view.
+   - Test 24: Polling resumes automatically on mount if valid `localStorage` key exists.
+   - Test 25: 5-minute timeout terminates polling and renders diagnostic timeout UI.
+   - Test 26: Clicking "Cancel Upload" calls `DELETE /api/jobs/:jobId` and resets view.
+3. **Full Regression**:
+   - Run root `npm test` (all 276 existing backend/validator tests must pass).
+   - Run frontend `vitest` tests (all component tests must pass).
+   - Run frontend production build (`npm --prefix frontend run build`).
