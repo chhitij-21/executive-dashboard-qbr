@@ -41,6 +41,11 @@ export default function ClientManager() {
   const [savingBranding, setSavingBranding] = useState(false);
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
   const [templateSuccessMsg, setTemplateSuccessMsg] = useState(null);
+  const [templateVersions, setTemplateVersions] = useState([]);
+  const [activeTemplateVersionId, setActiveTemplateVersionId] = useState(null);
+  const [isGlobalFallback, setIsGlobalFallback] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templateActionMsg, setTemplateActionMsg] = useState(null);
 
 const DEFAULT_RULES_YAML = `# Global business rules configuration
 # All values are configurable — no hardcoding in application code.
@@ -138,12 +143,32 @@ incident_severity_values:
     }
   };
 
+  const fetchTemplates = async (clientId) => {
+    if (!clientId) return;
+    setLoadingTemplates(true);
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${clientId}/templates`);
+      if (res.ok) {
+        const data = await res.json();
+        setTemplateVersions(data.versions || []);
+        setActiveTemplateVersionId(data.activeVersionId);
+        setIsGlobalFallback(!!data.isGlobalFallback);
+      }
+    } catch (err) {
+      console.warn('Could not fetch templates:', err.message);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
   const handleOpenBrandingModal = async (client) => {
     setSelectedClientForBranding(client);
     setBrandingSuccessMsg(null);
     setBrandingErrorMsg(null);
     setTemplateSuccessMsg(null);
     setShowBrandingModal(true);
+
+    fetchTemplates(client.id);
 
     try {
       const res = await apiFetch(`${API_BASE_URL}/api/tenants/${client.id}/settings`);
@@ -213,7 +238,7 @@ incident_severity_values:
     formData.append('template', file);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/template`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/templates`, {
         method: 'POST',
         body: formData,
       });
@@ -221,11 +246,50 @@ incident_severity_values:
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to upload template');
 
-      setTemplateSuccessMsg(`✅ Whitelabel PPT template "${file.name}" saved!`);
+      setTemplateSuccessMsg(`✅ Template version "${data.version?.versionId}" uploaded and activated!`);
+      await fetchTemplates(selectedClientForBranding.id);
     } catch (err) {
       setBrandingErrorMsg(err.message);
     } finally {
       setUploadingTemplate(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleActivateTemplate = async (versionId) => {
+    if (!selectedClientForBranding) return;
+    setTemplateActionMsg(`Activating ${versionId}...`);
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/templates/${versionId}/activate`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Activation failed');
+      setTemplateSuccessMsg(`✅ Template version ${versionId} is now active.`);
+      await fetchTemplates(selectedClientForBranding.id);
+    } catch (err) {
+      setBrandingErrorMsg(err.message);
+    } finally {
+      setTemplateActionMsg(null);
+    }
+  };
+
+  const handleDeleteTemplate = async (versionId) => {
+    if (!selectedClientForBranding) return;
+    if (!window.confirm(`Are you sure you want to delete template version ${versionId}?`)) return;
+    setTemplateActionMsg(`Deleting ${versionId}...`);
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/templates/${versionId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      setTemplateSuccessMsg(`🗑️ Template version ${versionId} deleted.`);
+      await fetchTemplates(selectedClientForBranding.id);
+    } catch (err) {
+      setBrandingErrorMsg(err.message);
+    } finally {
+      setTemplateActionMsg(null);
     }
   };
 
@@ -753,7 +817,7 @@ incident_severity_values:
                 </div>
               </div>
 
-              {/* Whitelabel PowerPoint Master Template */}
+              {/* Whitelabel PowerPoint Master Template & Version Management (Item #11) */}
               <div
                 style={{
                   background: '#f8fafc',
@@ -762,27 +826,158 @@ incident_severity_values:
                   padding: '1rem',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.5rem',
+                  gap: '0.75rem',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                    Whitelabel Master PPT Template (.pptx)
+                    Whitelabel Master PPT Template (.pptx) &amp; Version History
                   </label>
-                  <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                    Routes reports to custom slide deck
+                  <span
+                    style={{
+                      fontSize: '0.75rem',
+                      padding: '0.2rem 0.5rem',
+                      borderRadius: '4px',
+                      background: isGlobalFallback ? '#fef3c7' : '#dcfce7',
+                      color: isGlobalFallback ? '#92400e' : '#166534',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {isGlobalFallback ? '🏢 Corporate Master (Default)' : `Active: ${activeTemplateVersionId || 'Custom'}`}
                   </span>
                 </div>
-                <input
-                  type="file"
-                  accept=".pptx"
-                  disabled={uploadingTemplate}
-                  onChange={handleUploadTemplate}
-                  style={{ fontSize: '0.8rem' }}
-                />
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                  If omitted, reports automatically use the default corporate template (<code>templates/master_template.pptx</code>).
-                </span>
+
+                {/* Versions List */}
+                <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
+                  {loadingTemplates ? (
+                    <div style={{ padding: '0.75rem', fontSize: '0.8rem', color: '#64748b', textAlign: 'center' }}>
+                      ⏳ Loading template versions...
+                    </div>
+                  ) : templateVersions.length === 0 ? (
+                    <div style={{ padding: '0.75rem', fontSize: '0.8rem', color: '#64748b', textAlign: 'center' }}>
+                      No custom template versions uploaded yet. System automatically falls back to <code>templates/master_template.pptx</code>.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {templateVersions.map((v) => {
+                        const isActive = v.versionId === activeTemplateVersionId || v.isActive;
+                        return (
+                          <div
+                            key={v.versionId}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '0.5rem 0.75rem',
+                              borderBottom: '1px solid #f1f5f9',
+                              background: isActive ? '#f0fdf4' : 'transparent',
+                              fontSize: '0.8rem',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                              <span style={{ fontWeight: 700, color: isActive ? '#15803d' : '#334155' }}>
+                                {v.versionId}
+                              </span>
+                              <span style={{ color: '#1e293b' }}>{v.filename}</span>
+                              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                ({Math.round((v.sizeBytes || 0) / 1024)} KB &bull; {v.uploadedBy || 'Admin'})
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              {isActive ? (
+                                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#16a34a', padding: '0.15rem 0.4rem', background: '#dcfce7', borderRadius: '4px' }}>
+                                  ✓ Active
+                                </span>
+                              ) : (
+                                isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleActivateTemplate(v.versionId)}
+                                    disabled={Boolean(templateActionMsg)}
+                                    style={{
+                                      fontSize: '0.7rem',
+                                      padding: '0.2rem 0.5rem',
+                                      borderRadius: '4px',
+                                      background: '#eff6ff',
+                                      color: '#1d4ed8',
+                                      border: '1px solid #bfdbfe',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Activate
+                                  </button>
+                                )
+                              )}
+
+                              <a
+                                href={`${API_BASE_URL}/api/tenants/${selectedClientForBranding?.id}/templates/${v.versionId}/download`}
+                                download
+                                style={{
+                                  fontSize: '0.7rem',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px',
+                                  background: '#f1f5f9',
+                                  color: '#334155',
+                                  border: '1px solid #cbd5e1',
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                📥 Download
+                              </a>
+
+                              {!isActive && isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTemplate(v.versionId)}
+                                  disabled={Boolean(templateActionMsg)}
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: '4px',
+                                    background: '#fef2f2',
+                                    color: '#b91c1c',
+                                    border: '1px solid #fecaca',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {templateActionMsg && (
+                  <div style={{ fontSize: '0.75rem', color: '#2563eb' }}>{templateActionMsg}</div>
+                )}
+
+                {/* Upload Form */}
+                {isAdmin ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.25rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}>
+                      Upload New Template Version (.pptx)
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pptx"
+                      disabled={uploadingTemplate}
+                      onChange={handleUploadTemplate}
+                      style={{ fontSize: '0.8rem' }}
+                    />
+                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                      Enforces magic-byte verification (<code>PK\x03\x04</code>). Retention policy keeps max 5 versions per tenant; oldest version is pruned on 6th upload.
+                    </span>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic' }}>
+                    Template version uploads and activations are restricted to Administrators.
+                  </span>
+                )}
               </div>
 
               {/* Action Buttons */}

@@ -113,6 +113,8 @@ const reportsRouter = require('./routes/reports');
 app.use(['/api/reports', '/reports'], reportsRouter);
 const jobRoutes = require('./routes/jobRoutes');
 app.use(['/api/jobs', '/jobs'], jobRoutes);
+const templateRoutes = require('./routes/templateRoutes');
+app.use(['/api/tenants', '/api/clients'], templateRoutes);
 
 const queueService = require('./services/queueService');
 queueService.initialize().catch((err) => {
@@ -569,28 +571,6 @@ app.put(['/api/tenants/:id/settings', '/api/clients/:id/settings'], requireAuth,
     res.json({ success: true, tenantId: canonicalId, settings: updated, branding: updated?.branding });
   } catch (err) {
     res.status(400).json({ error: err.message });
-  }
-});
-
-// Upload Whitelabel Master PPT Template for Tenant
-app.post(['/api/tenants/:id/template', '/api/clients/:id/template'], requireAuth, requireAdmin, upload.single('template'), handleUploadErrors, verifyUploadedFileSignatures, (req, res) => {
-  try {
-    const canonicalId = clientService.resolveCanonicalClientId(req.params.id);
-    if (!canonicalId) return res.status(404).json({ error: 'Tenant not found' });
-    if (!req.file) return res.status(400).json({ error: 'PPTX template file is required' });
-
-    const dirs = clientService.ensureTenantDirs(canonicalId);
-    const dest = path.join(dirs.templatesDir, 'master.pptx');
-    fs.copyFileSync(req.file.path, dest);
-    try { fs.unlinkSync(req.file.path); } catch (_) {}
-
-    res.json({
-      success: true,
-      message: `Whitelabel PPT template uploaded for ${canonicalId}`,
-      templatePath: dest,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
 });
 

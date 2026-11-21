@@ -279,6 +279,14 @@ function updateTenantSettings(tenantId, patch = {}) {
 }
 
 function getTenantTemplatePath(tenantId) {
+  try {
+    const templateService = require('./templateService');
+    const resolved = templateService.getActiveTemplatePath(tenantId);
+    if (resolved && fs.existsSync(resolved)) {
+      return resolved;
+    }
+  } catch (_) {}
+
   const { templatesDir } = ensureTenantDirs(tenantId);
   const tenantCandidate = path.join(templatesDir, 'master.pptx');
   if (fs.existsSync(tenantCandidate)) {
