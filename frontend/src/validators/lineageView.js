@@ -27,7 +27,10 @@ export function formatLineageEntry(entry) {
       file: src.file ? sanitizePath(src.file) : undefined,
       sheet: src.sheet ? String(src.sheet) : undefined,
       row: typeof src.row === 'number' ? src.row : undefined,
+      cellCoordinates: src.cellCoordinates && typeof src.cellCoordinates === 'object' ? src.cellCoordinates : undefined,
+      contributingRows: Array.isArray(src.contributingRows) ? src.contributingRows : (typeof src.row === 'number' ? [src.row] : []),
       formula: src.formula ? String(src.formula) : undefined,
+      inputs: Array.isArray(src.inputs) ? src.inputs : [],
       aggregationType: String(src.aggregationType || 'NONE'),
     };
   });
@@ -36,6 +39,7 @@ export function formatLineageEntry(entry) {
     metricKey: String(entry.metricKey || 'unknown'),
     value: entry.value !== undefined ? entry.value : null,
     sources: freeze(sources),
+    timestamp: entry.timestamp || undefined,
   });
 }
 
@@ -49,7 +53,26 @@ export function findLineageForMetric(lineage, metricKey) {
   const sites = lineage.sites && typeof lineage.sites === 'object' ? lineage.sites : {};
   const metrics = lineage.metrics && typeof lineage.metrics === 'object' ? lineage.metrics : {};
 
-  const entry = metrics[key] || devices[key] || sites[key] || devices[`device.${key}`] || sites[`site.${key}`] || null;
+  // Check exact key first
+  let entry = metrics[key] || devices[key] || sites[key];
+
+  // Check common prefixes / aliases
+  if (!entry) {
+    entry = metrics[`executiveSummary.${key}`] ||
+            metrics[`executiveSummary.${key.charAt(0).toLowerCase() + key.slice(1)}`] ||
+            devices[`device.${key}`] ||
+            sites[`site.${key}`] ||
+            metrics[`rack.${key}`];
+  }
+
+  // Case-insensitive search fallback across metrics keys
+  if (!entry) {
+    const lowerKey = key.toLowerCase();
+    const matchedMetricKey = Object.keys(metrics).find(k => k.toLowerCase() === lowerKey || k.toLowerCase().endsWith(`.${lowerKey}`));
+    if (matchedMetricKey) {
+      entry = metrics[matchedMetricKey];
+    }
+  }
 
   return entry ? formatLineageEntry(entry) : null;
 }

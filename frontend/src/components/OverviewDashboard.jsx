@@ -1,5 +1,6 @@
 // frontend/src/components/OverviewDashboard.jsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import LineageModal from './LineageModal';
 import {
   Server,
   CheckCircle,
@@ -29,6 +30,7 @@ import {
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
 export default function OverviewDashboard({ data, onNavigate }) {
+  const [lineageTarget, setLineageTarget] = useState(null);
   const exec = data?.executiveSummary || {};
   const incidents = useMemo(() => Array.isArray(data?.incidents) ? data.incidents : [], [data]);
   const siteSummary = useMemo(() => Array.isArray(data?.siteSummary) ? data.siteSummary : [], [data]);
@@ -199,8 +201,19 @@ export default function OverviewDashboard({ data, onNavigate }) {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>Total Devices</span>
-            <div style={{ padding: '0.5rem', backgroundColor: '#eff6ff', borderRadius: '0.5rem', color: '#2563eb' }}>
-              <Server size={18} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                onClick={() => setLineageTarget({ metricKey: 'executiveSummary.totalDevices', metricTitle: 'Total Devices', currentValue: totalDevices })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', opacity: 0.75, padding: '2px 4px' }}
+                title="Trace Total Devices to spreadsheet cell"
+                aria-label="Trace Total Devices to spreadsheet cell"
+              >
+                🔗
+              </button>
+              <div style={{ padding: '0.5rem', backgroundColor: '#eff6ff', borderRadius: '0.5rem', color: '#2563eb' }}>
+                <Server size={18} />
+              </div>
             </div>
           </div>
           <div>
@@ -233,8 +246,19 @@ export default function OverviewDashboard({ data, onNavigate }) {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>Healthy Devices</span>
-            <div style={{ padding: '0.5rem', backgroundColor: '#f0fdf4', borderRadius: '0.5rem', color: '#16a34a' }}>
-              <CheckCircle size={18} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                onClick={() => setLineageTarget({ metricKey: 'executiveSummary.healthyDevices', metricTitle: 'Healthy Devices', currentValue: healthyDevices })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', opacity: 0.75, padding: '2px 4px' }}
+                title="Trace Healthy Devices to spreadsheet cell"
+                aria-label="Trace Healthy Devices to spreadsheet cell"
+              >
+                🔗
+              </button>
+              <div style={{ padding: '0.5rem', backgroundColor: '#f0fdf4', borderRadius: '0.5rem', color: '#16a34a' }}>
+                <CheckCircle size={18} />
+              </div>
             </div>
           </div>
           <div>
@@ -267,8 +291,19 @@ export default function OverviewDashboard({ data, onNavigate }) {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>At Risk Devices</span>
-            <div style={{ padding: '0.5rem', backgroundColor: '#fef2f2', borderRadius: '0.5rem', color: '#dc2626' }}>
-              <AlertTriangle size={18} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                onClick={() => setLineageTarget({ metricKey: 'executiveSummary.atRiskDevices', metricTitle: 'At Risk Devices', currentValue: atRiskDevices })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', opacity: 0.75, padding: '2px 4px' }}
+                title="Trace At Risk Devices to spreadsheet cell"
+                aria-label="Trace At Risk Devices to spreadsheet cell"
+              >
+                🔗
+              </button>
+              <div style={{ padding: '0.5rem', backgroundColor: '#fef2f2', borderRadius: '0.5rem', color: '#dc2626' }}>
+                <AlertTriangle size={18} />
+              </div>
             </div>
           </div>
           <div>
@@ -301,8 +336,19 @@ export default function OverviewDashboard({ data, onNavigate }) {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>Total Incidents</span>
-            <div style={{ padding: '0.5rem', backgroundColor: '#faf5ff', borderRadius: '0.5rem', color: '#9333ea' }}>
-              <Activity size={18} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                onClick={() => setLineageTarget({ metricKey: 'executiveSummary.totalIncidents', metricTitle: 'Total Incidents', currentValue: totalIncidents })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', opacity: 0.75, padding: '2px 4px' }}
+                title="Trace Total Incidents to spreadsheet cell"
+                aria-label="Trace Total Incidents to spreadsheet cell"
+              >
+                🔗
+              </button>
+              <div style={{ padding: '0.5rem', backgroundColor: '#faf5ff', borderRadius: '0.5rem', color: '#9333ea' }}>
+                <Activity size={18} />
+              </div>
             </div>
           </div>
           <div>
@@ -335,15 +381,26 @@ export default function OverviewDashboard({ data, onNavigate }) {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>TICKET SLA COMPLIANCE</span>
-            <div
-              style={{
-                padding: '0.5rem',
-                backgroundColor: isSlaBelow ? '#fef2f2' : '#ecfdf5',
-                borderRadius: '0.5rem',
-                color: isSlaBelow ? '#dc2626' : '#059669',
-              }}
-            >
-              <Clock size={18} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                onClick={() => setLineageTarget({ metricKey: 'executiveSummary.slaCompliance', metricTitle: 'Ticket SLA Compliance', currentValue: `${currentSLA.toFixed(2)}%` })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', opacity: 0.75, padding: '2px 4px' }}
+                title="Trace SLA Compliance to spreadsheet cell"
+                aria-label="Trace SLA Compliance to spreadsheet cell"
+              >
+                🔗
+              </button>
+              <div
+                style={{
+                  padding: '0.5rem',
+                  backgroundColor: isSlaBelow ? '#fef2f2' : '#ecfdf5',
+                  borderRadius: '0.5rem',
+                  color: isSlaBelow ? '#dc2626' : '#059669',
+                }}
+              >
+                <Clock size={18} />
+              </div>
             </div>
           </div>
           <div>
@@ -981,6 +1038,16 @@ export default function OverviewDashboard({ data, onNavigate }) {
           </div>
         </div>
       </div>
+
+      {/* KPI-to-Cell Lineage & Provenance Modal (Item #7) */}
+      <LineageModal
+        isOpen={!!lineageTarget}
+        onClose={() => setLineageTarget(null)}
+        metricKey={lineageTarget?.metricKey}
+        metricTitle={lineageTarget?.metricTitle}
+        currentValue={lineageTarget?.currentValue}
+        lineageData={data?.lineage}
+      />
     </div>
   );
 }

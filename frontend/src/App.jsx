@@ -802,6 +802,8 @@ function MainPortal() {
                 devices={activeDashboardData?.devices || []}
                 incidents={activeDashboardData?.incidents || []}
                 clientCode={clientLabel}
+                data={activeDashboardData}
+                lineage={activeDashboardData?.lineage}
                 onClose={() => {
                   setSelectedSite('ALL');
                   setActiveLocation('All Locations');

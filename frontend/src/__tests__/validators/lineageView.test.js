@@ -56,4 +56,40 @@ describe('lineageView validator suite', () => {
     assert.strictEqual(entry?.value, '99.43');
     assert.strictEqual(entry?.sources[0].formula, 'AVG(__effectiveUptime)');
   });
+
+  it('6. formatLineageEntry formats cellCoordinates and contributingRows', () => {
+    const entry = {
+      metricKey: 'device.SW-01',
+      value: 99.8,
+      derivedFrom: [
+        {
+          sourceType: 'EXCEL_ROW',
+          file: 'inventory.xlsx',
+          sheet: 'NOC',
+          row: 14,
+          cellCoordinates: { sheet: 'NOC', row: 14, cellRef: 'NOC!E14' },
+          contributingRows: [14],
+          formula: 'PROACTIVE_FORMULA',
+        },
+      ],
+    };
+    const formatted = formatLineageEntry(entry);
+    assert.strictEqual(formatted?.sources[0].cellCoordinates?.cellRef, 'NOC!E14');
+    assert.deepStrictEqual(formatted?.sources[0].contributingRows, [14]);
+  });
+
+  it('7. findLineageForMetric matches short metric alias names', () => {
+    const lineage = {
+      metrics: {
+        'executiveSummary.totalDevices': {
+          metricKey: 'executiveSummary.totalDevices',
+          value: 145,
+          derivedFrom: [{ sourceType: 'INVENTORY_SHEET' }],
+        },
+      },
+    };
+    const entry = findLineageForMetric(lineage, 'totalDevices');
+    assert.ok(entry, 'totalDevices should resolve to executiveSummary.totalDevices');
+    assert.strictEqual(entry?.value, 145);
+  });
 });

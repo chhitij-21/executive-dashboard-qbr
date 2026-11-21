@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import KpiCard from './KpiCard';
 import DataTable from './DataTable';
+import LineageModal from './LineageModal';
 import { normalizeLoc, isGenericLocation, normalizeSiteName } from '../utils/siteUtils';
 
 function formatExcelDate(val) {
@@ -35,8 +36,15 @@ export default function SiteInspector({
   devices = [],
   incidents = [],
   onClose,
-  clientCode = 'Client'
+  clientCode = 'Client',
+  data = null,
+  lineage = null,
 }) {
+  const [lineageTarget, setLineageTarget] = useState(null);
+  const activeLineage = lineage || data?.lineage;
+  const handleTrace = (metricKey, metricTitle, currentValue) => {
+    setLineageTarget({ metricKey, metricTitle, currentValue });
+  };
   const [ticketSearch, setTicketSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -273,13 +281,34 @@ export default function SiteInspector({
       {/* High-Level Site Executive KPIs Grid */}
       <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
         <KpiCard title="Site Name" value={siteId} />
-        <KpiCard title="Total Devices (inc. Stock)" value={currentSiteData.deviceCount ?? (siteActiveDevices.length + siteStockDevices.length)} />
-        <KpiCard title="Active Operational Devices" value={currentSiteData.activeDeviceCount ?? siteActiveDevices.length} />
+        <KpiCard
+          title="Total Devices (inc. Stock)"
+          value={currentSiteData.deviceCount ?? (siteActiveDevices.length + siteStockDevices.length)}
+          metricKey={`site.${siteId}`}
+          onTrace={handleTrace}
+        />
+        <KpiCard
+          title="Active Operational Devices"
+          value={currentSiteData.activeDeviceCount ?? siteActiveDevices.length}
+          metricKey={`site.${siteId}`}
+          onTrace={handleTrace}
+        />
         <KpiCard title="Stock Devices" value={currentSiteData.stockCount ?? siteStockDevices.length} />
         <KpiCard title="Switches" value={currentSiteData.switchCount} />
         <KpiCard title="Access Points (APs)" value={currentSiteData.apCount} />
-        <KpiCard title="Incident Free %" value={currentSiteData.incidentFreePercent ?? '100.00'} unit="%" />
-        <KpiCard title="Health Score" value={currentSiteData.healthScore ? `${currentSiteData.healthScore} (${currentSiteData.healthLabel})` : '100.0 (Excellent)'} />
+        <KpiCard
+          title="Incident Free %"
+          value={currentSiteData.incidentFreePercent ?? '100.00'}
+          unit="%"
+          metricKey={`site.${siteId}`}
+          onTrace={handleTrace}
+        />
+        <KpiCard
+          title="Health Score"
+          value={currentSiteData.healthScore ? `${currentSiteData.healthScore} (${currentSiteData.healthLabel})` : '100.0 (Excellent)'}
+          metricKey={`site.${siteId}`}
+          onTrace={handleTrace}
+        />
         <KpiCard title="Primary RCA (Switches)" value={currentSiteData.primaryRcaSwitches || currentSiteData.primaryRca || 'Stable Operations (No Incidents)'} />
         <KpiCard title="Primary RCA (APs)" value={currentSiteData.primaryRcaAPs || currentSiteData.primaryRcaForAPs || 'Stable Operations (No Incidents)'} />
       </div>
@@ -561,6 +590,16 @@ export default function SiteInspector({
           />
         </div>
       )}
+
+      {/* KPI-to-Cell Lineage & Provenance Modal (Item #7) */}
+      <LineageModal
+        isOpen={!!lineageTarget}
+        onClose={() => setLineageTarget(null)}
+        metricKey={lineageTarget?.metricKey}
+        metricTitle={lineageTarget?.metricTitle}
+        currentValue={lineageTarget?.currentValue}
+        lineageData={activeLineage}
+      />
     </div>
   );
 }

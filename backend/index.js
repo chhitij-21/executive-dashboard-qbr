@@ -1502,6 +1502,17 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
       } catch (_) {}
     }
 
+    if (!filteredData.lineage) {
+      try {
+        const { buildLineage } = require('./services/validators/lineageTracker');
+        const lineageRes = buildLineage(filteredData);
+        if (lineageRes && lineageRes.success) {
+          filteredData.lineage = lineageRes.lineage;
+          filteredData.lineageSummary = lineageRes.summary;
+        }
+      } catch (_) {}
+    }
+
     const targetCustomerName = client?.name || (clientId === 'client-jfl' ? 'Jubilant Foodworks Ltd (JFL)' : (clientId === 'client-mmtcpamp' ? 'MMTC' : (rawData.customerName || 'Customer')));
     try {
       filteredData.customerName = targetCustomerName;
@@ -1522,6 +1533,97 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Lineage & Data Provenance Endpoints (Item #7) ──────────────────────────
+app.get(['/api/lineage', '/lineage'], requireAuth, requireClientAccess(), async (req, res) => {
+  try {
+    const clientId = req.targetClientId;
+    const reqJobId = req.query?.jobId || 'latest';
+    let dPath = null;
+
+    if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
+      const job = resolveLatestCompletedJob(clientId);
+      if (job) dPath = job.dashboardPath;
+    } else {
+      const job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+      if (job) dPath = job.dashboardPath;
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
+      const fallbackPath = path.resolve('backend', 'data', 'dashboard_data.json');
+      if (fs.existsSync(fallbackPath)) dPath = fallbackPath;
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
+      return res.status(404).json({ success: false, error: 'Dashboard data not found for lineage extraction.' });
+    }
+
+    const content = fs.readFileSync(dPath, 'utf8');
+    const rawData = JSON.parse(content);
+    const { buildLineage } = require('./services/validators/lineageTracker');
+    const lineageRes = rawData.lineage ? { success: true, lineage: rawData.lineage, summary: rawData.lineageSummary } : buildLineage(rawData);
+
+    res.json({
+      success: true,
+      lineage: lineageRes.lineage,
+      summary: lineageRes.summary,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get(['/api/lineage/trace', '/lineage/trace'], requireAuth, requireClientAccess(), async (req, res) => {
+  try {
+    const metricKey = req.query?.key || req.query?.metric;
+    if (!metricKey || typeof metricKey !== 'string') {
+      return res.status(400).json({ success: false, error: 'Query parameter "key" is required.' });
+    }
+
+    const clientId = req.targetClientId;
+    let dPath = null;
+    const job = resolveLatestCompletedJob(clientId);
+    if (job) dPath = job.dashboardPath;
+    if (!dPath || !fs.existsSync(dPath)) {
+      const fallbackPath = path.resolve('backend', 'data', 'dashboard_data.json');
+      if (fs.existsSync(fallbackPath)) dPath = fallbackPath;
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
+      return res.status(404).json({ success: false, error: 'Dashboard data not found.' });
+    }
+
+    const content = fs.readFileSync(dPath, 'utf8');
+    const rawData = JSON.parse(content);
+    const { buildLineage } = require('./services/validators/lineageTracker');
+    const lineageRes = rawData.lineage ? { success: true, lineage: rawData.lineage, summary: rawData.lineageSummary } : buildLineage(rawData);
+
+    const lineage = lineageRes.lineage || {};
+    const devices = lineage.devices || {};
+    const sites = lineage.sites || {};
+    const metrics = lineage.metrics || {};
+
+    let entry = metrics[metricKey] || devices[metricKey] || sites[metricKey] ||
+                metrics[`executiveSummary.${metricKey}`] ||
+                devices[`device.${metricKey}`] ||
+                sites[`site.${metricKey}`] ||
+                metrics[`rack.${metricKey}`];
+
+    if (!entry) {
+      const lower = metricKey.toLowerCase();
+      const match = Object.keys(metrics).find(k => k.toLowerCase() === lower || k.toLowerCase().endsWith(`.${lower}`));
+      if (match) entry = metrics[match];
+    }
+
+    if (!entry) {
+      return res.status(404).json({ success: false, error: `Metric "${metricKey}" not found in lineage tree.` });
+    }
+
+    res.json({ success: true, entry });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

@@ -36,6 +36,7 @@ function normalizeSiteName(site) {
 const ruleEngine = require('./ruleEngine');
 const { generatePPT } = require('./pptGenerator');
 const { continuousPipelineAudit } = require('./ai/iq200Validator');
+const { buildLineage } = require('./validators/lineageTracker');
 const clientService = require('./clientService');
 
 // Helper for returning structured failure results
@@ -1684,6 +1685,18 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     log(`IQ-200 AI Validator: ${iq200Audit.status} (Score: ${iq200Audit.score}%, Invariants: ${iq200Audit.invariants?.passed}/${iq200Audit.invariants?.total}, Hallucinations: ${iq200Audit.hallucinationsDetected})`);
   } catch (auditErr) {
     log(`WARNING: IQ-200 continuous validation notice: ${auditErr.message}`);
+  }
+
+  // ── 8d. Data Provenance & Lineage Tracker (Item #7) ──────────────────────────
+  try {
+    const lineageRes = buildLineage(qbrData);
+    if (lineageRes && lineageRes.success) {
+      qbrData.lineage = lineageRes.lineage;
+      qbrData.lineageSummary = lineageRes.summary;
+      log(`Lineage Tracker: ${lineageRes.summary?.totalEntries || 0} entries tracked (${lineageRes.summary?.coverage || '100%'} coverage)`);
+    }
+  } catch (lineageErr) {
+    log(`WARNING: Lineage calculation notice: ${lineageErr.message}`);
   }
 
   // ── 9. Data quality report ────────────────────────────────────────────────
