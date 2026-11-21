@@ -41,17 +41,14 @@ When a dataset contains 0 devices and 0 incidents:
 - All invariant checks marked as not applicable with clear explanatory text.
 - Includes automated test assertion verifying `status === 'INSUFFICIENT_DATA'` and `score === null`.
 
-### 5. PDF & Excel Export DoS Protection: Rate Limiting, Headers & Pagination
+### 5. PDF & Excel Export DoS Protection: Rate Limiting, Headers & Scopes
 - **Per-Tenant Rate Limiting**: Added `checkExportRateLimit(tenantId)` allowing a maximum of 5 export requests per 60 seconds per tenant. If exceeded, returns HTTP 429 Too Many Requests (`RATE_LIMIT_EXCEEDED`) with header `Retry-After: 60` and JSON `{ code: 'RATE_LIMIT_EXCEEDED', retryAfter: 60 }`.
   - *Architecture Note & Known Limitation*: Implemented as an in-memory sliding window map (`_exportRateMap`), suitable for single-instance / development setups. In horizontally autoscaled multi-pod environments, this should be backed by Redis `INCR` + `EXPIRE` leveraging the Redis client from `queueService`.
 - **Hard Limit**: Maximum 2,000 issues exported. If `?strict=true` and count > 2,000, returns HTTP 413 Payload Too Large (`PAYLOAD_TOO_LARGE`). Otherwise automatically caps to top 2,000 issues with a visible notice banner.
 - **Unicode Glyph Transliteration**: Pure Node.js PDF 1.4 generator translates Unicode symbols (`⚠️` $\to$ `[!]`, `₹` $\to$ `INR `, `🟢` $\to$ `[PASS]`, etc.) to guarantee 100% crash-free Type 1 Helvetica font streams.
-- **PDF Pagination Specification (Multi-Page Expansion for >50 Rows)**:
-  - Currently: Generates a 1-page Executive Audit Summary highlighting the top 10 prioritized issues, full invariant verifications, and operational recommendations.
-  - Multi-page pagination logic for full issue catalogs (>50 rows):
-    - **Page-break threshold**: 45 issue rows per continuation page (first page reserves header and summary cards, fitting 15 issues).
-    - **Coordinate Tracking**: When $y \le 60$, end current text object (`ET`), register page stream into PDF catalog objects array, print footer `Page X of Y` at $(x=500, y=30)$, reset $y = 750$, and initiate a new PDF page stream object.
-    - **Total Pages Calculation**: $1 + \lceil \max(0, N - 15) / 45 \rceil$.
+- **Export Scope Separation (1-Page Executive PDF vs Full Excel)**:
+  - **PDF Export**: Strictly a 1-page **Executive Summary** by design (top 10 prioritized issues, all 5 mathematical invariant conservation audits, health metrics, and operational recommendations).
+  - **Excel (.xlsx) Export**: Dedicated to full-catalog data audits, exporting complete data up to the 2,000-issue cap across multi-tab structured worksheets (`Executive Summary`, `Invariant Rules`, `Data Hygiene Issues`, `Operational Recommendations`). Full 2,000-issue data is in XLSX.
 
 ### 6. Lazy-Load Job Pinning & Stale Cache Invalidation
 - **Job-Pinned Fetch**: `DataHealthModal.jsx` must pass `?jobId=${activeJobId || 'latest'}` on every `/api/data-health/issue/:issueId` call.
