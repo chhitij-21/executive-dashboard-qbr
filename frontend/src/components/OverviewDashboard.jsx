@@ -1,6 +1,7 @@
 // frontend/src/components/OverviewDashboard.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import LineageModal from './LineageModal';
+import QoQCompareModal from './QoQCompareModal';
 import {
   Server,
   CheckCircle,
@@ -12,7 +13,8 @@ import {
   ArrowDownRight,
   ExternalLink,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  BarChart3
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -29,8 +31,85 @@ import {
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
-export default function OverviewDashboard({ data, onNavigate }) {
+export default function OverviewDashboard({ data, onNavigate, activeClientId }) {
   const [lineageTarget, setLineageTarget] = useState(null);
+  const [isQoQEnabled, setIsQoQEnabled] = useState(false);
+  const [isQoQModalOpen, setIsQoQModalOpen] = useState(false);
+
+  // Client Switch Reset Guard (Requirement 1 & Roadmap Invariant)
+  useEffect(() => {
+    setIsQoQEnabled(false);
+  }, [activeClientId, data?.clientId, data?.client_id, data?.customerName]);
+
+  const qoqComp = data?.qoqComparison;
+  const isStandardQuarter = data?.is_standard_quarter ?? qoqComp?.is_standard_quarter ?? false;
+  const hasPriorQuarter = data?.has_prior_quarter ?? qoqComp?.has_prior_quarter ?? false;
+  const qoqDisabledReason = data?.qoq_disabled_reason || qoqComp?.qoq_disabled_reason || null;
+  const isToggleDisabled = Boolean(qoqDisabledReason) || !hasPriorQuarter || !isStandardQuarter;
+
+  const renderDeltaBadge = (kpi, unit = '') => {
+    if (!isQoQEnabled || !kpi) return null;
+    const isImproved = kpi.direction === 'improved';
+    const isDegraded = kpi.direction === 'degraded';
+    const badgeColor = isImproved ? '#16a34a' : isDegraded ? '#dc2626' : '#64748b';
+    const badgeBg = isImproved ? '#dcfce7' : isDegraded ? '#fee2e2' : '#f1f5f9';
+
+    return (
+      <span
+        style={{
+          marginLeft: '0.45rem',
+          fontSize: '0.75rem',
+          fontWeight: 700,
+          padding: '2px 6px',
+          borderRadius: '4px',
+          backgroundColor: badgeBg,
+          color: badgeColor,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '2px',
+        }}
+        title={`Prior Quarter: ${kpi.prior}${unit}`}
+      >
+        {isImproved ? '▲' : isDegraded ? '▼' : '■'} {kpi.formattedDelta}{unit}
+      </span>
+    );
+  };
+
+  const renderMiniSparkline = (kpi) => {
+    if (!isQoQEnabled || !kpi?.sparkline || kpi.sparkline.length < 2) return null;
+    const isImproved = kpi.direction === 'improved';
+    const isDegraded = kpi.direction === 'degraded';
+    const stroke = isImproved ? '#16a34a' : isDegraded ? '#dc2626' : '#2563eb';
+    const vals = kpi.sparkline.map(d => d.value);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const range = max - min || 1;
+
+    return (
+      <div style={{ marginTop: '0.4rem', height: '20px', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <svg width="48" height="16" style={{ overflow: 'visible' }}>
+          <polyline
+            fill="none"
+            stroke={stroke}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            points={kpi.sparkline.map((d, i) => {
+              const x = (i / (kpi.sparkline.length - 1)) * 44 + 2;
+              const y = 14 - ((d.value - min) / range) * 10;
+              return `${x},${y}`;
+            }).join(' ')}
+          />
+          {kpi.sparkline.map((d, i) => {
+            const x = (i / (kpi.sparkline.length - 1)) * 44 + 2;
+            const y = 14 - ((d.value - min) / range) * 10;
+            return <circle key={i} cx={x} cy={y} r="2" fill={stroke} />;
+          })}
+        </svg>
+        <span style={{ fontSize: '0.68rem', color: '#64748b' }}>QoQ Trend</span>
+      </div>
+    );
+  };
   const exec = data?.executiveSummary || {};
   const incidents = useMemo(() => Array.isArray(data?.incidents) ? data.incidents : [], [data]);
   const siteSummary = useMemo(() => Array.isArray(data?.siteSummary) ? data.siteSummary : [], [data]);
@@ -174,6 +253,86 @@ export default function OverviewDashboard({ data, onNavigate }) {
       }}
     >
       {/* ══════════════════════════════════════════════════════════════
+          QOQ COMPARATIVE CONTROLS TOOLBAR (Item #9)
+          ══════════════════════════════════════════════════════════════ */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: '#ffffff',
+          padding: '0.75rem 1.25rem',
+          borderRadius: '0.75rem',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <BarChart3 size={18} color="#2563eb" />
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>
+            Quarter-over-Quarter (QoQ) Comparative Mode
+          </span>
+          {qoqDisabledReason && (
+            <span style={{ fontSize: '0.75rem', color: '#64748b', backgroundColor: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+              {qoqDisabledReason}
+            </span>
+          )}
+          {hasPriorQuarter && (
+            <span style={{ fontSize: '0.75rem', color: '#16a34a', backgroundColor: '#dcfce7', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+              Prior: {qoqComp?.priorPeriod || 'Baseline'}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              cursor: isToggleDisabled ? 'not-allowed' : 'pointer',
+              opacity: isToggleDisabled ? 0.6 : 1,
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: '#334155',
+            }}
+            title={isToggleDisabled ? (qoqDisabledReason || 'QoQ comparison unavailable') : 'Toggle inline QoQ deltas on KPI cards'}
+          >
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Compare to Previous Quarter"
+              disabled={isToggleDisabled}
+              checked={isQoQEnabled}
+              onChange={(e) => setIsQoQEnabled(e.target.checked)}
+              style={{ cursor: isToggleDisabled ? 'not-allowed' : 'pointer' }}
+            />
+            Compare to Previous Quarter
+          </label>
+          <button
+            type="button"
+            onClick={() => setIsQoQModalOpen(true)}
+            style={{
+              padding: '0.35rem 0.85rem',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              backgroundColor: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              color: '#2563eb',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+          >
+            <BarChart3 size={14} /> Full QoQ Breakdown
+          </button>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════
           ROW 1: KPI CARDS (5 Columns)
           ══════════════════════════════════════════════════════════════ */}
       <div
@@ -262,9 +421,13 @@ export default function OverviewDashboard({ data, onNavigate }) {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '1.875rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>
-              {healthyDevices}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ fontSize: '1.875rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>
+                {healthyDevices}
+              </div>
+              {renderDeltaBadge(qoqComp?.kpis?.healthScore)}
             </div>
+            {renderMiniSparkline(qoqComp?.kpis?.healthScore)}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.5rem' }}>
               <span style={{ color: '#16a34a', fontSize: '0.75rem', fontWeight: 600 }}>
                 {totalDevices > 0 ? ((healthyDevices / totalDevices) * 100).toFixed(1) : '100'}%
@@ -352,9 +515,13 @@ export default function OverviewDashboard({ data, onNavigate }) {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '1.875rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>
-              {totalIncidents}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ fontSize: '1.875rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>
+                {totalIncidents}
+              </div>
+              {renderDeltaBadge(qoqComp?.kpis?.totalIncidents)}
             </div>
+            {renderMiniSparkline(qoqComp?.kpis?.totalIncidents)}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.5rem' }}>
               <span style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 600 }}>
                 Logged
@@ -404,9 +571,13 @@ export default function OverviewDashboard({ data, onNavigate }) {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '1.875rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>
-              {currentSLA.toFixed(2)}%
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ fontSize: '1.875rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>
+                {currentSLA.toFixed(2)}%
+              </div>
+              {renderDeltaBadge(qoqComp?.kpis?.slaCompliance, '%')}
             </div>
+            {renderMiniSparkline(qoqComp?.kpis?.slaCompliance)}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.5rem' }}>
               <span
                 style={{
@@ -1047,6 +1218,14 @@ export default function OverviewDashboard({ data, onNavigate }) {
         metricTitle={lineageTarget?.metricTitle}
         currentValue={lineageTarget?.currentValue}
         lineageData={data?.lineage}
+      />
+
+      {/* Quarter-over-Quarter Comparison Breakdown Modal (Item #9) */}
+      <QoQCompareModal
+        isOpen={isQoQModalOpen}
+        onClose={() => setIsQoQModalOpen(false)}
+        comparison={qoqComp}
+        qoqData={qoqComp}
       />
     </div>
   );

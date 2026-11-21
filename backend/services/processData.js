@@ -38,6 +38,111 @@ const { generatePPT } = require('./pptGenerator');
 const { continuousPipelineAudit } = require('./ai/iq200Validator');
 const { buildLineage } = require('./validators/lineageTracker');
 const clientService = require('./clientService');
+const historyService = require('./historyService');
+const qoqComparisonService = require('./qoqComparisonService');
+
+function getISTDateParts(timestamp) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    });
+    const parts = formatter.formatToParts(new Date(timestamp));
+    return {
+      year: Number(parts.find(p => p.type === 'year').value),
+      month: Number(parts.find(p => p.type === 'month').value),
+      day: Number(parts.find(p => p.type === 'day').value),
+    };
+  } catch (_) {
+    const istEpoch = new Date(timestamp).getTime() + (5.5 * 3600 * 1000);
+    const istDate = new Date(istEpoch);
+    return {
+      year: istDate.getUTCFullYear(),
+      month: istDate.getUTCMonth() + 1,
+      day: istDate.getUTCDate(),
+    };
+  }
+}
+
+function deriveQuarterAndFiscalYear(startDate, endDate, label = '') {
+  if (!startDate || !endDate) {
+    return {
+      quarter: 'CUSTOM',
+      fiscal_year: 'CUSTOM',
+      is_standard_quarter: false,
+      qoq_disabled_reason: 'QoQ comparison is only available for standard quarterly periods.',
+    };
+  }
+
+  const sMatch = String(startDate).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const eMatch = String(endDate).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!sMatch || !eMatch) {
+    return {
+      quarter: 'CUSTOM',
+      fiscal_year: 'CUSTOM',
+      is_standard_quarter: false,
+      qoq_disabled_reason: 'QoQ comparison is only available for standard quarterly periods.',
+    };
+  }
+
+  const sYear = parseInt(sMatch[1], 10);
+  const sMonth = parseInt(sMatch[2], 10);
+  const sDay = parseInt(sMatch[3], 10);
+
+  const eYear = parseInt(eMatch[1], 10);
+  const eMonth = parseInt(eMatch[2], 10);
+  const eDay = parseInt(eMatch[3], 10);
+
+  // Q1: Apr 1 (04-01) to Jun 30 (06-30) -> FY{Year}
+  if (sYear === eYear && sMonth === 4 && sDay === 1 && eMonth === 6 && eDay === 30) {
+    return {
+      quarter: 'Q1',
+      fiscal_year: `FY${sYear}`,
+      is_standard_quarter: true,
+      qoq_disabled_reason: null,
+    };
+  }
+
+  // Q2: Jul 1 (07-01) to Sep 30 (09-30) -> FY{Year}
+  if (sYear === eYear && sMonth === 7 && sDay === 1 && eMonth === 9 && eDay === 30) {
+    return {
+      quarter: 'Q2',
+      fiscal_year: `FY${sYear}`,
+      is_standard_quarter: true,
+      qoq_disabled_reason: null,
+    };
+  }
+
+  // Q3: Oct 1 (10-01) to Dec 31 (12-31) -> FY{Year}
+  if (sYear === eYear && sMonth === 10 && sDay === 1 && eMonth === 12 && eDay === 31) {
+    return {
+      quarter: 'Q3',
+      fiscal_year: `FY${sYear}`,
+      is_standard_quarter: true,
+      qoq_disabled_reason: null,
+    };
+  }
+
+  // Q4: Jan 1 (01-01) to Mar 31 (03-31) -> FY{Year - 1}
+  if (sYear === eYear && sMonth === 1 && sDay === 1 && eMonth === 3 && eDay === 31) {
+    return {
+      quarter: 'Q4',
+      fiscal_year: `FY${sYear - 1}`,
+      is_standard_quarter: true,
+      qoq_disabled_reason: null,
+    };
+  }
+
+  return {
+    quarter: 'CUSTOM',
+    fiscal_year: 'CUSTOM',
+    is_standard_quarter: false,
+    qoq_disabled_reason: 'QoQ comparison is only available for standard quarterly periods.',
+  };
+}
 
 // Helper for returning structured failure results
 function fail(outputDir, errorCode, message, log) {
@@ -320,18 +425,28 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     const edParts = endDate.split('-');
     const sdLabel = `${parseInt(sdParts[2], 10)} ${months[parseInt(sdParts[1], 10) - 1]} ${sdParts[0]}`;
     const edLabel = `${parseInt(edParts[2], 10)} ${months[parseInt(edParts[1], 10) - 1]} ${edParts[0]}`;
+    const qInfo = deriveQuarterAndFiscalYear(startDate, endDate);
     reportPeriodMeta = {
       start_date: startDate,
       end_date: endDate,
       period_type: 'custom',
       display_label: `${sdLabel} – ${edLabel}`,
+      quarter: qInfo.quarter,
+      fiscal_year: qInfo.fiscal_year,
+      is_standard_quarter: qInfo.is_standard_quarter,
+      qoq_disabled_reason: qInfo.qoq_disabled_reason,
     };
   } else if (options.reportingPeriod && options.reportingPeriod !== '' && options.reportingPeriod !== 'Custom Period') {
+    const qInfo = deriveQuarterAndFiscalYear(startDate, endDate, options.reportingPeriod);
     reportPeriodMeta = {
       start_date: startDate,
       end_date: endDate,
       period_type: 'custom',
       display_label: options.reportingPeriod,
+      quarter: qInfo.quarter,
+      fiscal_year: qInfo.fiscal_year,
+      is_standard_quarter: qInfo.is_standard_quarter,
+      qoq_disabled_reason: qInfo.qoq_disabled_reason,
     };
   }
 
@@ -1701,6 +1816,37 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
 
   // ── 9. Data quality report ────────────────────────────────────────────────
   writeDataQualityReport(outputDir, devices, incidents, allLocMap, log);
+
+  // ── 9b. Pre-PPT QoQ Longitudinal Comparison (Item #9) ───────────────────────
+  try {
+    if (qbrData.report_period && qbrData.report_period.is_standard_quarter === true) {
+      const priorReport = historyService.findPreviousQuarterReport(
+        targetClientId,
+        qbrData.report_period.quarter,
+        qbrData.report_period.fiscal_year
+      );
+      if (priorReport) {
+        const qoqComp = qoqComparisonService.compareQoQ(qbrData, priorReport);
+        qbrData.qoqComparison = qoqComp;
+        qbrData.has_prior_quarter = true;
+        qbrData.qoq_disabled_reason = null;
+        log(`QoQ Compare: Computed against preceding quarter (${qoqComp.priorPeriod})`);
+      } else {
+        qbrData.qoqComparison = null;
+        qbrData.has_prior_quarter = false;
+        qbrData.qoq_disabled_reason = 'No previous quarterly data available (Initial QBR).';
+        log('QoQ Compare: Initial QBR - no prior quarter found in history');
+      }
+    } else {
+      qbrData.qoqComparison = null;
+      qbrData.has_prior_quarter = false;
+      qbrData.qoq_disabled_reason = 'QoQ comparison is only available for standard quarterly periods.';
+    }
+  } catch (qoqErr) {
+    log(`WARNING: QoQ calculation notice: ${qoqErr.message}`);
+    qbrData.qoqComparison = null;
+    qbrData.has_prior_quarter = false;
+  }
 
   // ── 10. Save dashboard JSON (SSOT) FIRST so data is immediately available ─
   const tenantSettings = clientService.getTenantSettings ? clientService.getTenantSettings(targetClientId) : null;
@@ -3195,5 +3341,7 @@ module.exports = {
   buildSLAAnalytics,
   deriveSubCategory,
   reconcileRMA,
+  deriveQuarterAndFiscalYear,
+  getISTDateParts,
 };
 

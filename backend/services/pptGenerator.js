@@ -603,6 +603,16 @@ async function buildPresentation(data, outputPath, options = {}) {
   // Slide 3: Executive Summary Overview
   buildExecSummarySlide(pres, exec, siteSummary, incidents, rcaBreakdown);
 
+  // Slide 3b: QoQ Performance Slide (Item #9) — Gracefully skipped if no prior quarter
+  const shouldBuildQoQ = Boolean(
+    data.qoqComparison &&
+    data.qoqComparison.is_standard_quarter === true &&
+    data.qoqComparison.has_prior_quarter === true
+  );
+  if (shouldBuildQoQ) {
+    buildQoQPerformanceSlide(pres, data.qoqComparison, displayPeriod, clientShort, isJFL);
+  }
+
   // Slide 4: Overall Network Health
   buildNetworkHealthSlide(pres, exec, siteSummary, incidents);
 
@@ -643,7 +653,7 @@ async function buildPresentation(data, outputPath, options = {}) {
     const siteIncs = siteIncsMap[siteKey] || [];
     const siteAps  = siteApsMap[siteKey]  || [];
 
-    buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1, targetSites.length, clientShort, isJFL);
+    buildSiteOverviewSlide(pres, siteKey, siteData, siteIncs, siteIdx + 1, targetSites.length, clientShort, isJFL, data.qoqComparison);
     if (!isMultiSiteBloat) {
       buildSiteOperationsSlide(pres, siteKey, siteData, siteSws, siteIncs, siteAps, siteIdx + 1, targetSites.length, clientShort, isJFL);
       buildSiteTicketSlide(pres, siteKey, siteData, siteIncs, rcaBreakdown, siteIdx + 1, targetSites.length, clientShort);
@@ -667,6 +677,14 @@ async function buildPresentation(data, outputPath, options = {}) {
   } else {
     // MMTC-PAMP Enterprise Reporting Slides (MMTC-Only Flow)
     buildMmtcKpiSlide(pres, data, displayPeriod);
+    const shouldBuildQoQMmtc = Boolean(
+      data.qoqComparison &&
+      data.qoqComparison.is_standard_quarter === true &&
+      data.qoqComparison.has_prior_quarter === true
+    );
+    if (shouldBuildQoQMmtc) {
+      buildQoQPerformanceSlide(pres, data.qoqComparison, displayPeriod, clientShort, isJFL);
+    }
     buildInfrastructureSlide(pres, exec, siteSummary, displayPeriod, incidents, clientShort, isJFL);
     buildMmtcRCAPieChartSlide(pres, rcaBreakdown, displayPeriod);
     buildMmtcISPLocationSlide(pres, data.isp_location_breakdown || [], displayPeriod);
@@ -1101,6 +1119,146 @@ function buildTOCSlide(pres, exec, displayPeriod) {
       x: 11.0, y: y + 0.22, w: 1.73, h: 0.28,
       fontSize: 10, bold: true, color: C.BLUE, align: 'right', fontFace: 'Calibri',
     });
+  });
+}
+
+// ── Slide 3b: Quarter-over-Quarter Performance (Item #9) ────────────────────
+function buildQoQPerformanceSlide(pres, qoqComp, displayPeriod, clientShort = 'Client', isJFL = true) {
+  if (!qoqComp || !qoqComp.kpis) return;
+  _slideNum++;
+  const s = pres.addSlide();
+  s.background = { color: C.BG_LIGHT };
+  addHeader(
+    pres,
+    s,
+    'QUARTER-OVER-QUARTER PERFORMANCE',
+    `Comparative Reliability & SLA Analytics vs ${qoqComp.priorPeriod || 'Prior Quarter'}  ·  ${displayPeriod}`,
+    _slideNum
+  );
+
+  const kpis = qoqComp.kpis;
+  const cards = [
+    {
+      label: 'Overall Switch Uptime',
+      val: `${kpis.overallUptime.current}%`,
+      sub: `${kpis.overallUptime.direction === 'improved' ? '▲' : kpis.overallUptime.direction === 'degraded' ? '▼' : '■'} ${kpis.overallUptime.formattedDelta}%`,
+      color: kpis.overallUptime.direction === 'improved' ? C.GREEN : kpis.overallUptime.direction === 'degraded' ? C.RED : C.BLUE,
+    },
+    {
+      label: isJFL ? `${clientShort} Switch Uptime` : 'Proactive Switch Uptime',
+      val: `${(isJFL ? kpis.jflUptime : kpis.proactiveUptime).current}%`,
+      sub: `${(isJFL ? kpis.jflUptime : kpis.proactiveUptime).direction === 'improved' ? '▲' : (isJFL ? kpis.jflUptime : kpis.proactiveUptime).direction === 'degraded' ? '▼' : '■'} ${(isJFL ? kpis.jflUptime : kpis.proactiveUptime).formattedDelta}%`,
+      color: (isJFL ? kpis.jflUptime : kpis.proactiveUptime).direction === 'improved' ? C.GREEN : (isJFL ? kpis.jflUptime : kpis.proactiveUptime).direction === 'degraded' ? C.RED : C.BLUE,
+    },
+    {
+      label: 'Total Incidents',
+      val: `${kpis.totalIncidents.current}`,
+      sub: `${kpis.totalIncidents.direction === 'improved' ? '▼' : kpis.totalIncidents.direction === 'degraded' ? '▲' : '■'} ${kpis.totalIncidents.formattedDelta}`,
+      color: kpis.totalIncidents.direction === 'improved' ? C.GREEN : kpis.totalIncidents.direction === 'degraded' ? C.RED : C.BLUE,
+    },
+    {
+      label: 'SLA Compliance',
+      val: `${kpis.slaCompliance.current}%`,
+      sub: `${kpis.slaCompliance.direction === 'improved' ? '▲' : kpis.slaCompliance.direction === 'degraded' ? '▼' : '■'} ${kpis.slaCompliance.formattedDelta}%`,
+      color: kpis.slaCompliance.direction === 'improved' ? C.GREEN : kpis.slaCompliance.direction === 'degraded' ? C.RED : C.BLUE,
+    },
+    {
+      label: 'Network Health Score',
+      val: `${kpis.healthScore.current}`,
+      sub: `${kpis.healthScore.direction === 'improved' ? '▲' : kpis.healthScore.direction === 'degraded' ? '▼' : '■'} ${kpis.healthScore.formattedDelta}`,
+      color: kpis.healthScore.direction === 'improved' ? C.GREEN : kpis.healthScore.direction === 'degraded' ? C.RED : C.BLUE,
+    },
+  ];
+
+  const cardW = 2.38;
+  const cardH = 1.25;
+  const cardY = 1.15;
+  cards.forEach((c, idx) => {
+    const cardX = 0.4 + idx * (cardW + 0.18);
+    s.addShape('roundRect', {
+      x: cardX, y: cardY, w: cardW, h: cardH,
+      fill: { color: C.CARD_BG },
+      line: { color: C.CARD_BORDER, pt: 1 },
+      rectRadius: 0.08,
+    });
+    s.addText(c.val, {
+      x: cardX, y: cardY + 0.08, w: cardW, h: 0.45,
+      fontSize: 20, bold: true, color: c.color, align: 'center', fontFace: C.FONT_PRIMARY,
+    });
+    s.addText(c.sub, {
+      x: cardX, y: cardY + 0.52, w: cardW, h: 0.3,
+      fontSize: 12, bold: true, color: c.color, align: 'center', fontFace: C.FONT_PRIMARY,
+    });
+    s.addText(c.label, {
+      x: cardX, y: cardY + 0.82, w: cardW, h: 0.35,
+      fontSize: 9.5, color: C.TEXT_MUTED, align: 'center', fontFace: C.FONT_PRIMARY,
+    });
+  });
+
+  // Section divider
+  addSectionDivider(s, 2.55, 'Site Movement & RCA Category Dynamics');
+
+  // Table: Site Performance Movement
+  const siteComparisons = qoqComp.siteComparisons || {};
+  const siteKeys = Object.keys(siteComparisons);
+  const rows = [
+    [
+      { text: [{ text: 'Site Name', options: { hyperlink: false, bold: true, color: C.TEXT_LIGHT } }], options: { fill: { color: C.NAVY } } },
+      { text: [{ text: 'Prior Uptime', options: { hyperlink: false, bold: true, color: C.TEXT_LIGHT } }], options: { fill: { color: C.NAVY } } },
+      { text: [{ text: 'Current Uptime', options: { hyperlink: false, bold: true, color: C.TEXT_LIGHT } }], options: { fill: { color: C.NAVY } } },
+      { text: [{ text: 'Uptime Delta', options: { hyperlink: false, bold: true, color: C.TEXT_LIGHT } }], options: { fill: { color: C.NAVY } } },
+      { text: [{ text: 'Prior Incs', options: { hyperlink: false, bold: true, color: C.TEXT_LIGHT } }], options: { fill: { color: C.NAVY } } },
+      { text: [{ text: 'Curr Incs', options: { hyperlink: false, bold: true, color: C.TEXT_LIGHT } }], options: { fill: { color: C.NAVY } } },
+      { text: [{ text: 'Status', options: { hyperlink: false, bold: true, color: C.TEXT_LIGHT } }], options: { fill: { color: C.NAVY } } },
+    ]
+  ];
+
+  siteKeys.slice(0, 8).forEach((key, rIdx) => {
+    const sc = siteComparisons[key];
+    const dSign = sc.uptimeDelta > 0 ? '+' : '';
+    const isDegraded = sc.status === 'degraded';
+    const isImproved = sc.status === 'improved';
+    const statusColor = isDegraded ? C.RED : isImproved ? C.GREEN : C.TEXT_MUTED;
+    const bgFill = rIdx % 2 === 0 ? C.TABLE_ALT : C.CARD_BG;
+
+    rows.push([
+      { text: [{ text: String(key), options: { hyperlink: false, bold: true } }], options: { fill: { color: bgFill } } },
+      { text: [{ text: sc.isNewSite ? 'N/A' : `${sc.priorUptime}%`, options: { hyperlink: false } }], options: { fill: { color: bgFill } } },
+      { text: [{ text: `${sc.currentUptime}%`, options: { hyperlink: false } }], options: { fill: { color: bgFill } } },
+      { text: [{ text: sc.isNewSite ? 'New Site' : `${dSign}${sc.uptimeDelta}%`, options: { hyperlink: false, bold: true, color: statusColor } }], options: { fill: { color: bgFill } } },
+      { text: [{ text: sc.isNewSite ? 'N/A' : String(sc.priorIncidents), options: { hyperlink: false } }], options: { fill: { color: bgFill } } },
+      { text: [{ text: String(sc.currentIncidents), options: { hyperlink: false } }], options: { fill: { color: bgFill } } },
+      { text: [{ text: String(sc.status || 'stable').toUpperCase(), options: { hyperlink: false, bold: true, color: statusColor } }], options: { fill: { color: bgFill } } },
+    ]);
+  });
+
+  if (rows.length > 1) {
+    s.addTable(rows, {
+      x: 0.4, y: 2.95, w: 12.5,
+      colW: [2.5, 1.6, 1.6, 1.6, 1.6, 1.6, 2.0],
+      fontSize: 9,
+      fontFace: C.FONT_PRIMARY,
+      border: { pt: 0.5, color: 'E2E8F0' },
+      align: 'center',
+    });
+  }
+
+  // Summary box
+  const rcaShifts = qoqComp.rcaShifts || [];
+  const topShift = rcaShifts[0];
+  const narrative = topShift
+    ? `Top RCA Movement: ${topShift.category} shifted by ${topShift.changeLabel} (from ${topShift.priorCount} to ${topShift.currentCount} tickets).`
+    : 'All failure categories remained consistent with previous quarter performance baseline.';
+
+  s.addShape('roundRect', {
+    x: 0.4, y: 6.2, w: 12.5, h: 0.75,
+    fill: { color: 'F1F5F9' },
+    line: { color: 'CBD5E1', pt: 0.75 },
+    rectRadius: 0.05,
+  });
+  s.addText(`Quarter-over-Quarter Insights: ${narrative}`, {
+    x: 0.6, y: 6.25, w: 12.1, h: 0.65,
+    fontSize: 10, color: C.TEXT_DARK, bold: true, fontFace: C.FONT_PRIMARY,
   });
 }
 
@@ -2121,7 +2279,7 @@ function buildRiskAssessmentSlide(pres, siteSummary, incidents, rcaBreakdown) {
 
 // ── Site Slides A, B, C ────────────────────────────────────────────────────
 
-function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSites = 8, clientShort = 'Client', isJFL = true) {
+function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSites = 8, clientShort = 'Client', isJFL = true, qoqComparison = null) {
   _slideNum++;
   const s = pres.addSlide();
   s.background = { color: C.BG_LIGHT };
@@ -2183,6 +2341,10 @@ function buildSiteOverviewSlide(pres, siteKey, site, siteIncs, siteNum, totalSit
       : `Proactive Switch Uptime: ${pct(site.proactiveSwitchUptime || site.switchUptime)} — ${siteProUptime >= SLA_TARGET ? 'within' : 'below'} the ${SLA_TARGET}% SLA threshold.`,
     `Primary RCA Drivers: Switches [${topRcaSw}] | APs [${topRcaAp}].`,
   ];
+  const siteQoQ = qoqComparison?.siteComparisons?.[siteKey] || qoqComparison?.siteComparisons?.[site?.siteId];
+  if (siteQoQ && siteQoQ.narrative) {
+    aiSummary.push(`QoQ Progression (${qoqComparison.priorPeriod || 'Prior Qtr'}): ${siteQoQ.narrative}`);
+  }
   addNarrativeBox(s, 5.4, aiSummary, `AI Site Summary — ${site.siteId || siteKey}`);
 }
 

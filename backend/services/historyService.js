@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const qoqComparisonService = require('./qoqComparisonService');
 
 const BASE_STORAGE_DIR = process.env.PERSISTENT_DIR || process.env.STORAGE_DIR || process.env.RENDER_DISK_PATH;
 const DATA_DIR = BASE_STORAGE_DIR
@@ -21,6 +22,70 @@ function ensureDataDir() {
   }
 }
 
+/**
+ * Migration helper: Backfills quarter, fiscal_year, and is_standard_quarter on legacy entries.
+ */
+function migrateLegacyQuarterMetadata(list) {
+  if (!Array.isArray(list)) return [];
+  let modified = false;
+
+  const migrated = list.map(item => {
+    if (item.quarter && item.fiscal_year !== undefined) {
+      return item;
+    }
+
+    let startDate = item.startDate || item.report_period?.start_date;
+    let endDate = item.endDate || item.report_period?.end_date;
+
+    // Try parsing from reportPeriod string (e.g. "1 Apr 2026 – 30 Jun 2026")
+    if ((!startDate || !endDate) && typeof item.reportPeriod === 'string') {
+      const parts = item.reportPeriod.split(/[–-]/);
+      if (parts.length === 2) {
+        const d1 = new Date(parts[0].trim());
+        const d2 = new Date(parts[1].trim());
+        if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
+          startDate = d1.toISOString().split('T')[0];
+          endDate = d2.toISOString().split('T')[0];
+        }
+      }
+    }
+
+    let qInfo = { quarter: 'CUSTOM', fiscal_year: 'CUSTOM', is_standard_quarter: false };
+    if (startDate && endDate) {
+      const sMatch = String(startDate).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const eMatch = String(endDate).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (sMatch && eMatch) {
+        const sYear = parseInt(sMatch[1], 10);
+        const sMonth = parseInt(sMatch[2], 10);
+        const sDay = parseInt(sMatch[3], 10);
+        const eYear = parseInt(eMatch[1], 10);
+        const eMonth = parseInt(eMatch[2], 10);
+        const eDay = parseInt(eMatch[3], 10);
+
+        if (sYear === eYear && sMonth === 4 && sDay === 1 && eMonth === 6 && eDay === 30) {
+          qInfo = { quarter: 'Q1', fiscal_year: `FY${sYear}`, is_standard_quarter: true };
+        } else if (sYear === eYear && sMonth === 7 && sDay === 1 && eMonth === 9 && eDay === 30) {
+          qInfo = { quarter: 'Q2', fiscal_year: `FY${sYear}`, is_standard_quarter: true };
+        } else if (sYear === eYear && sMonth === 10 && sDay === 1 && eMonth === 12 && eDay === 31) {
+          qInfo = { quarter: 'Q3', fiscal_year: `FY${sYear}`, is_standard_quarter: true };
+        } else if (sYear === eYear && sMonth === 1 && sDay === 1 && eMonth === 3 && eDay === 31) {
+          qInfo = { quarter: 'Q4', fiscal_year: `FY${sYear - 1}`, is_standard_quarter: true };
+        }
+      }
+    }
+
+    modified = true;
+    return {
+      ...item,
+      quarter: qInfo.quarter,
+      fiscal_year: qInfo.fiscal_year,
+      is_standard_quarter: qInfo.is_standard_quarter,
+    };
+  });
+
+  return migrated;
+}
+
 function loadHistory() {
   ensureDataDir();
   if (!fs.existsSync(METADATA_FILE)) {
@@ -33,7 +98,9 @@ function loadHistory() {
     if (!Array.isArray(data)) return [];
 
     const rootDir = path.resolve(__dirname, '..', '..');
-    return data.map((item) => {
+    const migrated = migrateLegacyQuarterMetadata(data);
+
+    return migrated.map((item) => {
       const normalize = (p) => {
         if (!p) return null;
         if (fs.existsSync(p)) return p;
@@ -114,6 +181,9 @@ function recordReport(metadata) {
     clientName: metadata.clientName || 'Jubilant Foodworks Ltd (JFL)',
     location: metadata.location || 'All Locations',
     reportPeriod: metadata.reportPeriod || 'Q1 FY2026',
+    quarter: metadata.quarter || null,
+    fiscal_year: metadata.fiscal_year || null,
+    is_standard_quarter: metadata.is_standard_quarter !== undefined ? metadata.is_standard_quarter : false,
     uploadTimestamp: metadata.uploadTimestamp || new Date().toISOString(),
     uploadedBy: metadata.uploadedBy || 'System User',
     reportVersion: metadata.reportVersion || '1.0',
@@ -289,6 +359,53 @@ function cleanupOldReports(maxKeep = 3) {
   }
 }
 
+/**
+ * Strict Multi-Tenant Lookup: Searches an in-memory report list for matching client, quarter, and FY.
+ */
+function findPreviousQuarterReportFromList(list, clientId, targetQuarter, targetFiscalYear) {
+  if (!Array.isArray(list) || !clientId || !targetQuarter || !targetFiscalYear) return null;
+
+  // Strict tenant filtering: Tenant B can NEVER match Tenant A
+  const candidates = list.filter((item) => {
+    const isTenantMatch = item.clientId === clientId;
+    const isQuarterMatch = item.quarter === targetQuarter && item.fiscal_year === targetFiscalYear;
+    const isCompleted = item.status === 'completed';
+    return isTenantMatch && isQuarterMatch && isCompleted;
+  });
+
+  if (candidates.length === 0) return null;
+
+  // Reverse scan: most recent completed report
+  return candidates[candidates.length - 1];
+}
+
+/**
+ * Resolves the preceding quarter report dataset from disk for a given tenant.
+ */
+function findPreviousQuarterReport(clientId, currentQuarter, currentFiscalYear) {
+  if (!clientId || !currentQuarter || !currentFiscalYear) return null;
+  const preceding = qoqComparisonService.getPrecedingQuarter(currentQuarter, currentFiscalYear);
+  if (!preceding) return null;
+
+  const list = loadHistory();
+  const matched = findPreviousQuarterReportFromList(list, clientId, preceding.quarter, preceding.fiscal_year);
+  if (!matched) return null;
+
+  if (matched.data) return matched.data;
+
+  // If dashboardPath exists on disk, read and parse it
+  if (matched.dashboardPath && fs.existsSync(matched.dashboardPath)) {
+    try {
+      const raw = fs.readFileSync(matched.dashboardPath, 'utf8');
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn(`[historyService] Could not read prior dashboard json: ${e.message}`);
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   getHistory,
   getReportByJobId,
@@ -297,5 +414,8 @@ module.exports = {
   deleteReport,
   clearAllHistory,
   cleanupOldReports,
+  migrateLegacyQuarterMetadata,
+  findPreviousQuarterReportFromList,
+  findPreviousQuarterReport,
 };
 

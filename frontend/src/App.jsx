@@ -1365,6 +1365,7 @@ function MainPortal() {
               <OverviewDashboard
                 data={activeDashboardData}
                 onNavigate={(t) => setTab(t)}
+                activeClientId={activeClient?.id || activeDashboardData?.clientId}
               />
             </ErrorBoundary>
           )}

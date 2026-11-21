@@ -1,50 +1,41 @@
-# Code Review: Item #8 Multi-tenancy (Option A: Physical Directory Partitioning & Whitelabel Config)
+# Code Review: Item #9 Quarter-over-Quarter (QoQ) Comparison Engine & UI
 
-## 1. Changes Summary
-- `backend/services/clientService.js:15–285`: Implemented physical tenant filesystem lifecycle (`ensureTenantDirs`, `getTenantSettings`, `updateTenantSettings`, `getTenantTemplatePath`, `getTenantRulesPath`), hex color validation (`#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})`), and seeded tenant directories.
-- `backend/middleware/tenantContext.js:1–88`: Created fail-closed tenant resolution middleware enforcing tenant isolation, resolving canonical client aliases, and attaching `req.tenant` with isolated paths (`rootDir`, `reportsDir`, `templatesDir`, `templatePath`, `rulesPath`, `branding`).
-- `backend/services/ruleEngine.js:65–95, 395–396`: Added tenant-scoped business rule loading (`loadTenantRules`) and saving (`saveTenantRules`) targeting `data/tenants/{tenantId}/rules.yaml` with global fallback.
-- `backend/services/processData.js:1705–1715`: Integrated dynamic whitelabel PPT template routing to `data/tenants/{tenantId}/templates/master.pptx` with automatic fallback to master corporate template, attaching tenant branding to `qbrData`.
-- `backend/index.js:410–465`: Added tenant administration REST endpoints (`GET /api/tenants`, `GET/PUT /api/tenants/:id/settings`, `POST /api/tenants/:id/template`).
-- `frontend/src/components/ClientManager.jsx:27–45, 140–235, 370–385, 595–800`: Added Whitelabel Branding & Template modal supporting logo URL/dataURI preview, primary/secondary/accent hex color pickers, contractual SLA target, and PPT template upload.
-- `backend/tests/multiTenancy.test.js:1–180`: Created 7 TDD unit tests covering directory partitioning, hex validation, PPT template routing, authorization rejection, custom rules, and partial updates.
+## Scope of Review
+- **Feature**: Item #9 — QoQ compare engine, dynamic PPT generation, site drilldown progression, and React dashboard toggle.
+- **Files Modified / Added**:
+  - `backend/services/qoqComparisonService.js` (NEW): Fiscal quarter algebra, delta calculations, RCA category normalization, division-by-zero protection, 2-point SVG sparklines, and site-level executive narratives.
+  - `backend/services/historyService.js`: Multi-tenant quarterly lookup (`findPreviousQuarterReport`) and legacy history quarter backfilling.
+  - `backend/services/processData.js`: Indian Fiscal Calendar boundaries (Q1 Apr-Jun, Q2 Jul-Sep, Q3 Oct-Dec, Q4 Jan-Mar) with UTC+5.5 numerical offset fallback, standard quarter validation (`CUSTOM` tagging), and pre-PPT QoQ data injection.
+  - `backend/services/pptGenerator.js`: Added `buildQoQPerformanceSlide` with 5 KPI cards, site movement table, and RCA shift breakdown. Graceful skip if non-standard or missing prior quarter. Per-site QoQ callouts on slide overview.
+  - `backend/index.js`: Legacy on-the-fly QoQ computation fallback on `/api/dashboard`, and `/api/qoq/compare` endpoint with tenant filtering.
+  - `backend/tests/qoqComparison.test.js` (NEW): 16 unit and integration tests covering quarter boundaries, timezone fallback, history migration, tenant isolation, delta math, RCA normalization, division-by-zero, PPT fallback, and PPT integration.
+  - `frontend/src/components/OverviewDashboard.jsx`: Compare toolbar, `isQoQEnabled` toggle, activeClientId state reset, inline delta badges, and mini sparklines.
+  - `frontend/src/components/QoQCompareModal.jsx` (NEW): Full modal breakdown with KPI delta cards, site movement table, and RCA shifts with empty state.
+  - `frontend/src/components/SiteInspector.jsx`: Site-level QoQ Progression Banner and delta badges.
+  - `frontend/src/components/KpiCard.jsx`: Inline `deltaBadge` and `sparklineData` support.
+  - `frontend/src/App.jsx`: Passed `activeClientId` prop to `<OverviewDashboard />`.
+  - `frontend/src/__tests__/OverviewDashboard.test.jsx` (NEW): 4 Vitest component tests verifying toggle reset on client switch, disabled state on custom quarters, inline delta badges, and modal open/close.
 
----
+## Verification Checklist
+1. **Fiscal Calendar & Timezone**:
+   - `deriveQuarterAndFiscalYear` enforces strict Indian Fiscal Year (Q1 Apr-Jun, Q2 Jul-Sep, Q3 Oct-Dec, Q4 Jan-Mar).
+   - Timezone uses `getISTDateParts(timestamp)` with numerical UTC+5.5 fallback if `Intl` lacks `Asia/Kolkata`.
+2. **Standard Quarter Validation**:
+   - Date ranges that do not align with quarterly boundaries (e.g., Aug 15 - Nov 15) are strictly tagged `quarter: 'CUSTOM'`, `is_standard_quarter: false`.
+   - QoQ toggle is disabled with tooltip: `"QoQ comparison is only available for standard quarterly periods."`
+3. **Tenant Isolation**:
+   - `findPreviousQuarterReport` filters strictly by `clientId` / `tenantId`. Verified via test `Tenant Isolation: Client A cannot see Client B previous quarter`.
+4. **RCA Normalization & Math Safety**:
+   - Normalized categories via `trim().toLowerCase()`.
+   - Handled division by zero (`priorCount === 0 && currentCount > 0` $\rightarrow$ `New Occurrence (+100%)`, `0 -> 0` $\rightarrow$ `Unchanged (0%)`).
+5. **PPT Synchronization & Fallback**:
+   - PPT slide `buildQoQPerformanceSlide` gracefully skips if `shouldBuildQoQ` is false.
+   - Verified that PPT generation succeeds with 0 errors when no prior quarter exists.
+6. **Frontend State & Test Coverage**:
+   - `useEffect` in `OverviewDashboard.jsx` resets `isQoQEnabled` to `false` when `activeClientId` changes.
+   - Tested and passing in Vitest (4/4 tests passed).
+   - Backend & validation tests: 276/276 tests passed.
+   - Frontend build: Vite production build succeeds with 0 errors.
 
-## 2. Correctness vs Spec
-- **Physical Partitioning**: Each tenant is allocated an isolated directory structure (`data/tenants/{tenantId}/{reports,templates,inventory}`) on disk.
-- **Tenant Branding**: Hex codes are strictly validated against `^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$`, preventing CSS injection or malformed colors.
-- **Whitelabel PPT Templates**: PPT generation evaluates `data/tenants/{tenantId}/templates/master.pptx` first, seamlessly falling back to `templates/master_template.pptx`.
-- **Tenant Isolation**: Non-admin clients attempting to access another tenant's files or API context receive `403 CUSTOMER_ISOLATION_VIOLATION`.
-
----
-
-## 3. Security (Injection, Auth, Leaks)
-- **Hex Color Injection**: Regex validation ensures color inputs cannot inject script tags, CSS expressions, or invalid characters.
-- **Path Traversal**: Tenant IDs are sanitized via `resolveCanonicalClientId` which strictly allows known aliases or trimmed strings, preventing `../` traversal attacks.
-- **Template Upload Security**: Handled by hardened multer middleware with magic bytes verification.
-
----
-
-## 4. Performance & Memory
-- Filesystem directories are created idempotently with synchronous `mkdirSync({ recursive: true })`.
-- Tenant settings are read and written directly as small JSON files ($< 2\text{KB}$), introducing zero perceptible latency.
-
----
-
-## 5. Readability & Maintainability
-- Clean modular abstractions in `clientService.js` and `tenantContext.js`.
-- Seamless integration with existing `requireClientAccess()` and `processData.js` pipeline.
-
----
-
-## 6. Test Coverage
-- Master test suite: 260/260 tests pass across 37 test suites (0 failures).
-- Frontend production build (`npm --prefix frontend run build`): Succeeded in 5.67s (0 errors, 3,004 modules).
-
----
-
-## 7. Improvement Points
-1. **Dynamic Theme CSS Variables**: Inject tenant `primaryColor`, `secondaryColor`, and `accentColor` as live CSS variables (`--tenant-primary`, etc.) into the frontend root DOM.
-2. **Template Slide Preview**: Generate SVG or PNG thumbnails of custom master `.pptx` template slide layouts for in-browser visual verification.
-3. **Tenant Deletion / Archive Lifecycle**: Add a soft-delete or archive option for off-boarded tenants to preserve compliance audit logs.
+## Assessment
+**Status**: APPROVED. Ready for local commit.

@@ -1570,6 +1570,69 @@ app.get(['/api/dashboard/:jobId', '/dashboard/:jobId', '/api/dashboard', '/dashb
       }
     } catch (_) {}
 
+    // ── QoQ Compare Resolution & On-the-Fly Legacy Guard (Item #9) ─────────
+    const { deriveQuarterAndFiscalYear } = require('./services/processData');
+    const qoqComparisonService = require('./services/qoqComparisonService');
+    const historyService = require('./services/historyService');
+
+    let reportPeriod = filteredData.report_period || {};
+    if (!reportPeriod.quarter || reportPeriod.is_standard_quarter === undefined) {
+      const qInfo = deriveQuarterAndFiscalYear(
+        reportPeriod.start_date || filteredData.startDate,
+        reportPeriod.end_date || filteredData.endDate,
+        reportPeriod.display_label || filteredData.reportingPeriod
+      );
+      reportPeriod = {
+        ...reportPeriod,
+        quarter: qInfo.quarter,
+        fiscal_year: qInfo.fiscal_year,
+        is_standard_quarter: qInfo.is_standard_quarter,
+        qoq_disabled_reason: qInfo.qoq_disabled_reason,
+      };
+      filteredData.report_period = reportPeriod;
+    }
+
+    // Lazy / On-the-fly Computation Guard for Legacy Reports
+    if (filteredData.qoqComparison === undefined) {
+      if (reportPeriod.is_standard_quarter === true) {
+        try {
+          const priorReport = historyService.findPreviousQuarterReport(
+            clientId,
+            reportPeriod.quarter,
+            reportPeriod.fiscal_year
+          );
+          if (priorReport) {
+            filteredData.qoqComparison = qoqComparisonService.compareQoQ(filteredData, priorReport);
+            filteredData.has_prior_quarter = true;
+            filteredData.qoq_disabled_reason = null;
+          } else {
+            filteredData.qoqComparison = null;
+            filteredData.has_prior_quarter = false;
+            filteredData.qoq_disabled_reason = 'No previous quarterly data available (Initial QBR).';
+          }
+        } catch (_) {
+          filteredData.qoqComparison = null;
+          filteredData.has_prior_quarter = false;
+        }
+      } else {
+        filteredData.qoqComparison = null;
+        filteredData.has_prior_quarter = false;
+        filteredData.qoq_disabled_reason = 'QoQ comparison is only available for standard quarterly periods.';
+      }
+    } else if (filteredData.qoqComparison) {
+      filteredData.has_prior_quarter = filteredData.qoqComparison.has_prior_quarter ?? true;
+      filteredData.qoq_disabled_reason = filteredData.qoqComparison.qoq_disabled_reason ?? null;
+    } else {
+      filteredData.has_prior_quarter = false;
+      filteredData.qoq_disabled_reason = filteredData.qoq_disabled_reason || (
+        reportPeriod.is_standard_quarter === false
+          ? 'QoQ comparison is only available for standard quarterly periods.'
+          : 'No previous quarterly data available (Initial QBR).'
+      );
+    }
+
+    filteredData.is_standard_quarter = reportPeriod.is_standard_quarter ?? false;
+
     res.json({
       ...filteredData,
       jobId: job?.jobId || reqJobId,
@@ -1671,6 +1734,92 @@ app.get(['/api/lineage/trace', '/lineage/trace'], requireAuth, requireClientAcce
     }
 
     res.json({ success: true, entry });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── Quarter-over-Quarter Comparison Endpoint (Item #9) ────────────────────
+app.get(['/api/qoq/compare', '/qoq/compare'], requireAuth, requireClientAccess(), async (req, res) => {
+  try {
+    const clientId = req.targetClientId;
+    const reqJobId = req.query?.jobId || 'latest';
+    let dPath = null;
+
+    if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
+      const job = resolveLatestCompletedJob(clientId);
+      if (job) dPath = job.dashboardPath;
+    } else {
+      const job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+      if (job) dPath = job.dashboardPath;
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
+      const fallbackPath = path.resolve('backend', 'data', 'dashboard_data.json');
+      if (fs.existsSync(fallbackPath)) dPath = fallbackPath;
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
+      return res.status(404).json({ success: false, error: 'Dashboard data not found.' });
+    }
+
+    const content = fs.readFileSync(dPath, 'utf8');
+    const currentData = JSON.parse(content);
+    const { deriveQuarterAndFiscalYear } = require('./services/processData');
+    const qoqComparisonService = require('./services/qoqComparisonService');
+    const historyService = require('./services/historyService');
+
+    let reportPeriod = currentData.report_period || {};
+    if (!reportPeriod.quarter || reportPeriod.is_standard_quarter === undefined) {
+      const qInfo = deriveQuarterAndFiscalYear(
+        reportPeriod.start_date || currentData.startDate,
+        reportPeriod.end_date || currentData.endDate,
+        reportPeriod.display_label || currentData.reportingPeriod
+      );
+      reportPeriod = {
+        ...reportPeriod,
+        quarter: qInfo.quarter,
+        fiscal_year: qInfo.fiscal_year,
+        is_standard_quarter: qInfo.is_standard_quarter,
+        qoq_disabled_reason: qInfo.qoq_disabled_reason,
+      };
+      currentData.report_period = reportPeriod;
+    }
+
+    if (reportPeriod.is_standard_quarter === false) {
+      return res.json({
+        success: true,
+        is_standard_quarter: false,
+        has_prior_quarter: false,
+        qoq_disabled_reason: 'QoQ comparison is only available for standard quarterly periods.',
+        comparison: null,
+      });
+    }
+
+    const priorReport = historyService.findPreviousQuarterReport(
+      clientId,
+      reportPeriod.quarter,
+      reportPeriod.fiscal_year
+    );
+
+    if (!priorReport) {
+      return res.json({
+        success: true,
+        is_standard_quarter: true,
+        has_prior_quarter: false,
+        qoq_disabled_reason: 'No previous quarterly data available (Initial QBR).',
+        comparison: null,
+      });
+    }
+
+    const comparison = qoqComparisonService.compareQoQ(currentData, priorReport);
+    return res.json({
+      success: true,
+      is_standard_quarter: true,
+      has_prior_quarter: true,
+      qoq_disabled_reason: null,
+      comparison,
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

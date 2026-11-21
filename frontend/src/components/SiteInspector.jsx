@@ -278,6 +278,56 @@ export default function SiteInspector({
         </div>
       </div>
 
+      {/* Site-Level Quarter-over-Quarter Operational Progression Banner (Item #9) */}
+      {(() => {
+        const siteQoQ = data?.qoqComparison?.siteComparisons?.[siteId];
+        const priorPeriodLabel = data?.qoqComparison?.priorPeriod;
+        if (!siteQoQ || !data?.qoqComparison?.has_prior_quarter) return null;
+
+        const isDegraded = siteQoQ.status === 'degraded';
+        const isImproved = siteQoQ.status === 'improved';
+        const bannerBg = isDegraded ? '#fff5f5' : isImproved ? '#f0fdf4' : '#f8fafc';
+        const bannerBorder = isDegraded ? '#fecaca' : isImproved ? '#bbf7d0' : '#e2e8f0';
+
+        return (
+          <div
+            style={{
+              marginBottom: '1.25rem',
+              padding: '0.85rem 1.15rem',
+              backgroundColor: bannerBg,
+              border: `1px solid ${bannerBorder}`,
+              borderRadius: '8px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                QoQ Progression ({priorPeriodLabel || 'Prior Quarter'}):
+              </span>
+              <span style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                Switch Uptime: <strong>{siteQoQ.currentUptime}%</strong>{' '}
+                <span style={{ color: siteQoQ.uptimeDelta > 0 ? '#16a34a' : siteQoQ.uptimeDelta < 0 ? '#dc2626' : '#64748b', fontWeight: 700 }}>
+                  ({siteQoQ.uptimeDelta > 0 ? `▲ +${siteQoQ.uptimeDelta}%` : siteQoQ.uptimeDelta < 0 ? `▼ ${siteQoQ.uptimeDelta}%` : '■ 0.00%'})
+                </span>
+              </span>
+              <span style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                Incidents: <strong>{siteQoQ.currentIncidents}</strong>{' '}
+                <span style={{ color: siteQoQ.incidentDelta < 0 ? '#16a34a' : siteQoQ.incidentDelta > 0 ? '#dc2626' : '#64748b', fontWeight: 700 }}>
+                  ({siteQoQ.incidentDelta > 0 ? `▲ +${siteQoQ.incidentDelta}` : siteQoQ.incidentDelta < 0 ? `▼ ${siteQoQ.incidentDelta}` : '■ 0'})
+                </span>
+              </span>
+            </div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: isDegraded ? '#b91c1c' : isImproved ? '#15803d' : '#475569' }}>
+              {siteQoQ.narrative}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* High-Level Site Executive KPIs Grid */}
       <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
         <KpiCard title="Site Name" value={siteId} />

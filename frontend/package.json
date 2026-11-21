@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",
@@ -19,5 +20,12 @@
     "react-i18next": "^17.0.15",
     "recharts": "^3.10.1",
     "vite": "5.4.19"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^8.0.0",
+    "@testing-library/react": "^16.3.3",
+    "jsdom": "^31.0.1",
+    "vitest": "^2.1.9"
   }
 }
