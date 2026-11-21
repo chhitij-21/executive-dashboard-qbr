@@ -11,6 +11,9 @@ const DATA_DIR = process.env.VERCEL
   ? path.join(os.tmpdir(), 'data')
   : path.resolve(__dirname, '..', '..', 'data');
 const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
+const TENANTS_DIR = path.join(DATA_DIR, 'tenants');
+
+const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 
 // Pre-seeded clients
 const DEFAULT_CLIENTS = [
@@ -100,18 +103,18 @@ function createClient(clientData) {
     code,
     logo,
     status,
-    ruleConfigFile: 'rules.yaml',
-    locations,
-    createdAt: new Date().toISOString(),
     description,
+    ruleConfigFile: 'rules.yaml',
+    locations: locations.includes('All Locations') ? locations : ['All Locations', ...locations],
+    createdAt: new Date().toISOString(),
   };
-
-  if (!newClient.locations.includes('All Locations')) {
-    newClient.locations.unshift('All Locations');
-  }
 
   clients.push(newClient);
   saveClients(clients);
+
+  // Initialize tenant directories immediately
+  ensureTenantDirs(newClient.id);
+
   return newClient;
 }
 
@@ -159,6 +162,140 @@ function addLocation(clientId, locationName) {
   return client;
 }
 
+// ── Physical Filesystem Partitioning & Tenant Isolation (Item #8) ────────────
+
+function validateHexColor(hex, fieldName = 'Color') {
+  if (!hex || typeof hex !== 'string') return;
+  const trimmed = hex.trim();
+  if (!HEX_COLOR_REGEX.test(trimmed)) {
+    throw new Error(`INVALID_HEX_COLOR: ${fieldName} must be a valid hex color code (e.g. #1e3a8a). Received: "${hex}"`);
+  }
+}
+
+function getTenantDir(tenantId) {
+  const canonicalId = resolveCanonicalClientId(tenantId) || 'client-default';
+  return path.join(TENANTS_DIR, canonicalId);
+}
+
+function ensureTenantDirs(tenantId) {
+  const canonicalId = resolveCanonicalClientId(tenantId) || 'client-default';
+  const rootDir = getTenantDir(canonicalId);
+  const reportsDir = path.join(rootDir, 'reports');
+  const templatesDir = path.join(rootDir, 'templates');
+  const inventoryDir = path.join(rootDir, 'inventory');
+  const settingsFile = path.join(rootDir, 'settings.json');
+
+  [rootDir, reportsDir, templatesDir, inventoryDir].forEach((dir) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+
+  if (!fs.existsSync(settingsFile)) {
+    const defaultSettings = {
+      tenantId: canonicalId,
+      slaTarget: 99.3,
+      branding: {
+        logo: '',
+        primaryColor: '#1e3a8a',
+        secondaryColor: '#3b82f6',
+        accentColor: '#10b981',
+      },
+      locations: ['All Locations'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(settingsFile, JSON.stringify(defaultSettings, null, 2), 'utf8');
+  }
+
+  return {
+    rootDir,
+    reportsDir,
+    templatesDir,
+    inventoryDir,
+    settingsFile,
+  };
+}
+
+function getTenantSettings(tenantId) {
+  const { settingsFile } = ensureTenantDirs(tenantId);
+  try {
+    const raw = fs.readFileSync(settingsFile, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed;
+  } catch (err) {
+    console.error(`[clientService] Error reading settings for tenant ${tenantId}:`, err.message);
+    return {
+      tenantId,
+      slaTarget: 99.3,
+      branding: {
+        logo: '',
+        primaryColor: '#1e3a8a',
+        secondaryColor: '#3b82f6',
+        accentColor: '#10b981',
+      },
+    };
+  }
+}
+
+function updateTenantSettings(tenantId, patch = {}) {
+  const { settingsFile } = ensureTenantDirs(tenantId);
+  const current = getTenantSettings(tenantId);
+
+  if (patch.slaTarget !== undefined) {
+    const num = Number(patch.slaTarget);
+    if (isNaN(num) || num < 0 || num > 100) {
+      throw new Error('INVALID_SLA_TARGET: Must be a number between 0 and 100.');
+    }
+    current.slaTarget = Number(num.toFixed(2));
+  }
+
+  if (patch.branding && typeof patch.branding === 'object') {
+    current.branding = current.branding || {};
+    if (patch.branding.primaryColor !== undefined) {
+      validateHexColor(patch.branding.primaryColor, 'Primary Color');
+      current.branding.primaryColor = patch.branding.primaryColor.trim();
+    }
+    if (patch.branding.secondaryColor !== undefined) {
+      validateHexColor(patch.branding.secondaryColor, 'Secondary Color');
+      current.branding.secondaryColor = patch.branding.secondaryColor.trim();
+    }
+    if (patch.branding.accentColor !== undefined) {
+      validateHexColor(patch.branding.accentColor, 'Accent Color');
+      current.branding.accentColor = patch.branding.accentColor.trim();
+    }
+    if (patch.branding.logo !== undefined) {
+      current.branding.logo = String(patch.branding.logo).trim();
+    }
+  }
+
+  if (Array.isArray(patch.locations)) {
+    current.locations = patch.locations.map((l) => String(l).trim()).filter(Boolean);
+  }
+
+  current.updatedAt = new Date().toISOString();
+  fs.writeFileSync(settingsFile, JSON.stringify(current, null, 2), 'utf8');
+  return current;
+}
+
+function getTenantTemplatePath(tenantId) {
+  const { templatesDir } = ensureTenantDirs(tenantId);
+  const tenantCandidate = path.join(templatesDir, 'master.pptx');
+  if (fs.existsSync(tenantCandidate)) {
+    return tenantCandidate;
+  }
+  return path.resolve(__dirname, '..', '..', 'templates', 'master_template.pptx');
+}
+
+function getTenantRulesPath(tenantId) {
+  const { rootDir } = ensureTenantDirs(tenantId);
+  const tenantCandidate = path.join(rootDir, 'rules.yaml');
+  if (fs.existsSync(tenantCandidate)) {
+    return tenantCandidate;
+  }
+  return path.resolve(__dirname, '..', 'config', 'rules.yaml');
+}
+
 module.exports = {
   getAllClients,
   getClientById,
@@ -166,4 +303,11 @@ module.exports = {
   createClient,
   updateClient,
   addLocation,
+  // Tenant isolation & partitioning
+  getTenantDir,
+  ensureTenantDirs,
+  getTenantSettings,
+  updateTenantSettings,
+  getTenantTemplatePath,
+  getTenantRulesPath,
 };

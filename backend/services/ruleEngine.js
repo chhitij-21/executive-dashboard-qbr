@@ -63,6 +63,35 @@ function saveRulesYaml(rawYaml, configFile = 'rules.yaml') {
   }
 }
 
+function loadTenantRules(tenantId) {
+  try {
+    const clientService = require('./clientService');
+    const rulesPath = clientService.getTenantRulesPath(tenantId);
+    if (fs.existsSync(rulesPath)) {
+      const file = fs.readFileSync(rulesPath, 'utf8');
+      const parsed = yaml.parse(file);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error(`[ruleEngine] Error loading rules for tenant ${tenantId}:`, err.message);
+  }
+  return loadRules('rules.yaml');
+}
+
+function saveTenantRules(tenantId, rawYaml) {
+  const parsed = yaml.parse(rawYaml);
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Invalid YAML format: Root content must be an object.');
+  }
+  const clientService = require('./clientService');
+  const dirs = clientService.ensureTenantDirs(tenantId);
+  const targetPath = path.join(dirs.rootDir, 'rules.yaml');
+  fs.writeFileSync(targetPath, rawYaml, 'utf8');
+  return { success: true, rules: parsed, path: targetPath };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Health Score
 // ─────────────────────────────────────────────────────────────────────────────
@@ -359,6 +388,8 @@ module.exports = {
   getRules: () => rules,
   getRulesYaml,
   saveRulesYaml,
+  loadTenantRules,
+  saveTenantRules,
   // Health
   calculateHealthScore,
   getHealthLabel,

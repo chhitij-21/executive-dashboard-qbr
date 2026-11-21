@@ -26,6 +26,22 @@ export default function ClientManager() {
   const [rulesErrorMsg, setRulesErrorMsg] = useState(null);
   const [selectedClientForRules, setSelectedClientForRules] = useState(null);
 
+  // ── Tenant Whitelabel Branding & Template State (Item #8) ────────────────────
+  const [showBrandingModal, setShowBrandingModal] = useState(false);
+  const [selectedClientForBranding, setSelectedClientForBranding] = useState(null);
+  const [brandingForm, setBrandingForm] = useState({
+    slaTarget: 99.3,
+    logo: '',
+    primaryColor: '#1e3a8a',
+    secondaryColor: '#3b82f6',
+    accentColor: '#10b981',
+  });
+  const [brandingSuccessMsg, setBrandingSuccessMsg] = useState(null);
+  const [brandingErrorMsg, setBrandingErrorMsg] = useState(null);
+  const [savingBranding, setSavingBranding] = useState(false);
+  const [uploadingTemplate, setUploadingTemplate] = useState(false);
+  const [templateSuccessMsg, setTemplateSuccessMsg] = useState(null);
+
 const DEFAULT_RULES_YAML = `# Global business rules configuration
 # All values are configurable — no hardcoding in application code.
 
@@ -119,6 +135,97 @@ incident_severity_values:
       }, 1500);
     } finally {
       setSavingRules(false);
+    }
+  };
+
+  const handleOpenBrandingModal = async (client) => {
+    setSelectedClientForBranding(client);
+    setBrandingSuccessMsg(null);
+    setBrandingErrorMsg(null);
+    setTemplateSuccessMsg(null);
+    setShowBrandingModal(true);
+
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${client.id}/settings`);
+      if (res.ok) {
+        const json = await res.json();
+        const s = json.settings || {};
+        const b = s.branding || {};
+        setBrandingForm({
+          slaTarget: s.slaTarget !== undefined ? s.slaTarget : 99.3,
+          logo: b.logo || client.logo || '',
+          primaryColor: b.primaryColor || '#1e3a8a',
+          secondaryColor: b.secondaryColor || '#3b82f6',
+          accentColor: b.accentColor || '#10b981',
+        });
+      }
+    } catch (err) {
+      console.warn('Could not load tenant settings, using defaults:', err.message);
+    }
+  };
+
+  const handleSaveBranding = async (e) => {
+    e.preventDefault();
+    if (!selectedClientForBranding) return;
+    setSavingBranding(true);
+    setBrandingSuccessMsg(null);
+    setBrandingErrorMsg(null);
+
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slaTarget: parseFloat(brandingForm.slaTarget),
+          branding: {
+            logo: brandingForm.logo,
+            primaryColor: brandingForm.primaryColor,
+            secondaryColor: brandingForm.secondaryColor,
+            accentColor: brandingForm.accentColor,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update tenant branding');
+
+      setBrandingSuccessMsg('✨ Tenant branding and SLA settings saved successfully!');
+      refreshClients();
+      setTimeout(() => {
+        setBrandingSuccessMsg(null);
+      }, 2000);
+    } catch (err) {
+      setBrandingErrorMsg(err.message);
+    } finally {
+      setSavingBranding(false);
+    }
+  };
+
+  const handleUploadTemplate = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedClientForBranding) return;
+
+    setUploadingTemplate(true);
+    setTemplateSuccessMsg(null);
+    setBrandingErrorMsg(null);
+
+    const formData = new FormData();
+    formData.append('template', file);
+
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/template`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload template');
+
+      setTemplateSuccessMsg(`✅ Whitelabel PPT template "${file.name}" saved!`);
+    } catch (err) {
+      setBrandingErrorMsg(err.message);
+    } finally {
+      setUploadingTemplate(false);
     }
   };
 
@@ -260,13 +367,23 @@ incident_severity_values:
                       <code style={{ marginLeft: '0.5rem' }}>{c.ruleConfigFile || 'rules.yaml'}</code>
                     </div>
                     {isAdmin && (
-                      <button
-                        className="btn-secondary-sm"
-                        onClick={() => handleOpenRulesModal(c)}
-                        style={{ background: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: '6px', cursor: 'pointer' }}
-                      >
-                        ✏️ Edit rules.yaml
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <button
+                          className="btn-secondary-sm"
+                          onClick={() => handleOpenBrandingModal(c)}
+                          style={{ background: '#fdf2f8', color: '#9d174d', border: '1px solid #fbcfe8', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: '6px', cursor: 'pointer' }}
+                          title="Configure tenant branding colors, logo, and PPT template"
+                        >
+                          🎨 Branding &amp; Templates
+                        </button>
+                        <button
+                          className="btn-secondary-sm"
+                          onClick={() => handleOpenRulesModal(c)}
+                          style={{ background: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                          ✏️ Edit rules.yaml
+                        </button>
+                      </div>
                     )}
                   </div>
                   <div className="rules-specs-grid">
@@ -475,6 +592,209 @@ incident_severity_values:
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Whitelabel Branding & Master PPT Template Modal (Item #8) ──────────── */}
+      {showBrandingModal && selectedClientForBranding && (
+        <div className="modal-backdrop">
+          <div className="modal-card" style={{ maxWidth: '640px', width: '100%' }}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">🎨 Whitelabel Branding &amp; Template Configuration</h3>
+                <p className="card-subtitle" style={{ margin: 0 }}>
+                  Customize logo, brand colors, SLA target, and PPT template for <strong>{selectedClientForBranding.name}</strong> ({selectedClientForBranding.code})
+                </p>
+              </div>
+              <button
+                className="btn-close"
+                onClick={() => setShowBrandingModal(false)}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {brandingSuccessMsg && (
+              <div className="alert alert-success" style={{ margin: '1rem 0' }}>
+                {brandingSuccessMsg}
+              </div>
+            )}
+            {brandingErrorMsg && (
+              <div className="alert alert-danger" style={{ margin: '1rem 0' }}>
+                ⚠️ {brandingErrorMsg}
+              </div>
+            )}
+            {templateSuccessMsg && (
+              <div className="alert alert-success" style={{ margin: '1rem 0' }}>
+                {templateSuccessMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBranding} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1rem' }}>
+              {/* SLA Target */}
+              <div className="form-group">
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                  Contractual SLA Uptime Target (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  className="input-field"
+                  value={brandingForm.slaTarget}
+                  onChange={(e) => setBrandingForm({ ...brandingForm, slaTarget: e.target.value })}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                  required
+                />
+              </div>
+
+              {/* Logo URL / Emoji */}
+              <div className="form-group">
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                  Client Logo (URL or Emoji)
+                </label>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="https://example.com/logo.png or emoji"
+                    value={brandingForm.logo}
+                    onChange={(e) => setBrandingForm({ ...brandingForm, logo: e.target.value })}
+                    style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                  />
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.25rem',
+                      background: '#f8fafc',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {brandingForm.logo.startsWith('http') || brandingForm.logo.startsWith('data:') ? (
+                      <img src={brandingForm.logo} alt="Preview" style={{ maxWidth: '100%', maxHeight: '100%' }} />
+                    ) : (
+                      brandingForm.logo || '🏢'
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Hex Brand Colors */}
+              <div className="form-group">
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                  Tenant Brand Colors (Hex Codes)
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                  {/* Primary Color */}
+                  <div>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Primary</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <input
+                        type="color"
+                        value={brandingForm.primaryColor}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, primaryColor: e.target.value })}
+                        style={{ width: '32px', height: '32px', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+                      />
+                      <input
+                        type="text"
+                        value={brandingForm.primaryColor}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, primaryColor: e.target.value })}
+                        style={{ width: '100%', fontSize: '0.8rem', padding: '0.35rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Secondary Color */}
+                  <div>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Secondary</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <input
+                        type="color"
+                        value={brandingForm.secondaryColor}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, secondaryColor: e.target.value })}
+                        style={{ width: '32px', height: '32px', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+                      />
+                      <input
+                        type="text"
+                        value={brandingForm.secondaryColor}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, secondaryColor: e.target.value })}
+                        style={{ width: '100%', fontSize: '0.8rem', padding: '0.35rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Accent Color */}
+                  <div>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Accent</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <input
+                        type="color"
+                        value={brandingForm.accentColor}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, accentColor: e.target.value })}
+                        style={{ width: '32px', height: '32px', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+                      />
+                      <input
+                        type="text"
+                        value={brandingForm.accentColor}
+                        onChange={(e) => setBrandingForm({ ...brandingForm, accentColor: e.target.value })}
+                        style={{ width: '100%', fontSize: '0.8rem', padding: '0.35rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Whitelabel PowerPoint Master Template */}
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                    Whitelabel Master PPT Template (.pptx)
+                  </label>
+                  <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                    Routes reports to custom slide deck
+                  </span>
+                </div>
+                <input
+                  type="file"
+                  accept=".pptx"
+                  disabled={uploadingTemplate}
+                  onChange={handleUploadTemplate}
+                  style={{ fontSize: '0.8rem' }}
+                />
+                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  If omitted, reports automatically use the default corporate template (<code>templates/master_template.pptx</code>).
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowBrandingModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={savingBranding}>
+                  {savingBranding ? '⏳ Saving Branding...' : '💾 Save Tenant Branding'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

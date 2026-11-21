@@ -411,6 +411,55 @@ app.post(['/api/clients/:id/locations', '/clients/:id/locations'], requireAuth, 
   res.json({ client: updated });
 });
 
+// ── Tenant Settings, Whitelabel Branding & PPT Template Endpoints (Item #8) ───
+app.get(['/api/tenants', '/api/clients/all-with-settings'], requireAuth, (req, res) => {
+  const clients = clientService.getAllClients().map((c) => {
+    const settings = clientService.getTenantSettings(c.id);
+    return { ...c, settings, branding: settings?.branding };
+  });
+  res.json({ tenants: clients, clients });
+});
+
+app.get(['/api/tenants/:id/settings', '/api/clients/:id/settings'], requireAuth, (req, res) => {
+  const canonicalId = clientService.resolveCanonicalClientId(req.params.id);
+  if (!canonicalId) return res.status(404).json({ error: 'Tenant not found' });
+  const settings = clientService.getTenantSettings(canonicalId);
+  res.json({ tenantId: canonicalId, settings, branding: settings?.branding });
+});
+
+app.put(['/api/tenants/:id/settings', '/api/clients/:id/settings'], requireAuth, requireAdmin, (req, res) => {
+  try {
+    const canonicalId = clientService.resolveCanonicalClientId(req.params.id);
+    if (!canonicalId) return res.status(404).json({ error: 'Tenant not found' });
+    const updated = clientService.updateTenantSettings(canonicalId, req.body);
+    res.json({ success: true, tenantId: canonicalId, settings: updated, branding: updated?.branding });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Upload Whitelabel Master PPT Template for Tenant
+app.post(['/api/tenants/:id/template', '/api/clients/:id/template'], requireAuth, requireAdmin, upload.single('template'), handleUploadErrors, verifyUploadedFileSignatures, (req, res) => {
+  try {
+    const canonicalId = clientService.resolveCanonicalClientId(req.params.id);
+    if (!canonicalId) return res.status(404).json({ error: 'Tenant not found' });
+    if (!req.file) return res.status(400).json({ error: 'PPTX template file is required' });
+
+    const dirs = clientService.ensureTenantDirs(canonicalId);
+    const dest = path.join(dirs.templatesDir, 'master.pptx');
+    fs.copyFileSync(req.file.path, dest);
+    try { fs.unlinkSync(req.file.path); } catch (_) {}
+
+    res.json({
+      success: true,
+      message: `Whitelabel PPT template uploaded for ${canonicalId}`,
+      templatePath: dest,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Rules Configuration Endpoints ───────────────────────────────────────────
 app.get(['/api/rules', '/rules'], (req, res) => {
   try {

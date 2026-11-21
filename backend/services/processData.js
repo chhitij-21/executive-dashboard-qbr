@@ -1703,7 +1703,13 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   writeDataQualityReport(outputDir, devices, incidents, allLocMap, log);
 
   // ── 10. Save dashboard JSON (SSOT) FIRST so data is immediately available ─
-  const templatePath = path.resolve('templates', 'master_template.pptx');
+  const tenantSettings = clientService.getTenantSettings ? clientService.getTenantSettings(targetClientId) : null;
+  if (tenantSettings && tenantSettings.branding) {
+    qbrData.branding = tenantSettings.branding;
+  }
+
+  const templatePath = clientService.getTenantTemplatePath ? clientService.getTenantTemplatePath(targetClientId) : path.resolve('templates', 'master_template.pptx');
+  log(`Whitelabel PPT Template resolved: ${path.basename(templatePath)}`);
   const clientPrefix = (targetClientId === 'client-mmtcpamp' || /mmtc/i.test(CUSTOMER_NAME)) ? 'MMTC' : 'JFL';
   const pptPath = path.join(outputDir, `${clientPrefix}_QBR_${Date.now()}.pptx`);
 

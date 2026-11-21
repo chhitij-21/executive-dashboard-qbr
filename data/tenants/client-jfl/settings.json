@@ -1,0 +1,15 @@
+{
+  "tenantId": "client-jfl",
+  "slaTarget": 99.3,
+  "branding": {
+    "logo": "",
+    "primaryColor": "#1e3a8a",
+    "secondaryColor": "#3b82f6",
+    "accentColor": "#10b981"
+  },
+  "locations": [
+    "All Locations"
+  ],
+  "createdAt": "2026-11-21T12:33:44.406Z",
+  "updatedAt": "2026-11-21T12:33:44.406Z"
+}
