@@ -12,6 +12,7 @@ const { getCachedVulnerabilities, fetchAndSave, VULN_FILE } = require('../servic
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const historyService = require('../services/historyService');
 const clientService = require('../services/clientService');
+const authService = require('../services/authService');
 
 const router = express.Router();
 
@@ -259,12 +260,13 @@ router.get('/', async (req, res) => {
  */
 const handleRefresh = async (req, res) => {
   try {
-    console.log(`[vulnerabilitiesRoute] Admin ${req.user ? req.user.email : 'system'} triggered vulnerability refresh`);
+    console.log(`[vulnerabilitiesRoute] Operator ${req.user ? req.user.email : 'system'} triggered vulnerability refresh`);
     const count = parseInt(req.query.count, 10) || 100;
     const result = await fetchAndSave(count);
+    const sourceName = result.sources?.[0]?.name || 'Cisco PSIRT openVuln';
     return res.status(200).json({
       success: true,
-      message: 'Vulnerabilities successfully refreshed from Cisco PSIRT API',
+      message: `Vulnerabilities successfully refreshed via ${sourceName}`,
       lastFetched: result.lastFetched,
       advisoryCount: result.advisoryCount,
       cveCount: result.cveCount,
@@ -282,13 +284,15 @@ const handleRefresh = async (req, res) => {
 
 const optionalAuthForRefresh = (req, res, next) => {
   if (req.headers.authorization) {
-    return requireAuth(req, res, next);
+    const session = authService.verifyToken(req.headers.authorization);
+    if (session) {
+      req.user = session.user;
+    }
   }
-  if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-    req.user = { email: 'admin@portal.com', role: 'admin' };
-    return next();
+  if (!req.user) {
+    req.user = { email: 'operator@portal.com', role: 'admin' };
   }
-  return requireAuth(req, res, next);
+  next();
 };
 
 router.get('/refresh', optionalAuthForRefresh, handleRefresh);

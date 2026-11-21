@@ -260,4 +260,36 @@ describe('Cisco PSIRT openVuln Integration Suite', () => {
       }
     }
   });
+
+  test('Part 4: Fail-safe manual refresh POST /api/vulnerabilities/refresh executes with operator fallback', async () => {
+    let server;
+    const vulnPath = path.resolve(__dirname, '..', '..', 'data', 'vulnerabilities.json');
+    const origVulnContent = fs.existsSync(vulnPath) ? fs.readFileSync(vulnPath, 'utf8') : null;
+
+    try {
+      await new Promise((resolve) => {
+        server = app.listen(0, '127.0.0.1', () => resolve());
+      });
+      const port = server.address().port;
+
+      const res = await originalFetch(`http://127.0.0.1:${port}/api/vulnerabilities/refresh?count=10`, {
+        method: 'POST',
+      });
+      assert.equal(res.status, 200, 'POST /api/vulnerabilities/refresh must return 200');
+
+      const json = await res.json();
+      assert.equal(json.success, true);
+      assert.ok(typeof json.cveCount === 'number');
+      assert.ok(json.cveCount > 0);
+      assert.ok(json.lastFetched);
+      assert.ok(typeof json.message === 'string' && json.message.includes('successfully refreshed'));
+    } finally {
+      if (server) {
+        await new Promise((resolve) => server.close(resolve));
+      }
+      if (origVulnContent !== null) {
+        try { fs.writeFileSync(vulnPath, origVulnContent, 'utf8'); } catch (_) {}
+      }
+    }
+  });
 });
