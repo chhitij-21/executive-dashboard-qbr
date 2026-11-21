@@ -123,18 +123,47 @@ router.get('/issue/:issueId', requireAuth, (req, res) => {
   }
 });
 
+// Per-tenant rate limiting on exports (DoS protection)
+// Known limitation: in-memory, single-instance only. For multi-pod horizontal scaling,
+// back with Redis INCR + EXPIRE using Redis client from queueService.
+const _exportRateMap = new Map();
+const EXPORT_WINDOW_MS = 60 * 1000; // 60 seconds
+const MAX_EXPORTS_PER_WINDOW = 5;
+
+function checkExportRateLimit(tenantId) {
+  const key = tenantId || 'default';
+  const now = Date.now();
+  let record = _exportRateMap.get(key);
+  if (!record || now - record.windowStart > EXPORT_WINDOW_MS) {
+    record = { count: 1, windowStart: now };
+    _exportRateMap.set(key, record);
+    return;
+  }
+  record.count += 1;
+  if (record.count > MAX_EXPORTS_PER_WINDOW) {
+    const err = new Error('Too many export requests. Please wait a minute before requesting another export.');
+    err.statusCode = 429;
+    err.code = 'RATE_LIMIT_EXCEEDED';
+    throw err;
+  }
+}
+
 // ── GET /api/data-health/export?format=xlsx|pdf ──────────────────────────────
 router.get('/export', requireAuth, (req, res) => {
   try {
     const format = String(req.query.format || 'xlsx').toLowerCase();
     const strict = req.query.strict === 'true' || req.query.strict === '1';
     const { qbrData, tenantId, jobId } = resolveQbrData(req);
+
+    checkExportRateLimit(tenantId);
+
     const health = dataHealthService.calculateDataHealth(qbrData);
+    // Sanitize jobId in Content-Disposition filename (strip CRLF/quotes -> [^a-zA-Z0-9_-] -> _)
+    const safeJobId = String(jobId || 'latest').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `Data_Health_Report_${safeJobId}.${format}`;
 
     if (format === 'xlsx') {
       const buffer = dataHealthExporter.generateExcelReport(qbrData, health, { strict });
-      const filename = `Data_Health_Report_${Date.now()}.xlsx`;
-
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       return res.send(buffer);
@@ -142,8 +171,6 @@ router.get('/export', requireAuth, (req, res) => {
 
     if (format === 'pdf') {
       const buffer = dataHealthExporter.generatePdfReport(qbrData, health, { strict });
-      const filename = `Data_Health_Report_${Date.now()}.pdf`;
-
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       return res.send(buffer);
@@ -154,6 +181,15 @@ router.get('/export', requireAuth, (req, res) => {
       code: 'INVALID_FORMAT',
     });
   } catch (err) {
+    if (err.statusCode === 429 || err.code === 'RATE_LIMIT_EXCEEDED') {
+      res.setHeader('Retry-After', '60');
+      return res.status(429).json({
+        error: err.message,
+        code: 'RATE_LIMIT_EXCEEDED',
+        retryAfter: 60,
+      });
+    }
+
     if (err.statusCode === 413 || err.code === 'PAYLOAD_TOO_LARGE') {
       return res.status(413).json({
         error: err.message,
@@ -193,3 +229,4 @@ router.get('/:jobId', requireAuth, (req, res) => {
 });
 
 module.exports = router;
+

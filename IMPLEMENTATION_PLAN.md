@@ -1,222 +1,236 @@
-# Implementation Plan — Item #12: Data Health Panel
+# Implementation Plan — Item #12 Refinements & Item #13: Scheduled QBR
 
 **Status**: Waiting for user **APPROVED** before writing code.  
-**Roadmap Item**: #12 of 23 (Batch 3: Items #11, #12, #13)  
-**Type**: UI & Analytics Feature (SSOT Data Telemetry & Invariant Audit)
+**Roadmap Items**:
+- **Item #12 Refinements**: Data Health Panel (6 Critical Production Safeguards)
+- **Item #13**: Scheduled QBR Engine (Batch 3 Final Item)
 
 ---
 
-## 1. Overview & Objectives
-The **Data Health Panel** delivers executive-grade observability into the health, completeness, mathematical validity, and operational hygiene of the QBR dataset. It serves as an automated auditor for both NOC engineers and C-level executives, exposing:
-1. **Mathematical Invariant Audits**: Continuous verification of physical conservation laws (inventory arithmetic, RCA driver totals, SLA status partitions, uptime boundedness).
-2. **Data Completeness & Hygiene with Lazy-Loaded Row Previews**: Identifying missing hardware telemetry (serial numbers, IPs, models) and incident classification gaps (unassigned root causes, missing hold durations). The initial payload remains lightweight; clicking an issue triggers an on-demand fetch to display the exact Excel `sheetName`, `rowNumber`, `rawValue`, and row snapshot.
-3. **Multi-Format Export (Excel & PDF) with Event-Loop Safeguards**: High-fidelity export of the Data Health Report in `.xlsx` and `.pdf` formats, protected by a hard 2,000-row limit to prevent blocking the Node.js event loop.
-4. **Crash-Free Unicode / Glyph Normalization in PDF**: Full support for emojis and currency symbols (e.g. `⚠️`, `₹`, `🟢`, `🔴`) via a glyph transliteration engine, avoiding "Glyph not found" PDF errors.
-5. **Rollover & Duration Telemetry**: Real-time detection of tickets spanning multiple reporting quarters or periods with capped hold time deductions.
-6. **Interactive Dashboard Panel**: A high-visibility health indicator in `OverviewDashboard.jsx` leading to an interactive modal with tabbed audit views, quick metric tiles, and row-level drill-downs.
+## Part 1: Item #12 Data Health Panel — 6 Production Safeguards
+
+### 1. Standardized Content-Disposition Header & JobId Sanitization
+On both `/export?format=xlsx` and `/export?format=pdf` endpoints, the filename dynamically interpolates a strictly sanitized `jobId`:
+```javascript
+const safeJobId = String(jobId || 'latest').replace(/[^a-zA-Z0-9_-]/g, '_');
+const filename = `Data_Health_Report_${safeJobId}.${format}`;
+```
+- **Sanitization Guard**: Strips CRLF (`\r`, `\n`), quotation marks (`"`), slashes, and spaces to eliminate HTTP header injection and filename tampering vulnerabilities.
+- For Excel: `Content-Disposition: attachment; filename="Data_Health_Report_job_123.xlsx"`
+- For PDF: `Content-Disposition: attachment; filename="Data_Health_Report_job_123.pdf"`
+
+### 2. Invariant Reconciliation: R1 vs R5 (Excluding Stock from Sites)
+- **R1 (Physical Inventory Conservation)**:
+  $$\text{Active Switches} + \text{Active APs} + \text{Stock Devices} = \text{Total Devices}$$
+- **R5 (Site Device Allocation Consistency)**:
+  Site summary tables explicitly represent operational devices installed at client store/branch sites. Unassigned spare/shelf hardware in warehouse storage (`stockDevices`) is NOT part of site device allocations.
+  $$\sum_{s \in \text{sites}} s.\text{deviceCount} = \text{Total Active Devices} = \text{Total Devices} - \text{Stock Devices}$$
+  - **Formula**: `Sum of Site Device Counts = Total Active Devices (Total Devices - Stock Devices)`
+  - **Expected Value**: `totalDevices - stockDevices`
+  - Eliminates false positive invariant violations on datasets with stock inventory.
+
+### 3. Removal of Shared `qbrData` Deep-Freeze
+- Remove `Object.freeze` / `deepFreeze` on the shared in-memory `qbrData` object. Freezing shared references introduces runtime `TypeError` risks in downstream middleware or routes that annotate transient properties.
+- Immutability is enforced contractually by ensuring `dataHealthService.js` operates purely as a read-only scanner without mutating any inputs.
+
+### 4. Empty / Minimal Dataset: `INSUFFICIENT_DATA` Status
+When a dataset contains 0 devices and 0 incidents:
+- **Status**: `"INSUFFICIENT_DATA"` (never `"HEALTHY"`).
+- **Health Score**: `null` (displayed in the UI as `"N/A"`).
+- **Audit Detail**: `"Insufficient data to evaluate health metrics (0 devices and 0 incidents found)."`
+- All invariant checks marked as not applicable with clear explanatory text.
+- Includes automated test assertion verifying `status === 'INSUFFICIENT_DATA'` and `score === null`.
+
+### 5. PDF & Excel Export DoS Protection: Rate Limiting, Headers & Pagination
+- **Per-Tenant Rate Limiting**: Added `checkExportRateLimit(tenantId)` allowing a maximum of 5 export requests per 60 seconds per tenant. If exceeded, returns HTTP 429 Too Many Requests (`RATE_LIMIT_EXCEEDED`) with header `Retry-After: 60` and JSON `{ code: 'RATE_LIMIT_EXCEEDED', retryAfter: 60 }`.
+  - *Architecture Note & Known Limitation*: Implemented as an in-memory sliding window map (`_exportRateMap`), suitable for single-instance / development setups. In horizontally autoscaled multi-pod environments, this should be backed by Redis `INCR` + `EXPIRE` leveraging the Redis client from `queueService`.
+- **Hard Limit**: Maximum 2,000 issues exported. If `?strict=true` and count > 2,000, returns HTTP 413 Payload Too Large (`PAYLOAD_TOO_LARGE`). Otherwise automatically caps to top 2,000 issues with a visible notice banner.
+- **Unicode Glyph Transliteration**: Pure Node.js PDF 1.4 generator translates Unicode symbols (`⚠️` $\to$ `[!]`, `₹` $\to$ `INR `, `🟢` $\to$ `[PASS]`, etc.) to guarantee 100% crash-free Type 1 Helvetica font streams.
+- **PDF Pagination Specification (Multi-Page Expansion for >50 Rows)**:
+  - Currently: Generates a 1-page Executive Audit Summary highlighting the top 10 prioritized issues, full invariant verifications, and operational recommendations.
+  - Multi-page pagination logic for full issue catalogs (>50 rows):
+    - **Page-break threshold**: 45 issue rows per continuation page (first page reserves header and summary cards, fitting 15 issues).
+    - **Coordinate Tracking**: When $y \le 60$, end current text object (`ET`), register page stream into PDF catalog objects array, print footer `Page X of Y` at $(x=500, y=30)$, reset $y = 750$, and initiate a new PDF page stream object.
+    - **Total Pages Calculation**: $1 + \lceil \max(0, N - 15) / 45 \rceil$.
+
+### 6. Lazy-Load Job Pinning & Stale Cache Invalidation
+- **Job-Pinned Fetch**: `DataHealthModal.jsx` must pass `?jobId=${activeJobId || 'latest'}` on every `/api/data-health/issue/:issueId` call.
+- **Scoped Cache Key**: Snapshot cache key is scoped by job: `${activeJobId || 'default'}_${issue.id}`.
+- **Cache Invalidation on Refresh**: Whenever `activeJobId` changes or the dataset refreshes, `snapshotCache` is wiped clean (`setSnapshotCache({})`), preventing stale row snapshots from bleeding across jobs.
+- Added test in `DataHealthModal.test.jsx` verifying that changing `activeJobId` clears cached row previews.
 
 ---
 
-## 2. Architecture & Data Flow
+## Part 2: Item #13 Scheduled QBR Engine Plan
+
+### 1. Overview & Objectives
+The **Scheduled QBR** engine automates recurring report generation for enterprise tenants on standard business cadences (weekly, monthly, quarterly, or custom cron). It eliminates manual report execution at period close by:
+1. **Automated Period Resolution**: Automatically resolving previous month or quarter boundaries (e.g., automatically generating `1 May 2026 – 31 May 2026` on June 1st).
+2. **Dual-Driver Integration with Queue & Tenant Locking**: Submitting scheduled jobs directly into `queueService` and acquiring `TenantLockManager` locks to guarantee zero overlap with live manual uploads.
+3. **Execution History & Audit Log**: Retaining a persistent run log (`runs.json`) recording execution timestamps, durations, generated `jobId`s, and error telemetry.
+4. **Ad-Hoc Manual Trigger ("⚡ Run Now")**: Permitting immediate on-demand test runs without waiting for wall-clock cron triggers.
+5. **Strict RBAC & Physical Tenant Isolation**: Config stored within tenant namespace (`data/tenants/:id/schedules/`); client users have read-only visibility, while creation, updating, and execution are restricted to Administrators.
+
+---
+
+### 2. Architecture & Data Flow
 
 ```
    ┌─────────────────────────────────────────────────────────────┐
-   │                      SSOT (qbrData)                         │
-   │   - devices[]            - incidents[]                      │
-   │   - siteSummary[]        - executiveSummary                 │
-   │   - incidentAnalytics    - slaCompliance                    │
+   │                     node-cron Scheduler                     │
+   │  - Weekly: '0 6 * * 1'      - Monthly: '0 6 1 * *'          │
+   │  - Quarterly: '0 6 1 1,4,7,10 *'                            │
+   │  - Custom 5-field cron validated with cron.validate()       │
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
-   │         backend/services/dataHealthService.js               │
-   │  1. Invariant Law Validator (Conservation checks)           │
-   │  2. Hygiene Auditor (Lightweight issue summaries):          │
-   │     - id, type, severity, sheetName, rowNumber, fieldName   │
-   │  3. Lazy Row Resolver: getRowSnapshot(issueId, qbrData)     │
-   │  4. Score Calculator (Weighted Composite 0-100%)            │
+   │         backend/services/schedulerService.js                │
+   │  1. Resolves dynamic period dates (Previous Month/Quarter)  │
+   │  2. Resolves staged/incoming tenant workbooks               │
+   │  3. Acquires TenantLock via queueService                    │
+   │  4. Queues background job in BullMQ / In-Memory Queue       │
+   │  5. Appends run record to runs.json                         │
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
-   │      backend/routes/dataHealthRoutes.js (Tenant-Isolated)   │
-   │  - GET /api/data-health (Lightweight Telemetry Payload)     │
-   │  - GET /api/data-health/issue/:issueId (Lazy Row Snapshot)  │
-   │  - GET /api/data-health/export?format=xlsx (Max 2,000 Rows) │
-   │  - GET /api/data-health/export?format=pdf (Unicode Safe)    │
-   │  - Validates req.tenantId === job.clientId                  │
+   │         backend/routes/scheduleRoutes.js                    │
+   │  - GET /api/tenants/:id/schedules (Read-only for Clients)   │
+   │  - POST /api/tenants/:id/schedules (Admin Only)             │
+   │  - POST /api/tenants/:id/schedules/trigger (Run Now, Admin) │
+   │  - DELETE /api/tenants/:id/schedules (Admin Only)           │
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
-   │       frontend/src/components/DataHealthModal.jsx           │
-   │  - Health Gauge: 🟢 98% HEALTHY / 🟡 WARNING / 🔴 CRITICAL  │
-   │  - 4 Quick-Stat KPI Cards (Invariants, Completeness, etc.)  │
-   │  - Click Issue → Lazy Loads /api/data-health/issue/:issueId │
-   │  - Mini Row Preview Table (Offending Cell Highlighted)      │
-   │  - Export Buttons: 📊 Export Excel (.xlsx) | 📄 Export PDF (.pdf) │
+   │     frontend/src/components/ScheduleManagerModal.jsx        │
+   │  - Next Run Countdown & Status Toggle (Enabled/Disabled)    │
+   │  - Cadence: Monthly | Quarterly | Weekly | Custom Cron      │
+   │  - Recipients Email Tags & Notification Settings            │
+   │  - Execution History Table (Status, Duration, Download Link)│
+   │  - ⚡ Run Now Trigger Button (Admin Only)                   │
    └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Mathematical Invariants & Health Score Formulation
+### 3. Dynamic Period Resolution Rules (Zero Hardcoded Dates)
 
-### A. Core Mathematical Invariant Rules (Zero-Tolerance)
-| Invariant | Formulation | Verification Condition |
+When a scheduled job fires automatically, it dynamically derives calendar dates according to the configured cadence:
+
+| Cadence | Execution Timing | Derived Date Period Formulation |
 |---|---|---|
-| **R1: Inventory Conservation** | $\text{Active Switches} + \text{Active APs} + \text{Stock} = \text{Total Devices}$ | Exact integer match |
-| **R2: RCA Summation** | $\sum \text{RCA counts} = \text{Total Incidents}$ | Exact integer match |
-| **R3: SLA Status Partition** | $\text{SLA Met} + \text{SLA Breached} + \text{Open} = \text{Total Incidents}$ | Exact integer match |
-| **R4: Uptime Boundedness** | $\forall d \in \text{devices}: 0.00\% \le d.\text{uptime} \le 100.00\%$ | No NaN, no out-of-range values |
-| **R5: Site Device Allocation** | $\sum_{s \in \text{sites}} s.\text{deviceCount} = \text{Total Active Devices}$ | Exact integer match |
-
-### B. Composite Health Score (0 – 100%)
-$$\text{Health Score} = 0.35 \times I_{\text{invariants}} + 0.25 \times C_{\text{inventory}} + 0.25 \times H_{\text{incidents}} + 0.15 \times A_{\text{anomalies}}$$
-- $I_{\text{invariants}}$: Ratio of passed invariant mathematical laws (e.g., $5/5 = 1.0$). If any critical invariant fails, score is penalized.
-- $C_{\text{inventory}}$: Percentage of devices possessing valid Hostname, IP, and Serial Number.
-- $H_{\text{incidents}}$: Percentage of incidents with classified Root Cause (non-Unknown) and valid hold duration.
-- $A_{\text{anomalies}}$: Absence factor for multi-period rollovers and negative or excessive hold times.
-
-### C. Health Status Thresholds
-- **🟢 HEALTHY**: Score $\ge 90\%$ (All mathematical invariants pass)
-- **🟡 WARNING / NEEDS ATTENTION**: $70\% \le \text{Score} < 90\%$ (Hygiene or completeness warnings, all invariants pass)
-- **🔴 CRITICAL**: $\text{Score} < 70\%$ OR any core mathematical invariant fails
+| **Monthly** | 1st day of month at 06:00 | Previous full calendar month (e.g. if run on June 1, `2026-05-01` to `2026-05-31`). Formatted as `1 May 2026 – 31 May 2026`. |
+| **Quarterly** | 1st day of quarter at 06:00 (Jan 1, Apr 1, Jul 1, Oct 1) | Previous full calendar quarter (e.g. if run on July 1, Q1: `2026-04-01` to `2026-06-30`). Formatted as `1 Apr 2026 – 30 Jun 2026`. |
+| **Weekly** | Every Monday at 06:00 | Preceding 7 full calendar days (Monday to Sunday). |
+| **Custom Cron** | User-defined cron expression | Defaults to previous calendar month unless custom period parameters are supplied. |
 
 ---
 
-## 4. Backend Implementation Plan
+### 4. Backend Implementation Plan
 
-### 4.1. `backend/services/dataHealthService.js`
-- Export `calculateDataHealth(qbrData)`:
-  - Deep-freezes `qbrData` so validation logic never mutates dashboard state.
-  - Runs all 5 mathematical invariant assertions.
-  - **Lightweight Issue Summary**: Each issue in the main response contains:
+#### 4.1. `backend/services/schedulerService.js`
+- **Schedule Configuration Storage**:
+  - Persisted at `data/tenants/{tenantId}/schedules/schedule_config.json`.
+  - Schema:
     ```javascript
     {
-      id: "issue_dev_3_serial",
-      type: "DEVICE_MISSING_SERIAL",
-      severity: "HIGH",
-      message: "Device is missing hardware Serial Number.",
-      sheetName: d.__sheet || "Updated Inventory -139",
-      rowNumber: d.__rowNum || idx + 2,
-      fieldName: "SerialNo",
-      rawValue: d.SerialNo || null,
-      recommendation: "Update the asset inventory with hardware serial number."
-      // rowSnapshot is intentionally OMITTED here for performance
+      tenantId: "client-jfl",
+      enabled: true,
+      cadence: "monthly", // "weekly" | "monthly" | "quarterly" | "custom"
+      cronExpression: "0 6 1 * *",
+      recipients: ["cio@dominos.in", "noc-ops@dominos.in"],
+      lastRunAt: "2026-05-01T06:00:00.000Z",
+      nextRunAt: "2026-06-01T06:00:00.000Z",
+      lastStatus: "SUCCESS", // "SUCCESS" | "FAILED" | "PENDING"
+      updatedAt: "2026-05-22T02:00:00.000Z",
+      updatedBy: "admin@portal.com"
     }
     ```
-- Export `getIssueRowSnapshot(qbrData, issueId)`:
-  - Resolves the specific record by parsed `issueId` (e.g. device index or incident ticket).
-  - Returns the full key-value dictionary `rowSnapshot` on-demand when requested by the UI.
+- **Lifecycle Methods**:
+  - `initSchedulers()`: Scans all tenant directories on server boot and mounts active `node-cron` standing tasks.
+  - `saveSchedule(tenantId, config, user)`: Validates cron syntax using `cron.validate(cronExpression)`, writes atomically via `.tmp` and rename, and restarts the tenant's cron task.
+  - `getSchedule(tenantId)`: Returns current config and last 10 execution run records.
+  - `executeScheduledQbr(tenantId, triggerType = 'CRON')`:
+    - Checks tenant directory for incoming or cached source workbooks (`inventory.xlsx`, `incidents.xlsx`). If missing, records a descriptive error in `runs.json` without throwing.
+    - Resolves dynamic period start and end dates.
+    - Acquires tenant lock via `queueService.acquireTenantLock`.
+    - Queues or executes QBR processing.
+    - On completion, writes run record to `data/tenants/{tenantId}/schedules/runs.json`.
+  - `deleteSchedule(tenantId)`: Cancels active node-cron task and marks config as disabled.
 
-### 4.2. `backend/services/dataHealthExporter.js`
-- **Hard Limit & Event-Loop Safeguard**:
-  - `MAX_EXPORT_ISSUES = 2000`.
-  - If issues count > 2,000 and `?strict=true`, returns HTTP 413 Payload Too Large (`{ error: "Payload too large: issue count exceeds safety threshold (2,000 max). Please filter or truncate your request.", code: "PAYLOAD_TOO_LARGE" }`).
-  - Otherwise, caps export to top 2,000 most critical issues (CRITICAL > HIGH > MEDIUM > LOW) and prepends an audit notice: `"Notice: Export capped to top 2,000 issues out of N total issues for event-loop safety."`.
-- **Excel (.xlsx) Exporter**:
-  - Uses `xlsx` (SheetJS) to construct a workbook with 3 styled sheets: `Overview & Invariants`, `Data Hygiene Issues` (capped at 2,000 rows), and `Rollovers & Anomalies`.
-- **PDF (.pdf) Exporter with Unicode Glyph Transliteration**:
-  - Dedicated zero-dependency Node.js PDF 1.4 document builder (`dataHealthPdfExporter` — ensuring `backend/services/pdfGenerator.js` is NEVER created, strictly preserving the `speedOptimization.test.js` invariant).
-  - **Unicode Normalizer**: Before embedding strings in Type 1 Helvetica font streams, transliterates non-WinAnsi glyphs:
-    - `⚠️` $\to$ `[!]`
-    - `🟢` $\to$ `[PASS]`
-    - `🔴` $\to$ `[FAIL]`
-    - `🟡` $\to$ `[WARN]`
-    - `₹` $\to$ `INR `
-    - `✓` $\to$ `[OK]`
-    - `✗` $\to$ `[X]`
-    - All other characters outside `[\x20-\x7E\xA0-\xFF]` are safely stripped or transliterated to ASCII, completely preventing "Glyph not found" crashes.
+#### 4.2. `backend/routes/scheduleRoutes.js`
+- Endpoints:
+  - `GET /api/tenants/:id/schedules`: Returns tenant schedule configuration and run history. Client users restricted to their assigned tenant.
+  - `POST /api/tenants/:id/schedules`: Updates schedule configuration (Admin only).
+  - `POST /api/tenants/:id/schedules/trigger`: Triggers immediate "Run Now" execution (Admin only).
+  - `DELETE /api/tenants/:id/schedules`: Disables/deletes schedule (Admin only).
+- Enforces strict role checks: Non-admin users receive HTTP 403 Forbidden on `POST` and `DELETE`.
 
-### 4.3. `backend/routes/dataHealthRoutes.js`
-- Mount endpoints:
-  - `GET /api/data-health`: Computes data health for the latest canonical dataset or active tenant (lightweight payload).
-  - `GET /api/data-health/latest`: Alias for `/api/data-health`.
-  - `GET /api/data-health/:jobId`: Computes data health for a specific historical job report.
-  - `GET /api/data-health/issue/:issueId`: Lazy-loads `rowSnapshot` for a single clicked issue (supports `?jobId=...`).
-  - `GET /api/data-health/export?format=xlsx` (and `?format=pdf`): Downloads the generated Excel or PDF report with 2,000-row cap and tenant isolation.
-- Enforces tenant isolation: Verifies `req.tenantId === report.clientId`.
-
-### 4.4. `backend/index.js`
-- Mount `app.use(['/api/data-health', '/data-health'], dataHealthRoutes)`.
+#### 4.3. `backend/index.js`
+- Mount `app.use(['/api/tenants', '/api/clients'], scheduleRoutes)`.
+- On startup, invoke `schedulerService.initSchedulers()` to restore active cron jobs across all tenants.
 
 ---
 
-## 5. Frontend UI/UX Plan
+### 5. Frontend UI/UX Plan
 
-### 5.1. `frontend/src/components/DataHealthModal.jsx`
-- Clean, accessible modal dialog:
-  - **Top Health Banner**: Large score display (e.g. `98%`), Status Badge (`🟢 EXCELLENT HEALTH`), and last evaluated timestamp.
-  - **Action Header with Export Buttons**:
-    - `📊 Export Excel (.xlsx)` button: triggers download from `/api/data-health/export?format=xlsx`.
-    - `📄 Export PDF (.pdf)` button: triggers download from `/api/data-health/export?format=pdf`.
-  - **4 Top KPI Cards**:
-    1. Invariant Rules: `5 / 5 Passed` (100%)
-    2. Device Completeness: e.g. `98.6%` (143/145 Complete)
-    3. Incident Hygiene: e.g. `100%` (0 Unclassified)
-    4. Rollovers & Anomalies: `0 Active`
-  - **Tab Navigation**:
-    1. **Rules & Invariants Tab**: Table showing each invariant, formula, expected vs actual values, status (`PASS` in green, `FAIL` in red).
-    2. **Device & Incident Hygiene Tab with Lazy-Loaded Row Previews**:
-       - List of all issues with Severity pills, Sheet Name, Row Number, and Field.
-       - **Clicking an issue initiates an on-demand fetch to `/api/data-health/issue/:issueId`**:
-         - Displays loading spinner while fetching.
-         - Once loaded, renders the **Mini Row Preview Table**:
-           - Header: `📍 Source: Sheet "${issue.sheetName}", Row #${issue.rowNumber}`.
-           - Highlights the offending cell in red/amber with a `⚠️ Invalid Value: [${issue.rawValue}]` badge.
-           - Shows all columns from `issue.rowSnapshot` in a neat, responsive table.
-           - Includes "Copy Row JSON" button for fast operational handoffs.
-           - Caches fetched snapshots locally in React state to avoid redundant network calls.
-    3. **Rollovers & Durations Tab**: Detailed breakdown of cross-period tickets, hold durations, and period boundaries.
-    4. **Recommendations Tab**: Action checklist for operations/NOC teams (e.g., "Assign serial numbers to 2 switches in Bangalore").
+#### 5.1. `frontend/src/components/ScheduleManagerModal.jsx`
+- Clean modal dialog:
+  - **Header**: `📅 Automated QBR Scheduling & Cadence Manager`
+  - **Tenant Banner**: Current customer name, Active template badge, and status pill (`🟢 Active Schedule` / `⚪ Inactive`).
+  - **Configuration Section (Admin Editable, Client View-Only)**:
+    - **Active Switch**: Toggle automated scheduling on/off.
+    - **Cadence Selector**: Radio cards for `Monthly (1st of Month)`, `Quarterly (Period Close)`, `Weekly (Mondays)`, and `Custom Cron Expression`.
+    - **Cron Expression Input**: Validated live with human-readable explanation (e.g. `Runs at 06:00 on day 1 of the month`).
+    - **Recipients Input**: Multi-email chip input for notifications.
+  - **Run History Table**:
+    - Columns: Execution Date, Cadence, Period Generated, Duration, Status (`SUCCESS` in green, `FAILED` in red), Action (Download PPTX / View Dashboard).
+  - **Action Footer**:
+    - `⚡ Run Now` button: Triggers immediate ad-hoc report generation (Admin only).
+    - `💾 Save Schedule` button (Admin only).
+    - `Close` button.
 
-### 5.2. `frontend/src/components/OverviewDashboard.jsx`
-- In the top toolbar (alongside QoQ controls), add the **Data Health Status Button**:
-  - Displays dynamic badge: `🏥 Data Health: 98% (Healthy)` with color coding (Green/Amber/Red).
-  - Clicking button sets `isDataHealthOpen(true)`.
+#### 5.2. `frontend/src/components/ClientManager.jsx`
+- On each client card in `ClientManager.jsx`, add a **📅 Schedule** button next to Branding and Rules.
+- Clicking opens `ScheduleManagerModal`.
 
 ---
 
-## 6. Risks, Edge Cases & Safeguards
+### 6. Risks, Edge Cases & Safeguards
 
 | Risk / Edge Case | Safeguard |
 |---|---|
-| **Large Payload Freezing UI** | Omit `rowSnapshot` from initial `GET /api/data-health`. Lazy-load individual row snapshots via `GET /api/data-health/issue/:issueId` only on user click. |
-| **Event Loop Blocking on Export** | Enforce a hard cap of 2,000 issues on Excel/PDF exports. If `?strict=true` and count > 2,000, reject with HTTP 413 Payload Too Large. Otherwise, cap to top 2,000 issues with a visible notice banner. |
-| **PDF Unicode "Glyph Not Found" Error** | Transliterate symbols and currency characters (`⚠️` $\to$ `[!]`, `₹` $\to$ `INR `) before writing to the PDF font stream. Strips unmapped non-Latin1 chars. |
-| **`speedOptimization.test.js` Invariant Violation** | Invariant asserts `backend/services/pdfGenerator.js` must NEVER exist. Name the PDF exporter `dataHealthPdfExporter.js` or include it in `dataHealthExporter.js`. Never create `backend/services/pdfGenerator.js`. |
-| **Missing Lineage on Parsed Rows** | Fallback to `idx + 2` for `rowNumber` and generic sheet names if `__sheet` or `__rowNum` are omitted in legacy data. |
-| **Cross-Tenant Telemetry Leak** | Enforce `req.tenantId === report.clientId` on `/api/data-health/:jobId`, `/api/data-health/issue/:issueId`, and `/api/data-health/export`. Client users cannot inspect other tenant reports. |
-| **SSOT Mutation Risk** | Read-only analysis. Object is deep-frozen or treated immutably; zero mutations to `qbrData`. |
+| **Invalid Cron String** | Validate with `cron.validate(expr)` before saving. If invalid, reject with HTTP 400 Bad Request (`INVALID_CRON_SYNTAX`). |
+| **Race Condition with Manual Upload** | Scheduled jobs acquire `queueService.acquireTenantLock`. If tenant is currently processing an upload, scheduled job retries or logs `TENANT_LOCKED`. |
+| **Missing Incoming Workbooks** | If tenant has no cached or incoming files in `data/tenants/:id/`, logs `SOURCE_FILES_MISSING` in `runs.json`. Server process continues running safely. |
+| **Server Restart / Crash** | On server boot, `schedulerService.initSchedulers()` re-reads all tenant `schedule_config.json` files and re-registers standing cron tasks. |
+| **Client User RBAC Bypass** | Route enforces `requireAuth` + `requireAdmin` on all mutation endpoints (`POST /schedules`, `POST /trigger`, `DELETE /schedules`). |
 
 ---
 
-## 7. Test Plan & Invariants
+### 7. Test Plan & Invariants
 
-### A. Backend Test Suite (`backend/tests/dataHealth.test.js`)
-1. **Clean Dataset**: Verifies 100% score, `HEALTHY` status, and all 5 invariant checks pass.
-2. **Broken Physical Inventory Arithmetic**: Deliberately mismatches active switches + APs + stock vs total devices; asserts Invariant R1 fails and health status drops to `CRITICAL`.
-3. **Broken RCA Breakdown Sum**: Injects an extra uncounted incident; asserts Invariant R2 fails and reports discrepancy.
-4. **Lightweight Issue Summary**: Asserts main `GET /api/data-health` returns issues with `sheetName`, `rowNumber`, `fieldName`, and `rawValue`, but `rowSnapshot` is `undefined`.
-5. **Lazy Row Snapshot Endpoint**: Calls `GET /api/data-health/issue/:issueId`; verifies 200 OK and returns complete `rowSnapshot` object with highlighted row attributes.
-6. **Excel Export (.xlsx) with 2,000 Cap**: Requests `GET /api/data-health/export?format=xlsx`; verifies response status 200, Content-Type `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, and valid PK magic bytes (`0x50 0x4B 0x03 0x04`).
-7. **PDF Export (.pdf) with Unicode Transliteration**: Requests `GET /api/data-health/export?format=pdf` on a dataset containing `⚠️` and `₹`; verifies 200 OK, Content-Type `application/pdf`, valid PDF magic bytes (`%PDF-1.4`), and absence of glyph errors.
-8. **Export Limit 413 Protection**: Calls `GET /api/data-health/export?format=xlsx&strict=true` on synthetic dataset with 3,000 issues; asserts 413 Payload Too Large.
-9. **Tenant Isolation**: Verifies client user receives HTTP 403 when requesting data health, issue snapshot, or export for another tenant's job ID.
-10. **Empty / Minimal Dataset**: Verifies safe handling of empty dataset without division-by-zero or NaN errors.
+#### A. Backend Test Suite (`backend/tests/scheduledQbr.test.js`)
+1. **Cron Validation**: Rejects invalid cron strings (`* * * * * * *`, `invalid`) with 400 Bad Request.
+2. **Dynamic Period Calculation**: Verifies `monthly` derives previous calendar month dates, and `quarterly` derives previous calendar quarter.
+3. **Save & Persist Schedule**: Saves config to tenant namespace and verifies file structure.
+4. **Immediate Trigger ("Run Now")**: Calls `POST /api/tenants/:id/schedules/trigger` and verifies job execution and run record generation in `runs.json`.
+5. **Admin-Only RBAC**: Verifies client user receives HTTP 403 Forbidden on `POST /schedules` and `POST /trigger`.
+6. **Cross-Tenant Isolation**: Verifies client user cannot view another tenant's schedule config or history.
+7. **Boot Recovery**: Verifies `initSchedulers()` initializes standing cron tasks from disk manifests.
 
-### B. Frontend Verification
-- Verify `DataHealthModal.jsx` renders all 4 tabs cleanly.
-- Verify clicking a warning triggers on-demand fetch and displays the Mini Row Preview Table with the highlighted cell.
-- Verify clicking Excel and PDF export buttons initiates file downloads.
+#### B. Frontend Verification
+- Verify `ScheduleManagerModal.jsx` renders cadence options, recipient list, and history.
+- Verify client users see view-only controls (Run Now and Save disabled/hidden).
 - `npm --prefix frontend test` passes 100%.
 - `npm --prefix frontend run build` completes with 0 errors.
 
 ---
 
-## 8. Rollback Plan
-If any issue occurs, `DataHealthModal` and `dataHealthRoutes` can be unmounted without affecting core report generation or dashboard viewing.
+### 8. Rollback Plan
+If any issue occurs, `schedulerService` can be disabled with a feature flag `ENABLE_SCHEDULED_QBR=false` without affecting manual uploads or dashboard features.
 
 ---
 

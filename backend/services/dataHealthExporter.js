@@ -297,3 +297,4 @@ module.exports = {
   generatePdfReport,
   MAX_EXPORT_ISSUES,
 };
+

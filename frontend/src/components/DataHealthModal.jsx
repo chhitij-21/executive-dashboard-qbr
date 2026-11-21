@@ -24,6 +24,13 @@ export default function DataHealthModal({ isOpen, onClose, qbrData, activeJobId 
   // Export states
   const [exportingFormat, setExportingFormat] = useState(null);
 
+  // Invalidate stale cache on activeJobId change (dataset refresh)
+  useEffect(() => {
+    setSnapshotCache({});
+    setSelectedIssue(null);
+    setRowSnapshot(null);
+  }, [activeJobId]);
+
   useEffect(() => {
     if (!isOpen) {
       setSelectedIssue(null);
@@ -70,20 +77,21 @@ export default function DataHealthModal({ isOpen, onClose, qbrData, activeJobId 
     setSelectedIssue(issue);
     setCopiedRow(false);
 
-    if (snapshotCache[issue.id]) {
-      setRowSnapshot(snapshotCache[issue.id]);
+    const cacheKey = `${activeJobId || 'default'}_${issue.id}`;
+    if (snapshotCache[cacheKey]) {
+      setRowSnapshot(snapshotCache[cacheKey]);
       return;
     }
 
     setLoadingSnapshot(true);
     try {
-      const query = activeJobId ? `?jobId=${encodeURIComponent(activeJobId)}` : '';
+      const query = `?jobId=${encodeURIComponent(activeJobId || 'latest')}`;
       const res = await apiFetch(`${API_BASE_URL}/api/data-health/issue/${encodeURIComponent(issue.id)}${query}`);
       if (res.ok) {
         const data = await res.json();
         if (data.rowSnapshot) {
           setRowSnapshot(data);
-          setSnapshotCache((prev) => ({ ...prev, [issue.id]: data }));
+          setSnapshotCache((prev) => ({ ...prev, [cacheKey]: data }));
           return;
         }
       }
@@ -102,6 +110,7 @@ export default function DataHealthModal({ isOpen, onClose, qbrData, activeJobId 
         },
       };
       setRowSnapshot(fallback);
+      setSnapshotCache((prev) => ({ ...prev, [cacheKey]: fallback }));
     } catch (err) {
       console.warn('Failed to lazy load snapshot:', err.message);
     } finally {

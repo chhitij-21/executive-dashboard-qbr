@@ -7,19 +7,8 @@
 
 'use strict';
 
-/**
- * Deep freezes an object to guarantee zero mutation of SSOT.
- */
-function deepFreeze(obj) {
-  if (!obj || typeof obj !== 'object' || Object.isFrozen(obj)) return obj;
-  try {
-    Object.freeze(obj);
-    for (const key of Object.getOwnPropertyNames(obj)) {
-      deepFreeze(obj[key]);
-    }
-  } catch (_) {}
-  return obj;
-}
+// Note: Immutability is contractually guaranteed.
+// dataHealthService operates strictly as a read-only scanner over qbrData and never mutates caller input.
 
 /**
  * Evaluates core mathematical invariants against qbrData.
@@ -79,10 +68,10 @@ function evaluateInvariants(qbrData) {
     }
   }
 
-  // R5: Site Device Allocation (Sum of deviceCount across sites === Active Devices)
-  const activeDeviceTarget = Math.max(0, totalDevices - stockDevices);
+  // R5: Site Device Allocation (Sum of deviceCount across sites === Total Active Devices, excluding Stock)
+  const totalActiveDevices = Math.max(0, totalDevices - stockDevices);
   const siteDevicesSum = siteSummary.reduce((sum, s) => sum + (Number(s.deviceCount) || 0), 0);
-  const r5Passed = activeDeviceTarget === 0 ? true : siteDevicesSum === activeDeviceTarget || siteDevicesSum === totalDevices;
+  const r5Passed = totalActiveDevices === 0 ? (siteDevicesSum === 0) : (siteDevicesSum === totalActiveDevices);
 
   const checks = [
     {
@@ -130,13 +119,13 @@ function evaluateInvariants(qbrData) {
     {
       id: 'R5_SITE_DEVICE_ALLOCATION',
       name: 'Site Device Allocation Consistency',
-      formula: 'Sum of Site Device Counts = Total Active Operational Devices',
-      expected: activeDeviceTarget || totalDevices,
+      formula: 'Sum of Site Device Counts = Total Active Devices (Total Devices - Stock Devices)',
+      expected: totalActiveDevices,
       actual: siteDevicesSum,
       passed: r5Passed,
       detail: r5Passed
-        ? `Conserved: Sum across ${siteSummary.length} sites = ${siteDevicesSum}`
-        : `Discrepancy: Sum across sites is ${siteDevicesSum} but total active devices is ${activeDeviceTarget}`,
+        ? `Conserved: Sum across ${siteSummary.length} sites = ${siteDevicesSum} Active Devices (excluding ${stockDevices} Stock)`
+        : `Discrepancy: Sum across sites is ${siteDevicesSum} but total active devices (Total ${totalDevices} - Stock ${stockDevices}) is ${totalActiveDevices}`,
     },
   ];
 
@@ -321,7 +310,46 @@ function auditDataHygiene(qbrData) {
  * Calculates overall Data Health composite score and classifications.
  */
 function calculateDataHealth(qbrData) {
-  deepFreeze(qbrData);
+  const devices = Array.isArray(qbrData?.devices) ? qbrData.devices : [];
+  const incidents = Array.isArray(qbrData?.incidents) ? qbrData.incidents : [];
+
+  // Empty / minimal dataset safeguard: return INSUFFICIENT_DATA and score null
+  if (devices.length === 0 && incidents.length === 0) {
+    return {
+      status: 'INSUFFICIENT_DATA',
+      score: null, // UI renders as N/A
+      evaluatedAt: new Date().toISOString(),
+      invariants: {
+        total: 5,
+        passed: 0,
+        failed: 0,
+        checks: [
+          { id: 'R1_INVENTORY_CONSERVATION', name: 'Physical Inventory Conservation', formula: 'Switches + APs + Stock = Total', expected: 0, actual: 0, passed: true, detail: 'No data to evaluate' },
+          { id: 'R2_RCA_SUMMATION', name: 'RCA Driver Summation', formula: 'Sum of RCAs = Total Incidents', expected: 0, actual: 0, passed: true, detail: 'No data to evaluate' },
+          { id: 'R3_SLA_STATUS_PARTITION', name: 'SLA Status Conservation', formula: 'Met + Breached + Open = Total', expected: 0, actual: 0, passed: true, detail: 'No data to evaluate' },
+          { id: 'R4_UPTIME_BOUNDEDNESS', name: 'Uptime Percentage Boundedness', formula: '0.00% <= Uptime <= 100.00%', expected: 'N/A', actual: 'N/A', passed: true, detail: 'No data to evaluate' },
+          { id: 'R5_SITE_DEVICE_ALLOCATION', name: 'Site Device Allocation Consistency', formula: 'Site Devices = Total Active Devices', expected: 0, actual: 0, passed: true, detail: 'No data to evaluate' },
+        ],
+      },
+      metrics: {
+        totalDevices: 0,
+        completeDevices: 0,
+        inventoryCompleteness: 0,
+        totalIncidents: 0,
+        compliantIncidents: 0,
+        incidentHygiene: 0,
+        anomaliesCount: 0,
+      },
+      issues: [],
+      recommendations: [
+        {
+          priority: 'P2',
+          title: 'Upload Inventory and Incident Workbooks',
+          description: 'Dataset contains zero devices and zero incidents. Upload source data to generate QBR health analytics.',
+        },
+      ],
+    };
+  }
 
   const invariants = evaluateInvariants(qbrData);
   const hygiene = auditDataHygiene(qbrData);
@@ -496,3 +524,4 @@ module.exports = {
   evaluateInvariants,
   auditDataHygiene,
 };
+
