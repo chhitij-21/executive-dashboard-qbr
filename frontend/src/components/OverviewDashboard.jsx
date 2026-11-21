@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import LineageModal from './LineageModal';
 import QoQCompareModal from './QoQCompareModal';
+import DataHealthModal from './DataHealthModal';
 import {
   Server,
   CheckCircle,
@@ -35,6 +36,7 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
   const [lineageTarget, setLineageTarget] = useState(null);
   const [isQoQEnabled, setIsQoQEnabled] = useState(false);
   const [isQoQModalOpen, setIsQoQModalOpen] = useState(false);
+  const [isDataHealthOpen, setIsDataHealthOpen] = useState(false);
 
   // Client Switch Reset Guard (Requirement 1 & Roadmap Invariant)
   useEffect(() => {
@@ -328,6 +330,26 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
             }}
           >
             <BarChart3 size={14} /> Full QoQ Breakdown
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsDataHealthOpen(true)}
+            style={{
+              padding: '0.35rem 0.85rem',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              backgroundColor: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              color: '#15803d',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+            title="Inspect dataset mathematical invariants, data hygiene, and audit report"
+          >
+            <span>🛡️</span> Data Health Panel
           </button>
         </div>
       </div>
@@ -1226,6 +1248,14 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
         onClose={() => setIsQoQModalOpen(false)}
         comparison={qoqComp}
         qoqData={qoqComp}
+      />
+
+      {/* Data Health & Invariant Telemetry Modal (Item #12) */}
+      <DataHealthModal
+        isOpen={isDataHealthOpen}
+        onClose={() => setIsDataHealthOpen(false)}
+        qbrData={data}
+        activeJobId={data?.jobId || data?.id}
       />
     </div>
   );

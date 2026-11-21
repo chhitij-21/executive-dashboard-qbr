@@ -115,6 +115,8 @@ const jobRoutes = require('./routes/jobRoutes');
 app.use(['/api/jobs', '/jobs'], jobRoutes);
 const templateRoutes = require('./routes/templateRoutes');
 app.use(['/api/tenants', '/api/clients'], templateRoutes);
+const dataHealthRoutes = require('./routes/dataHealthRoutes');
+app.use(['/api/data-health', '/data-health'], dataHealthRoutes);
 
 const queueService = require('./services/queueService');
 queueService.initialize().catch((err) => {
