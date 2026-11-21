@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL, apiFetch } from '../config/api';
+import SheetMappingModal from './SheetMappingModal';
 
 const PROCESSING_STEPS = [
   { id: 'parsing', stepKey: 'parsing_excel', label: 'Parsing Excel...', icon: '📄', desc: 'Reading workbooks & validating sheets' },
@@ -28,6 +29,8 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const [aiAuditResult, setAiAuditResult] = useState(null);
   const [inventoryAuditResult, setInventoryAuditResult] = useState(null);
   const [isAuditing, setIsAuditing] = useState(false);
+  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  const [customSheetMapping, setCustomSheetMapping] = useState(null);
 
   const incidentRef = useRef(null);
   const inventoryRef = useRef(null);
@@ -86,6 +89,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const handleIncidentSelect = (e) => {
     if (e.target.files && e.target.files[0]) {
       setIncidentFile(e.target.files[0]);
+      setCustomSheetMapping(null);
       setValidationErrors([]);
       setErrorMsg(null);
     }
@@ -94,12 +98,14 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
   const handleInventorySelect = (e) => {
     if (e.target.files && e.target.files[0]) {
       setInventoryFile(e.target.files[0]);
+      setCustomSheetMapping(null);
     }
   };
 
   const handleRemoveIncident = (e) => {
     e.stopPropagation();
     setIncidentFile(null);
+    setCustomSheetMapping(null);
     if (incidentRef.current) incidentRef.current.value = '';
   };
 
@@ -179,6 +185,9 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     form.append('startDate',  startDate);
     form.append('endDate',    endDate);
     form.append('uploadedBy', user?.name || 'System User');
+    if (customSheetMapping) {
+      form.append('customSheetMapping', JSON.stringify(customSheetMapping));
+    }
 
     try {
       let res = await apiFetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
@@ -497,6 +506,61 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
               </div>
             </div>
           )}
+
+          {/* Sheet Mapping Configuration Bar (Item #6) */}
+          {(aiAuditResult || inventoryAuditResult) && (
+            <div
+              style={{
+                marginBottom: '1rem',
+                padding: '0.75rem 1rem',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                <span style={{ fontSize: '1.15rem' }}>📑</span>
+                <div>
+                  <strong>Worksheet & Field Mapping:</strong>{' '}
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {customSheetMapping?.incidentSheet
+                      ? `Primary: "${customSheetMapping.incidentSheet}" • ${customSheetMapping.locationSheets?.length || 0} Inv Sheets`
+                      : `Auto: "${aiAuditResult?.detectedRoles?.incidentSheet || 'Default'}" • ${aiAuditResult?.detectedRoles?.locationSheets?.length || 0} Inv Sheets`}
+                  </span>
+                  {customSheetMapping && (
+                    <span style={{ marginLeft: '0.5rem', fontSize: '0.72rem', background: 'rgba(37, 99, 235, 0.15)', color: 'var(--accent-blue)', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 600 }}>
+                      Customized
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsMappingModalOpen(true)}
+                className="btn btn-secondary"
+                style={{ fontSize: '0.8rem', padding: '0.35rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <span>⚙️</span>
+                <span>Configure Sheet Mapping</span>
+              </button>
+            </div>
+          )}
+
+          {/* Sheet Mapping Modal */}
+          <SheetMappingModal
+            isOpen={isMappingModalOpen}
+            onClose={() => setIsMappingModalOpen(false)}
+            auditResult={aiAuditResult}
+            inventoryAuditResult={inventoryAuditResult}
+            initialMapping={customSheetMapping}
+            onSave={(mapping) => setCustomSheetMapping(mapping)}
+          />
 
           {/* Dropzone File Upload Grid */}
           <div className="dropzone-grid">

@@ -63,6 +63,7 @@ function isRemovedSheet(name) {
  */
 function detectSheets(workbookData, options = {}) {
   const sheets = workbookData.__sheetNames || [];
+  const customMapping = options.customSheetMapping || options.sheetMapping || null;
 
   // Check if workbook is explicitly or implicitly an inventory workbook
   const hasUpdatedInvSheet = sheets.some((s) => /updated.?inventory/i.test(s));
@@ -74,17 +75,24 @@ function detectSheets(workbookData, options = {}) {
 
   if (isInventoryWb) {
     // Inventory workbook: NO incident sheet.
-    // Active inventory sheets are all sheets that are NOT removed/decommissioned and NOT uptime/summary sheets.
-    const activeLocationSheets = sheets.filter((s) => {
-      const lower = s.trim().toLowerCase();
-      if (isRemovedSheet(s)) return false;
-      return (
-        !lower.startsWith('all location') &&
-        !lower.includes('uptime') &&
-        !lower.startsWith('rca') &&
-        !lower.startsWith('device wise')
-      );
-    });
+    let activeLocationSheets;
+    if (customMapping && Array.isArray(customMapping.locationSheets) && customMapping.locationSheets.length > 0) {
+      activeLocationSheets = customMapping.locationSheets.filter((s) => sheets.includes(s));
+    }
+
+    if (!activeLocationSheets || activeLocationSheets.length === 0) {
+      // Active inventory sheets are all sheets that are NOT removed/decommissioned and NOT uptime/summary sheets.
+      activeLocationSheets = sheets.filter((s) => {
+        const lower = s.trim().toLowerCase();
+        if (isRemovedSheet(s)) return false;
+        return (
+          !lower.startsWith('all location') &&
+          !lower.includes('uptime') &&
+          !lower.startsWith('rca') &&
+          !lower.startsWith('device wise')
+        );
+      });
+    }
 
     const uptimeSheet = sheets.find((s) => s.trim().toLowerCase().startsWith('all location'))
       || sheets.find((s) => s.trim().toLowerCase().includes('uptime'))
@@ -96,6 +104,17 @@ function detectSheets(workbookData, options = {}) {
       incidentSheet: null,
       uptimeSheet,
       locationSheets: activeLocationSheets.length > 0 ? activeLocationSheets : sheets.filter((s) => !isRemovedSheet(s)),
+      allSheets: sheets,
+    };
+  }
+
+  // If user specified custom incident sheet and it exists in the workbook, prioritize it directly!
+  if (customMapping && customMapping.incidentSheet && sheets.includes(customMapping.incidentSheet)) {
+    console.log(`[excelParser] Using user-specified incident sheet: ${customMapping.incidentSheet}`);
+    return {
+      incidentSheet: customMapping.incidentSheet,
+      uptimeSheet: null,
+      locationSheets: [],
       allSheets: sheets,
     };
   }
@@ -396,6 +415,7 @@ function parseIncidentSheet(rows, options = {}) {
     /^(account\s*name|accountname|customer\s*name|customer|account)$/i.test(k.trim())
   );
 
+  const colOverrides = options.columnOverrides || options.customSheetMapping?.columnOverrides || {};
   const results = [];
   for (let idx = 0; idx < rows.length; idx++) {
     const row = rows[idx];
@@ -409,26 +429,47 @@ function parseIncidentSheet(rows, options = {}) {
       }
     }
 
-    const ticketNo = String(
-      getColVal(row, [
-        'Ticket Number', 'TicketNumber', 'Ticket No', 'TicketNo', 'Ticket #', 'Ticket', 'Ticket ID', 'TicketID', 'Ticket_Number', 'Case Number', 'Case ID', 'Ref No', 'Reference'
-      ])
-    ).trim();
+    let ticketNo = '';
+    if (colOverrides.ticketId && row[colOverrides.ticketId] !== undefined) {
+      ticketNo = String(row[colOverrides.ticketId]).trim();
+    } else if (colOverrides.ticketNumber && row[colOverrides.ticketNumber] !== undefined) {
+      ticketNo = String(row[colOverrides.ticketNumber]).trim();
+    } else {
+      ticketNo = String(
+        getColVal(row, [
+          'Ticket Number', 'TicketNumber', 'Ticket No', 'TicketNo', 'Ticket #', 'Ticket', 'Ticket ID', 'TicketID', 'Ticket_Number', 'Case Number', 'Case ID', 'Ref No', 'Reference', 'Incident ID', 'Incident Number'
+        ])
+      ).trim();
+    }
 
-    const incidentId = String(
-      getColVal(row, [
-        'Incident Number', 'IncidentNumber', 'Incident No', 'IncidentNo', 'Incident ID', 'IncidentID',
-        'Number', 'ID', 'Incident #', 'Incident', 'Incident_Number', 'Incident_ID'
-      ]) || `INC-${1000 + idx}`
-    ).trim();
+    let incidentId = '';
+    if (colOverrides.incidentId && row[colOverrides.incidentId] !== undefined) {
+      incidentId = String(row[colOverrides.incidentId]).trim();
+    } else if (colOverrides.incidentNumber && row[colOverrides.incidentNumber] !== undefined) {
+      incidentId = String(row[colOverrides.incidentNumber]).trim();
+    } else {
+      incidentId = String(
+        getColVal(row, [
+          'Incident Number', 'IncidentNumber', 'Incident No', 'IncidentNo', 'Incident ID', 'IncidentID',
+          'Number', 'ID', 'Incident #', 'Incident', 'Incident_Number', 'Incident_ID'
+        ]) || ticketNo || `INC-${1000 + idx}`
+      ).trim();
+    }
 
-    const devId = String(
-      getColVal(row, [
-        'Device Serial', 'Serial/Subscription', 'Device Serial No', 'Device Serial Number', 'Serial No', 'Serial No.',
-        'DeviceID', 'Device ID', 'Serial', 'Serial Number', 'SerialNumber', 'Serial_No', 'Serial_Number',
-        'Device_Serial', 'Device Serial #', 'Asset Tag', 'Host', 'Hostname', 'Device Name', 'Device'
-      ])
-    ).trim();
+    let devId = '';
+    if (colOverrides.deviceId && row[colOverrides.deviceId] !== undefined) {
+      devId = String(row[colOverrides.deviceId]).trim();
+    } else if (colOverrides.serialNo && row[colOverrides.serialNo] !== undefined) {
+      devId = String(row[colOverrides.serialNo]).trim();
+    } else {
+      devId = String(
+        getColVal(row, [
+          'Device Serial', 'Serial/Subscription', 'Device Serial No', 'Device Serial Number', 'Serial No', 'Serial No.',
+          'DeviceID', 'Device ID', 'Serial', 'Serial Number', 'SerialNumber', 'Serial_No', 'Serial_Number',
+          'Device_Serial', 'Device Serial #', 'Asset Tag', 'Host', 'Hostname', 'Device Name', 'Device'
+        ])
+      ).trim();
+    }
 
     let rawLoc = getColVal(row, ['Location', 'Site', 'SiteID', 'Site ID', 'Site Name', 'Location Name', 'City', 'Branch', 'Store', 'Facility']);
     if (!rawLoc || isGenericLocation(rawLoc)) {
@@ -457,7 +498,12 @@ function parseIncidentSheet(rows, options = {}) {
     const cat = String(getColVal(row, ['Category', 'Ticket Category', 'Type', 'Ticket Type', 'Class', 'Category Name'])).trim();
     const subCat = String(getColVal(row, ['Sub Category', 'SubCategory', 'Sub-Category', 'Ticket Sub Category'])).trim();
     const desc = String(getColVal(row, ['Description', 'Short Description', 'Subject', 'Summary', 'Title', 'Incident Description'])).trim();
-    const rcaStr = String(getColVal(row, ['RCA 2', 'RCA', 'Root Cause', 'RCA Category', 'Root Cause Analysis', 'RCA Reason', 'Primary RCA'])).trim();
+    let rcaStr = '';
+    if (colOverrides.rca && row[colOverrides.rca] !== undefined) {
+      rcaStr = String(row[colOverrides.rca]).trim();
+    } else {
+      rcaStr = String(getColVal(row, ['RCA 2', 'RCA', 'Root Cause', 'RCA Category', 'Root Cause Analysis', 'RCA Reason', 'Primary RCA'])).trim();
+    }
 
     const openTimeRaw = getColVal(row, [
       'Created Time', 'Open Time', 'OpenTime', 'Created Date', 'Open Date', 'Opened Date', 'Opened', 'Created',
@@ -478,7 +524,7 @@ function parseIncidentSheet(rows, options = {}) {
 
     results.push({
       IncidentNumber: incidentId,
-      TicketNumber: ticketNo,
+      TicketNumber: ticketNo || incidentId,
       DeviceID: devId,
       SerialNo: devId,
       Hostname: getColVal(row, ['Hostname', 'Device Name', 'Host Name', 'Device Hostname', 'Host']) || '',
@@ -500,16 +546,19 @@ function parseIncidentSheet(rows, options = {}) {
       CreatedTime: formatExcelDate(openTimeRaw),
       OpenTime: openTimeRaw || null,
       ResolvedTime: resolvedTimeRaw || null,
-      ActualResolutionMin: getColVal(row, [
-        'Total Proactive Downtime (Mins)- Actual resolution mint',
-        'Total Proactive Downtime (Mins)- Actual resolution mint ',
-        'Actual Resolution Time (min)',
-        'Actual Resolution Time (min) ',
-        'ActualResolutionMin',
-        'Actual Resolution Time(min)',
-        'Actual Resolution Time',
-        'Actual Resolution (min)'
-      ]),
+      ActualResolutionMin: colOverrides.actualResolutionMin && row[colOverrides.actualResolutionMin] !== undefined
+        ? Number(row[colOverrides.actualResolutionMin])
+        : getColVal(row, [
+            'Total Proactive Downtime (Mins)- Actual resolution mint',
+            'Total Proactive Downtime (Mins)- Actual resolution mint ',
+            'Actual Resolution Time (min)',
+            'Actual Resolution Time (min) ',
+            'ActualResolutionMin',
+            'Actual Resolution Time(min)',
+            'Actual Resolution Time',
+            'Actual Resolution (min)',
+            'Actual Resolution Time (Minutes)',
+          ]),
       TotalResolutionMin: getColVal(row, [
         'Total Resolution Time (min)',
         'Total Resolution Time (min) ',
@@ -525,7 +574,9 @@ function parseIncidentSheet(rows, options = {}) {
         'Resolution Time (min2)',
         'Duration (min)'
       ]),
-      HoldTimeMin: (() => {
+      HoldTimeMin: colOverrides.holdMin && row[colOverrides.holdMin] !== undefined
+        ? Number(row[colOverrides.holdMin])
+        : (() => {
         let h = '';
         
         // Priority 1: Always try to calculate exact hold time from First/Last Hold Dates

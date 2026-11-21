@@ -1049,6 +1049,17 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
     metadata: initialMeta
   };
 
+  let customSheetMapping = null;
+  if (req.body.customSheetMapping) {
+    try {
+      customSheetMapping = typeof req.body.customSheetMapping === 'string'
+        ? JSON.parse(req.body.customSheetMapping)
+        : req.body.customSheetMapping;
+    } catch (_) {
+      customSheetMapping = null;
+    }
+  }
+
   try {
     const result = await processJFLWorkbooks(incidentFile.path, inventoryFile ? inventoryFile.path : null, outputDir, {
       clientId,
@@ -1058,6 +1069,7 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
       endDate,
       reportingPeriod: reportPeriod || historyPeriodLabel,
       periodMode,
+      customSheetMapping,
       onProgress: (step, label) => {
         if (jobs[jobId]) {
           jobs[jobId].status = step;

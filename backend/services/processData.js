@@ -433,7 +433,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   if (invWb) log(`Inventory file parsed — sheets: ${invWb.__sheetNames.join(', ')}`);
 
   // ── 3. Extract sheets ─────────────────────────────────────────────────────
-  const incSheetMap = detectSheets(incWb);
+  const incSheetMap = detectSheets(incWb, { customSheetMapping: options.customSheetMapping });
   log(`Incident sheets detected: incidentSheet=${incSheetMap.incidentSheet}, uptimeSheet=${incSheetMap.uptimeSheet}`);
 
   // Main incident rows
@@ -454,7 +454,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   // ── 4. Build device list ──────────────────────────────────────────────────
   let devices = [];
   if (invWb) {
-    const invSheetMap = detectSheets(invWb, { isInventory: true });
+    const invSheetMap = detectSheets(invWb, { isInventory: true, customSheetMapping: options.customSheetMapping });
     devices = mergeInventorySheets(invWb, invSheetMap.locationSheets);
     log(`Inventory devices merged: ${devices.length} from ${invSheetMap.locationSheets.length} sheets`);
   }
