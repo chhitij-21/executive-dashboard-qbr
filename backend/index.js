@@ -219,33 +219,18 @@ const REPORTS_DIR = BASE_STORAGE_DIR
   });
 });
 
+const {
+  createHardenedUploadMiddleware,
+  handleUploadErrors,
+  verifyUploadedFileSignatures,
+} = require('./middleware/uploadHardening');
+
 // Temp file uploader with os.tmpdir fallback for Vercel serverless
 const tempUploadDir = process.env.VERCEL ? os.tmpdir() : INCOMING_DIR;
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, tempUploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.xlsx';
-    cb(null, `${uuidv4()}_${Date.now()}${ext}`);
-  }
-});
-
-// ── MIME-type allowlist + 50 MB file size cap ─────────────────────────────
-const ALLOWED_MIMES = [
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-  'application/vnd.ms-excel',                                           // .xls
-  'text/csv',                                                           // .csv
-  'application/octet-stream',                                           // generic binary (some OS use this)
-];
-const upload = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max
-  fileFilter: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (['.xlsx', '.xls', '.csv'].includes(ext) || ALLOWED_MIMES.includes(file.mimetype)) {
-      return cb(null, true);
-    }
-    cb(new Error(`File type not allowed: ${file.originalname}. Only .xlsx, .xls, .csv are accepted.`));
-  },
+const upload = createHardenedUploadMiddleware({
+  dest: tempUploadDir,
+  maxFileSize: 30 * 1024 * 1024, // 30 MB max
+  maxFiles: 2,
 });
 
 // In-memory active job cache
@@ -968,7 +953,7 @@ app.post(['/api/upload', '/upload'], requireAuth, heavyRateLimit, upload.fields(
   { name: 'incidents', maxCount: 1 },
   { name: 'inventory', maxCount: 1 },
   { name: 'excel', maxCount: 1 }, // legacy fallback
-]), async (req, res) => {
+]), handleUploadErrors, verifyUploadedFileSignatures, async (req, res) => {
   const incidentFile = req.files?.incidents?.[0] || req.files?.excel?.[0] || null;
   const inventoryFile = req.files?.inventory?.[0] || null;
 

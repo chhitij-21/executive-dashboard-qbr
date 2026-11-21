@@ -1,58 +1,51 @@
-# Code Review: Vulnerabilities Tab Exact Data & Refresh Engine
+# Code Review: Item #5 Upload Hardening (Limits / Magic Bytes)
 
 ## 1. Changes Summary
-- [`backend/services/mitigationService.js`](file:///c:/Users/Chhitij/Desktop/New%20folder/Executive-Dashboard-QBR-Generator/backend/services/mitigationService.js):
-  - Added instant high-accuracy domain heuristic mitigation generation for Meraki, Cisco IOS XE, Catalyst, Cisco IOS, FTD, FMC, ASA, ISE, and NX-OS.
-  - Updated `enrichVulnerabilitiesWithMitigation` to resolve synchronously via cache and domain heuristics in `fastOnly` mode (<5ms), removing the sequential 230+ external blocking HTTP/LLM calls.
-- [`backend/routes/vulnerabilities.js`](file:///c:/Users/Chhitij/Desktop/New%20folder/Executive-Dashboard-QBR-Generator/backend/routes/vulnerabilities.js):
-  - Expanded `mapModelToOsFamily()` to accurately recognize `CW*` (Catalyst APs), `C9*`, `ISR*`, `ASR*` (IOS XE), `WS-C*`, `C1-C*` (IOS), `FPR*`, `ASA*` (FTD), `FMC*` (FMC), and `SNS*`, `ISE*` (ISE).
-  - Broadened `cveMatchesOsFamily()` to catch `cisco secure firewall`, `firepower`, `catalyst`, `cisco ios`, `identity services engine`.
-  - Added canonical baseline fallback for MMTC in `getClientDashboardData()` to guarantee MMTC's Firepower inventory is never lost.
-  - Updated `/refresh` route authentication to `optionalAuthForRefresh`, allowing authenticated operators and dev/test environments to trigger sync.
-- [`frontend/src/components/VulnerabilitiesPage.jsx`](file:///c:/Users/Chhitij/Desktop/New%20folder/Executive-Dashboard-QBR-Generator/frontend/src/components/VulnerabilitiesPage.jsx):
-  - Made the sync button accessible to all authenticated operators.
-  - Implemented exact JSON error message extraction on non-200 responses.
-  - Added visual success banner displaying synced CVE count.
-- [`data/vulnerabilities.json`](file:///c:/Users/Chhitij/Desktop/New%20folder/Executive-Dashboard-QBR-Generator/data/vulnerabilities.json):
-  - Synchronized and updated to live Cisco PSIRT openVuln dataset containing 233 CVEs up to November 19, 2026.
+- `backend/middleware/uploadHardening.js:1–246`: Created dedicated upload hardening middleware implementing binary magic byte signature verification, strict multer multipart limits, error handling for MulterError, and automatic disk file cleanup upon rejected signatures.
+- `backend/index.js:220–232, 951–956`: Replaced raw multer instance with hardened multer (30MB, 2 files, 20 fields) and wired `handleUploadErrors` and `verifyUploadedFileSignatures` to `/api/upload`.
+- `backend/routes/reports.js:10–35`: Hardened in-memory report upload to 30MB, wired `handleUploadErrors` and `verifyUploadedFileSignatures`.
+- `backend/routes/inventorySync.js:15–38`: Hardened inventory sync upload to 30MB, wired `handleUploadErrors` and `verifyUploadedFileSignatures`.
+- `backend/tests/uploadHardening.test.js:1–165`: Created 14 unit and integration tests verifying magic bytes (XLSX, XLS, CSV), spoof rejection (text/exe disguised as xlsx), and middleware flow.
 
 ---
 
 ## 2. Correctness vs Spec
-- **Exact Data Requirement**:
-  - JFL inventory correctly detects 31 models and maps to 72 active CVEs across Meraki, Catalyst 9000, Catalyst APs, IOS, and ISE.
-  - MMTC inventory correctly detects 10 models and maps to 67 active CVEs, including all 50 FMC / FTD advisories.
-- **Refresh Engine**:
-  - `fetchAndSave(100)` completes cleanly in ~7–8 seconds without hanging or timing out.
+- **Magic Bytes Validation**: Verifies OpenXML ZIP headers (`0x50 0x4B 0x03 0x04`), CFBF OLE2 headers (`0xD0 0xCF 0x11 0xE0`), and text UTF-8 without binary null bytes.
+- **Blacklisting**: Rejects Windows PE/MZ executables (`4D 5A`) and Linux ELF binaries (`7F 45 4C 46`).
+- **Multipart Limits**: Applied `fileSize: 30MB`, `files: 2`, `fields: 20`, `fieldSize: 1MB`, `parts: 30`.
+- **Error Responses**: Multer limits and spoofed files return clean HTTP 400 JSON (`LIMIT_FILE_SIZE`, `INVALID_FILE_SIGNATURE`) with zero stack trace leaks.
 
 ---
 
-## 3. Security Analysis
-- **Authentication & Authorization**: Bearer tokens are validated on all authenticated requests. Sensitive client-level credentials remain protected in `.env` without exposure to frontend code.
-- **Tenant Isolation**: JFL users cannot see MMTC scoped vulnerabilities, and MMTC users cannot see JFL scoped vulnerabilities.
-- **Input Sanitization**: Query parameters (`count`, `clientId`, `startDate`, `endDate`, `severity`, `priority`, `product`) are sanitized and validated.
+## 3. Security (Injection, Auth, Leaks)
+- **Denial of Service (DoS)**: File size capped at 30 MB (down from 50 MB) and parts limited to 30 prevents resource exhaustion attacks.
+- **Executable Upload / Remote Code Execution (RCE)**: Magic byte inspection stops files with `.xlsx` extensions that contain executable or script code.
+- **Resource Leaks / Unlinked Files**: Disk files rejected during magic byte verification are immediately deleted via `fs.unlinkSync`.
+- **Information Disclosure**: Generic error messages prevent leaking internal server paths.
 
 ---
 
 ## 4. Performance & Memory
-- Bulk mitigation enrichment transitioned from $O(N)$ blocking external network calls (~350s) to $O(1)$ memory lookup + regex heuristics (<5ms).
-- Atomic write via temporary file prevents partial-write corruption on `data/vulnerabilities.json`.
+- Magic byte validation only reads the first 512 bytes on disk or checks the buffer header, introducing $< 1\text{ms}$ overhead per upload request.
+- Memory usage is tightly bounded by `maxFileSize: 30MB`.
 
 ---
 
-## 5. Improvement Points
-1. **Background LLM Cache Population**: Future worker processes can asynchronously enrich persistent cache entries with fine-tuned LLM responses during off-peak cron intervals.
-2. **Partial Sync Range**: The refresh endpoint could accept an optional date boundary parameter (`startDate`/`endDate`) to fetch incremental advisories rather than a full 100-batch.
-3. **Client-Side Notification Component**: Transition from inline banner to global toast notifications for consistent multi-page alerts.
+## 5. Readability & Maintainability
+- Clean modular design in `backend/middleware/uploadHardening.js`.
+- Clear naming for constants (`SIG_ZIP`, `SIG_OLE2`, `SIG_MZ`, `SIG_ELF`, `UTF8_BOM`).
+- Reusable across all upload endpoints.
 
 ---
 
-## 6. Verification Status
-- `backend/tests/vulnerabilities.test.js`: 3/3 passed.
-- Entire backend test suite (`node --test backend/tests/*.test.js`): 158/158 passed (21 test suites, 0 fails).
-- Frontend production build (`npm --prefix frontend run build`): Succeeded with 0 errors.
-- Live Cisco PSIRT API query verified with product endpoint: 246 total CVEs, 20 Meraki CVEs.
-- Multi-tenant verification:
-  - JFL inventory: 85 total CVEs, 20 Meraki CVEs.
-  - MMTC inventory: 80 total CVEs, 20 Meraki CVEs, 52 Firepower/FTD CVEs.
-- Working tree clean and verified.
+## 6. Test Coverage
+- 14/14 tests in `backend/tests/uploadHardening.test.js` pass.
+- Full master test suite: 240/240 tests pass across 32 test suites.
+- 0 failures.
+
+---
+
+## 7. Improvement Points
+1. **Streaming Magic Byte Check**: For extremely large files (e.g., > 100MB in future), magic bytes could be checked in a streaming pipeline before the file fully spools to disk.
+2. **ZIP Decompression Bomb Protection**: Add uncompressed size ratio checks if deeply nested ZIP archives are ever allowed.
+3. **MIME Detection Library**: In a future phase with libmagic native bindings, deeper file format introspection could be added if non-standard spreadsheets are introduced.

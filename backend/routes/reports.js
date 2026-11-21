@@ -10,11 +10,16 @@ const router = express.Router({ mergeParams: true });
 const { requireAuth, requireClientAccess } = require('../middleware/auth');
 const { buildReportAsync, persistTickets } = require('../services/reportService');
 const { parseTicketExcel } = require('../services/reportUpload');
+const {
+  createHardenedUploadMiddleware,
+  handleUploadErrors,
+  verifyUploadedFileSignatures,
+} = require('../middleware/uploadHardening');
 
 // Isolated in-memory multer instance for reports Excel upload (never writes to disk)
-const reportsUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+const reportsUpload = createHardenedUploadMiddleware({
+  maxFileSize: 30 * 1024 * 1024, // 30MB
+  maxFiles: 1,
 });
 
 // Fail-closed client access middleware
@@ -31,6 +36,8 @@ router.post(
   requireAuth,
   guard,
   reportsUpload.single('excel'),
+  handleUploadErrors,
+  verifyUploadedFileSignatures,
   async (req, res) => {
     // ADJUSTMENT A: Verify canonical client access strictly for MMTC
     if (req.targetClientId !== 'client-mmtcpamp') {

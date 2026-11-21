@@ -15,24 +15,22 @@ const {
   computeDiff,
   regenerateDashboardFileForClient,
 } = require('../services/inventorySyncService');
+const {
+  createHardenedUploadMiddleware,
+  handleUploadErrors,
+  verifyUploadedFileSignatures,
+} = require('../middleware/uploadHardening');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, os.tmpdir()),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.xlsx';
-    cb(null, `inv_sync_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max
+const upload = createHardenedUploadMiddleware({
+  dest: os.tmpdir(),
+  maxFileSize: 30 * 1024 * 1024,
+  maxFiles: 1,
 });
 
 router.use(requireAuth);
 
 // ── POST /api/inventory/sync/upload ─────────────────────────
-router.post('/sync/upload', upload.single('file'), async (req, res) => {
+router.post('/sync/upload', upload.single('file'), handleUploadErrors, verifyUploadedFileSignatures, async (req, res) => {
   const tempFile = req.file?.path; // if disk storage
   try {
     const clientId = String(req.body.clientId || '').toLowerCase();
