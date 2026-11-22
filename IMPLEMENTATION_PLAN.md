@@ -1,14 +1,14 @@
-# Implementation Plan — Item #14: API-First (v1 URI Versioning & Deprecation Lifecycle)
+# Implementation Plan — Item #14: API-First (v1 URI Versioning, Frontend Migration & Deprecation Lifecycle)
 
 **Status**: Waiting for user **APPROVED** before writing code.  
-**Roadmap Item**: **#14 API-first (v1 versioning)** (Architectural — Option A)  
+**Roadmap Item**: **#14 API-first (v1 versioning)** (Architectural — Option A with Full Frontend Cutover)  
 **Sequence Context**: Follows **#4 (Real Auth)** and **#3 (Database Layer)**. Freezes the canonical `/api/v1/` contract now that authentication and persistence layers are robust, with zero legacy in-memory auth or unencrypted recipient debt.
 
 ---
 
 ## 1. Executive Summary & Goals
 
-Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Executive Dashboard & QBR Generator platform per **Option A (URI Path Prefix Routing with Transparent Backward-Compatibility)**.
+Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Executive Dashboard & QBR Generator platform per **Option A (URI Path Prefix Routing with Transparent Backward-Compatibility)**, combined with an immediate frontend cutover to `/api/v1/*`.
 
 ### Core Deliverables:
 1. **Consolidated Canonical `/api/v1/` Router Bundle (`backend/routes/v1Router.js`)**:
@@ -28,30 +28,39 @@ Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Execu
      - `/api/v1/data-health/*` (Audit and data quality anomalies)
      - `/api/v1/vulnerabilities/*` (Cisco PSIRT CVE tracking)
      - `/api/v1/health` & `/api/v1/health/scheduler` (Service and scheduler health)
-2. **Transparent Backward Compatibility for Legacy `/api/...` (Zero Frontend Drift)**:
-   - Legacy `/api/...` routes remain 100% functional.
+2. **Frontend Migration to `/api/v1/*` in THIS Item (GAP 1 — Choice A)**:
+   - Full migration of all frontend call sites in `frontend/src/` to target `/api/v1/*`.
+   - `frontend/src/config/api.js` updated with `API_V1_URL = `${API_BASE_URL}/api/v1`` and all component fetch calls updated from `/api/...` to `/api/v1/...`.
+   - Makes `/api/v1/` the genuine, active primary consumer, ensuring the versioned API is actively utilized and verified in production.
+3. **Transparent Backward Compatibility for Legacy `/api/...` with Fallthrough Guard (GAP 2)**:
+   - Legacy `/api/...` routes remain 100% functional for external scripts, tools, and backward compatibility.
    - An Express forwarding / deprecation middleware attaches standard RFC 8594 deprecation headers:
      - `Deprecation: true`
      - `Link: </api/v1${req.path}>; rel="successor-version"`
+   - **Fallthrough Bug Fix**: Deprecation middleware skips if `req.path.startsWith('/v1')` or `req.originalUrl.startsWith('/api/v1')`, preventing duplicate links (`</api/v1/v1/...>`) and false deprecation headers on 404s.
    - *Nice-to-Have Note*: Sunset header (RFC 8594) TBD — to be added when deprecation timeline is committed.
-   - React frontend components, Vite proxy configurations, and existing scripts continue working immediately without modifications.
-3. **Middleware Placement Architecture (Single Source of Truth)**:
-   - **Inside `v1Router`**: All payload size limits (`express.json({ limit: '2mb' })`), rate limiters (`heavyRateLimit`, login rate limiters), tenant context resolvers, and authentication middleware (`requireAuth`, `requireAdmin`, `requireClientAccess`) live strictly inside `v1Router`.
-   - **Inside `backend/index.js`**: Holds top-level cross-cutting concerns (CORS, compression, static files) and the two router mounts:
-     - Canonical: `app.use('/api/v1', v1Router);`
-     - Legacy alias: `app.use('/api', deprecationNoticeMiddleware, v1Router);`
-   - *Guarantees no double-mounting or missing middleware.*
-4. **Health & Scheduler Health Endpoint Disposition**:
+4. **Explicit Express Middleware Ordering (CLARIFICATION 1)**:
+   - The middleware and route registration order in `backend/index.js` is strictly enforced:
+     1. Global middleware (CORS, compression, body parser)
+     2. Static files (`express.static(dist)`)
+     3. Canonical v1 router: `app.use('/api/v1', v1Router)`
+     4. Legacy alias router: `app.use('/api', deprecationMiddleware, v1Router)`
+     5. JSON 404 handler for `/api*` (BEFORE SPA fallback):
+        ```javascript
+        app.use(['/api', '/api/*'], (req, res) => {
+          res.status(404).json({ error: 'API route not found', status: 404, path: req.originalUrl });
+        });
+        ```
+     6. SPA catch-all LAST: `app.get('*', serveIndexHtml)`
+   - Guarantees that any unmatched API route returns JSON 404, never leaking SPA HTML.
+5. **Health & Scheduler Health Endpoint Disposition**:
    - `/api/v1/health/scheduler` is the canonical scheduler health endpoint inside `v1Router`.
    - `/api/health/scheduler` is the legacy alias delegating to `v1Router` with `Deprecation: true` and `Link: </api/v1/health/scheduler>; rel="successor-version"`.
    - `/api/v1/health` returns general server health along with a nested `scheduler` status summary.
-5. **OpenAPI 3.0 Contract Specification Plan (`docs/openapi-v1.yaml`)**:
+6. **OpenAPI 3.0 Contract Specification Plan (`docs/openapi-v1.yaml`)**:
    - OpenAPI specification maintained as a standalone specification file `docs/openapi-v1.yaml`.
    - Captures request/response schemas for core platform operations (Auth, Upload, Dashboard, Schedules, Data Health).
    - CI validation: Added to plan: `CI validates docs/openapi-v1.yaml via npx @redocly/cli lint (or swagger-cli validate). Fails PR if invalid.`
-6. **Contract Stability & Snapshot Verification**:
-   - Comprehensive audit verified that zero existing tests in `backend/tests/` perform `deepStrictEqual` or `deepEqual` on response headers (only targeted `res.headers.get(...)` checks). Adding `Deprecation` and `Link` headers will not break any existing tests.
-   - In accordance with Section 19 of the directive, comprehensive snapshot tests in `backend/tests/apiV1Contract.test.js` verify that `/api/v1/...` and `/api/...` responses are functionally identical and that no existing keys are mutated.
 
 ---
 
@@ -66,7 +75,8 @@ Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Execu
         GET/POST /api/v1/*                       GET/POST /api/* (Legacy)
                     │                                     │
                     │                                     ▼
-                    │                       legacyDeprecationMiddleware
+                    │                       deprecationMiddleware
+                    │                       - Skip if req.path starts with /v1
                     │                       - Set Header: Deprecation: true
                     │                       - Set Header: Link: </api/v1...>; rel="successor-version"
                     │                                     │
@@ -80,6 +90,13 @@ Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Execu
        ┌───────────────┬───────────────┼───────────────┬───────────────┐
        ▼               ▼               ▼               ▼               ▼
    authRoutes    dashboardRoutes  scheduleRoutes  tenantRoutes   healthRoutes
+                                       │
+                             (If Route Unmatched)
+                                       │
+                                       ▼
+                             JSON 404 Handler
+                    { error: 'API route not found', 404 }
+                         (Never leaks SPA index.html)
 ```
 
 ---
@@ -97,7 +114,7 @@ All direct `/api/*` and unversioned aliases currently mounted on `app` in `backe
   - `templateRoutes`
   - `dataHealthRoutes`
   - `scheduleRoutes`
-- Inline business routes moved into `v1Router.js` or domain route modules:
+- Inline business routes moved into `v1Router.js`:
   - Auth: `/auth/login`, `/auth/logout`, `/auth/revoke`, `/auth/me`, `/auth/auto`, `/auth/demo-accounts`, `/auth/download-ticket`, `/auth/sse-ticket`
   - Tenants & Clients: `/clients`, `/clients/:id`, `/clients/:id/locations`, `/tenants`, `/tenants/:id/settings`
   - Rules: `/rules` (GET and PUT)
@@ -113,41 +130,52 @@ In `backend/index.js`, the routing layer reduces to strictly:
 ```javascript
 const v1Router = require('./routes/v1Router');
 
-// Canonical API v1
-app.use('/api/v1', v1Router);
-
-// Legacy backwards-compatible /api alias with RFC 8594 deprecation headers
-app.use('/api', (req, res, next) => {
+function deprecationMiddleware(req, res, next) {
+  if (req.path.startsWith('/v1') || req.originalUrl.startsWith('/api/v1')) {
+    return next();
+  }
   res.setHeader('Deprecation', 'true');
   res.setHeader('Link', `</api/v1${req.path}>; rel="successor-version"`);
   next();
-}, v1Router);
+}
+
+// 1. Global Middleware (CORS, compression, body parser)
+// 2. Static files (dist)
+// 3. Canonical API v1
+app.use('/api/v1', v1Router);
+
+// 4. Legacy backwards-compatible /api alias
+app.use('/api', deprecationMiddleware, v1Router);
+
+// 5. JSON 404 handler for API routes
+app.use(['/api', '/api/*'], (req, res) => {
+  res.status(404).json({ error: 'API route not found', status: 404, path: req.originalUrl });
+});
+
+// 6. SPA catch-all fallback LAST
+app.get('*', (req, res) => {
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
+});
 ```
 
-### 3.2 Health & Scheduler Health Endpoints
-- Canonical:
-  - `GET /api/v1/health`: Returns `{ status: 'ok', ts: ISOString, version: 'v1', scheduler: schedulerHealth }`.
-  - `GET /api/v1/health/scheduler`: Returns full scheduler diagnostic payload `{ status: 'healthy' | 'degraded', runningJobs, lastRun, ... }`.
-- Legacy:
-  - `GET /api/health` and `GET /api/health/scheduler` delegated via `/api` deprecation middleware with headers `Deprecation: true` and `Link: </api/v1/health...>; rel="successor-version"`.
+### 3.2 Frontend Call Site Migration to `/api/v1/*`
+The following frontend files will be updated to point directly to `/api/v1/*`:
+1. `frontend/src/config/api.js`: Add `export const API_V1_BASE = `${API_BASE_URL}/api/v1`;`.
+2. `frontend/src/App.jsx`: `/api/dashboard` → `/api/v1/dashboard`, `/api/auth/download-ticket` → `/api/v1/auth/download-ticket`, `/api/${exportType}` → `/api/v1/${exportType}`.
+3. `frontend/src/context/AuthContext.jsx`: `/api/auth/me` → `/api/v1/auth/me`, `/api/clients` → `/api/v1/clients`, `/api/auth/login` → `/api/v1/auth/login`, `/api/mfa/login-verify` → `/api/v1/mfa/login-verify`, `/api/auth/logout` → `/api/v1/auth/logout`.
+4. `frontend/src/components/FileUploader.jsx`: `/api/analyze-excel` → `/api/v1/analyze-excel`, `/api/upload` → `/api/v1/upload`, `/api/jobs/` → `/api/v1/jobs/`, `/api/status/` → `/api/v1/status/`.
+5. `frontend/src/components/DataHealthModal.jsx`: `/api/data-health` → `/api/v1/data-health`.
+6. `frontend/src/components/ScheduleManagerModal.jsx`: `/api/tenants/.../schedules` → `/api/v1/tenants/.../schedules`, `/api/tenants/.../templates` → `/api/v1/tenants/.../templates`, `/api/ppt/download/` → `/api/v1/ppt/download/`.
+7. `frontend/src/components/ClientManager.jsx`: `/api/rules` → `/api/v1/rules`, `/api/tenants/` → `/api/v1/tenants/`, `/api/clients` → `/api/v1/clients`.
+8. `frontend/src/components/VulnerabilitiesPage.jsx`: `/api/v1/vulnerabilities`.
+9. `frontend/src/components/ReportHistory.jsx`: `/api/v1/history`, `/api/v1/auth/download-ticket`.
+10. `frontend/src/components/ReportsView.jsx`: `/api/v1/reports/mmtc/latest`.
+11. `frontend/src/components/AIChatbot.jsx`, `AISectionSummary.jsx`, `EnterpriseInsightCard.jsx`: `/api/v1/chat`, `/api/v1/ai/...`.
+12. `frontend/src/components/InventorySyncPage.jsx`: `/api/v1/inventory/...`.
+13. `frontend/src/components/MFASetup.jsx`: `/api/v1/mfa/...`.
+14. Frontend test mocks in `frontend/src/__tests__/`: update url assertions to match `/api/v1/`.
 
-### 3.3 Middleware Placement Architecture
-- **Inside `v1Router.js`**:
-  - `v1Router.use(express.json({ limit: '2mb' }));`
-  - Rate limiters (`heavyRateLimit`, login rate limiters) applied directly to sensitive endpoints inside `v1Router`.
-  - Auth checks (`requireAuth`, `requireAdmin`, `requireClientAccess`) applied directly inside `v1Router`.
-- **Inside `backend/index.js`**:
-  - Global CORS configuration.
-  - Compression middleware.
-  - Static file serving (`express.static(dist)`).
-  - Single unversioned `/api` deprecation wrapper delegating to `v1Router`.
-
-### 3.4 Frontend/Backend Contract Stability (Section 19 Compliance)
-- **Frontend Audit**: Frontend calls in `frontend/src/` query `${API_BASE_URL}/api/...`.
-- **Zero Breaking Changes**: The legacy `/api` alias forwards seamlessly to `v1Router`, preserving 100% of existing behavior and response shapes.
-- **Contract Freeze Guarantee**: Field additions in `/api/v1/` are strictly additive. No existing keys in `/api/dashboard`, `/api/jobs`, or `/api/reports` will be deleted or renamed.
-
-### 3.5 OpenAPI 3.0 Contract Specification (`docs/openapi-v1.yaml`)
+### 3.3 OpenAPI 3.0 Contract Specification (`docs/openapi-v1.yaml`)
 - Authored as a formal schema file documenting:
   - Info: Title: `Executive Dashboard & QBR Generator API`, Version: `1.0.0`
   - Servers: `/api/v1`
@@ -170,15 +198,18 @@ New test suite `backend/tests/apiV1Contract.test.js` covering:
 1. **`v1_healthEndpoint_returns200`**: `GET /api/v1/health` returns `{ status: 'ok', version: 'v1' }`.
 2. **`v1_schedulerHealth_parity`**: `GET /api/v1/health/scheduler` returns scheduler health state; `GET /api/health/scheduler` returns identical state plus `Deprecation: true` and `Link: </api/v1/health/scheduler>; rel="successor-version"`.
 3. **`v1_deprecationHeaders_attachedOnLegacy`**: `GET /api/health` returns identical payload plus `Deprecation: true` and `Link: </api/v1/health>; rel="successor-version"`.
-4. **`v1_authLogin_returnsToken`**: `POST /api/v1/auth/login` issues valid JWT v2 session identical to legacy `/api/auth/login`.
-5. **`v1_dashboard_jsonContractMatch`**: `GET /api/v1/dashboard` payload keys match `GET /api/dashboard` 100%.
-6. **`v1_tenants_settings_roundtrip`**: `GET /api/v1/tenants` and `GET /api/v1/tenants/:id/settings` return valid tenant configuration.
-7. **`v1_schedules_crud_parity`**: `GET /api/v1/tenants/:id/schedules` correctly queries schedule repo.
-8. **`v1_dataHealth_parity`**: `GET /api/v1/data-health` returns valid data health metrics.
-9. **`v1_vulnerabilities_parity`**: `GET /api/v1/vulnerabilities` returns filtered inventory CVEs.
-10. **`v1_uploadSecurity_rateLimit_inherited`**: Rate limits and payload size guards apply uniformly to `/api/v1/upload`.
-11. **`v1_tenantIsolation_enforced`**: Tenant boundaries apply identically across `/api/v1/` routes.
-12. **`v1_noLegacyRoutesDirectlyOnApp`**: Verifies that `backend/index.js` does NOT register individual `/api/*` mounts directly outside `v1Router`.
+4. **`apiV1UnmatchedRoute_noDeprecationHeaders` (GAP 2)**: `GET /api/v1/nonexistent-route-xyz` returns HTTP 404, does NOT attach `Deprecation` or `Link` headers, and does NOT produce double `/v1/v1` in links.
+5. **`apiUnmatchedReturns404Json_notHtml` (CLARIFICATION 1)**: `GET /api/nonexistent-route-xyz` returns HTTP 404 with JSON `{ error: 'API route not found' }`, never leaking SPA HTML.
+6. **`legacyDirectMountsAbsent` (CLARIFICATION 2)**: Asserts old direct mounts in `backend/index.js` are truly removed and `app._router.stack` contains no duplicate legacy route handlers.
+7. **`apiV1CorsPreflight` (CLARIFICATION 3)**: `OPTIONS /api/v1/auth/login` and `OPTIONS /api/auth/login` return 204 with `Access-Control-Allow-*` headers.
+8. **`v1_authLogin_returnsToken`**: `POST /api/v1/auth/login` issues valid JWT v2 session identical to legacy `/api/auth/login`.
+9. **`v1_dashboard_jsonContractMatch`**: `GET /api/v1/dashboard` payload keys match `GET /api/dashboard` 100%.
+10. **`v1_tenants_settings_roundtrip`**: `GET /api/v1/tenants` and `GET /api/v1/tenants/:id/settings` return valid tenant configuration.
+11. **`v1_schedules_crud_parity`**: `GET /api/v1/tenants/:id/schedules` correctly queries schedule repo.
+12. **`v1_dataHealth_parity`**: `GET /api/v1/data-health` returns valid data health metrics.
+13. **`v1_vulnerabilities_parity`**: `GET /api/v1/vulnerabilities` returns filtered inventory CVEs.
+14. **`v1_uploadSecurity_rateLimit_inherited`**: Rate limits and payload size guards apply uniformly to `/api/v1/upload`.
+15. **`v1_tenantIsolation_enforced`**: Tenant boundaries apply identically across `/api/v1/` routes.
 
 ---
 
@@ -186,6 +217,6 @@ New test suite `backend/tests/apiV1Contract.test.js` covering:
 
 - **Risk Level**: **LOW**.
   - Route handlers are consolidated and shared between `/api/v1` and `/api`. No data schemas or calculations are altered.
-  - Legacy routes continue to answer all frontend requests with zero regressions.
+  - Legacy routes continue to answer external requests with zero regressions.
 - **Rollback Path**:
   - Revert single commit: `git revert HEAD`. Server resumes previous mounting without `/api/v1` prefix.
