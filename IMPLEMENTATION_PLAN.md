@@ -61,12 +61,16 @@ When a dataset contains 0 devices and 0 incidents:
 ## Part 2: Item #13 Scheduled QBR Engine Plan
 
 ### 1. Overview & Objectives
-The **Scheduled QBR** engine automates recurring report generation for enterprise tenants on standard business cadences (weekly, monthly, quarterly, or custom cron). It eliminates manual report execution at period close by:
-1. **Automated Period Resolution**: Automatically resolving previous month or quarter boundaries (e.g., automatically generating `1 May 2026 – 31 May 2026` on June 1st).
-2. **Dual-Driver Integration with Queue & Tenant Locking**: Submitting scheduled jobs directly into `queueService` and acquiring `TenantLockManager` locks to guarantee zero overlap with live manual uploads.
-3. **Execution History & Audit Log**: Retaining a persistent run log (`runs.json`) recording execution timestamps, durations, generated `jobId`s, and error telemetry.
-4. **Ad-Hoc Manual Trigger ("⚡ Run Now")**: Permitting immediate on-demand test runs without waiting for wall-clock cron triggers.
-5. **Strict RBAC & Physical Tenant Isolation**: Config stored within tenant namespace (`data/tenants/:id/schedules/`); client users have read-only visibility, while creation, updating, and execution are restricted to Administrators.
+The **Scheduled QBR** engine automates recurring report generation for enterprise tenants across multiple independent schedules (e.g. Weekly Ops report for NOC + Monthly Executive QBR for Leadership). It eliminates manual report execution at period close by:
+1. **Automated Dynamic Period Resolution**: Automatically resolving previous month, quarter, or weekly boundaries (e.g., dynamically generating `1 May 2026 – 31 May 2026` on June 1st) with zero static hardcoded date strings.
+2. **Template Version Pinning (Item #11 Integration)**: Schedules pin a specific template version (`v1`, `v2`) or track `"latest"`. If a pinned template is pruned/deprecated, generation halts safely and alerts the NOC.
+3. **Multi-Schedule Architecture per Tenant**: Supports an array of multiple distinct schedules per tenant (`data/tenants/{tenantId}/schedules/schedules.json`), each with its own cadence, timezone, pinned template, and recipients.
+4. **Crash Mid-Run Recovery**: Writes a `PENDING` run record at execution start; reconciles unfinalized runs on boot, marking dead/crashed jobs as `FAILED` and notifying administrators.
+5. **Strict Lock Ordering & Backoff**: Acquires `tenantLock` FIRST (guaranteeing pipeline exclusivity with 3x backoff) and distributed `schedule_lock` SECOND (preventing multi-pod double-fire), releasing in reverse order.
+6. **Idempotency Key & Job Deduplication**: Period-bound dedup key `{tenantId}:{scheduleId}:{cadence}:{periodStart}:{periodEnd}` (TTL 24h) preventing duplicate report generations and returning HTTP 409 `DUPLICATE_JOB` on redundant ad-hoc triggers.
+7. **Missed-Run Boot Recovery**: On startup, `initSchedulers()` compares `lastRunAt` against `now` to detect missed calendar slots from server downtime, triggering an immediate catch-up run logged as `MISSED_RUN_RECOVERED`.
+8. **Failure Alerting Dispatcher**: Active `notifyFailure(tenantId, error)` hook delivering notifications to `config.recipients` (throttled to 1/hr per error code) and surfacing 🔴 status alerts on tenant dashboard cards.
+9. **Clean Teardown & Isolated Test Timers**: Exporting `stopAll()` to stop every registered standing cron task, guaranteeing 0 hanging timers and crash-free test exits.
 
 ---
 
@@ -74,160 +78,249 @@ The **Scheduled QBR** engine automates recurring report generation for enterpris
 
 ```
    ┌─────────────────────────────────────────────────────────────┐
-   │                     node-cron Scheduler                     │
-   │  - Weekly: '0 6 * * 1'      - Monthly: '0 6 1 * *'          │
-   │  - Quarterly: '0 6 1 1,4,7,10 *'                            │
-   │  - Custom 5-field cron validated with cron.validate()       │
+   │             node-cron Standing Tasks (v4.6.0)               │
+   │  - Configured with tenant IANA timezone (e.g. Asia/Kolkata) │
+   │  - Distinct task per scheduleId: 'sched_monthly', etc.      │
+   └──────────────────────────────┬──────────────────────────────┘
+                                  │ (Slot fires at wall-clock hour)
+                                  ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │  LOCK ORDERING:                                             │
+   │  1. queueService.acquireTenantLock(tenantId) [3x backoff]   │
+   │  2. Redis SETNX schedule_lock:{tenant}:{schedId}:{slot} (5m)│
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
    │         backend/services/schedulerService.js                │
-   │  1. Resolves dynamic period dates (Previous Month/Quarter)  │
-   │  2. Resolves staged/incoming tenant workbooks               │
-   │  3. Acquires TenantLock via queueService                    │
-   │  4. Queues background job in BullMQ / In-Memory Queue       │
-   │  5. Appends run record to runs.json                         │
+   │  1. Write PENDING run record to runs.json (at start)        │
+   │  2. Idempotency Check: dedup_qbr:{tenant}:{sched}:{period}  │
+   │  3. Template Pinning: Resolve pinnedVersion from manifest   │
+   │  4. Run QBR processing; on fail -> notifyFailure(1/hr cap)  │
+   │  5. Finalize run record to SUCCESS/FAILED (capped 100 runs) │
+   │  6. Release locks in REVERSE order (schedule_lock, tenant)  │
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
    │         backend/routes/scheduleRoutes.js                    │
+   │  - Boot Readiness Gate: rejects with 503 until init done    │
    │  - GET /api/tenants/:id/schedules (Read-only for Clients)   │
-   │  - POST /api/tenants/:id/schedules (Admin Only)             │
-   │  - POST /api/tenants/:id/schedules/trigger (Run Now, Admin) │
-   │  - DELETE /api/tenants/:id/schedules (Admin Only)           │
+   │  - POST /api/tenants/:id/schedules (Admin; optimistic lock) │
+   │  - POST /api/tenants/:id/schedules/:schedId/trigger (Run)   │
+   │  - DELETE /api/tenants/:id/schedules/:schedId (Admin)       │
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
    │     frontend/src/components/ScheduleManagerModal.jsx        │
-   │  - Next Run Countdown & Status Toggle (Enabled/Disabled)    │
+   │  - Schedule List with "+ Add Schedule" and Edit Drawer      │
    │  - Cadence: Monthly | Quarterly | Weekly | Custom Cron      │
-   │  - Recipients Email Tags & Notification Settings            │
-   │  - Execution History Table (Status, Duration, Download Link)│
-   │  - ⚡ Run Now Trigger Button (Admin Only)                   │
+   │  - Template Version Dropdown: 'Latest Active' vs Pinned 'v2'│
+   │  - Timezone Dropdown from Intl.supportedValuesOf('timeZone')│
+   │  - Execution History Table with evicted 404 artifact guard  │
+   │  - ⚡ Run Now Trigger Button (Admin Only; HTTP 409 handled) │
    └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 3. Dynamic Period Resolution Rules (Zero Hardcoded Dates)
+### 3. Dynamic Period Resolution & Timezone Rules (Zero Hardcoded Dates)
 
-When a scheduled job fires automatically, it dynamically derives calendar dates according to the configured cadence:
+When a scheduled job fires, it derives calendar dates according to the configured cadence:
 
 | Cadence | Execution Timing | Derived Date Period Formulation |
 |---|---|---|
-| **Monthly** | 1st day of month at 06:00 | Previous full calendar month (e.g. if run on June 1, `2026-05-01` to `2026-05-31`). Formatted as `1 May 2026 – 31 May 2026`. |
-| **Quarterly** | 1st day of quarter at 06:00 (Jan 1, Apr 1, Jul 1, Oct 1) | Previous full calendar quarter (e.g. if run on July 1, Q1: `2026-04-01` to `2026-06-30`). Formatted as `1 Apr 2026 – 30 Jun 2026`. |
-| **Weekly** | Every Monday at 06:00 | Preceding 7 full calendar days (Monday to Sunday). |
-| **Custom Cron** | User-defined cron expression | Defaults to previous calendar month unless custom period parameters are supplied. |
+| **Monthly** | 1st day of month at 06:00 (local timezone) | Previous full calendar month (e.g. if run on June 1, `2026-05-01` to `2026-05-31`). Formatted as `1 May 2026 – 31 May 2026`. Respects 28/29/30/31 calendar days. |
+| **Quarterly** | 1st day of quarter at 06:00 (Jan 1, Apr 1, Jul 1, Oct 1) | Previous full calendar quarter (e.g. if run on July 1, Q2: `2026-04-01` to `2026-06-30`). Formatted as `1 Apr 2026 – 30 Jun 2026`. |
+| **Weekly** | Every Monday at 06:00 (local timezone) | Preceding 7 full calendar days (Monday to Sunday). |
+| **Custom Cron** | User-defined 5-field cron expression | Defaults to previous calendar month. Custom date ranges are strictly capped at 1 year and future dates are rejected with HTTP 400 (`FUTURE_DATE_REJECTED`). |
+
+#### Timezone & DST Policy:
+- **Tenant Timezone Binding**: `timezone` field stored in each schedule (defaults to tenant settings from `clientService`, e.g. `'Asia/Kolkata'`, never server OS timezone).
+- **node-cron Timezone Execution**: Instantiated with `{ timezone: schedule.timezone }`.
+- **Daylight Saving Time (DST) Handling**: `node-cron` evaluates standard IANA timezones against local wall-clock time:
+  - Spring-Forward (skipped hour): When 02:00 springs to 03:00, schedules falling in the skipped hour execute immediately at the transition boundary.
+  - Fall-Back (repeated hour): When 02:00 repeats, schedules execute once on the first occurrence.
 
 ---
 
-### 4. Backend Implementation Plan
+### 4. Four Core System Blockers Resolved
 
-#### 4.1. `backend/services/schedulerService.js`
-- **Schedule Configuration Storage**:
-  - Persisted at `data/tenants/{tenantId}/schedules/schedule_config.json`.
-  - Schema:
-    ```javascript
+#### 1. Template Version Pinning (Item #11 Integration)
+- **Schedule Schema**: Includes `templateVersion: "latest" | "v1" | "v2" | ...` (defaults to `"latest"`).
+- **Resolution Logic**:
+  - Reads `templateService.getManifest(tenantId)`.
+  - If `"latest"`, uses `manifest.activeVersionId` (or master template fallback if tenant has no custom versions).
+  - If pinned to a specific version (e.g. `"v2"`), loads `templates/versions/{versionId}.pptx`.
+  - **Pruned / Deprecated Guard**: If the pinned version has been pruned by the 5-version retention policy or deleted, generation halts safely, does NOT fall back silently, triggers `notifyFailure(tenantId, 'PINNED_TEMPLATE_DEPRECATED')`, and logs `status: 'FAILED'`.
+- **Admin UI**: Dropdown offering `"Latest Active Template (Auto-Update)"` alongside all uploaded versions (`v1 — 1 May 2026`, `v2 — 15 May 2026`).
+- **Test Assertion**: Pinned `v2` + new active version uploaded as `v3` $\to$ report generation strictly uses `v2`.
+
+#### 2. Crash Mid-Run Recovery
+- **Execution State Journaling**:
+  - At the exact start of execution, write a `PENDING` run record to `runs.json`:
+    `{ id, scheduleId, runAt, status: 'PENDING', jobId, dedupKey, cadence, period }`.
+  - On successful completion, update the record to `status: 'SUCCESS'`. On catch error, update to `status: 'FAILED'`.
+- **Boot Reconciliation**:
+  - During `initSchedulers()`, scan all tenant `runs.json` files for lingering `PENDING` records.
+  - For each `PENDING` run, query `queueService.getJob(jobId)`.
+  - If the job is missing, aborted, or dead due to a server crash, transition the run record to `status: 'FAILED'`, `error: 'Server crashed mid-execution. Job terminated.'`, and trigger `notifyFailure(tenantId, 'SERVER_CRASH_MID_RUN', run)`.
+  - Eliminates silent job loss and prevents zombie duplicate executions when dedup keys expire.
+
+#### 3. Multiple Schedules Per Tenant Architecture
+- **Schema & Persistence**: Tenants can configure multiple distinct schedules stored in `data/tenants/{tenantId}/schedules/schedules.json` (array of schedule objects):
+  ```javascript
+  [
     {
-      tenantId: "client-jfl",
+      id: "sched_monthly_exec",
+      name: "Monthly Executive QBR",
       enabled: true,
-      cadence: "monthly", // "weekly" | "monthly" | "quarterly" | "custom"
+      cadence: "monthly",
       cronExpression: "0 6 1 * *",
-      recipients: ["cio@dominos.in", "noc-ops@dominos.in"],
+      timezone: "Asia/Kolkata",
+      templateVersion: "latest",
+      recipients: ["cio@dominos.in"],
       lastRunAt: "2026-05-01T06:00:00.000Z",
       nextRunAt: "2026-06-01T06:00:00.000Z",
-      lastStatus: "SUCCESS", // "SUCCESS" | "FAILED" | "PENDING"
+      lastStatus: "SUCCESS",
+      lastError: null,
+      updatedAt: "2026-05-22T02:00:00.000Z",
+      updatedBy: "admin@portal.com"
+    },
+    {
+      id: "sched_weekly_ops",
+      name: "Weekly NOC Operations Report",
+      enabled: true,
+      cadence: "weekly",
+      cronExpression: "0 6 * * 1",
+      timezone: "Asia/Kolkata",
+      templateVersion: "v2",
+      recipients: ["noc-leads@dominos.in"],
+      lastRunAt: "2026-05-18T06:00:00.000Z",
+      nextRunAt: "2026-05-25T06:00:00.000Z",
+      lastStatus: "SUCCESS",
+      lastError: null,
       updatedAt: "2026-05-22T02:00:00.000Z",
       updatedBy: "admin@portal.com"
     }
-    ```
-- **Lifecycle Methods**:
-  - `initSchedulers()`: Scans all tenant directories on server boot and mounts active `node-cron` standing tasks.
-  - `saveSchedule(tenantId, config, user)`: Validates cron syntax using `cron.validate(cronExpression)`, writes atomically via `.tmp` and rename, and restarts the tenant's cron task.
-  - `getSchedule(tenantId)`: Returns current config and last 10 execution run records.
-  - `executeScheduledQbr(tenantId, triggerType = 'CRON')`:
-    - Checks tenant directory for incoming or cached source workbooks (`inventory.xlsx`, `incidents.xlsx`). If missing, records a descriptive error in `runs.json` without throwing.
-    - Resolves dynamic period start and end dates.
-    - Acquires tenant lock via `queueService.acquireTenantLock`.
-    - Queues or executes QBR processing.
-    - On completion, writes run record to `data/tenants/{tenantId}/schedules/runs.json`.
-  - `deleteSchedule(tenantId)`: Cancels active node-cron task and marks config as disabled.
+  ]
+  ```
+- **Endpoints**:
+  - `GET /api/tenants/:id/schedules` $\to$ returns `{ success: true, schedules: [...], runs: [...] }`.
+  - `POST /api/tenants/:id/schedules` $\to$ creates or updates a schedule by `schedule.id`.
+  - `POST /api/tenants/:id/schedules/:scheduleId/trigger` $\to$ triggers Run Now for a specific schedule.
+  - `DELETE /api/tenants/:id/schedules/:scheduleId` $\to$ deletes a specific schedule.
+- **Frontend**: `ScheduleManagerModal` presents a schedule management list, "+ Add Schedule" button, and per-schedule controls.
 
-#### 4.2. `backend/routes/scheduleRoutes.js`
-- Endpoints:
-  - `GET /api/tenants/:id/schedules`: Returns tenant schedule configuration and run history. Client users restricted to their assigned tenant.
-  - `POST /api/tenants/:id/schedules`: Updates schedule configuration (Admin only).
-  - `POST /api/tenants/:id/schedules/trigger`: Triggers immediate "Run Now" execution (Admin only).
-  - `DELETE /api/tenants/:id/schedules`: Disables/deletes schedule (Admin only).
-- Enforces strict role checks: Non-admin users receive HTTP 403 Forbidden on `POST` and `DELETE`.
-
-#### 4.3. `backend/index.js`
-- Mount `app.use(['/api/tenants', '/api/clients'], scheduleRoutes)`.
-- On startup, invoke `schedulerService.initSchedulers()` to restore active cron jobs across all tenants.
+#### 4. Strict Lock Ordering (Deadlock & Slot Waste Prevention)
+- **Acquisition Order**:
+  1. `queueService.acquireTenantLock(tenantId)` **FIRST** (ensures exclusive pipeline access; retries up to 3x with backoff).
+  2. Distributed `schedule_lock:{tenantId}:{scheduleId}:{timeSlot}` via Redis `SETNX` (TTL 5m) **SECOND** (deduplicates multi-pod triggers).
+- **Release Order in Reverse**:
+  1. Release `schedule_lock` **FIRST**.
+  2. Release `tenantLock` **SECOND**.
+- **Rationale**: If `schedule_lock` were acquired before `tenantLock`, waiting for a long manual upload would waste the cron slot lock and block recovery.
 
 ---
 
-### 5. Frontend UI/UX Plan
+### 5. Eight Explicit Architecture Specifications (One-Liners)
+1. **Tenant Deletion Cleanup**: When a tenant is deleted or deactivated, invoke `stopAllForTenant(tenantId)` and archive `runs.json` to `archived_runs.json`.
+2. **Custom Cron Period Limits**: Custom start/end date overrides are capped at a maximum of 1 calendar year (366 days), and future end dates are rejected with HTTP 400 (`FUTURE_DATE_REJECTED`).
+3. **Frontend Timezone Selector**: Dropdown populated dynamically via `Intl.supportedValuesOf('timeZone')` with search filtering, defaulting to the client's configured timezone.
+4. **Optimistic Concurrency Control**: `POST /api/tenants/:id/schedules` compares incoming `updatedAt` against on-disk `updatedAt`; if mismatched, rejects with HTTP 409 Conflict (`SCHEDULE_VERSION_CONFLICT`).
+5. **Failure Alert Throttling**: `notifyFailure()` throttles outbound email dispatches for the same `(tenantId, errorCode)` tuple to at most 1 email per hour.
+6. **Evicted Job Artifact Download Handling**: When downloading artifacts from `runs.json`, if the underlying `jobId` report directory has been pruned/evicted, the route returns HTTP 404 with `{ code: 'JOB_ARTIFACT_EVICTED', error: 'Report artifacts for this run have expired or been pruned.' }`.
+7. **Boot Readiness Gate**: An internal flag `_schedulersReady` ensures `initSchedulers()` completes all boot scans and reconciliations before `POST /schedules*` mutations are accepted (rejecting with HTTP 503 `SCHEDULER_INITIALIZING` during boot).
+8. **Timezone Mutation Hot-Swap**: When `saveSchedule` updates `timezone` or `cronExpression`, it explicitly stops the previous `node-cron` instance and mounts a fresh task under the new timezone; verified by an automated unit test.
 
-#### 5.1. `frontend/src/components/ScheduleManagerModal.jsx`
+---
+
+### 6. Backend Implementation Plan
+
+#### 6.1. `backend/services/schedulerService.js`
+- **Methods**:
+  - `validateCron(expr)`: Validates 5-field cron syntax using `cron.validate(expr)`.
+  - `derivePeriodForCadence(cadence, refDate)`: Computes exact calendar start/end dates and human-readable label.
+  - `initSchedulers()`: Scans all tenant directories, reconciles lingering `PENDING` runs, checks missed-run slots, mounts active tasks with `{ timezone: schedule.timezone }`, and sets `_schedulersReady = true`.
+  - `saveSchedule(tenantId, scheduleData, user)`: Validates cron/timezone, applies optimistic concurrency check, persists atomically to `schedules.json`, stops old cron task, and mounts new task.
+  - `getSchedules(tenantId)`: Returns schedules array and last 100 execution run records.
+  - `executeScheduledQbr(tenantId, scheduleId, triggerType = 'CRON', options = {})`:
+    - Enforces lock ordering: `acquireTenantLock` FIRST (3x backoff), `schedule_lock` SECOND.
+    - Evaluates idempotency key (`dedup_qbr:{tenant}:{schedId}:{cadence}:{pStart}:{pEnd}`). Returns HTTP 409 if duplicate ad-hoc run.
+    - Appends `PENDING` record to `runs.json` at start.
+    - Resolves pinned template version from manifest.
+    - Executes report generation. If error, calls `notifyFailure()` (1/hr throttle).
+    - Updates run record to `SUCCESS` or `FAILED` and releases locks in reverse order.
+  - `stopAll()` / `stopAllForTenant(tenantId)`: Stops active `node-cron` tasks and clears timer references.
+  - `getActiveTaskCount()`: Returns active cron task count for test assertions.
+  - `notifyFailure(tenantId, errorCode, details)`: Throttled alert dispatcher (1/hr per errorCode) notifying recipients and updating status.
+
+#### 6.2. `backend/routes/scheduleRoutes.js`
+- `GET /api/tenants/:id/schedules`: Returns schedules array and run history. Client users restricted to assigned tenant.
+- `POST /api/tenants/:id/schedules`: Creates or updates schedule (Admin only; enforces optimistic lock and boot readiness gate).
+- `POST /api/tenants/:id/schedules/:scheduleId/trigger`: Triggers immediate "Run Now" execution (Admin only). Returns HTTP 409 `DUPLICATE_JOB` on duplicates.
+- `DELETE /api/tenants/:id/schedules/:scheduleId`: Deletes a specific schedule (Admin only).
+
+#### 6.3. `backend/index.js`
+- Mount `app.use(['/api/tenants', '/api/clients'], scheduleRoutes)`.
+- Invoke `schedulerService.initSchedulers()` on server startup.
+
+---
+
+### 7. Frontend UI/UX Plan
+
+#### 7.1. `frontend/src/components/ScheduleManagerModal.jsx`
 - Clean modal dialog:
   - **Header**: `📅 Automated QBR Scheduling & Cadence Manager`
-  - **Tenant Banner**: Current customer name, Active template badge, and status pill (`🟢 Active Schedule` / `⚪ Inactive`).
+  - **Tenant Banner**: Customer name, status pill (`🟢 Active Schedules` / `🔴 Last Run Failed` / `⚪ Inactive`).
+  - **Schedule Selector & Add Button**:
+    - List of configured schedules for this tenant.
+    - `+ Add Schedule` button (Admin only).
   - **Configuration Section (Admin Editable, Client View-Only)**:
-    - **Active Switch**: Toggle automated scheduling on/off.
-    - **Cadence Selector**: Radio cards for `Monthly (1st of Month)`, `Quarterly (Period Close)`, `Weekly (Mondays)`, and `Custom Cron Expression`.
-    - **Cron Expression Input**: Validated live with human-readable explanation (e.g. `Runs at 06:00 on day 1 of the month`).
-    - **Recipients Input**: Multi-email chip input for notifications.
+    - **Active Switch**: Toggle specific schedule on/off.
+    - **Schedule Name**: E.g. `"Monthly Executive QBR"`.
+    - **Cadence Selector**: Radio cards for Monthly, Quarterly, Weekly, and Custom Cron.
+    - **Template Version Dropdown**: Select `"Latest Active Template (Auto-Update)"` or specific pinned version (`v1`, `v2`).
+    - **Timezone Selector**: Dropdown populated from `Intl.supportedValuesOf('timeZone')` with search filter.
+    - **Recipients Input**: Multi-email chip input for alerts.
   - **Run History Table**:
-    - Columns: Execution Date, Cadence, Period Generated, Duration, Status (`SUCCESS` in green, `FAILED` in red), Action (Download PPTX / View Dashboard).
+    - Columns: Execution Date, Schedule Name, Trigger (`⏰ Cron`, `⚡ Ad-Hoc`, `🔄 Missed Recovery`), Derived Period, Duration, Status, Artifacts.
   - **Action Footer**:
-    - `⚡ Run Now` button: Triggers immediate ad-hoc report generation (Admin only).
-    - `💾 Save Schedule` button (Admin only).
+    - `⚡ Run Now` button (Admin only; triggers selected schedule; displays error if HTTP 409 duplicate).
+    - `💾 Save Schedule` button (Admin only; handles HTTP 409 conflict).
     - `Close` button.
 
-#### 5.2. `frontend/src/components/ClientManager.jsx`
-- On each client card in `ClientManager.jsx`, add a **📅 Schedule** button next to Branding and Rules.
-- Clicking opens `ScheduleManagerModal`.
+#### 7.2. `frontend/src/components/ClientManager.jsx`
+- Add `📅 Schedules` button on every client card.
+- Client card displays 🔴 failure badge if any schedule has `lastStatus === 'FAILED'`.
 
 ---
 
-### 6. Risks, Edge Cases & Safeguards
-
-| Risk / Edge Case | Safeguard |
-|---|---|
-| **Invalid Cron String** | Validate with `cron.validate(expr)` before saving. If invalid, reject with HTTP 400 Bad Request (`INVALID_CRON_SYNTAX`). |
-| **Race Condition with Manual Upload** | Scheduled jobs acquire `queueService.acquireTenantLock`. If tenant is currently processing an upload, scheduled job retries or logs `TENANT_LOCKED`. |
-| **Missing Incoming Workbooks** | If tenant has no cached or incoming files in `data/tenants/:id/`, logs `SOURCE_FILES_MISSING` in `runs.json`. Server process continues running safely. |
-| **Server Restart / Crash** | On server boot, `schedulerService.initSchedulers()` re-reads all tenant `schedule_config.json` files and re-registers standing cron tasks. |
-| **Client User RBAC Bypass** | Route enforces `requireAuth` + `requireAdmin` on all mutation endpoints (`POST /schedules`, `POST /trigger`, `DELETE /schedules`). |
-
----
-
-### 7. Test Plan & Invariants
+### 8. Test Plan & Invariants
 
 #### A. Backend Test Suite (`backend/tests/scheduledQbr.test.js`)
-1. **Cron Validation**: Rejects invalid cron strings (`* * * * * * *`, `invalid`) with 400 Bad Request.
-2. **Dynamic Period Calculation**: Verifies `monthly` derives previous calendar month dates, and `quarterly` derives previous calendar quarter.
-3. **Save & Persist Schedule**: Saves config to tenant namespace and verifies file structure.
-4. **Immediate Trigger ("Run Now")**: Calls `POST /api/tenants/:id/schedules/trigger` and verifies job execution and run record generation in `runs.json`.
-5. **Admin-Only RBAC**: Verifies client user receives HTTP 403 Forbidden on `POST /schedules` and `POST /trigger`.
-6. **Cross-Tenant Isolation**: Verifies client user cannot view another tenant's schedule config or history.
-7. **Boot Recovery**: Verifies `initSchedulers()` initializes standing cron tasks from disk manifests.
+1. **Dynamic Period Calculation**: Verifies previous calendar month, quarter, and weekly formulations without static dates.
+2. **Template Version Pinning**: Tests pinned `v2` + new active version uploaded as `v3` $\to$ report generator strictly uses `v2`. Deprecated version triggers `notifyFailure`.
+3. **Multiple Schedules per Tenant**: Configures two schedules (Monthly Exec + Weekly Ops) under one tenant; verifies independent cron tasks and triggers.
+4. **Crash Mid-Run Recovery**: Simulates `PENDING` run with dead job on boot $\to$ reconciles to `status: 'FAILED'` and triggers `notifyFailure()`.
+5. **Lock Ordering & Reverse Release**: Asserts `tenantLock` acquired first, `schedule_lock` second, released in reverse.
+6. **Idempotency Key & HTTP 409**: Triggers same period twice; asserts first succeeds, second returns HTTP 409 `DUPLICATE_JOB`, and only 1 run record exists.
+7. **Timezone Mutation Hot-Swap**: Updating timezone stops old cron and mounts new task with updated timezone.
+8. **Optimistic Concurrency**: Mismatched `updatedAt` returns HTTP 409 `SCHEDULE_VERSION_CONFLICT`.
+9. **Failure Alert Throttling**: 5 rapid failure triggers dispatch exactly 1 alert email within 1 hour.
+10. **Clean Teardown**: Calls `schedulerService.stopAll()`; asserts `getActiveTaskCount() === 0` and process exits without hang.
 
 #### B. Frontend Verification
-- Verify `ScheduleManagerModal.jsx` renders cadence options, recipient list, and history.
-- Verify client users see view-only controls (Run Now and Save disabled/hidden).
+- `ScheduleManagerModal.jsx` renders schedule list, template dropdown, timezone selector, recipient list, and history table.
+- Verifies non-admin client users see view-only controls (Run Now and Save disabled/hidden).
 - `npm --prefix frontend test` passes 100%.
 - `npm --prefix frontend run build` completes with 0 errors.
 
 ---
 
-### 8. Rollback Plan
-If any issue occurs, `schedulerService` can be disabled with a feature flag `ENABLE_SCHEDULED_QBR=false` without affecting manual uploads or dashboard features.
+### 9. Rollback Plan
+If any issue occurs, `schedulerService` can be disabled with feature flag `ENABLE_SCHEDULED_QBR=false` without affecting manual uploads or dashboard features.
 
 ---
 
