@@ -35,7 +35,7 @@ export function useValidationReport(jobId, options = {}) {
     setError(null);
 
     try {
-      const url = `${API_BASE_URL}/api/validation/${encodeURIComponent(jobId.trim())}`;
+      const url = `${API_BASE_URL}/api/v1/validation/${encodeURIComponent(jobId.trim())}`;
       const res = await apiFetch(url, { signal: controller.signal });
 
       if (!res.ok) {

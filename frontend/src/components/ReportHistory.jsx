@@ -20,7 +20,7 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
     }
     const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/download-ticket`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/download-ticket`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -35,7 +35,7 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
       if (res.ok) {
         const ticketData = await res.json();
         if (ticketData.downloadTicket) {
-          window.location.href = `${API_BASE_URL}/api/${endpoint}/${jobId}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          window.location.href = `${API_BASE_URL}/api/v1/${endpoint}/${jobId}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
           return;
         }
       }
@@ -61,7 +61,7 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
         queryParams.append('location', locationFilter);
       }
 
-      const res = await apiFetch(`${API_BASE_URL}/api/history?${queryParams.toString()}`);
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/history?${queryParams.toString()}`);
       if (res.ok) {
         const json = await res.json();
         setHistory(json.history || []);
@@ -94,7 +94,7 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
     try {
       setDeletingJobId(jobId);
       const encodedId = encodeURIComponent(jobId);
-      const res = await apiFetch(`${API_BASE_URL}/api/history/${encodedId}`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/history/${encodedId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -128,7 +128,7 @@ export default function ReportHistory({ onViewDashboard, onReportDeleted }) {
     }
     try {
       setLoading(true);
-      const res = await apiFetch(`${API_BASE_URL}/api/history`, { method: 'DELETE' });
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/history`, { method: 'DELETE' });
       if (res.ok) {
         setHistory([]);
         if (onReportDeleted) onReportDeleted('all');

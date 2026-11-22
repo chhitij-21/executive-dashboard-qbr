@@ -80,7 +80,7 @@ export default function ScheduleManagerModal({ isOpen, onClose, client, isAdmin 
     setErrorMsg(null);
     try {
       // 1. Fetch Schedules
-      const schedRes = await apiFetch(`${API_BASE_URL}/api/tenants/${encodeURIComponent(client.id)}/schedules`);
+      const schedRes = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${encodeURIComponent(client.id)}/schedules`);
       if (schedRes.ok) {
         const body = await schedRes.json();
         setIsInitializing(Boolean(body.initializing));
@@ -98,7 +98,7 @@ export default function ScheduleManagerModal({ isOpen, onClose, client, isAdmin 
       }
 
       // 2. Fetch Templates Manifest for Version Pinning Dropdown
-      const tplRes = await apiFetch(`${API_BASE_URL}/api/tenants/${encodeURIComponent(client.id)}/templates`);
+      const tplRes = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${encodeURIComponent(client.id)}/templates`);
       if (tplRes.ok) {
         const tplBody = await tplRes.json();
         const vers = tplBody.manifest?.versions || [];
@@ -161,7 +161,7 @@ export default function ScheduleManagerModal({ isOpen, onClose, client, isAdmin 
         id: activeSchedule.isDraft ? undefined : activeSchedule.id,
       };
 
-      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${encodeURIComponent(client.id)}/schedules`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${encodeURIComponent(client.id)}/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -196,7 +196,7 @@ export default function ScheduleManagerModal({ isOpen, onClose, client, isAdmin 
 
     try {
       const res = await apiFetch(
-        `${API_BASE_URL}/api/tenants/${encodeURIComponent(client.id)}/schedules/${encodeURIComponent(activeSchedule.id)}/trigger`,
+        `${API_BASE_URL}/api/v1/tenants/${encodeURIComponent(client.id)}/schedules/${encodeURIComponent(activeSchedule.id)}/trigger`,
         { method: 'POST' }
       );
 
@@ -239,7 +239,7 @@ export default function ScheduleManagerModal({ isOpen, onClose, client, isAdmin 
     setErrorMsg(null);
     try {
       const res = await apiFetch(
-        `${API_BASE_URL}/api/tenants/${encodeURIComponent(client.id)}/schedules/${encodeURIComponent(activeSchedule.id)}`,
+        `${API_BASE_URL}/api/v1/tenants/${encodeURIComponent(client.id)}/schedules/${encodeURIComponent(activeSchedule.id)}`,
         { method: 'DELETE' }
       );
       if (res.ok) {
@@ -637,7 +637,7 @@ export default function ScheduleManagerModal({ isOpen, onClose, client, isAdmin 
                       <td style={{ padding: '0.45rem 0.65rem' }}>
                         {r.jobId ? (
                           <a
-                            href={`${API_BASE_URL}/api/ppt/download/${r.jobId}`}
+                            href={`${API_BASE_URL}/api/v1/ppt/download/${r.jobId}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}

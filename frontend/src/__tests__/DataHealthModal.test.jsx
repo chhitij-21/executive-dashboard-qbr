@@ -77,7 +77,7 @@ describe('DataHealthModal Component (Item #12)', () => {
     };
 
     global.fetch = vi.fn().mockImplementation((url) => {
-      if (url.includes('/api/data-health/issue/')) {
+      if (url.includes('/api/v1/data-health/issue/')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({
@@ -117,7 +117,7 @@ describe('DataHealthModal Component (Item #12)', () => {
     // Verify snapshot fetch called with ?jobId=job_initial
     await waitFor(() => {
       const issueCall = global.fetch.mock.calls.find(call => 
-        typeof call[0] === 'string' && call[0].includes('/api/data-health/issue/')
+        typeof call[0] === 'string' && call[0].includes('/api/v1/data-health/issue/')
       );
       expect(issueCall).toBeDefined();
       expect(issueCall[0]).toContain('jobId=job_initial');

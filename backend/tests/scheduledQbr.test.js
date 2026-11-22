@@ -17,15 +17,41 @@ describe('Scheduled QBR Engine Suite (Item #13)', () => {
   const schedDir = path.join(tenantDir, 'schedules');
 
   before(async () => {
+    try {
+      const { migrate } = require('../db/migrate');
+      await migrate();
+    } catch (_) {}
+    try {
+      const { execute } = require('../config/database');
+      await execute('DELETE FROM schedule_runs WHERE tenant_id = ?', [TEST_TENANT]);
+      await execute('DELETE FROM schedules WHERE tenant_id = ?', [TEST_TENANT]);
+    } catch (_) {}
     if (!fs.existsSync(schedDir)) {
       fs.mkdirSync(schedDir, { recursive: true });
     }
     await schedulerService.initSchedulers();
   });
 
-  after(() => {
+  beforeEach(async () => {
+    try {
+      const { execute } = require('../config/database');
+      await execute('DELETE FROM schedule_runs WHERE tenant_id = ?', [TEST_TENANT]);
+      await execute('DELETE FROM schedules WHERE tenant_id = ?', [TEST_TENANT]);
+    } catch (_) {}
+    if (fs.existsSync(schedDir)) {
+      const files = fs.readdirSync(schedDir);
+      for (const f of files) {
+        try { fs.unlinkSync(path.join(schedDir, f)); } catch (_) {}
+      }
+    }
+  });
+
+  after(async () => {
     try {
       schedulerService.stopAll();
+      const { execute } = require('../config/database');
+      await execute('DELETE FROM schedule_runs WHERE tenant_id = ?', [TEST_TENANT]);
+      await execute('DELETE FROM schedules WHERE tenant_id = ?', [TEST_TENANT]);
       if (fs.existsSync(tenantDir)) {
         fs.rmSync(tenantDir, { recursive: true, force: true });
       }

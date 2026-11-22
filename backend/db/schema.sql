@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS reports_tickets (
   payload_json TEXT NOT NULL,
   bucket TEXT,
   ticket_type TEXT,
+  job_id TEXT,
   uploaded_at TEXT NOT NULL,
   UNIQUE(client_id, ticket_number)
 );

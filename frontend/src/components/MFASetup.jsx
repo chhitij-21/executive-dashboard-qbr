@@ -21,7 +21,7 @@ export default function MFASetup() {
   const loadMfaStatus = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/mfa/status`);
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/mfa/status`);
       if (res.ok) {
         const json = await res.json();
         setMfaEnabled(!!json.mfaEnabled);
@@ -43,7 +43,7 @@ export default function MFASetup() {
     setSuccessMsg(null);
     setLoading(true);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/mfa/setup`, { method: 'POST' });
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/mfa/setup`, { method: 'POST' });
       const json = await res.json();
       if (res.ok && json.success) {
         setSetupData(json);
@@ -69,7 +69,7 @@ export default function MFASetup() {
     setVerifying(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/mfa/verify`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/mfa/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: clean }),
@@ -100,7 +100,7 @@ export default function MFASetup() {
     setError(null);
     setSuccessMsg(null);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/mfa/disable`, { method: 'POST' });
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/mfa/disable`, { method: 'POST' });
       const json = await res.json();
       if (res.ok && json.success) {
         setMfaEnabled(false);

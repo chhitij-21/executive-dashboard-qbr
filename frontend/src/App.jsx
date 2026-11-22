@@ -163,7 +163,7 @@ function MainPortal() {
           site: siteParam,
         }).toString();
 
-        const fetchUrl = `${API_BASE_URL}/api/dashboard?${query}`;
+        const fetchUrl = `${API_BASE_URL}/api/v1/dashboard?${query}`;
         console.log('FETCHING API:', fetchUrl);
         const res = await apiFetch(fetchUrl, {
           signal: abortController.signal,
@@ -249,7 +249,7 @@ function MainPortal() {
     }
     const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/download-ticket`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/download-ticket`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -264,7 +264,7 @@ function MainPortal() {
       if (res.ok) {
         const ticketData = await res.json();
         if (ticketData.downloadTicket) {
-          const downloadUrl = `${API_BASE_URL}/api/${exportType}/${jobId || 'latest'}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          const downloadUrl = `${API_BASE_URL}/api/v1/${exportType}/${jobId || 'latest'}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
           window.location.href = downloadUrl;
           return;
         }

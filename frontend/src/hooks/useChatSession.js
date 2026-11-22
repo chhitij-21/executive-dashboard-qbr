@@ -51,7 +51,7 @@ export default function useChatSession(options = {}) {
     setMessages(prev => [...prev, userMessage, assistantPlaceholder]);
 
     try {
-      const url = `${API_BASE_URL}/api/chat/stream`;
+      const url = `${API_BASE_URL}/api/v1/chat/stream`;
       const response = await fetch(url, {
         method: 'POST',
         headers: {

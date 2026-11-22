@@ -348,22 +348,37 @@ async function getSchedulesRaw(tenantId) {
   try {
     const dbSchedules = await scheduleRepo.getSchedulesByTenant(canonicalId);
     if (dbSchedules && dbSchedules.length > 0) {
-      return dbSchedules.map((s) => ({
-        id: s.id,
-        name: s.name,
-        enabled: s.active,
-        cadence: s.cadence,
-        cronExpression: s.cronExpression,
-        timezone: 'Asia/Kolkata',
-        templateVersion: 'latest',
-        recipients: s.recipients,
-        recipientsDecryptionFailed: s.recipientsDecryptionFailed,
-        lastRunAt: s.lastRunAt,
-        nextRunAt: null,
-        lastStatus: s.lastStatus,
-        lastError: null,
-        updatedAt: s.updatedAt,
-      }));
+      let fileMap = {};
+      if (fs.existsSync(schedulesFile)) {
+        try {
+          const raw = await fs.promises.readFile(schedulesFile, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            for (const item of parsed) {
+              fileMap[item.id] = item;
+            }
+          }
+        } catch (_) {}
+      }
+      return dbSchedules.map((s) => {
+        const fileItem = fileMap[s.id] || {};
+        return {
+          id: s.id,
+          name: s.name,
+          enabled: s.active,
+          cadence: s.cadence,
+          cronExpression: s.cronExpression,
+          timezone: fileItem.timezone || 'Asia/Kolkata',
+          templateVersion: fileItem.templateVersion || 'latest',
+          recipients: s.recipients,
+          recipientsDecryptionFailed: s.recipientsDecryptionFailed,
+          lastRunAt: s.lastRunAt || fileItem.lastRunAt || null,
+          nextRunAt: fileItem.nextRunAt || null,
+          lastStatus: s.lastStatus || fileItem.lastStatus || null,
+          lastError: fileItem.lastError || null,
+          updatedAt: s.updatedAt || fileItem.updatedAt,
+        };
+      });
     }
   } catch (err) {
     // DB not ready or during tests

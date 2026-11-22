@@ -97,7 +97,7 @@ incident_severity_values:
     }
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/rules`);
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/rules`);
       if (res.ok) {
         const json = await res.json();
         if (json.yaml) {
@@ -121,7 +121,7 @@ incident_severity_values:
     localStorage.setItem('portal_rules_yaml', editingRulesYaml);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/rules`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/rules`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ yaml: editingRulesYaml }),
@@ -150,7 +150,7 @@ incident_severity_values:
     if (!clientId) return;
     setLoadingTemplates(true);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${clientId}/templates`);
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${clientId}/templates`);
       if (res.ok) {
         const data = await res.json();
         setTemplateVersions(data.versions || []);
@@ -174,7 +174,7 @@ incident_severity_values:
     fetchTemplates(client.id);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${client.id}/settings`);
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${client.id}/settings`);
       if (res.ok) {
         const json = await res.json();
         const s = json.settings || {};
@@ -200,7 +200,7 @@ incident_severity_values:
     setBrandingErrorMsg(null);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/settings`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${selectedClientForBranding.id}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -246,7 +246,7 @@ incident_severity_values:
     formData.append('template', file);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/templates`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${selectedClientForBranding.id}/templates`, {
         method: 'POST',
         body: formData,
       });
@@ -268,7 +268,7 @@ incident_severity_values:
     if (!selectedClientForBranding) return;
     setTemplateActionMsg(`Activating ${versionId}...`);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/templates/${versionId}/activate`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${selectedClientForBranding.id}/templates/${versionId}/activate`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -287,7 +287,7 @@ incident_severity_values:
     if (!window.confirm(`Are you sure you want to delete template version ${versionId}?`)) return;
     setTemplateActionMsg(`Deleting ${versionId}...`);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/tenants/${selectedClientForBranding.id}/templates/${versionId}`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/tenants/${selectedClientForBranding.id}/templates/${versionId}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -311,7 +311,7 @@ incident_severity_values:
       .filter(Boolean);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/clients`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/clients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -344,7 +344,7 @@ incident_severity_values:
     if (!isAdmin) return;
     const nextStatus = client.status === 'active' ? 'inactive' : 'active';
     try {
-      await apiFetch(`${API_BASE_URL}/api/clients/${client.id}`, {
+      await apiFetch(`${API_BASE_URL}/api/v1/clients/${client.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),
@@ -360,7 +360,7 @@ incident_severity_values:
     if (!locName || !locName.trim()) return;
 
     try {
-      await apiFetch(`${API_BASE_URL}/api/clients/${clientId}/locations`, {
+      await apiFetch(`${API_BASE_URL}/api/v1/clients/${clientId}/locations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ location: locName.trim() }),
@@ -930,7 +930,7 @@ incident_severity_values:
                               )}
 
                               <a
-                                href={`${API_BASE_URL}/api/tenants/${selectedClientForBranding?.id}/templates/${v.versionId}/download`}
+                                href={`${API_BASE_URL}/api/v1/tenants/${selectedClientForBranding?.id}/templates/${v.versionId}/download`}
                                 download
                                 style={{
                                   fontSize: '0.7rem',

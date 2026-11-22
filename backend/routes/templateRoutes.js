@@ -181,9 +181,19 @@ router.get('/:id/templates/:versionId/download', requireAuth, async (req, res) =
       return res.status(404).json({ error: 'Template version not found', code: 'VERSION_NOT_FOUND' });
     }
 
-    const versionPath = path.resolve(__dirname, `../../data/tenants/${tenantId}/templates/versions/${version.storedName}`);
+    let versionPath = path.resolve(__dirname, `../../data/tenants/${tenantId}/templates/versions/${version.storedName}`);
     if (!fs.existsSync(versionPath)) {
-      return res.status(404).json({ error: 'Template version physical file missing', code: 'FILE_NOT_FOUND' });
+      const candidates = [
+        path.resolve(__dirname, `../../data/tenants/${tenantId}/templates/${version.storedName}`),
+        path.resolve(__dirname, `../../data/tenants/${tenantId}/templates/master.pptx`),
+        version.storagePath ? path.resolve(__dirname, '../../', version.storagePath) : null,
+      ].filter(Boolean);
+      const found = candidates.find((p) => fs.existsSync(p));
+      if (found) {
+        versionPath = found;
+      } else {
+        return res.status(404).json({ error: 'Template version physical file missing', code: 'FILE_NOT_FOUND' });
+      }
     }
 
     return res.download(versionPath, version.filename);

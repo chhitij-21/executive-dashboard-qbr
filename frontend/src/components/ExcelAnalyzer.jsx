@@ -35,7 +35,7 @@ export default function ExcelAnalyzer() {
     form.append('excel', file);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/analyze-excel`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/analyze-excel`, {
         method: 'POST',
         body: form,
       });

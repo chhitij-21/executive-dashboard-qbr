@@ -20,7 +20,10 @@ let _currentUrl = null;
  */
 function getDatabaseUrl() {
   if (process.env.TURSO_DATABASE_URL && process.env.TURSO_DATABASE_URL.trim()) {
-    return process.env.TURSO_DATABASE_URL.trim();
+    const url = process.env.TURSO_DATABASE_URL.trim();
+    if (process.env.NODE_ENV !== 'test' || url.startsWith('file:') || process.env.TEST_USE_TURSO) {
+      return url;
+    }
   }
   const defaultDbFile = process.env.NODE_ENV === 'test'
     ? path.resolve(__dirname, '../../data/test.db')

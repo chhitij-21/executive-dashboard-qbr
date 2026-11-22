@@ -82,7 +82,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       try {
         const formData = new FormData();
         formData.append('file', incidentFile);
-        const res = await apiFetch(`${API_BASE_URL}/api/analyze-excel`, { method: 'POST', body: formData });
+        const res = await apiFetch(`${API_BASE_URL}/api/v1/analyze-excel`, { method: 'POST', body: formData });
         if (res.ok) {
           const audit = await res.json();
           setAiAuditResult(audit);
@@ -108,7 +108,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
       try {
         const formData = new FormData();
         formData.append('file', inventoryFile);
-        const res = await apiFetch(`${API_BASE_URL}/api/analyze-excel`, { method: 'POST', body: formData });
+        const res = await apiFetch(`${API_BASE_URL}/api/v1/analyze-excel`, { method: 'POST', body: formData });
         if (res.ok) {
           const audit = await res.json();
           setInventoryAuditResult(audit);
@@ -225,12 +225,12 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     }
 
     try {
-      let res = await apiFetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
+      let res = await apiFetch(`${API_BASE_URL}/api/v1/upload`, { method: 'POST', body: form });
 
       if (res.status === 401) {
         // Auto-refresh token by logging in as default admin
         try {
-          const loginRes = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          const loginRes = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: 'admin@portal.com', password: process.env.ADMIN_PASSWORD || 'admin123' }),
@@ -239,7 +239,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
             const loginData = await loginRes.json();
             if (loginData.token) {
               localStorage.setItem('portal_token', loginData.token);
-              res = await apiFetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
+              res = await apiFetch(`${API_BASE_URL}/api/v1/upload`, { method: 'POST', body: form });
             }
           }
         } catch (e) { }
@@ -296,7 +296,7 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
     setIsCancelling(true);
     try {
       const clientQuery = activeClient?.id ? `?clientId=${encodeURIComponent(activeClient.id)}` : '';
-      const res = await apiFetch(`${API_BASE_URL}/api/jobs/${currentJobId}${clientQuery}`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/jobs/${currentJobId}${clientQuery}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -336,9 +336,9 @@ export default function FileUploader({ onJobStarted, onJobCompleted }) {
 
       try {
         const clientQuery = activeClient?.id ? `?clientId=${encodeURIComponent(activeClient.id)}` : '';
-        let res = await apiFetch(`${API_BASE_URL}/api/jobs/${currentJobId}${clientQuery}`);
+        let res = await apiFetch(`${API_BASE_URL}/api/v1/jobs/${currentJobId}${clientQuery}`);
         if (!res.ok) {
-          res = await apiFetch(`${API_BASE_URL}/api/status/${currentJobId}${clientQuery}`);
+          res = await apiFetch(`${API_BASE_URL}/api/v1/status/${currentJobId}${clientQuery}`);
           if (!res.ok) {
             if (isSubscribed) {
               pollInterval = Math.min(pollInterval * 1.5, MAX_INTERVAL);

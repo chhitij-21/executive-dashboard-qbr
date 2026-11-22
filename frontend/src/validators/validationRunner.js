@@ -16,7 +16,7 @@ export async function runValidationReport(qbrData, options = {}) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const url = `${API_BASE_URL}/api/validate`;
+    const url = `${API_BASE_URL}/api/v1/validate`;
     const res = await apiFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

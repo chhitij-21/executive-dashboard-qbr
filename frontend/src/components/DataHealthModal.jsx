@@ -43,7 +43,7 @@ export default function DataHealthModal({ isOpen, onClose, qbrData, activeJobId 
       setErrorMsg(null);
       try {
         const query = activeJobId ? `?jobId=${encodeURIComponent(activeJobId)}` : '';
-        const res = await apiFetch(`${API_BASE_URL}/api/data-health${query}`);
+        const res = await apiFetch(`${API_BASE_URL}/api/v1/data-health${query}`);
         if (res.ok) {
           const body = await res.json();
           if (body.health) {
@@ -86,7 +86,7 @@ export default function DataHealthModal({ isOpen, onClose, qbrData, activeJobId 
     setLoadingSnapshot(true);
     try {
       const query = `?jobId=${encodeURIComponent(activeJobId || 'latest')}`;
-      const res = await apiFetch(`${API_BASE_URL}/api/data-health/issue/${encodeURIComponent(issue.id)}${query}`);
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/data-health/issue/${encodeURIComponent(issue.id)}${query}`);
       if (res.ok) {
         const data = await res.json();
         if (data.rowSnapshot) {
@@ -123,7 +123,7 @@ export default function DataHealthModal({ isOpen, onClose, qbrData, activeJobId 
     try {
       const query = activeJobId ? `&jobId=${encodeURIComponent(activeJobId)}` : '';
       const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-      const url = `${API_BASE_URL}/api/data-health/export?format=${format}${query}`;
+      const url = `${API_BASE_URL}/api/v1/data-health/export?format=${format}${query}`;
 
       const res = await fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

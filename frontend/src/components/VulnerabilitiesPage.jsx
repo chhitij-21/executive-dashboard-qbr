@@ -99,7 +99,7 @@ export default function VulnerabilitiesPage() {
       const clientQuery = (scopeMode === 'CLIENT' && activeClient?.id)
         ? `?clientId=${encodeURIComponent(activeClient.id)}`
         : '';
-      const res = await apiFetch(`${API_BASE_URL}/api/vulnerabilities${clientQuery}`, { signal });
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/vulnerabilities${clientQuery}`, { signal });
       if (!res.ok) {
         throw new Error(`Failed to fetch vulnerabilities (HTTP ${res.status})`);
       }
@@ -120,7 +120,7 @@ export default function VulnerabilitiesPage() {
     setSyncSuccessMsg(null);
     setSyncErrorMsg(null);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/vulnerabilities/refresh?count=100`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/vulnerabilities/refresh?count=100`, {
         method: 'POST',
       });
       const data = await res.json().catch(() => ({}));

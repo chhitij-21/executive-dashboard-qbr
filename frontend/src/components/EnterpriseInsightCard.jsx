@@ -131,7 +131,7 @@ export default function EnterpriseInsightCard({
 
     setLoading(true);
 
-    fetch(`${API_BASE_URL}/api/ai/insights`, {
+    fetch(`${API_BASE_URL}/api/v1/ai/insights`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

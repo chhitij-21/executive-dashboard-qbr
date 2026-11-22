@@ -52,7 +52,7 @@ describe('ScheduleManagerModal Component (Item #13)', () => {
       period: { displayLabel: '1 April 2026 – 30 April 2026' },
       status: 'SUCCESS',
       jobId: 'job_1',
-      downloadUrl: '/api/ppt/download/job_1',
+      downloadUrl: '/api/v1/ppt/download/job_1',
     },
   ];
 

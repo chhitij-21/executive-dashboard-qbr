@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
       const storedToken = localStorage.getItem('portal_token');
       if (storedToken) {
         try {
-          const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
             headers: { Authorization: `Bearer ${storedToken}` },
           });
 
@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
   const refreshClients = async (retryCount = 0) => {
     try {
       setLoadingClients(true);
-      const res = await apiFetch(`${API_BASE_URL}/api/clients`);
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/clients`);
       if (res.ok) {
         const json = await res.json();
         setClients(json.clients || []);
@@ -114,10 +114,10 @@ export function AuthProvider({ children }) {
     setActiveLocation('All Locations');
   };
 
-  // Requirement 1, 2, 3: POST /api/auth/login with API_BASE_URL and store state
+  // Requirement 1, 2, 3: POST /api/v1/auth/login with API_BASE_URL and store state
   const login = async (email, password) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -171,7 +171,7 @@ export function AuthProvider({ children }) {
 
   const completeMFALogin = async (tempToken, code) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/mfa/login-verify`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/mfa/login-verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempToken, token: code }),
@@ -213,7 +213,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     // Invalidate token on the server
     try {
-      await apiFetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST' });
+      await apiFetch(`${API_BASE_URL}/api/v1/auth/logout`, { method: 'POST' });
     } catch (_) { /* ignore network errors on logout */ }
 
     setUser(null);

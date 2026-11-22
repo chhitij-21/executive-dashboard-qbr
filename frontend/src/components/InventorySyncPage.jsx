@@ -30,7 +30,7 @@ export default function InventorySyncPage() {
 
   const fetchSyncs = useCallback(async (cid) => {
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/inventory/syncs?clientId=${encodeURIComponent(cid)}`);
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/inventory/syncs?clientId=${encodeURIComponent(cid)}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Failed to fetch syncs (${res.status})`);
@@ -44,7 +44,7 @@ export default function InventorySyncPage() {
 
   const fetchCurrent = useCallback(async (cid, includeAll = false) => {
     try {
-      const url = `${API_BASE_URL}/api/inventory/current?clientId=${encodeURIComponent(cid)}${includeAll ? '&include=all' : ''}`;
+      const url = `${API_BASE_URL}/api/v1/inventory/current?clientId=${encodeURIComponent(cid)}${includeAll ? '&include=all' : ''}`;
       const res = await apiFetch(url);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -108,7 +108,7 @@ export default function InventorySyncPage() {
       fd.append('clientId', clientId);
       fd.append('file', file);
 
-      const res = await fetch(`${API_BASE_URL}/api/inventory/sync/upload`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/inventory/sync/upload`, {
         method: 'POST',
         headers: { ...getAuthHeaders() },
         body: fd,
@@ -142,7 +142,7 @@ export default function InventorySyncPage() {
     setSuccess(null);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/inventory/sync/${pendingSync.syncId}/approve`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/inventory/sync/${pendingSync.syncId}/approve`, {
         method: 'POST',
       });
       const body = await res.json().catch(() => ({}));
@@ -174,7 +174,7 @@ export default function InventorySyncPage() {
     setSuccess(null);
 
     try {
-      const res = await apiFetch(`${API_BASE_URL}/api/inventory/sync/${pendingSync.syncId}/reject`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/v1/inventory/sync/${pendingSync.syncId}/reject`, {
         method: 'POST',
       });
       const body = await res.json().catch(() => ({}));

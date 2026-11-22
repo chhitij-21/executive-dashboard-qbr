@@ -54,7 +54,7 @@ export default function ReportsView({ jobId = 'latest' }) {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
       };
       const queryParam = jobId ? `?jobId=${encodeURIComponent(jobId)}` : '';
-      const res = await fetch(`${API_BASE_URL}/api/reports/mmtc/latest${queryParam}`, { headers });
+      const res = await fetch(`${API_BASE_URL}/api/v1/reports/mmtc/latest${queryParam}`, { headers });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || `HTTP ${res.status}`);

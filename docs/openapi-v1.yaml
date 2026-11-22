@@ -1,0 +1,355 @@
+openapi: 3.0.3
+info:
+  title: Executive Dashboard & QBR Generator Platform API
+  description: >
+    Canonical API v1 specification for the Executive QBR Platform.
+    Provides complete multi-tenant reporting, automated scheduling,
+    vulnerability monitoring, AI analytics, and presentation generation.
+  version: 1.0.0
+  contact:
+    name: Executive Platform Engineering Team
+servers:
+  - url: /api/v1
+    description: Canonical API v1 Base URL
+  - url: /api
+    description: Legacy Endpoint Alias (RFC 8594 Deprecated; includes Deprecation and Link headers)
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: API & Platform Health Check
+      description: Returns liveness status, API version, and scheduler health summary.
+      security: []
+      responses:
+        '200':
+          description: Service is healthy and operational.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  ts:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    example: v1
+                  scheduler:
+                    type: string
+                    example: healthy
+
+  /health/scheduler:
+    get:
+      summary: Scheduler Engine Health
+      description: Returns readiness, active task count, and last heartbeat timestamp of the standing scheduler.
+      security: []
+      responses:
+        '200':
+          description: Scheduler is ready and operational.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerHealth'
+        '503':
+          description: Scheduler is stopped or uninitialized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerHealth'
+
+  /auth/login:
+    post:
+      summary: User Authentication
+      description: Authenticates user credentials with rate limiting (5 attempts per 15 min) and issues a JWT v2 token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@portal.com
+                password:
+                  type: string
+                  format: password
+                  example: admin123
+      responses:
+        '200':
+          description: Successful authentication.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Missing email or password.
+        '401':
+          description: Invalid email or password.
+        '429':
+          description: Rate limit exceeded.
+
+  /auth/logout:
+    post:
+      summary: Self Session Logout
+      description: Revokes the caller's active JWT session via jti blocklist in Redis/in-memory store.
+      responses:
+        '200':
+          description: Logged out successfully.
+        '401':
+          description: Unauthorized.
+
+  /auth/revoke:
+    post:
+      summary: Admin Session Revocation
+      description: Revokes all sessions for a target user before current timestamp or specific jti. Requires admin role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                jti:
+                  type: string
+      responses:
+        '200':
+          description: Sessions revoked successfully.
+        '403':
+          description: Admin privilege required.
+
+  /dashboard:
+    get:
+      summary: Executive QBR Dashboard Data
+      description: Returns processed SSOT analytics, site summaries, SLA compliance, and uptime metrics.
+      parameters:
+        - in: query
+          name: clientId
+          schema:
+            type: string
+          required: true
+          description: Tenant identifier (e.g. client-jfl, client-mmtcpamp)
+        - in: query
+          name: jobId
+          schema:
+            type: string
+          description: Optional specific report job identifier
+        - in: query
+          name: site
+          schema:
+            type: string
+          description: Optional site name filter
+      responses:
+        '200':
+          description: Dashboard data payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardData'
+        '400':
+          description: Missing clientId.
+        '403':
+          description: Forbidden - cross-tenant access denied.
+        '404':
+          description: Report data not found.
+
+  /tenants:
+    get:
+      summary: List Tenants
+      description: Returns list of provisioned tenant configurations.
+      responses:
+        '200':
+          description: List of tenants.
+    post:
+      summary: Provision Tenant
+      description: Registers a new tenant organization. Requires admin role.
+      responses:
+        '201':
+          description: Tenant created.
+
+  /tenants/{id}/settings:
+    get:
+      summary: Get Tenant Settings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tenant settings object.
+    put:
+      summary: Update Tenant Settings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Settings updated.
+
+  /tenants/{id}/schedules:
+    get:
+      summary: List Tenant Schedules
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of standing schedules.
+    post:
+      summary: Create Tenant Schedule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Schedule created.
+
+  /data-health:
+    get:
+      summary: Data Hygiene & Invariant Telemetry
+      description: Evaluates cross-workbook invariants, device integrity, and incident hygiene scores.
+      responses:
+        '200':
+          description: Data health report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataHealthReport'
+
+  /vulnerabilities:
+    get:
+      summary: CVE & Security Vulnerability Feed
+      description: Returns network hardware and infrastructure CVE advisories matched against tenant inventory.
+      responses:
+        '200':
+          description: Vulnerability list and severity breakdown.
+
+  /validate:
+    post:
+      summary: Run Report Invariant Validation
+      description: Validates QBR dataset against enterprise data hygiene rules.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qbrData]
+              properties:
+                qbrData:
+                  type: object
+      responses:
+        '200':
+          description: Validation result.
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, user, viewer]
+        client_access:
+          type: array
+          items:
+            type: string
+
+    SchedulerHealth:
+      type: object
+      properties:
+        ready:
+          type: boolean
+        activeTasks:
+          type: integer
+        lastHeartbeat:
+          type: string
+          format: date-time
+
+    DashboardData:
+      type: object
+      properties:
+        customerName:
+          type: string
+        reportingPeriod:
+          type: string
+        generatedAt:
+          type: string
+        executiveSummary:
+          type: object
+        siteSummary:
+          type: array
+          items:
+            type: object
+        switchAnalytics:
+          type: object
+        apAnalytics:
+          type: object
+        incidentAnalytics:
+          type: object
+        rcaAnalytics:
+          type: object
+        slaAnalytics:
+          type: object
+
+    DataHealthReport:
+      type: object
+      properties:
+        success:
+          type: boolean
+        tenantId:
+          type: string
+        health:
+          type: object
+          properties:
+            status:
+              type: string
+            score:
+              type: number
+            invariants:
+              type: object
+            metrics:
+              type: object
+            issues:
+              type: array
+              items:
+                type: object

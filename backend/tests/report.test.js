@@ -61,6 +61,11 @@ describe('Phase 1 — MMTC Reports Suite (TDD)', () => {
   let mmtcToken;
 
   before(async () => {
+    try {
+      const { migrate } = require('../db/migrate');
+      await migrate();
+    } catch (_) {}
+
     // Start ephemeral HTTP server for route testing
     await new Promise((resolve) => {
       server = app.listen(0, '127.0.0.1', () => {

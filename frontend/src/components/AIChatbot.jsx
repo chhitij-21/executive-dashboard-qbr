@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext';
 // AIChatbot — Executive QBR AI Assistant with Claudex Loop (Precision Edition)
 //
 // Two modes:
-//   Standard → Single-shot /api/chat  query
-//   Claudex  → SSE-streamed /api/chat/loop with live Think→Act→Observe→Repeat
+//   Standard → Single-shot /api/v1/chat  query
+//   Claudex  → SSE-streamed /api/v1/chat/loop with live Think→Act→Observe→Repeat
 //              + precision confidence breakdown per cycle
 //              + cited KPIs and missing KPI badges
 //              + downloadable loop trace JSON
@@ -108,7 +108,7 @@ export function AIChatbot({ jobId }) {
     setLoading(true);
     const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/chat`, {
+      const res  = await fetch(`${API_BASE_URL}/api/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +152,7 @@ export function AIChatbot({ jobId }) {
     const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
     let sseTicket = null;
     try {
-      const ticketRes = await fetch(`${API_BASE_URL}/api/auth/sse-ticket`, {
+      const ticketRes = await fetch(`${API_BASE_URL}/api/v1/auth/sse-ticket`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -179,7 +179,7 @@ export function AIChatbot({ jobId }) {
       maxIterations: 4,
       ticket: sseTicket,
     });
-    const es     = new EventSource(`${API_BASE_URL}/api/chat/loop?${params}`);
+    const es     = new EventSource(`${API_BASE_URL}/api/v1/chat/loop?${params}`);
     eventSourceRef.current = es;
 
     const ALL_EVENTS = ['loop_start','think','act','observe','repeat','loop_converged','loop_complete','error'];

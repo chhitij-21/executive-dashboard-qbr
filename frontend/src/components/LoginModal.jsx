@@ -30,7 +30,7 @@ export default function LoginModal({ isOpen, onClose, requireLogin = false }) {
   }, [isOpen]);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/auth/demo-accounts`)
+    fetch(`${API_BASE_URL}/api/v1/auth/demo-accounts`)
       .then((res) => {
         if (!res.ok) throw new Error('Backend Offline');
         return res.json();

@@ -26,7 +26,7 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
     }
     const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/download-ticket`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/download-ticket`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -41,7 +41,7 @@ export default function OverviewPage({ data, jobId, onOpenReports, onOpenTickets
       if (res.ok) {
         const ticketData = await res.json();
         if (ticketData.downloadTicket) {
-          const downloadUrl = `${API_BASE_URL}/api/${exportType}/${activeJobId}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          const downloadUrl = `${API_BASE_URL}/api/v1/${exportType}/${activeJobId}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
           window.location.href = downloadUrl;
           return;
         }

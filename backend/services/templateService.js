@@ -95,18 +95,20 @@ async function saveManifest(tenantId, manifest) {
   // Sync to DB repo (Item #3)
   try {
     if (Array.isArray(manifest.versions)) {
+      const activeNum = manifest.activeVersion || parseInt(String(manifest.activeVersionId || '').replace(/\D/g, ''), 10) || 1;
       for (const v of manifest.versions) {
-        const vNum = typeof v.version === 'number' ? v.version : parseInt(String(v.versionId || '').replace('v', ''), 10) || 1;
+        const vNum = typeof v.version === 'number' ? v.version : parseInt(String(v.versionId || '').replace(/\D/g, ''), 10) || 1;
+        const isActive = (v.versionId === manifest.activeVersionId || vNum === activeNum);
         await templateRepo.addVersion({
           id: `${canonicalId}_v${vNum}`,
           tenantId: canonicalId,
           version: vNum,
           filename: v.originalName || v.filename || `template_v${vNum}.pptx`,
-          storagePath: v.storagePath || `data/tenants/${canonicalId}/templates/v${vNum}/${v.storedName || 'master.pptx'}`,
+          storagePath: v.storagePath || path.join('data', 'tenants', canonicalId, 'templates', 'versions', v.storedName || `v${vNum}.pptx`),
           fileSizeBytes: v.size || v.fileSizeBytes || 0,
           uploadedBy: v.uploadedBy || 'admin@portal.com',
           uploadedAt: v.uploadedAt || new Date().toISOString(),
-          isActive: v.isActive || manifest.activeVersionId === v.versionId || manifest.activeVersion === vNum,
+          isActive,
         });
       }
     }
@@ -181,7 +183,7 @@ function getActiveTemplatePath(tenantId) {
   return globalFallback;
 }
 
-async function enforceRetentionPolicy(manifest, versionsDir) {
+async function enforceRetentionPolicy(manifest, versionsDir, canonicalId) {
   if (manifest.versions.length <= MAX_TEMPLATE_VERSIONS) return;
 
   const sorted = [...manifest.versions].sort((a, b) => new Date(a.uploadedAt) - new Date(b.uploadedAt));
@@ -196,6 +198,12 @@ async function enforceRetentionPolicy(manifest, versionsDir) {
       const prunePath = path.join(versionsDir, pruned.storedName);
       await fs.promises.unlink(prunePath).catch(() => {});
       manifest.versions = manifest.versions.filter((v) => v.versionId !== pruned.versionId);
+      try {
+        const vNum = typeof pruned.version === 'number' ? pruned.version : parseInt(String(pruned.versionId || '').replace(/\D/g, ''), 10);
+        if (canonicalId && vNum) {
+          await templateRepo.deleteVersion(canonicalId, vNum);
+        }
+      } catch (_) {}
     }
   }
 }
@@ -223,8 +231,10 @@ async function createVersion(tenantId, buffer, originalFilename, uploadedBy = 'S
 
   const newVersionEntry = {
     versionId,
+    version: versionNum,
     filename: path.basename(originalFilename || `${versionId}.pptx`),
     storedName,
+    storagePath: path.join('data', 'tenants', canonicalId, 'templates', 'versions', storedName),
     sizeBytes: buffer.length,
     sha256,
     uploadedBy,
@@ -233,9 +243,10 @@ async function createVersion(tenantId, buffer, originalFilename, uploadedBy = 'S
   };
 
   manifest.versions.push(newVersionEntry);
+  manifest.activeVersion = versionNum;
   manifest.activeVersionId = versionId;
 
-  await enforceRetentionPolicy(manifest, versionsDir);
+  await enforceRetentionPolicy(manifest, versionsDir, canonicalId);
 
   const masterPath = path.join(templatesDir, 'master.pptx');
   try {
@@ -256,16 +267,23 @@ async function activateVersion(tenantId, versionId) {
     throw new Error(`Version not found: "${versionId}" for tenant ${canonicalId}`);
   }
 
+  const vNum = typeof target.version === 'number' ? target.version : parseInt(String(target.versionId || '').replace(/\D/g, ''), 10) || 1;
+  manifest.activeVersion = vNum;
+  manifest.activeVersionId = versionId;
+
   for (const v of manifest.versions) {
     v.isActive = (v.versionId === versionId);
   }
-  manifest.activeVersionId = versionId;
 
   const versionPath = path.join(versionsDir, target.storedName);
   if (fs.existsSync(versionPath)) {
     const masterPath = path.join(templatesDir, 'master.pptx');
     await fs.promises.copyFile(versionPath, masterPath).catch(() => {});
   }
+
+  try {
+    await templateRepo.setActiveVersion(canonicalId, vNum);
+  } catch (_) {}
 
   await saveManifest(canonicalId, manifest);
   return manifest;
@@ -288,6 +306,12 @@ async function deleteVersion(tenantId, versionId) {
   await fs.promises.unlink(filePath).catch(() => {});
 
   manifest.versions = manifest.versions.filter((v) => v.versionId !== versionId);
+  try {
+    const vNum = typeof target.version === 'number' ? target.version : parseInt(String(target.versionId || '').replace(/\D/g, ''), 10);
+    if (vNum) {
+      await templateRepo.deleteVersion(canonicalId, vNum);
+    }
+  } catch (_) {}
   await saveManifest(canonicalId, manifest);
 
   return { success: true, deletedVersionId: versionId };

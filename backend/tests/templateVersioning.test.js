@@ -12,8 +12,16 @@ describe('Template Versioning & Retention Suite (Item #11)', () => {
   let validPptxBuffer = null;
   const masterTemplatePath = path.resolve(__dirname, '../../templates/master_template.pptx');
 
-  before(() => {
+  before(async () => {
     validPptxBuffer = fs.readFileSync(masterTemplatePath);
+    try {
+      const { migrate } = require('../db/migrate');
+      await migrate();
+    } catch (_) {}
+    try {
+      const { execute } = require('../config/database');
+      await execute('DELETE FROM templates WHERE tenant_id = ?', [testTenant]);
+    } catch (_) {}
   });
 
   beforeEach(async () => {
@@ -22,9 +30,17 @@ describe('Template Versioning & Retention Suite (Item #11)', () => {
     if (fs.existsSync(tenantDir)) {
       await fs.promises.rm(tenantDir, { recursive: true, force: true }).catch(() => {});
     }
+    try {
+      const { execute } = require('../config/database');
+      await execute('DELETE FROM templates WHERE tenant_id = ?', [testTenant]);
+    } catch (_) {}
   });
 
   after(async () => {
+    try {
+      const { execute } = require('../config/database');
+      await execute('DELETE FROM templates WHERE tenant_id = ?', [testTenant]);
+    } catch (_) {}
     const tenantDir = path.resolve(__dirname, `../../data/tenants/${testTenant}`);
     if (fs.existsSync(tenantDir)) {
       await fs.promises.rm(tenantDir, { recursive: true, force: true }).catch(() => {});

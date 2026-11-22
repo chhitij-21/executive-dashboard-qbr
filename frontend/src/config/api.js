@@ -9,6 +9,7 @@ const rawUrl = env.VITE_API_URL !== undefined && env.VITE_API_URL !== ""
   : "";
 
 export const API_BASE_URL = rawUrl ? rawUrl.replace(/\/+$/, "") : "";
+export const API_V1_BASE = `${API_BASE_URL}/api/v1`;
 export default API_BASE_URL;
 
 // ─── Authenticated Fetch Helper ────────────────────────────────────────────────

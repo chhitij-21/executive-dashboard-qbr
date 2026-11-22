@@ -18,7 +18,7 @@ export default function AISectionSummary({ section, jobId, title = 'AI Section S
     setLoading(true);
 
     const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
-    fetch(`${API_BASE_URL}/api/ai/section-summary`, {
+    fetch(`${API_BASE_URL}/api/v1/ai/section-summary`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
