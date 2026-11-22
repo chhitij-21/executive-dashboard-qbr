@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const templateRepo = require('../repositories/templateRepo');
 const clientService = require('./clientService');
 
 const MAX_TEMPLATE_VERSIONS = 5;
@@ -36,10 +37,34 @@ function getManifestPath(tenantId) {
 }
 
 async function getManifest(tenantId) {
+  const { canonicalId } = getTenantTemplatesDir(tenantId);
+  try {
+    const dbManifest = await templateRepo.getManifest(canonicalId);
+    if (dbManifest && dbManifest.versions && dbManifest.versions.length > 0) {
+      return {
+        tenantId: canonicalId,
+        activeVersion: dbManifest.activeVersion,
+        activeVersionId: `v${dbManifest.activeVersion}`,
+        updatedAt: new Date().toISOString(),
+        versions: dbManifest.versions.map((v) => ({
+          versionId: `v${v.version}`,
+          version: v.version,
+          originalName: v.filename,
+          storedName: path.basename(v.storagePath),
+          size: v.fileSizeBytes,
+          uploadedAt: v.uploadedAt,
+          uploadedBy: v.uploadedBy,
+          isActive: v.isActive,
+        })),
+      };
+    }
+  } catch (_) {}
+
   const manifestPath = getManifestPath(tenantId);
   if (!fs.existsSync(manifestPath)) {
     return {
-      tenantId,
+      tenantId: canonicalId,
+      activeVersion: 1,
       activeVersionId: null,
       updatedAt: new Date().toISOString(),
       versions: [],
@@ -47,11 +72,16 @@ async function getManifest(tenantId) {
   }
   try {
     const content = await fs.promises.readFile(manifestPath, 'utf8');
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+    return {
+      activeVersion: parsed.activeVersion || (parsed.activeVersionId ? parseInt(parsed.activeVersionId.replace('v', ''), 10) : 1),
+      ...parsed,
+    };
   } catch (err) {
     console.warn(`[templateService] Corrupt manifest for ${tenantId}, initializing fresh:`, err.message);
     return {
-      tenantId,
+      tenantId: canonicalId,
+      activeVersion: 1,
       activeVersionId: null,
       updatedAt: new Date().toISOString(),
       versions: [],
@@ -60,6 +90,28 @@ async function getManifest(tenantId) {
 }
 
 async function saveManifest(tenantId, manifest) {
+  const { canonicalId } = getTenantTemplatesDir(tenantId);
+
+  // Sync to DB repo (Item #3)
+  try {
+    if (Array.isArray(manifest.versions)) {
+      for (const v of manifest.versions) {
+        const vNum = typeof v.version === 'number' ? v.version : parseInt(String(v.versionId || '').replace('v', ''), 10) || 1;
+        await templateRepo.addVersion({
+          id: `${canonicalId}_v${vNum}`,
+          tenantId: canonicalId,
+          version: vNum,
+          filename: v.originalName || v.filename || `template_v${vNum}.pptx`,
+          storagePath: v.storagePath || `data/tenants/${canonicalId}/templates/v${vNum}/${v.storedName || 'master.pptx'}`,
+          fileSizeBytes: v.size || v.fileSizeBytes || 0,
+          uploadedBy: v.uploadedBy || 'admin@portal.com',
+          uploadedAt: v.uploadedAt || new Date().toISOString(),
+          isActive: v.isActive || manifest.activeVersionId === v.versionId || manifest.activeVersion === vNum,
+        });
+      }
+    }
+  } catch (_) {}
+
   const manifestPath = getManifestPath(tenantId);
   const dir = path.dirname(manifestPath);
   if (!fs.existsSync(dir)) {

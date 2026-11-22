@@ -1,39 +1,82 @@
 // backend/config/database.js
-// Enterprise Turso Database Client (Phase G)
+// Enterprise Turso & Embedded SQLite Database Client (Item #3)
+// Supports cloud Turso (libsql://) in production and zero-dependency embedded SQLite (file:) in local/test.
 
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables strictly from root .env
+// Load environment variables from root .env
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const { createClient } = require('@libsql/client');
 
 let _client = null;
+let _currentUrl = null;
 
 /**
- * Asserts that the Turso database URL is configured.
- * Throws a fatal error if missing.
+ * Resolves the database connection URL based on environment.
+ * If TURSO_DATABASE_URL is set, uses it.
+ * Otherwise, falls back to embedded SQLite file.
+ */
+function getDatabaseUrl() {
+  if (process.env.TURSO_DATABASE_URL && process.env.TURSO_DATABASE_URL.trim()) {
+    return process.env.TURSO_DATABASE_URL.trim();
+  }
+  const defaultDbFile = process.env.NODE_ENV === 'test'
+    ? path.resolve(__dirname, '../../data/test.db')
+    : path.resolve(__dirname, '../../data/app.db');
+  return `file:${defaultDbFile.replace(/\\/g, '/')}`;
+}
+
+/**
+ * Asserts that the database connection configuration is valid.
+ * In production without TURSO_DATABASE_URL, warns or falls back safely.
  */
 function assertConfigured() {
-  if (!process.env.TURSO_DATABASE_URL) {
-    throw new Error('[FATAL] Missing TURSO_DATABASE_URL environment variable. Turso connection is strictly required.');
+  const url = getDatabaseUrl();
+  if (process.env.NODE_ENV === 'production' && !process.env.TURSO_DATABASE_URL) {
+    console.warn('[database] WARNING: Running in production without TURSO_DATABASE_URL. Falling back to local embedded SQLite file.');
   }
+  return url;
 }
 
 /**
  * Lazy getter for the LibSQL client instance.
+ * Automatically enforces foreign key constraints (PRAGMA foreign_keys = ON;).
  * @returns {import('@libsql/client').Client}
  */
 function getClient() {
-  assertConfigured();
-  if (!_client) {
+  const targetUrl = getDatabaseUrl();
+  if (!_client || _currentUrl !== targetUrl) {
+    if (_client) {
+      try { _client.close(); } catch (_) {}
+    }
+    _currentUrl = targetUrl;
     _client = createClient({
-      url: process.env.TURSO_DATABASE_URL,
-      authToken: process.env.TURSO_AUTH_TOKEN,
+      url: targetUrl,
+      authToken: process.env.TURSO_AUTH_TOKEN || undefined,
+    });
+
+    // Enforce foreign key constraints in SQLite/LibSQL
+    _client.execute('PRAGMA foreign_keys = ON;').catch((err) => {
+      // In cloud Turso or environments without PRAGMA support, log debug only
+      if (!err.message?.includes('not supported')) {
+        console.warn('[database] Note on PRAGMA foreign_keys:', err.message);
+      }
     });
   }
   return _client;
+}
+
+/**
+ * Reset client (used in tests when changing DB URLs)
+ */
+function resetClient() {
+  if (_client) {
+    try { _client.close(); } catch (_) {}
+    _client = null;
+    _currentUrl = null;
+  }
 }
 
 /**
@@ -48,7 +91,7 @@ const db = new Proxy({}, {
 });
 
 /**
- * Execute a SQL query with parameters against the Turso database.
+ * Execute a SQL query with parameters against the database.
  * @param {string|object} query SQL query string or statement object
  * @param {Array} params Parameter array for SQL placeholders
  * @returns {Promise<object>} Query result set
@@ -63,7 +106,7 @@ async function execute(query, params = []) {
 }
 
 /**
- * Execute a batch of SQL statements in a single transaction against the Turso database.
+ * Execute a batch of SQL statements in a single transaction against the database.
  * @param {Array<string|object>} statements Array of SQL queries or statement objects
  * @param {string} [mode='deferred'] Transaction mode ('deferred' | 'immediate' | 'exclusive')
  * @returns {Promise<Array<object>>} Batch query result set
@@ -84,8 +127,8 @@ async function batch(statements, mode = 'deferred') {
 }
 
 /**
- * Check health and connectivity to the Turso database.
- * @returns {Promise<{healthy: boolean, timestamp: string, rows?: number, error?: string}>}
+ * Check health and connectivity to the database.
+ * @returns {Promise<{healthy: boolean, timestamp: string, rows?: number, error?: string, url?: string}>}
  */
 async function healthCheck() {
   try {
@@ -95,12 +138,14 @@ async function healthCheck() {
       healthy: true,
       timestamp: new Date().toISOString(),
       rows: res.rows?.length || 0,
+      url: _currentUrl,
     };
   } catch (error) {
     return {
       healthy: false,
       timestamp: new Date().toISOString(),
       error: error.message,
+      url: _currentUrl,
     };
   }
 }
@@ -108,7 +153,9 @@ async function healthCheck() {
 module.exports = {
   db,
   getClient,
+  resetClient,
   assertConfigured,
+  getDatabaseUrl,
   execute,
   batch,
   healthCheck,

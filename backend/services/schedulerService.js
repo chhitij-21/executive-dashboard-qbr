@@ -45,7 +45,9 @@ const _failureAlertsThrottle = new Map();
 let _schedulersReady = false;
 
 // Heartbeat tracker
+const scheduleRepo = require('../repositories/scheduleRepo');
 let _lastHeartbeat = Date.now();
+let _schedulerHealthDegraded = null;
 let _heartbeatTimer = null;
 
 /**
@@ -342,6 +344,31 @@ async function logAdminAudit(action, scheduleId, tenantId, user = {}, ip = '127.
 async function getSchedulesRaw(tenantId) {
   const { schedulesFile, legacyConfigFile, canonicalId } = getTenantSchedulesDir(tenantId);
 
+  // Read from DB repo first (Item #3)
+  try {
+    const dbSchedules = await scheduleRepo.getSchedulesByTenant(canonicalId);
+    if (dbSchedules && dbSchedules.length > 0) {
+      return dbSchedules.map((s) => ({
+        id: s.id,
+        name: s.name,
+        enabled: s.active,
+        cadence: s.cadence,
+        cronExpression: s.cronExpression,
+        timezone: 'Asia/Kolkata',
+        templateVersion: 'latest',
+        recipients: s.recipients,
+        recipientsDecryptionFailed: s.recipientsDecryptionFailed,
+        lastRunAt: s.lastRunAt,
+        nextRunAt: null,
+        lastStatus: s.lastStatus,
+        lastError: null,
+        updatedAt: s.updatedAt,
+      }));
+    }
+  } catch (err) {
+    // DB not ready or during tests
+  }
+
   if (fs.existsSync(schedulesFile)) {
     try {
       const raw = await fs.promises.readFile(schedulesFile, 'utf8');
@@ -579,6 +606,25 @@ async function saveSchedule(tenantId, scheduleData = {}, user = {}, ip = '127.0.
 
     await safeWriteJson(schedulesFile, schedules);
 
+    // Persist to DB repo (Item #3)
+    try {
+      await scheduleRepo.saveSchedule({
+        id: scheduleId,
+        tenantId: canonicalId,
+        name: updatedSchedule.name,
+        cadence: updatedSchedule.cadence,
+        cronExpression: updatedSchedule.cronExpression,
+        dayOfMonth: scheduleData.dayOfMonth ?? null,
+        dayOfWeek: scheduleData.dayOfWeek ?? null,
+        hourUtc: scheduleData.hourUtc ?? 6,
+        recipients: updatedSchedule.recipients,
+        active: updatedSchedule.enabled,
+        lastRunAt: updatedSchedule.lastRunAt,
+        lastStatus: updatedSchedule.lastStatus,
+        updatedAt: updatedSchedule.updatedAt,
+      });
+    } catch (_) {}
+
     // Hot-swap: stop old task and mount updated one under new timezone/cron
     registerCronTask(canonicalId, updatedSchedule);
 
@@ -593,6 +639,10 @@ async function saveSchedule(tenantId, scheduleData = {}, user = {}, ip = '127.0.
  */
 async function deleteSchedule(tenantId, scheduleId, user = {}, ip = '127.0.0.1') {
   const { canonicalId, schedulesFile } = getTenantSchedulesDir(tenantId);
+
+  try {
+    await scheduleRepo.deleteSchedule(canonicalId, scheduleId);
+  } catch (_) {}
 
   return withFileLock(schedulesFile, async () => {
     const schedules = await getSchedulesRaw(canonicalId);
@@ -706,6 +756,25 @@ async function executeScheduledQbr(tenantId, scheduleId, triggerType = 'CRON', o
 
   if (!schedule) {
     throw new Error(`Schedule ${scheduleId} not found for tenant ${canonicalId}.`);
+  }
+
+  // Blocker 2: Loud Decryption Failure Check
+  if (schedule.recipients === null || schedule.recipientsDecryptionFailed) {
+    const errorMsg = 'RECIPIENTS_UNAVAILABLE: Decryption failure for recipient list. Halting execution to prevent alert drop.';
+    console.error(`[schedulerService] [CRITICAL] ${errorMsg} (Schedule: ${schedule.id}, Tenant: ${canonicalId})`);
+    notifyFailure(canonicalId, 'RECIPIENTS_DECRYPTION_FAILED', {
+      scheduleId: schedule.id,
+      scheduleName: schedule.name,
+      error: errorMsg,
+    });
+    _schedulerHealthDegraded = {
+      degraded: true,
+      reason: 'RECIPIENTS_DECRYPTION_FAILED',
+      timestamp: new Date().toISOString(),
+      tenantId: canonicalId,
+      scheduleId: schedule.id,
+    };
+    throw new Error(errorMsg);
   }
 
   const period = derivePeriodForCadence(

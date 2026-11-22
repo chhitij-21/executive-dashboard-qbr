@@ -71,3 +71,14 @@ api/
 # Python
 __pycache__/
 *.py[cod]
+
+# Dynamic operational tenant state (managed in DB via Item #3)
+data/tenants/**/schedules/
+data/tenants/**/templates/*_manifest.json
+data/templates_manifest.json
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/*.migrated
+data/backup_pre_item3_*/

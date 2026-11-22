@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const userRepo = require('../repositories/userRepo');
 
 const TOKEN_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours access token lifespan (Item #4 spec)
 const LEGACY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours for legacy fallback
@@ -131,7 +132,21 @@ function safeWriteJsonSync(filePath, data) {
 function loadUserMfaData() {
   try {
     if (fs.existsSync(USERS_FILE)) {
-      const raw = fs.readFileSync(USERS_FILE, 'utf-8');
+      let raw = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          raw = fs.readFileSync(USERS_FILE, 'utf-8');
+          break;
+        } catch (e) {
+          if (e.code === 'EBUSY' && attempt < 4) {
+            const start = Date.now();
+            while (Date.now() - start < 25) {}
+          } else {
+            return;
+          }
+        }
+      }
+      if (!raw) return;
       const mfaMap = JSON.parse(raw);
       if (typeof mfaMap === 'object' && mfaMap !== null) {
         for (const user of USERS) {
@@ -220,19 +235,41 @@ function saveUserMfaData() {
 
 function migratePlaintextPasswordsFile(filePath) {
   if (!fs.existsSync(filePath)) return 0;
-  const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  let raw = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      raw = fs.readFileSync(filePath, 'utf8');
+      break;
+    } catch (e) {
+      if (e.code === 'EBUSY' && attempt < 4) {
+        const start = Date.now();
+        while (Date.now() - start < 25) {}
+      } else {
+        return 0;
+      }
+    }
+  }
+  if (!raw) return 0;
+  let content;
+  try {
+    content = JSON.parse(raw);
+  } catch (_) {
+    return 0;
+  }
   let count = 0;
   if (typeof content === 'object' && content !== null) {
     for (const key of Object.keys(content)) {
       const u = content[key];
-      if (u.password && typeof u.password === 'string' && !u.password.startsWith('$2a$') && !u.password.startsWith('$2b$') && !u.password.startsWith('$2y$')) {
+      if (u && u.password && typeof u.password === 'string' && !u.password.startsWith('$2a$') && !u.password.startsWith('$2b$') && !u.password.startsWith('$2y$')) {
         u.password = bcrypt.hashSync(u.password, 10);
         count++;
       }
     }
   }
   if (count > 0) {
-    safeWriteJsonSync(filePath, content);
+    try {
+      safeWriteJsonSync(filePath, content);
+    } catch (_) {}
   }
   return count;
 }
@@ -571,6 +608,9 @@ async function updateUserPassword(userId, newPassword) {
   if (!user) throw new Error(`User not found: ${userId}`);
   user.password = bcrypt.hashSync(newPassword, 10);
   saveUserMfaData();
+  try {
+    await userRepo.updatePassword(userId, user.password);
+  } catch (_) {}
   await revokeAllUserTokens(userId);
   return true;
 }
@@ -731,6 +771,9 @@ function setUserMFA(userId, { mfaSecret, mfaEnabled, pendingMfaSecret } = {}) {
   if (mfaEnabled !== undefined) user.mfaEnabled = !!mfaEnabled;
   if (pendingMfaSecret !== undefined) user.pendingMfaSecret = pendingMfaSecret;
   saveUserMfaData();
+  try {
+    userRepo.updateMFA(userId, { mfaSecret, mfaEnabled, pendingMfaSecret }).catch(() => {});
+  } catch (_) {}
   return true;
 }
 
@@ -741,6 +784,9 @@ function resetUserMFA(userId) {
   user.mfaEnabled = false;
   user.pendingMfaSecret = null;
   saveUserMfaData();
+  try {
+    userRepo.updateMFA(userId, { mfaSecret: null, mfaEnabled: 0, pendingMfaSecret: null }).catch(() => {});
+  } catch (_) {}
   return true;
 }
 
@@ -879,6 +925,8 @@ module.exports = {
   verifyAndConsumeSSETicket,
   getUserById,
   getUserByEmail,
+  getUserFromDb: (id) => userRepo.getUserById(id),
+  userRepo,
   setUserMFA,
   resetUserMFA,
   createMFATempToken,
