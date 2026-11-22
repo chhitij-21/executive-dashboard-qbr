@@ -25,6 +25,8 @@ const historyService = require('../services/historyService');
 const ruleEngine = require('../services/ruleEngine');
 const queueService = require('../services/queueService');
 const schedulerService = require('../services/schedulerService');
+const sentry = require('../utils/sentry');
+const { logger } = require('../utils/logger');
 const { processJFLWorkbooks, filterDashboardBySite } = require('../services/processData');
 const { generatePPT } = require('../services/pptGenerator');
 const jobs = require('../services/jobCache');
@@ -63,7 +65,7 @@ router.use(['/tenants', '/api/tenants', '/clients', '/api/clients'], scheduleRou
 router.use(['/data-health', '/api/data-health'], dataHealthRoutes);
 router.use(['/validate', '/api/validate'], validationRoutes.router);
 
-// ── Canonical Health & Scheduler Health Endpoints (GAP 2) ───────────────────
+// ── Canonical Health & Scheduler Health Endpoints (GAP 2 & Item #15) ────────
 router.get(['/health', '/api/health'], (req, res) => {
   const scheduler = schedulerService.getHealth();
   res.json({
@@ -71,13 +73,25 @@ router.get(['/health', '/api/health'], (req, res) => {
     ts: new Date().toISOString(),
     version: 'v1',
     scheduler: scheduler.status || (scheduler.ready ? 'healthy' : 'degraded'),
+    observability: {
+      logger: 'pino',
+      logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),
+      sentryActive: sentry.isInitialized(),
+      environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'production',
+    },
   });
 });
 
 router.get(['/health/scheduler', '/api/health/scheduler'], (req, res) => {
   const health = schedulerService.getHealth();
   const statusCode = health.ready ? 200 : 503;
-  return res.status(statusCode).json(health);
+  return res.status(statusCode).json({
+    ...health,
+    observability: {
+      logger: 'pino',
+      sentryActive: sentry.isInitialized(),
+    },
+  });
 });
 
 // Helper to resolve data paths

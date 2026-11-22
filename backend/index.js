@@ -24,8 +24,32 @@ const authService = require('./services/authService');
 const ruleEngine = require('./services/ruleEngine');
 const { migrate } = require('./db/migrate');
 const { healthCheck } = require('./config/database');
+const sentry = require('./utils/sentry');
+const { logger } = require('./utils/logger');
+const { loggingMiddleware } = require('./middleware/loggingMiddleware');
 
 const app = express();
+
+// Initialize Sentry SDK (Item #15)
+sentry.initSentry(app);
+
+// Global unhandled error safety nets
+process.on('unhandledRejection', (reason) => {
+  sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)), {
+    module: 'process',
+    operation: 'unhandledRejection',
+  });
+});
+
+process.on('uncaughtException', (err) => {
+  sentry.captureException(err, { module: 'process', operation: 'uncaughtException' });
+});
+
+// 1. Sentry Request Handler
+app.use(sentry.sentryRequestHandler());
+
+// 2. Pino Correlation & Request Logger Middleware
+app.use(loggingMiddleware);
 
 // ── CORS: only allow explicit origins from ALLOWED_ORIGINS + localhost for dev ─
 // SECURITY FIX (FINDING-008): Removed wildcard *.onrender.com — any Render app
@@ -387,6 +411,28 @@ app.use(['/api', '/api/*'], (req, res) => {
   res.status(404).json({ error: 'API route not found', status: 404, path: req.originalUrl });
 });
 
+// ── Sentry Error Handler (Item #15) ──────────────────────────────────────────
+app.use(sentry.sentryErrorHandler());
+
+// ── Centralized JSON 500 Error Handler (Item #15) ─────────────────────────────
+app.use((err, req, res, next) => {
+  const reqId = req.id || req.headers['x-request-id'] || 'unknown';
+  const status = err.status || err.statusCode || 500;
+  sentry.captureException(err, { reqId, module: 'express', status });
+
+  if (req.log?.error) {
+    req.log.error({ err, status, reqId }, err.message);
+  } else {
+    logger.error({ err, status, reqId }, err.message);
+  }
+
+  res.status(status).json({
+    error: status >= 500 ? 'Internal Server Error' : err.message,
+    status,
+    reqId,
+  });
+});
+
 // ── Static Frontend Assets (Production / Render) ──────────────────────────────
 const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
 const rootDistPath = path.join(__dirname, '..', 'dist');
@@ -413,16 +459,15 @@ if ((require.main === module || !process.env.VERCEL) && process.env.NODE_ENV !==
 
   const startServer = (port) => {
     const server = app.listen(port, '0.0.0.0', () => {
-      console.log(`[server] Multi-Client Web Portal running at http://localhost:${port}`);
-      console.log(`[server] Reports directory: ${REPORTS_DIR}`);
+      logger.info({ port, reportsDir: REPORTS_DIR }, `[server] Multi-Client Web Portal running at http://localhost:${port}`);
     });
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.warn(`[server] Port ${port} occupied. Trying port ${port + 1}...`);
+        logger.warn({ port }, `[server] Port ${port} occupied. Trying port ${port + 1}...`);
         startServer(port + 1);
       } else {
-        console.error('[server] Startup error:', err.message);
+        logger.error({ err }, `[server] Startup error: ${err.message}`);
       }
     });
   };
@@ -436,41 +481,41 @@ if ((require.main === module || !process.env.VERCEL) && process.env.NODE_ENV !==
         const reportLabel = parsed?.report_period?.display_label || parsed?.reportingPeriod || '';
         
         if (reportLabel === 'User Selected Period' || reportLabel === 'Selected Period' || reportLabel === '') {
-          console.warn('[startup] Stale or placeholder dashboard_data.json detected. Evicting cache.');
+          logger.warn('[startup] Stale or placeholder dashboard_data.json detected. Evicting cache.');
           try { fs.unlinkSync(canonicalPath); } catch (_) {}
         } else {
           const n = parsed?.executiveSummary?.totalIncidents;
-          console.log(`[startup] Canonical dashboard_data.json present (${n ?? 'unknown'} incidents).`);
+          logger.info(`[startup] Canonical dashboard_data.json present (${n ?? 'unknown'} incidents).`);
         }
       } catch (e) {
-        console.warn('[startup] Canonical dashboard_data.json exists but is unreadable:', e.message);
+        logger.warn({ err: e }, `[startup] Canonical dashboard_data.json exists but is unreadable: ${e.message}`);
       }
     } else {
-      console.log('[startup] No canonical dashboard_data.json — empty state until first upload.');
+      logger.info('[startup] No canonical dashboard_data.json — empty state until first upload.');
     }
   } catch (err) {
-    console.warn('[startup] Warning during startup cache validation:', err.message);
+    logger.warn({ err }, `[startup] Warning during startup cache validation: ${err.message}`);
   }
 
   historyService.cleanupOldReports(3);
   (async () => {
     try {
       const result = await migrate();
-      console.log('[Phase G] Turso schema ready:',
-                  result.statementsRun, 'statements in',
-                  result.durationMs, 'ms');
+      logger.info({ statementsRun: result.statementsRun, durationMs: result.durationMs }, '[Phase G] Turso schema ready');
       const health = await healthCheck();
       if (!health.healthy) {
         throw new Error('Turso health check failed: ' + health.error);
       }
-      console.log('[Phase G] Turso connection healthy');
+      logger.info('[Phase G] Turso connection healthy');
     } catch (err) {
-      console.error('[Phase G] FATAL: migration/health failed:', err.message);
+      logger.error({ err }, `[Phase G] FATAL: migration/health failed: ${err.message}`);
+      sentry.captureException(err, { module: 'startup', phase: 'migration' });
       process.exit(1);
     }
     startServer(Number(DEFAULT_PORT));
   })().catch((err) => {
-    console.error('[Phase G] FATAL startup error:', err);
+    logger.error({ err }, '[Phase G] FATAL startup error');
+    sentry.captureException(err, { module: 'startup', phase: 'serverListen' });
     process.exit(1);
   });
 

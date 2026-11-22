@@ -2,6 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const sentry = require('../utils/sentry');
+const { logger } = require('../utils/logger');
 
 let BullMQ = null;
 let Redis = null;
@@ -142,7 +144,8 @@ class InMemoryJobQueue {
     try {
       await this.processor(item.jobState, item.jobData);
     } catch (err) {
-      console.error(`[InMemoryJobQueue] Error executing job ${item.jobState.jobId}:`, err);
+      sentry.captureException(err, { module: 'queueService', jobId: item.jobState.jobId, queueType: 'inMemory' });
+      logger.error({ err, jobId: item.jobState.jobId }, `[InMemoryJobQueue] Error executing job ${item.jobState.jobId}`);
     } finally {
       this.activeWorkers--;
       setImmediate(() => this.processNext());
@@ -418,7 +421,8 @@ class QueueService {
     const sanitized = this.sanitizeErrorMessage(error);
 
     // Log full raw internal exception strictly server-side
-    console.error(`[queueService] Internal job failure for ${jobId}:`, error);
+    sentry.captureException(error, { module: 'queueService', jobId });
+    logger.error({ err: error, jobId }, `[queueService] Internal job failure for ${jobId}`);
 
     if (job) {
       job.status = 'failed';

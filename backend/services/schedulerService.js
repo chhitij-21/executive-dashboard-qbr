@@ -13,6 +13,8 @@ const cron = require('node-cron');
 const clientService = require('./clientService');
 const queueService = require('./queueService');
 const templateService = require('./templateService');
+const sentry = require('../utils/sentry');
+const { logger } = require('../utils/logger');
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -711,7 +713,8 @@ function registerCronTask(tenantId, schedule) {
         try {
           await executeScheduledQbr(tenantId, schedule.id, 'CRON');
         } catch (err) {
-          console.error(`[schedulerService] Cron execution failed for ${taskKey}:`, err.message);
+          sentry.captureException(err, { module: 'schedulerService', tenantId, scheduleId: schedule.id, taskKey });
+          logger.error({ err, taskKey }, `[schedulerService] Cron execution failed for ${taskKey}: ${err.message}`);
         }
       },
       { timezone: schedule.timezone || 'Asia/Kolkata' }
@@ -738,7 +741,13 @@ function notifyFailure(tenantId, errorCode, details = {}) {
   }
 
   _failureAlertsThrottle.set(throttleKey, now);
-  console.error(`[schedulerService:ALERT] Tenant ${tenantId} failure alert [${errorCode}]:`, details.error || details);
+  sentry.captureException(new Error(`Scheduler failure alert: ${errorCode}`), {
+    module: 'schedulerService',
+    tenantId,
+    errorCode,
+    extra: details,
+  });
+  logger.error({ errorCode, tenantId, details: details.error || details }, `[schedulerService:ALERT] Tenant ${tenantId} failure alert [${errorCode}]`);
   // Email delivery mechanism: noted as out-of-scope stub for this batch
   return true;
 }
@@ -776,7 +785,13 @@ async function executeScheduledQbr(tenantId, scheduleId, triggerType = 'CRON', o
   // Blocker 2: Loud Decryption Failure Check
   if (schedule.recipients === null || schedule.recipientsDecryptionFailed) {
     const errorMsg = 'RECIPIENTS_UNAVAILABLE: Decryption failure for recipient list. Halting execution to prevent alert drop.';
-    console.error(`[schedulerService] [CRITICAL] ${errorMsg} (Schedule: ${schedule.id}, Tenant: ${canonicalId})`);
+    sentry.captureException(new Error(errorMsg), {
+      module: 'schedulerService',
+      tenantId: canonicalId,
+      scheduleId: schedule.id,
+      errorCode: 'RECIPIENTS_DECRYPTION_FAILED',
+    });
+    logger.error({ scheduleId: schedule.id, tenant: canonicalId }, `[schedulerService] [CRITICAL] ${errorMsg}`);
     notifyFailure(canonicalId, 'RECIPIENTS_DECRYPTION_FAILED', {
       scheduleId: schedule.id,
       scheduleName: schedule.name,
