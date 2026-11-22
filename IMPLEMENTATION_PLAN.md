@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary & Goals
 
-Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Executive Dashboard & QBR Generator platform per **Option A (URI Path Prefix Routing with Transparent Backward-Compatibility)**, combined with an immediate frontend cutover to `/api/v1/*`.
+Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Executive Dashboard & QBR Generator platform per **Option A (URI Path Prefix Routing with Transparent Backward-Compatibility)**, combined with an immediate frontend cutover to `/api/v1/*` and automated static analysis verification.
 
 ### Core Deliverables:
 1. **Consolidated Canonical `/api/v1/` Router Bundle (`backend/routes/v1Router.js`)**:
@@ -28,31 +28,30 @@ Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Execu
      - `/api/v1/data-health/*` (Audit and data quality anomalies)
      - `/api/v1/vulnerabilities/*` (Cisco PSIRT CVE tracking)
      - `/api/v1/health` & `/api/v1/health/scheduler` (Service and scheduler health)
-2. **Frontend Migration to `/api/v1/*` in THIS Item (GAP 1 — Choice A)**:
-   - Full migration of all frontend call sites in `frontend/src/` to target `/api/v1/*`.
-   - `frontend/src/config/api.js` updated with `API_V1_URL = `${API_BASE_URL}/api/v1`` and all component fetch calls updated from `/api/...` to `/api/v1/...`.
-   - Makes `/api/v1/` the genuine, active primary consumer, ensuring the versioned API is actively utilized and verified in production.
-3. **Transparent Backward Compatibility for Legacy `/api/...` with Fallthrough Guard (GAP 2)**:
+2. **Frontend Migration to `/api/v1/*` & Automated Verification**:
+   - All call sites in `frontend/src/` updated to target `/api/v1/*`.
+   - All frontend unit test mocks in `frontend/src/__tests__/` updated to `/api/v1/*` to prevent mock drift (17/17 vitest suites green post-migration).
+   - **Automated CI / Test Invariant (`frontendUsesOnlyV1Paths`)**: Scans all frontend source files (`frontend/src/**/*.jsx?`) for unversioned `/api/` paths (excluding `config/api.js`). Fails if any unversioned `/api/` path remains.
+3. **Transparent Backward Compatibility for Legacy `/api/...` with Fallthrough Guard**:
    - Legacy `/api/...` routes remain 100% functional for external scripts, tools, and backward compatibility.
    - An Express forwarding / deprecation middleware attaches standard RFC 8594 deprecation headers:
      - `Deprecation: true`
      - `Link: </api/v1${req.path}>; rel="successor-version"`
    - **Fallthrough Bug Fix**: Deprecation middleware skips if `req.path.startsWith('/v1')` or `req.originalUrl.startsWith('/api/v1')`, preventing duplicate links (`</api/v1/v1/...>`) and false deprecation headers on 404s.
    - *Nice-to-Have Note*: Sunset header (RFC 8594) TBD — to be added when deprecation timeline is committed.
-4. **Explicit Express Middleware Ordering (CLARIFICATION 1)**:
-   - The middleware and route registration order in `backend/index.js` is strictly enforced:
+4. **Explicit Express Middleware Ordering (Standard Practice)**:
+   - To prevent accidental static shadowing of API paths and prevent SPA HTML leaks on missing API routes, the execution order in `backend/index.js` is strictly enforced:
      1. Global middleware (CORS, compression, body parser)
-     2. Static files (`express.static(dist)`)
-     3. Canonical v1 router: `app.use('/api/v1', v1Router)`
-     4. Legacy alias router: `app.use('/api', deprecationMiddleware, v1Router)`
-     5. JSON 404 handler for `/api*` (BEFORE SPA fallback):
+     2. Canonical v1 router: `app.use('/api/v1', v1Router)`
+     3. Legacy alias router: `app.use('/api', deprecationMiddleware, v1Router)`
+     4. JSON 404 handler for `/api*` (BEFORE static files & SPA fallback):
         ```javascript
         app.use(['/api', '/api/*'], (req, res) => {
           res.status(404).json({ error: 'API route not found', status: 404, path: req.originalUrl });
         });
         ```
+     5. Static files: `app.use(express.static(frontendDistPath)); app.use(express.static(rootDistPath));`
      6. SPA catch-all LAST: `app.get('*', serveIndexHtml)`
-   - Guarantees that any unmatched API route returns JSON 404, never leaking SPA HTML.
 5. **Health & Scheduler Health Endpoint Disposition**:
    - `/api/v1/health/scheduler` is the canonical scheduler health endpoint inside `v1Router`.
    - `/api/health/scheduler` is the legacy alias delegating to `v1Router` with `Deprecation: true` and `Link: </api/v1/health/scheduler>; rel="successor-version"`.
@@ -97,6 +96,12 @@ Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Execu
                              JSON 404 Handler
                     { error: 'API route not found', 404 }
                          (Never leaks SPA index.html)
+                                       │
+                                       ▼
+                         Static Files (express.static)
+                                       │
+                                       ▼
+                            SPA Fallback (GET *)
 ```
 
 ---
@@ -140,17 +145,24 @@ function deprecationMiddleware(req, res, next) {
 }
 
 // 1. Global Middleware (CORS, compression, body parser)
-// 2. Static files (dist)
-// 3. Canonical API v1
+app.use(cors(...));
+app.use(compression());
+app.use(express.json({ limit: '2mb' }));
+
+// 2. Canonical API v1
 app.use('/api/v1', v1Router);
 
-// 4. Legacy backwards-compatible /api alias
+// 3. Legacy backwards-compatible /api alias
 app.use('/api', deprecationMiddleware, v1Router);
 
-// 5. JSON 404 handler for API routes
+// 4. JSON 404 handler for API routes (BEFORE static files & SPA fallback)
 app.use(['/api', '/api/*'], (req, res) => {
   res.status(404).json({ error: 'API route not found', status: 404, path: req.originalUrl });
 });
+
+// 5. Static files (dist)
+app.use(express.static(frontendDistPath));
+app.use(express.static(rootDistPath));
 
 // 6. SPA catch-all fallback LAST
 app.get('*', (req, res) => {
@@ -158,22 +170,14 @@ app.get('*', (req, res) => {
 });
 ```
 
-### 3.2 Frontend Call Site Migration to `/api/v1/*`
-The following frontend files will be updated to point directly to `/api/v1/*`:
+### 3.2 Frontend Call Site Migration & Test Mock Parity
 1. `frontend/src/config/api.js`: Add `export const API_V1_BASE = `${API_BASE_URL}/api/v1`;`.
-2. `frontend/src/App.jsx`: `/api/dashboard` → `/api/v1/dashboard`, `/api/auth/download-ticket` → `/api/v1/auth/download-ticket`, `/api/${exportType}` → `/api/v1/${exportType}`.
-3. `frontend/src/context/AuthContext.jsx`: `/api/auth/me` → `/api/v1/auth/me`, `/api/clients` → `/api/v1/clients`, `/api/auth/login` → `/api/v1/auth/login`, `/api/mfa/login-verify` → `/api/v1/mfa/login-verify`, `/api/auth/logout` → `/api/v1/auth/logout`.
-4. `frontend/src/components/FileUploader.jsx`: `/api/analyze-excel` → `/api/v1/analyze-excel`, `/api/upload` → `/api/v1/upload`, `/api/jobs/` → `/api/v1/jobs/`, `/api/status/` → `/api/v1/status/`.
-5. `frontend/src/components/DataHealthModal.jsx`: `/api/data-health` → `/api/v1/data-health`.
-6. `frontend/src/components/ScheduleManagerModal.jsx`: `/api/tenants/.../schedules` → `/api/v1/tenants/.../schedules`, `/api/tenants/.../templates` → `/api/v1/tenants/.../templates`, `/api/ppt/download/` → `/api/v1/ppt/download/`.
-7. `frontend/src/components/ClientManager.jsx`: `/api/rules` → `/api/v1/rules`, `/api/tenants/` → `/api/v1/tenants/`, `/api/clients` → `/api/v1/clients`.
-8. `frontend/src/components/VulnerabilitiesPage.jsx`: `/api/v1/vulnerabilities`.
-9. `frontend/src/components/ReportHistory.jsx`: `/api/v1/history`, `/api/v1/auth/download-ticket`.
-10. `frontend/src/components/ReportsView.jsx`: `/api/v1/reports/mmtc/latest`.
-11. `frontend/src/components/AIChatbot.jsx`, `AISectionSummary.jsx`, `EnterpriseInsightCard.jsx`: `/api/v1/chat`, `/api/v1/ai/...`.
-12. `frontend/src/components/InventorySyncPage.jsx`: `/api/v1/inventory/...`.
-13. `frontend/src/components/MFASetup.jsx`: `/api/v1/mfa/...`.
-14. Frontend test mocks in `frontend/src/__tests__/`: update url assertions to match `/api/v1/`.
+2. Migrate all component call sites from `/api/` to `/api/v1/`:
+   - `App.jsx`, `AuthContext.jsx`, `FileUploader.jsx`, `DataHealthModal.jsx`, `ScheduleManagerModal.jsx`, `ClientManager.jsx`, `VulnerabilitiesPage.jsx`, `ReportHistory.jsx`, `ReportsView.jsx`, `AIChatbot.jsx`, `AISectionSummary.jsx`, `EnterpriseInsightCard.jsx`, `ExcelAnalyzer.jsx`, `InventorySyncPage.jsx`, `LoginModal.jsx`, `MFASetup.jsx`, `OverviewPage.jsx`, `useChatSession.js`, `useValidationReport.js`, `validationRunner.js`.
+3. Update all mock URLs in `frontend/src/__tests__/`:
+   - `DataHealthModal.test.jsx`: `/api/data-health/issue/` → `/api/v1/data-health/issue/`
+   - `ScheduleManagerModal.test.jsx`: `/api/ppt/download/job_1` → `/api/v1/ppt/download/job_1`
+   - Verify `npm --prefix frontend test -- --run` passes 17/17 post-migration.
 
 ### 3.3 OpenAPI 3.0 Contract Specification (`docs/openapi-v1.yaml`)
 - Authored as a formal schema file documenting:
@@ -202,14 +206,15 @@ New test suite `backend/tests/apiV1Contract.test.js` covering:
 5. **`apiUnmatchedReturns404Json_notHtml` (CLARIFICATION 1)**: `GET /api/nonexistent-route-xyz` returns HTTP 404 with JSON `{ error: 'API route not found' }`, never leaking SPA HTML.
 6. **`legacyDirectMountsAbsent` (CLARIFICATION 2)**: Asserts old direct mounts in `backend/index.js` are truly removed and `app._router.stack` contains no duplicate legacy route handlers.
 7. **`apiV1CorsPreflight` (CLARIFICATION 3)**: `OPTIONS /api/v1/auth/login` and `OPTIONS /api/auth/login` return 204 with `Access-Control-Allow-*` headers.
-8. **`v1_authLogin_returnsToken`**: `POST /api/v1/auth/login` issues valid JWT v2 session identical to legacy `/api/auth/login`.
-9. **`v1_dashboard_jsonContractMatch`**: `GET /api/v1/dashboard` payload keys match `GET /api/dashboard` 100%.
-10. **`v1_tenants_settings_roundtrip`**: `GET /api/v1/tenants` and `GET /api/v1/tenants/:id/settings` return valid tenant configuration.
-11. **`v1_schedules_crud_parity`**: `GET /api/v1/tenants/:id/schedules` correctly queries schedule repo.
-12. **`v1_dataHealth_parity`**: `GET /api/v1/data-health` returns valid data health metrics.
-13. **`v1_vulnerabilities_parity`**: `GET /api/v1/vulnerabilities` returns filtered inventory CVEs.
-14. **`v1_uploadSecurity_rateLimit_inherited`**: Rate limits and payload size guards apply uniformly to `/api/v1/upload`.
-15. **`v1_tenantIsolation_enforced`**: Tenant boundaries apply identically across `/api/v1/` routes.
+8. **`frontendUsesOnlyV1Paths` (FRONTEND AUDIT INVARIANT)**: Greps `frontend/src/` for `/api/` (excluding `config/api.js`) and asserts zero legacy unversioned paths exist in frontend codebase.
+9. **`v1_authLogin_returnsToken`**: `POST /api/v1/auth/login` issues valid JWT v2 session identical to legacy `/api/auth/login`.
+10. **`v1_dashboard_jsonContractMatch`**: `GET /api/v1/dashboard` payload keys match `GET /api/dashboard` 100%.
+11. **`v1_tenants_settings_roundtrip`**: `GET /api/v1/tenants` and `GET /api/v1/tenants/:id/settings` return valid tenant configuration.
+12. **`v1_schedules_crud_parity`**: `GET /api/v1/tenants/:id/schedules` correctly queries schedule repo.
+13. **`v1_dataHealth_parity`**: `GET /api/v1/data-health` returns valid data health metrics.
+14. **`v1_vulnerabilities_parity`**: `GET /api/v1/vulnerabilities` returns filtered inventory CVEs.
+15. **`v1_uploadSecurity_rateLimit_inherited`**: Rate limits and payload size guards apply uniformly to `/api/v1/upload`.
+16. **`v1_tenantIsolation_enforced`**: Tenant boundaries apply identically across `/api/v1/` routes.
 
 ---
 
