@@ -1,227 +1,401 @@
-# Implementation Plan — Item #14: API-First (v1 URI Versioning, Frontend Migration & Deprecation Lifecycle)
+# Implementation Plan — Item #15: Observability (Structured Logging with Pino & Error Tracking with Sentry)
 
 **Status**: Waiting for user **APPROVED** before writing code.  
-**Roadmap Item**: **#14 API-first (v1 versioning)** (Architectural — Option A with Full Frontend Cutover)  
-**Sequence Context**: Follows **#4 (Real Auth)** and **#3 (Database Layer)**. Freezes the canonical `/api/v1/` contract now that authentication and persistence layers are robust, with zero legacy in-memory auth or unencrypted recipient debt.
+**Roadmap Item**: **#15 Observability (Pino Structured Logging & Sentry Error Tracking)** (Wave 3 — Trust)  
+**Sequence Context**: Follows **#4 (Real Auth)**, **#3 (Database Layer)**, and **#14 (API-First v1 Versioning)**. Lays enterprise-grade telemetry, auditability, and incident tracking across all canonical `/api/v1/` endpoints and background workers before **#16 (Testing & Quality)**.
 
 ---
 
-## 1. Executive Summary & Goals
+## 1. Acknowledged Carry-Forward Items & Review of #14 Touches
 
-Item #14 establishes a formal, versioned API boundary (`/api/v1/`) for the Executive Dashboard & QBR Generator platform per **Option A (URI Path Prefix Routing with Transparent Backward-Compatibility)**, combined with an immediate frontend cutover to `/api/v1/*` and automated static analysis verification.
+### 1.1 Item #14 Git Diff Review on Files from #3, #11, and #13
+A rigorous diff audit was performed on all files touched during Item #14 that originated in #3 (Database), #11 (Templates), and #13 (Scheduling). The findings are:
 
-### Core Deliverables:
-1. **Consolidated Canonical `/api/v1/` Router Bundle (`backend/routes/v1Router.js`)**:
-   - **Removal of all direct `/api/*` mounts from `backend/index.js`**: All existing route mounts (`templateRoutes`, `dataHealthRoutes`, `scheduleRoutes`, `authRoutes`, `reportsRouter`, `jobRoutes`, `inventorySyncRouter`, `vulnerabilities`, `mfa`, and inline business handlers) are removed from `backend/index.js` and consolidated entirely into `backend/routes/v1Router.js`.
-   - All platform routes become canonical under `/api/v1/`:
-     - `/api/v1/auth/*` (Login, Logout, Revoke, MFA, Session Tickets)
-     - `/api/v1/dashboard/*` (Executive KPI aggregations, site inspections, rack health)
-     - `/api/v1/upload` & `/api/v1/analyze-excel` (Ingestion pipeline)
-     - `/api/v1/jobs/*` (Async processing status and job inspection)
-     - `/api/v1/tenants/*` & `/api/v1/clients/*` (Multi-tenant config, branding, and templates)
-     - `/api/v1/schedules/*` (Scheduled QBR management and runs)
-     - `/api/v1/reports/*` (Tenant-isolated reports, MMTC ticket dual-read)
-     - `/api/v1/rules/*` (Dynamic SLA threshold rules)
-     - `/api/v1/history/*` (Executive report run history)
-     - `/api/v1/lineage/*` (KPI cell traceability)
-     - `/api/v1/qoq/*` (Quarter-over-Quarter comparison)
-     - `/api/v1/data-health/*` (Audit and data quality anomalies)
-     - `/api/v1/vulnerabilities/*` (Cisco PSIRT CVE tracking)
-     - `/api/v1/health` & `/api/v1/health/scheduler` (Service and scheduler health)
-2. **Frontend Migration to `/api/v1/*` & Automated Verification**:
-   - All call sites in `frontend/src/` updated to target `/api/v1/*`.
-   - All frontend unit test mocks in `frontend/src/__tests__/` updated to `/api/v1/*` to prevent mock drift (17/17 vitest suites green post-migration).
-   - **Automated CI / Test Invariant (`frontendUsesOnlyV1Paths`)**: Scans all frontend source files (`frontend/src/**/*.jsx?`) for unversioned `/api/` paths (excluding `config/api.js`). Fails if any unversioned `/api/` path remains.
-3. **Transparent Backward Compatibility for Legacy `/api/...` with Fallthrough Guard**:
-   - Legacy `/api/...` routes remain 100% functional for external scripts, tools, and backward compatibility.
-   - An Express forwarding / deprecation middleware attaches standard RFC 8594 deprecation headers:
-     - `Deprecation: true`
-     - `Link: </api/v1${req.path}>; rel="successor-version"`
-   - **Fallthrough Bug Fix**: Deprecation middleware skips if `req.path.startsWith('/v1')` or `req.originalUrl.startsWith('/api/v1')`, preventing duplicate links (`</api/v1/v1/...>`) and false deprecation headers on 404s.
-   - *Nice-to-Have Note*: Sunset header (RFC 8594) TBD — to be added when deprecation timeline is committed.
-4. **Explicit Express Middleware Ordering (Standard Practice)**:
-   - To prevent accidental static shadowing of API paths and prevent SPA HTML leaks on missing API routes, the execution order in `backend/index.js` is strictly enforced:
-     1. Global middleware (CORS, compression, body parser)
-     2. Canonical v1 router: `app.use('/api/v1', v1Router)`
-     3. Legacy alias router: `app.use('/api', deprecationMiddleware, v1Router)`
-     4. JSON 404 handler for `/api*` (BEFORE static files & SPA fallback):
-        ```javascript
-        app.use(['/api', '/api/*'], (req, res) => {
-          res.status(404).json({ error: 'API route not found', status: 404, path: req.originalUrl });
-        });
-        ```
-     5. Static files: `app.use(express.static(frontendDistPath)); app.use(express.static(rootDistPath));`
-     6. SPA catch-all LAST: `app.get('*', serveIndexHtml)`
-5. **Health & Scheduler Health Endpoint Disposition**:
-   - `/api/v1/health/scheduler` is the canonical scheduler health endpoint inside `v1Router`.
-   - `/api/health/scheduler` is the legacy alias delegating to `v1Router` with `Deprecation: true` and `Link: </api/v1/health/scheduler>; rel="successor-version"`.
-   - `/api/v1/health` returns general server health along with a nested `scheduler` status summary.
-6. **OpenAPI 3.0 Contract Specification Plan (`docs/openapi-v1.yaml`)**:
-   - OpenAPI specification maintained as a standalone specification file `docs/openapi-v1.yaml`.
-   - Captures request/response schemas for core platform operations (Auth, Upload, Dashboard, Schedules, Data Health).
-   - CI validation: Added to plan: `CI validates docs/openapi-v1.yaml via npx @redocly/cli lint (or swagger-cli validate). Fails PR if invalid.`
+| File | Change Category | Logic vs Assertion Analysis |
+| :--- | :--- | :--- |
+| `backend/config/database.js` | **Logic Update** | `getDatabaseUrl()` was hardened for test safety: in `process.env.NODE_ENV === 'test'`, it now rejects remote `libsql://` or `http://` URLs unless `url.startsWith('file:')` or `process.env.TEST_USE_TURSO` is set. This prevents sandboxed test runs from timing out on remote network calls and ensures tests reliably use local `data/test.db`. |
+| `backend/db/schema.sql` | **Schema Addition** | Added missing `job_id TEXT` column to `reports_tickets` table definition. Phase 1 MMTC report upload (`reportUpload.js`) associates tickets with a `job_id`, which was expected by T23 in `report.test.js` but had been omitted in the initial SQLite schema. |
+| `backend/services/schedulerService.js` | **Logic Update** | Fixed `getSchedulesRaw()`: previously, reading schedules from SQLite hardcoded `templateVersion: 'latest'` and `lastError: null`. It now merges SQLite schedule records with disk metadata from `schedules.json`, ensuring `templateVersion`, `timezone`, `nextRunAt`, and `lastError` are accurately preserved. |
+| `backend/services/templateService.js` | **Logic Update** | Aligned template storage path to `data/tenants/{canonicalId}/templates/versions/{storedName}` and synchronized template deletion and activation with SQLite (`templateRepo.deleteVersion` and `templateRepo.setActiveVersion`). |
+| `backend/tests/report.test.js` | **Lifecycle Setup** | Added `await migrate();` in `before()` hook to guarantee database tables exist before test execution. No logic changes. |
+| `backend/tests/scheduledQbr.test.js` | **Lifecycle Setup** | Added `DELETE FROM schedule_runs WHERE tenant_id = ?` and `DELETE FROM schedules WHERE tenant_id = ?` in `before()`, `beforeEach()`, and `after()` hooks to eliminate cross-suite state leakage. No test assertion changes. |
+| `backend/tests/templateVersioning.test.js` | **Lifecycle Setup** | Added `await migrate();` and `DELETE FROM templates WHERE tenant_id = ?` across hooks to guarantee table readiness and prevent template collision. No test assertion changes. |
+
+### 1.2 Carry-Forward Item 1: #16 Priority — Test Isolation
+- **Current Reality**: The test suite currently passes 392/392 tests across 49 suites serially using `node --test --test-concurrency=1`.
+- **Root Cause**: Tests share a single SQLite database file (`data/test.db`), tenant directories (`data/tenants/`), and in-process singletons (`jobCache.js`, `_authRateMap`). Default parallelism causes SQLite lock contention (`SQLITE_BUSY`) and data collisions.
+- **Commitment for #16**: The #16 plan will explicitly design per-worker test isolation (e.g. worker-scoped test databases `data/test-${process.pid}.db` and unique test tenant IDs), or formally document and standardize serial CI execution (`--test-concurrency=1`) as the supported CI execution contract.
+
+### 1.3 Carry-Forward Item 2: `v1Router.js` Modular Decomposition Backlog
+- **Current Reality**: `backend/routes/v1Router.js` is 2,206 lines, housing consolidated route handlers for auth, dashboard, reports, schedules, templates, rules, and telemetry.
+- **Backlog Tracking**: Decomposing `v1Router.js` into modular domain sub-routers (`backend/routes/v1/authRoutes.js`, `backend/routes/v1/dashboardRoutes.js`, `backend/routes/v1/reportRoutes.js`, `backend/routes/v1/scheduleRoutes.js`, etc.) is tracked as a dedicated backlog item (targeted for #16 or post-#16). It is non-blocking for Item #15.
 
 ---
 
-## 2. Architecture & Request Flow
+## 2. Problem Statement & Objectives for Item #15
+
+### 2.1 Problem Statement
+The backend currently relies on 320+ ad-hoc `console.log`, `console.warn`, and `console.error` calls. This poses four critical enterprise operational vulnerabilities:
+1. **Zero Correlation & Traceability**: Incoming requests have no unique correlation ID (`X-Request-Id`). Debugging distributed workflows, slow queries, or failed report generations across async queues (BullMQ) requires manual timestamp cross-referencing.
+2. **Sensitive Data Exposure Risk**: Raw `console.log` statements risk emitting sensitive headers (Authorization Bearer tokens, `X-Service-Pass`), passwords, API secrets, MFA codes, or recipient email arrays into server logs and aggregators.
+3. **No Centralized Exception Tracking**: Unhandled rejections, background queue failures, and scheduled QBR errors fail silently or log unformatted stack traces to stdout without triggering alerts or grouping in an error tracking system.
+4. **Unformatted Telemetry**: Log aggregators (Datadog, CloudWatch, Render, ELK) cannot index or alert on unstructured stdout strings. Logs require structured JSON formatting with ISO timestamps, severity levels, PID, and host tags.
+
+### 2.2 Core Deliverables
+1. **Pino Structured Logger (`backend/utils/logger.js`)**:
+   - High-throughput JSON logging with ISO timestamps, log levels (`fatal`, `error`, `warn`, `info`, `debug`, `trace`), and service metadata.
+   - **Automated Field Redaction**: Automatically scrubs `req.headers.authorization`, `req.headers["x-service-pass"]`, `*.password`, `*.token`, `*.mfaCode`, `*.secret`, `*.recipients`, `*.secretKey`, `*.accessToken`, `*.refreshToken`.
+   - **Child Logger Factory**: `getChildLogger(moduleName, context)` to support scoped module logging (e.g. `scheduler`, `auth`, `queue`).
+   - **Silent Test Mode**: Suppresses log noise during `NODE_ENV === 'test'` unless `LOG_LEVEL` or `ENABLE_TEST_LOGS` is set.
+2. **Request Correlation Middleware (`backend/middleware/loggingMiddleware.js`)**:
+   - Generates a UUID v4 `X-Request-Id` if not provided, or propagates incoming client/proxy `X-Request-Id`.
+   - Attaches `res.setHeader('X-Request-Id', reqId)` and `req.log = logger.child({ reqId, client_id, user_id })`.
+   - Logs request start and request completion with method, route, HTTP status code, duration in ms, remote IP, and user-agent.
+   - Suppresses high-frequency health probe noise (`/api/v1/health` logged at `debug` level).
+3. **Sentry Error Tracking & Graceful Fallback (`backend/utils/sentry.js`)**:
+   - Initializes `@sentry/node` if `SENTRY_DSN` is configured.
+   - **Graceful No-Op Fallback**: If `SENTRY_DSN` is omitted or in `NODE_ENV === 'test'`, operates in safe mock/no-op mode without throwing or failing startup.
+   - Express request and error handler middleware integration.
+   - Safe `captureException(err, context)` helper for async background tasks (BullMQ workers, cron jobs) with tenant, job, and module tagging.
+   - Process-level unhandled rejection and uncaught exception safety nets.
+4. **Centralized JSON 500 Error Handler**:
+   - Express error-handling middleware (`(err, req, res, next)`) attached before fallback handlers.
+   - Captures error in Sentry, logs via Pino with `req.id`, and returns consistent JSON `{ error: 'Internal Server Error', status: 500, reqId }`. Stack traces are omitted in production.
+5. **Observability Health Telemetry**:
+   - Updates `/api/v1/health` and legacy `/api/health` to expose observability status (`logger: 'pino'`, `logLevel`, `sentryActive: boolean`, `sentryEnvironment`).
+
+---
+
+## 3. Architecture & Telemetry Data Flow
 
 ```
-                             Incoming HTTP Request
-                                       │
-                    ┌──────────────────┴──────────────────┐
-                    │                                     │
-                    ▼                                     ▼
-        GET/POST /api/v1/*                       GET/POST /api/* (Legacy)
-                    │                                     │
-                    │                                     ▼
-                    │                       deprecationMiddleware
-                    │                       - Skip if req.path starts with /v1
-                    │                       - Set Header: Deprecation: true
-                    │                       - Set Header: Link: </api/v1...>; rel="successor-version"
-                    │                                     │
-                    └──────────────────┬──────────────────┘
-                                       │
-                                       ▼
-                              v1 Router Bundle
-                          (backend/routes/v1Router.js)
-                 [express.json(2mb) + Rate Limiters + Auth]
-                                       │
-       ┌───────────────┬───────────────┼───────────────┬───────────────┐
-       ▼               ▼               ▼               ▼               ▼
-   authRoutes    dashboardRoutes  scheduleRoutes  tenantRoutes   healthRoutes
-                                       │
-                             (If Route Unmatched)
-                                       │
-                                       ▼
-                             JSON 404 Handler
-                    { error: 'API route not found', 404 }
-                         (Never leaks SPA index.html)
-                                       │
-                                       ▼
-                         Static Files (express.static)
-                                       │
-                                       ▼
-                            SPA Fallback (GET *)
+                               Incoming HTTP Request
+                                         │
+                                         ▼
+                             [X-Request-Id Extractor]
+                      (Preserve incoming or generate UUID v4)
+                                         │
+                                         ▼
+                                 [Sentry Request]
+                            (Trace context & user tags)
+                                         │
+                                         ▼
+                            [Pino Logging Middleware]
+                       - Attach req.id & req.log
+                       - Set Response Header: X-Request-Id
+                       - Timer: process.hrtime.bigint()
+                                         │
+                                         ▼
+                     ┌───────────────────┴───────────────────┐
+                     ▼                                       ▼
+             /api/v1/* (Canonical)                   /api/* (Legacy Alias)
+                     │                                       │
+                     └───────────────────┬───────────────────┘
+                                         ▼
+                               [Route / Job Handler]
+                          (Uses req.log.info / warn)
+                                         │
+                    ┌────────────────────┴────────────────────┐
+                    │ (Success)                               │ (Error / Exception)
+                    ▼                                         ▼
+          res.on('finish')                         Express Error Middleware
+      req.log.info({                                  - sentry.captureException(err)
+        method, url, status,                          - req.log.error({ err, reqId })
+        durationMs, ip                                - res.status(500).json({
+      })                                                  error: 'Internal Server Error',
+                                                          reqId
+                                                        })
 ```
 
 ---
 
-## 3. Detailed Specifications
+## 4. Files to Create and Modify
 
-### 3.1 Route Consolidation & Removal from `backend/index.js`
-All direct `/api/*` and unversioned aliases currently mounted on `app` in `backend/index.js` are removed from `index.js` and consolidated into `backend/routes/v1Router.js`:
-- Sub-routers imported into `v1Router.js`:
-  - `vulnerabilities`
-  - `mfa`
-  - `inventorySyncRouter`
-  - `reportsRouter`
-  - `jobRoutes`
-  - `templateRoutes`
-  - `dataHealthRoutes`
-  - `scheduleRoutes`
-- Inline business routes moved into `v1Router.js`:
-  - Auth: `/auth/login`, `/auth/logout`, `/auth/revoke`, `/auth/me`, `/auth/auto`, `/auth/demo-accounts`, `/auth/download-ticket`, `/auth/sse-ticket`
-  - Tenants & Clients: `/clients`, `/clients/:id`, `/clients/:id/locations`, `/tenants`, `/tenants/:id/settings`
-  - Rules: `/rules` (GET and PUT)
-  - History: `/history`, `/history/:jobId`
-  - Ingestion: `/upload`, `/upload-json`, `/analyze-excel`
-  - Dashboard: `/dashboard`, `/dashboard/:jobId`
-  - Traceability & QoQ: `/lineage`, `/lineage/trace`, `/qoq/compare`
-  - AI: `/chat`, `/chat/loop`, `/ai/section-summary`, `/ai/insights`
-  - Exports & Downloads: `/ppt/download/:jobId`, `/ppt/:jobId`, `/status/:jobId`, `/report/:jobId`, `/error-report/:jobId`, `/data-quality/:jobId`, `/processing-log/:jobId`
-  - Health: `/health`, `/health/scheduler`
+### 4.1 Files to Create:
+1. `backend/utils/logger.js`: Root Pino logger instance, redactor configuration, child logger factory, and test-safe stream handling.
+2. `backend/middleware/loggingMiddleware.js`: Request correlation ID generation, header propagation, request child logger injection, and duration tracking on `res.finish`.
+3. `backend/utils/sentry.js`: Sentry initialization wrapper, Express middleware adapters, safe `captureException` helper with tenant/job tagging, and no-op fallback client.
+4. `backend/tests/observability.test.js`: Comprehensive TDD suite verifying redaction, correlation IDs, request timing, Sentry no-op behavior, Express error handling, and health telemetry.
 
-In `backend/index.js`, the routing layer reduces to strictly:
+### 4.2 Files to Modify:
+1. `package.json` & `backend/package.json`: Add dependencies `pino`, `pino-http`, `@sentry/node`.
+2. `backend/index.js`:
+   - Initialize Sentry (`sentry.initSentry(app)`).
+   - Mount `loggingMiddleware` immediately after CORS and Sentry request handler.
+   - Mount `sentry.sentryErrorHandler` and JSON 500 error-handling middleware after route mounts.
+   - Add process-level crash safety nets (`unhandledRejection`, `uncaughtException`).
+3. `backend/routes/v1Router.js`:
+   - Update `GET /health` and `GET /health/scheduler` to expose observability telemetry (`logger`, `logLevel`, `sentryActive`).
+4. `backend/services/queueService.js`:
+   - Replace raw `console.error` with `sentry.captureException(err, { module: 'queueService', jobId })` and `logger.error`.
+5. `backend/services/schedulerService.js`:
+   - Replace raw `console.error` with `sentry.captureException(err, { module: 'schedulerService', tenantId, scheduleId })` and `logger.error`.
+6. `.env.example`: Add `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`, `LOG_LEVEL`.
+
+---
+
+## 5. Detailed Specifications
+
+### 5.1 Pino Logger Specification (`backend/utils/logger.js`)
 ```javascript
-const v1Router = require('./routes/v1Router');
+const pino = require('pino');
 
-function deprecationMiddleware(req, res, next) {
-  if (req.path.startsWith('/v1') || req.originalUrl.startsWith('/api/v1')) {
-    return next();
-  }
-  res.setHeader('Deprecation', 'true');
-  res.setHeader('Link', `</api/v1${req.path}>; rel="successor-version"`);
+const REDACT_PATHS = [
+  'req.headers.authorization',
+  'req.headers["x-service-pass"]',
+  '*.password',
+  '*.token',
+  '*.mfaCode',
+  '*.secret',
+  '*.secretKey',
+  '*.recipients',
+  '*.accessToken',
+  '*.refreshToken',
+];
+
+const isTest = process.env.NODE_ENV === 'test';
+const defaultLevel = isTest
+  ? (process.env.LOG_LEVEL || (process.env.ENABLE_TEST_LOGS ? 'info' : 'silent'))
+  : (process.env.LOG_LEVEL || 'info');
+
+const logger = pino({
+  level: defaultLevel,
+  timestamp: pino.stdTimeFunctions.isoTime,
+  base: {
+    pid: process.pid,
+    service: 'executive-qbr-backend',
+  },
+  redact: {
+    paths: REDACT_PATHS,
+    censor: '[REDACTED]',
+  },
+  serializers: {
+    err: pino.stdSerializers.err,
+    req: pino.stdSerializers.req,
+    res: pino.stdSerializers.res,
+  },
+});
+
+function getChildLogger(moduleName, bindings = {}) {
+  return logger.child({ module: moduleName, ...bindings });
+}
+
+module.exports = {
+  logger,
+  getChildLogger,
+  REDACT_PATHS,
+};
+```
+
+### 5.2 Logging & Correlation Middleware (`backend/middleware/loggingMiddleware.js`)
+```javascript
+const { v4: uuidv4 } = require('uuid');
+const { logger } = require('../utils/logger');
+
+function loggingMiddleware(req, res, next) {
+  // 1. Correlation ID: propagate or generate
+  const reqId = req.headers['x-request-id'] || uuidv4();
+  req.id = reqId;
+  res.setHeader('X-Request-Id', reqId);
+
+  // 2. Child logger bound to request context
+  req.log = logger.child({
+    reqId,
+    ip: req.ip || req.connection?.remoteAddress,
+  });
+
+  // 3. Track request duration
+  const startTime = process.hrtime.bigint();
+
+  res.on('finish', () => {
+    const elapsedNs = process.hrtime.bigint() - startTime;
+    const durationMs = Number(elapsedNs / 1000000n);
+
+    const logData = {
+      reqId,
+      method: req.method,
+      url: req.originalUrl || req.url,
+      statusCode: res.statusCode,
+      durationMs,
+      contentLength: res.getHeader('content-length'),
+      userAgent: req.headers['user-agent'],
+      userId: req.user?.id || req.user?.username,
+      tenantId: req.user?.tenantId || req.tenantId,
+    };
+
+    // Suppress noise for polling health endpoints
+    if (req.path.endsWith('/health') || req.path.endsWith('/health/scheduler')) {
+      req.log.debug(logData, 'HTTP Request Completed');
+      return;
+    }
+
+    if (res.statusCode >= 500) {
+      req.log.error(logData, 'HTTP Request Failed (Server Error)');
+    } else if (res.statusCode >= 400) {
+      req.log.warn(logData, 'HTTP Request Failed (Client Error)');
+    } else {
+      req.log.info(logData, 'HTTP Request Completed');
+    }
+  });
+
   next();
 }
 
-// 1. Global Middleware (CORS, compression, body parser)
-app.use(cors(...));
-app.use(compression());
-app.use(express.json({ limit: '2mb' }));
+module.exports = loggingMiddleware;
+```
 
-// 2. Canonical API v1
-app.use('/api/v1', v1Router);
+### 5.3 Sentry Integration & Fallback (`backend/utils/sentry.js`)
+```javascript
+const Sentry = require('@sentry/node');
+const { logger } = require('./logger');
 
-// 3. Legacy backwards-compatible /api alias
-app.use('/api', deprecationMiddleware, v1Router);
+let isSentryInitialized = false;
 
-// 4. JSON 404 handler for API routes (BEFORE static files & SPA fallback)
-app.use(['/api', '/api/*'], (req, res) => {
-  res.status(404).json({ error: 'API route not found', status: 404, path: req.originalUrl });
-});
+function initSentry(app) {
+  const dsn = process.env.SENTRY_DSN;
+  const isTest = process.env.NODE_ENV === 'test' && !process.env.ENABLE_TEST_SENTRY;
 
-// 5. Static files (dist)
-app.use(express.static(frontendDistPath));
-app.use(express.static(rootDistPath));
+  if (!dsn || isTest) {
+    logger.debug('[sentry] SENTRY_DSN not configured or running in test mode. Sentry initialized in no-op mock mode.');
+    isSentryInitialized = false;
+    return;
+  }
 
-// 6. SPA catch-all fallback LAST
-app.get('*', (req, res) => {
-  res.sendFile(path.join(frontendDistPath, 'index.html'));
+  try {
+    Sentry.init({
+      dsn,
+      environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'production',
+      release: process.env.npm_package_version || '1.0.0',
+      tracesSampleRate: parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.1'),
+    });
+    isSentryInitialized = true;
+    logger.info('[sentry] Sentry error tracking successfully initialized.');
+  } catch (err) {
+    logger.error({ err }, '[sentry] Failed to initialize Sentry SDK. Operating in fallback mode.');
+    isSentryInitialized = false;
+  }
+}
+
+function captureException(err, context = {}) {
+  // Always log error via structured logger
+  logger.error({ err, ...context }, context.message || err.message);
+
+  if (!isSentryInitialized) {
+    return null;
+  }
+
+  return Sentry.captureException(err, {
+    tags: {
+      tenantId: context.tenantId || 'unknown',
+      module: context.module || 'unknown',
+      jobId: context.jobId || 'none',
+      ...context.tags,
+    },
+    extra: context.extra || context,
+  });
+}
+
+function sentryRequestHandler() {
+  if (!isSentryInitialized) {
+    return (req, res, next) => next();
+  }
+  return Sentry.Handlers?.requestHandler ? Sentry.Handlers.requestHandler() : (req, res, next) => next();
+}
+
+function sentryErrorHandler() {
+  if (!isSentryInitialized) {
+    return (err, req, res, next) => next(err);
+  }
+  return Sentry.Handlers?.errorHandler ? Sentry.Handlers.errorHandler() : (err, req, res, next) => next(err);
+}
+
+module.exports = {
+  initSentry,
+  captureException,
+  sentryRequestHandler,
+  sentryErrorHandler,
+  isInitialized: () => isSentryInitialized,
+};
+```
+
+### 5.4 Centralized JSON 500 Express Middleware (`backend/index.js`)
+```javascript
+// Mounted after routes, after Sentry error handler, before static files:
+app.use((err, req, res, next) => {
+  const reqId = req.id || req.headers['x-request-id'] || 'unknown';
+  const status = err.status || err.statusCode || 500;
+
+  if (req.log?.error) {
+    req.log.error({ err, status, reqId }, err.message);
+  } else {
+    logger.error({ err, status, reqId }, err.message);
+  }
+
+  res.status(status).json({
+    error: status >= 500 ? 'Internal Server Error' : err.message,
+    status,
+    reqId,
+  });
 });
 ```
 
-### 3.2 Frontend Call Site Migration & Test Mock Parity
-1. `frontend/src/config/api.js`: Add `export const API_V1_BASE = `${API_BASE_URL}/api/v1`;`.
-2. Migrate all component call sites from `/api/` to `/api/v1/`:
-   - `App.jsx`, `AuthContext.jsx`, `FileUploader.jsx`, `DataHealthModal.jsx`, `ScheduleManagerModal.jsx`, `ClientManager.jsx`, `VulnerabilitiesPage.jsx`, `ReportHistory.jsx`, `ReportsView.jsx`, `AIChatbot.jsx`, `AISectionSummary.jsx`, `EnterpriseInsightCard.jsx`, `ExcelAnalyzer.jsx`, `InventorySyncPage.jsx`, `LoginModal.jsx`, `MFASetup.jsx`, `OverviewPage.jsx`, `useChatSession.js`, `useValidationReport.js`, `validationRunner.js`.
-3. Update all mock URLs in `frontend/src/__tests__/`:
-   - `DataHealthModal.test.jsx`: `/api/data-health/issue/` → `/api/v1/data-health/issue/`
-   - `ScheduleManagerModal.test.jsx`: `/api/ppt/download/job_1` → `/api/v1/ppt/download/job_1`
-   - Verify `npm --prefix frontend test -- --run` passes 17/17 post-migration.
+---
 
-### 3.3 OpenAPI 3.0 Contract Specification (`docs/openapi-v1.yaml`)
-- Authored as a formal schema file documenting:
-  - Info: Title: `Executive Dashboard & QBR Generator API`, Version: `1.0.0`
-  - Servers: `/api/v1`
-  - Paths:
-    - `/auth/login`, `/auth/logout`, `/auth/revoke`, `/auth/me`
-    - `/dashboard`, `/dashboard/{jobId}`
-    - `/upload`, `/upload-json`, `/analyze-excel`
-    - `/jobs/{jobId}`
-    - `/tenants/{id}/settings`, `/tenants/{id}/schedules`, `/tenants/{id}/templates`
-    - `/data-health`, `/data-health/export`
-    - `/health`, `/health/scheduler`
-  - Components: Security schemes (`BearerAuth`), Data models (`DashboardSummary`, `HealthStatus`, `LoginResponse`, etc.).
-- **CI Validation Plan**: Added to CI checks: `npx @redocly/cli lint docs/openapi-v1.yaml` (or `swagger-cli validate`). Fails PR if invalid.
+## 6. Test Strategy (TDD)
+
+New comprehensive test suite `backend/tests/observability.test.js` covering:
+
+1. **`logger_redacts_sensitive_authorization_header`**: Asserts `req.headers.authorization` is scrubbed to `[REDACTED]`.
+2. **`logger_redacts_sensitive_password_and_token`**: Asserts objects with keys `password`, `token`, `secret`, `recipients` have values scrubbed to `[REDACTED]`.
+3. **`correlationId_generated_when_missing`**: `GET /api/v1/health` without `X-Request-Id` returns 200 and attaches a valid UUID v4 `X-Request-Id` response header.
+4. **`correlationId_propagated_when_present`**: `GET /api/v1/health` with `X-Request-Id: trace-custom-999` echoes `X-Request-Id: trace-custom-999` in response headers.
+5. **`loggingMiddleware_attaches_child_logger`**: Asserts route handlers receive `req.log` pre-bound with `reqId`.
+6. **`sentry_noop_when_dsn_omitted`**: Asserts `initSentry` without `SENTRY_DSN` does not throw and leaves `isInitialized()` as `false`.
+7. **`sentry_captureException_safe_when_uninitialized`**: Asserts `captureException(new Error('fail'), { module: 'test' })` returns `null` without crashing.
+8. **`express_error_handler_returns_json_500_with_reqId`**: Asserts an error thrown in an Express route triggers the global error handler, sets status 500, and returns `{ error: 'Internal Server Error', status: 500, reqId }`.
+9. **`health_telemetry_includes_observability`**: Asserts `GET /api/v1/health` returns `{ status: 'ok', version: 'v1', observability: { logger: 'pino', sentryActive: false } }`.
+10. **`background_error_capture_enriches_tags`**: Asserts `captureException` passes tenant, module, and jobId tags to Sentry context.
 
 ---
 
-## 4. Test Strategy (TDD)
+## 7. HUMAN ACTION REQUIRED — Observability (Sentry & Pino)
 
-New test suite `backend/tests/apiV1Contract.test.js` covering:
-1. **`v1_healthEndpoint_returns200`**: `GET /api/v1/health` returns `{ status: 'ok', version: 'v1' }`.
-2. **`v1_schedulerHealth_parity`**: `GET /api/v1/health/scheduler` returns scheduler health state; `GET /api/health/scheduler` returns identical state plus `Deprecation: true` and `Link: </api/v1/health/scheduler>; rel="successor-version"`.
-3. **`v1_deprecationHeaders_attachedOnLegacy`**: `GET /api/health` returns identical payload plus `Deprecation: true` and `Link: </api/v1/health>; rel="successor-version"`.
-4. **`apiV1UnmatchedRoute_noDeprecationHeaders` (GAP 2)**: `GET /api/v1/nonexistent-route-xyz` returns HTTP 404, does NOT attach `Deprecation` or `Link` headers, and does NOT produce double `/v1/v1` in links.
-5. **`apiUnmatchedReturns404Json_notHtml` (CLARIFICATION 1)**: `GET /api/nonexistent-route-xyz` returns HTTP 404 with JSON `{ error: 'API route not found' }`, never leaking SPA HTML.
-6. **`legacyDirectMountsAbsent` (CLARIFICATION 2)**: Asserts old direct mounts in `backend/index.js` are truly removed and `app._router.stack` contains no duplicate legacy route handlers.
-7. **`apiV1CorsPreflight` (CLARIFICATION 3)**: `OPTIONS /api/v1/auth/login` and `OPTIONS /api/auth/login` return 204 with `Access-Control-Allow-*` headers.
-8. **`frontendUsesOnlyV1Paths` (FRONTEND AUDIT INVARIANT)**: Greps `frontend/src/` for `/api/` (excluding `config/api.js`) and asserts zero legacy unversioned paths exist in frontend codebase.
-9. **`v1_authLogin_returnsToken`**: `POST /api/v1/auth/login` issues valid JWT v2 session identical to legacy `/api/auth/login`.
-10. **`v1_dashboard_jsonContractMatch`**: `GET /api/v1/dashboard` payload keys match `GET /api/dashboard` 100%.
-11. **`v1_tenants_settings_roundtrip`**: `GET /api/v1/tenants` and `GET /api/v1/tenants/:id/settings` return valid tenant configuration.
-12. **`v1_schedules_crud_parity`**: `GET /api/v1/tenants/:id/schedules` correctly queries schedule repo.
-13. **`v1_dataHealth_parity`**: `GET /api/v1/data-health` returns valid data health metrics.
-14. **`v1_vulnerabilities_parity`**: `GET /api/v1/vulnerabilities` returns filtered inventory CVEs.
-15. **`v1_uploadSecurity_rateLimit_inherited`**: Rate limits and payload size guards apply uniformly to `/api/v1/upload`.
-16. **`v1_tenantIsolation_enforced`**: Tenant boundaries apply identically across `/api/v1/` routes.
+Per Section 10 of SYSTEM DIRECTIVE:
+
+### 1. Dashboard Steps (Click-by-Click)
+1. Log into your [Sentry Dashboard](https://sentry.io/).
+2. Click **Create Project** $\to$ select **Node.js / Express**.
+3. Set project name: `executive-qbr-backend`.
+4. Copy the generated **DSN URL** (format: `https://<key>@<org>.ingest.sentry.io/<project-id>`).
+5. Open your deployment platform (e.g. Render Dashboard $\to$ Environment Variables).
+
+### 2. Environment Variables to Set
+| Variable Name | Example Value (DO NOT use real secrets in code) | Purpose |
+| :--- | :--- | :--- |
+| `SENTRY_DSN` | `https://examplePublicKey@o000000.ingest.sentry.io/0000000` | Sentry ingestion endpoint |
+| `SENTRY_ENVIRONMENT` | `production` | Deployment environment tag |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Performance APM transaction sample rate (10%) |
+| `LOG_LEVEL` | `info` | Pino log verbosity (`info`, `debug`, `warn`, `error`) |
+
+### 3. Verification Command
+To verify Sentry connectivity in production:
+```bash
+curl -X GET https://your-deployed-domain.com/api/v1/health
+```
+Assert response contains `"observability": { "logger": "pino", "sentryActive": true }`.
+
+### 4. What Breaks if the Human Skips This
+- If `SENTRY_DSN` is omitted:
+  - The application **will NOT crash** and remains 100% functional.
+  - Pino structured JSON logging continues writing to `stdout`.
+  - Sentry exception tracking and alerting remain inactive (errors log to stdout only; no email/Slack alerts fire).
 
 ---
 
-## 5. Risk Assessment & Rollback
+## 8. Risk Assessment & Rollback
 
 - **Risk Level**: **LOW**.
-  - Route handlers are consolidated and shared between `/api/v1` and `/api`. No data schemas or calculations are altered.
-  - Legacy routes continue to answer external requests with zero regressions.
+  - All logging and Sentry utilities are designed with defensive try-catch wrappers and no-op fallbacks.
+  - If Sentry or Pino configuration is missing or malformed, the system degrades silently without breaking existing business APIs or report generation.
 - **Rollback Path**:
-  - Revert single commit: `git revert HEAD`. Server resumes previous mounting without `/api/v1` prefix.
+  - Revert commit: `git revert HEAD`. Server resumes previous standard `console.log` logging.
