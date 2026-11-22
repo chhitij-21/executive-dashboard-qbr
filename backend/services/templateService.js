@@ -61,6 +61,10 @@ async function getManifest(tenantId) {
 
 async function saveManifest(tenantId, manifest) {
   const manifestPath = getManifestPath(tenantId);
+  const dir = path.dirname(manifestPath);
+  if (!fs.existsSync(dir)) {
+    await fs.promises.mkdir(dir, { recursive: true });
+  }
   const tmpPath = `${manifestPath}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
   manifest.updatedAt = new Date().toISOString();
   const payload = JSON.stringify(manifest, null, 2);
@@ -68,8 +72,13 @@ async function saveManifest(tenantId, manifest) {
   try {
     await fs.promises.rename(tmpPath, manifestPath);
   } catch (_) {
-    await fs.promises.copyFile(tmpPath, manifestPath);
-    await fs.promises.unlink(tmpPath).catch(() => {});
+    try {
+      await fs.promises.copyFile(tmpPath, manifestPath);
+      await fs.promises.unlink(tmpPath).catch(() => {});
+    } catch (__e) {
+      await fs.promises.writeFile(manifestPath, payload, 'utf8');
+      await fs.promises.unlink(tmpPath).catch(() => {});
+    }
   }
 }
 
