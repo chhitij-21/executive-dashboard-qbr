@@ -17,16 +17,40 @@ const clientService = require('../services/clientService');
 
 /**
  * Middleware: validates Bearer token from Authorization header.
- * Attaches req.user on success, returns 401 on failure.
+ * Attaches req.user on success, returns 401 on failure (or 503 if auth service unavailable).
  */
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
-  const session = authService.verifyToken(authHeader);
-  if (!session) {
+  if (!authHeader) {
     return res.status(401).json({ error: 'Authorization required — please log in.', code: 'UNAUTHORIZED' });
   }
-  req.user = session.user;
-  next();
+
+  try {
+    const session = await authService.verifyToken(authHeader);
+    if (!session || !session.user) {
+      return res.status(401).json({ error: 'Authorization required — please log in.', code: 'UNAUTHORIZED' });
+    }
+    req.user = session.user;
+    req.jwtPayload = session.payload || null;
+    next();
+  } catch (err) {
+    if (err.statusCode === 503 || err.code === 'AUTH_SERVICE_UNAVAILABLE') {
+      return res.status(503).json({ error: err.message, code: 'AUTH_SERVICE_UNAVAILABLE' });
+    }
+    if (err.code === 'TOKEN_REVOKED') {
+      return res.status(401).json({ error: 'Token has been revoked. Please log in again.', code: 'TOKEN_REVOKED' });
+    }
+    if (err.code === 'USER_SESSION_TERMINATED') {
+      return res.status(401).json({ error: 'User session has been revoked. Please log in again.', code: 'USER_SESSION_TERMINATED' });
+    }
+    if (err.code === 'TOKEN_EXPIRED') {
+      return res.status(401).json({ error: 'Token has expired. Please log in again.', code: 'TOKEN_EXPIRED' });
+    }
+    if (err.code === 'INVALID_TOKEN' || err.code === 'MALFORMED_TOKEN') {
+      return res.status(401).json({ error: 'Invalid authentication token.', code: 'INVALID_TOKEN' });
+    }
+    return res.status(401).json({ error: err.message || 'Authorization required — please log in.', code: err.code || 'UNAUTHORIZED' });
+  }
 }
 
 /**
@@ -114,7 +138,7 @@ function requireClientAccess(extractClientId) {
  */
 function requireAdmin(req, res, next) {
   if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required.', code: 'ADMIN_REQUIRED' });
+    return res.status(403).json({ error: 'Admin access required.', code: 'ADMIN_ACCESS_REQUIRED' });
   }
   next();
 }

@@ -412,13 +412,34 @@ app.use('/api', (req, res, next) => {
 // ── Auth Routes ─────────────────────────────────────────────────────────────
 app.get(['/api/auth/auto', '/auth/auto'], handleAutoAuthRoute);
 
-app.post(['/api/auth/login', '/auth/login'], authRateLimit, (req, res) => {
-  const { email, password } = req.body;
+app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
+  const { email, password } = req.body || {};
   if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
+
+  const ip = req.headers['x-forwarded-for'] || req.ip || req.connection?.remoteAddress || '127.0.0.1';
+  const username = email.trim().toLowerCase();
+
+  // Rate limiting check: 5 attempts per 15 min per IP + username
+  const rateLimit = await authService.checkLoginRateLimit(ip, username);
+  if (!rateLimit.allowed) {
+    res.set('Retry-After', String(rateLimit.retryAfter || 900));
+    return res.status(429).json({
+      error: 'Too many login attempts. Please try again in 15 minutes.',
+      code: 'RATE_LIMIT_EXCEEDED',
+      retryAfter: rateLimit.retryAfter || 900,
+    });
+  }
+
   const result = authService.authenticateUser(email.trim(), password);
-  if (!result) return res.status(401).json({ error: 'Invalid email or password' });
+  if (!result) {
+    return res.status(401).json({ error: 'Invalid email or password', code: 'INVALID_CREDENTIALS' });
+  }
+
+  // Clear failed attempt counter on success
+  await authService.clearLoginRateLimit(ip, username);
+
   if (result.mfaRequired) {
     return res.json({
       mfaRequired: true,
@@ -433,9 +454,31 @@ app.get(['/api/auth/me', '/auth/me'], requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
 
-app.post(['/api/auth/logout', '/auth/logout'], (req, res) => {
-  authService.invalidateToken(req.headers.authorization);
+app.post(['/api/auth/logout', '/auth/logout'], async (req, res) => {
+  await authService.invalidateToken(req.headers.authorization);
   res.json({ success: true, message: 'Logged out successfully.' });
+});
+
+// Admin-only token or user revocation endpoint
+app.post(['/api/auth/revoke', '/auth/revoke'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { userId, jti } = req.body || {};
+    if (!userId && !jti) {
+      return res.status(400).json({ error: 'Either userId or jti is required for revocation.', code: 'MISSING_REVOCATION_TARGET' });
+    }
+    if (userId) {
+      await authService.revokeAllUserTokens(userId);
+    }
+    if (jti) {
+      await authService.revokeToken(jti);
+    }
+    res.json({ success: true, message: 'Revocation processed successfully.' });
+  } catch (err) {
+    if (err.statusCode === 503 || err.code === 'AUTH_SERVICE_UNAVAILABLE') {
+      return res.status(503).json({ error: err.message, code: 'AUTH_SERVICE_UNAVAILABLE' });
+    }
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/auth/demo-accounts', (req, res) => {
@@ -1017,7 +1060,10 @@ app.get(['/api/chat/loop', '/chat/loop'], async (req, res) => {
     authUser = ticketData.user;
     authorizedClientId = ticketData.clientId;
   } else if (req.headers.authorization) {
-    const session = authService.verifyToken(req.headers.authorization);
+    let session = null;
+    try {
+      session = await authService.verifyToken(req.headers.authorization);
+    } catch (_) {}
     if (!session || !session.user) {
       return res.status(401).json({ error: 'Authorization required — please log in.', code: 'UNAUTHORIZED' });
     }
@@ -2111,7 +2157,10 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
         authorizedClientId = ticketData.clientId;
         authorizedJobId = ticketData.jobId;
       } else {
-        const session = authService.verifyToken(ticket);
+        let session = null;
+        try {
+          session = await authService.verifyToken(ticket);
+        } catch (_) {}
         if (session && session.user) {
           authUser = session.user;
         } else {
@@ -2122,7 +2171,10 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
         }
       }
     } else {
-      const session = authService.verifyToken(req.headers.authorization);
+      let session = null;
+      try {
+        session = await authService.verifyToken(req.headers.authorization);
+      } catch (_) {}
       if (!session || !session.user) {
         return res.status(401).json({
           error: 'Authorization required — please log in or provide a download ticket.',
@@ -2408,6 +2460,8 @@ app.get('*', (req, res) => {
 });
 
 if ((require.main === module || !process.env.VERCEL) && process.env.NODE_ENV !== 'test') {
+  // Validate JWT secret requirements on boot
+  authService.assertJwtSecretValid();
   const DEFAULT_PORT = process.env.PORT || 3000;
 
   const startServer = (port) => {

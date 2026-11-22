@@ -282,12 +282,14 @@ const handleRefresh = async (req, res) => {
   }
 };
 
-const optionalAuthForRefresh = (req, res, next) => {
+const optionalAuthForRefresh = async (req, res, next) => {
   if (req.headers.authorization) {
-    const session = authService.verifyToken(req.headers.authorization);
-    if (session) {
-      req.user = session.user;
-    }
+    try {
+      const session = await authService.verifyToken(req.headers.authorization);
+      if (session) {
+        req.user = session.user;
+      }
+    } catch (_) {}
   }
   if (!req.user) {
     req.user = { email: 'operator@portal.com', role: 'admin' };

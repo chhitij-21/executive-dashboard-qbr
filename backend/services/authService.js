@@ -1,16 +1,35 @@
 // backend/services/authService.js
-const crypto = require('crypto');
-// Authentication & Role-Based Access Control (RBAC) service.
-// Supports Admin and Client User roles out-of-the-box.
+// Enterprise Authentication, JWT v2, RBAC, and Token Revocation Service (Item #4)
 
-const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const bcrypt = require('bcryptjs');
+
+const TOKEN_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours access token lifespan (Item #4 spec)
+const LEGACY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours for legacy fallback
 const DOWNLOAD_TICKET_TTL_MS = 60 * 1000; // 60 seconds (short-lived single-use)
+const SSE_TICKET_TTL_MS = 60 * 1000; // 60 seconds
+const MFA_TEMP_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 const isProd = process.env.NODE_ENV === 'production';
 const allowDemo = process.env.ALLOW_DEMO_ACCOUNTS === 'true';
 
-// PRODUCTION PASSWORD INTEGRITY ENFORCEMENT
-// Fail-fast on startup if required secrets are missing in production.
+/**
+ * Validates the JWT_SECRET configuration.
+ * In production (NODE_ENV=production), fails fast if missing or < 32 chars.
+ */
+function assertJwtSecretValid() {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!secret || typeof secret !== 'string' || secret.trim().length < 32) {
+      throw new Error('[FATAL] Production startup halted: Missing or insecure JWT_SECRET (must be >= 32 chars).');
+    }
+  }
+  return secret || 'dev-jwt-secret-at-least-32-characters-long-for-testing';
+}
+
+// Fail-fast on startup if required secrets are missing in production
 if (isProd && !allowDemo) {
   const missing = [];
   if (!process.env.ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD');
@@ -23,23 +42,20 @@ if (isProd && !allowDemo) {
   }
 }
 
+// Base seed accounts
 const SUPER_ADMIN = {
   id: 'user-super-admin',
   email: 'admin@portal.com',
   username: 'admin',
-  password: process.env.ADMIN_PASSWORD || 'admin123', // override via env in production
+  password: process.env.ADMIN_PASSWORD || 'admin123',
   name: 'Super Admin',
   role: 'admin',
   assignedClient: 'all',
-  avatar: '👑'
+  avatar: '👑',
 };
 
 const USERS = [SUPER_ADMIN];
 
-// BEHAVIORAL NOTE: Interaction between ENABLE_CLIENT_ACCOUNTS and password-based seeding:
-// If ENABLE_CLIENT_ACCOUNTS is explicitly 'false', client accounts (JFL & MMTC) are skipped
-// even if their passwords are provided. By default (or when 'true'), client user accounts are seeded
-// using dedicated env vars in production or safe fixtures in non-production.
 if (process.env.ENABLE_CLIENT_ACCOUNTS !== 'false') {
   const jflPassword = process.env.JFL_PASSWORD || (!isProd || allowDemo ? 'jfl123' : null);
   const mmtcPassword = process.env.MMTC_PASSWORD || (!isProd || allowDemo ? 'mmtc123' : null);
@@ -53,7 +69,7 @@ if (process.env.ENABLE_CLIENT_ACCOUNTS !== 'false') {
       name: 'JFL Portal User',
       role: 'client_user',
       assignedClient: 'client-jfl',
-      avatar: '🍔'
+      avatar: '🍔',
     });
   }
 
@@ -66,30 +82,51 @@ if (process.env.ENABLE_CLIENT_ACCOUNTS !== 'false') {
       name: 'MMTC Portal User',
       role: 'client_user',
       assignedClient: 'client-mmtcpamp',
-      avatar: '🏭'
+      avatar: '🏭',
     });
   }
 }
 
-const fs = require('fs');
-const path = require('path');
-
 const USERS_FILE = path.resolve(__dirname, '../../data/users.json');
 
-// In-memory token map: token → { session, expiresAt }
+// In-memory legacy fallback token map: token -> { session, expiresAt }
 const tokens = new Map();
 
-// In-memory download tickets: ticket → { userId, clientId, jobId, exportType, expiresAt }
+// In-memory tickets
 const downloadTickets = new Map();
-// In-memory SSE tickets: ticket → { user, userId, clientId, expiresAt }
 const sseTickets = new Map();
-const SSE_TICKET_TTL_MS = 60 * 1000; // 60 seconds
-
-// In-memory MFA temporary challenge tokens: tempToken → { userId, expiresAt }
 const mfaTempTokens = new Map();
-const MFA_TEMP_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-// ─── Persistence for User MFA States ──────────────────────────────────────────
+// In-memory active revocation state (used in test & dev fallback)
+const _inMemoryBlocklist = new Map(); // jti -> expiresAtSec
+const _inMemoryUserRevokedBefore = new Map(); // userId -> timestampSec
+let _simulatedRedisFailure = false;
+
+// In-memory login rate limit map: key -> { count, expiresAtMs }
+const _inMemoryLoginRateMap = new Map();
+
+// ─── Atomic File Writing Helper ───────────────────────────────────────────────
+
+function safeWriteJsonSync(filePath, data) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmp = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
+  const payload = JSON.stringify(data, null, 2);
+  fs.writeFileSync(tmp, payload, 'utf8');
+  try {
+    fs.renameSync(tmp, filePath);
+  } catch (_) {
+    try {
+      fs.copyFileSync(tmp, filePath);
+      fs.unlinkSync(tmp);
+    } catch (__) {
+      fs.writeFileSync(filePath, payload, 'utf8');
+      try { fs.unlinkSync(tmp); } catch (___) {}
+    }
+  }
+}
+
+// ─── Persistence & Password Migration ─────────────────────────────────────────
 
 function loadUserMfaData() {
   try {
@@ -97,24 +134,25 @@ function loadUserMfaData() {
       const raw = fs.readFileSync(USERS_FILE, 'utf-8');
       const mfaMap = JSON.parse(raw);
       if (typeof mfaMap === 'object' && mfaMap !== null) {
-        // 1. Sync MFA properties to existing in-memory seeded users (matching by id, email, or username)
         for (const user of USERS) {
-          const entry = mfaMap[user.id] ||
-            Object.values(mfaMap).find(e => e && (
-              (e.id && e.id === user.id) ||
-              (e.email && user.email && e.email.toLowerCase() === user.email.toLowerCase()) ||
-              (e.username && user.username && e.username.toLowerCase() === user.username.toLowerCase())
-            ));
+          const entry =
+            mfaMap[user.id] ||
+            Object.values(mfaMap).find(
+              (e) =>
+                e &&
+                ((e.id && e.id === user.id) ||
+                  (e.email && user.email && e.email.toLowerCase() === user.email.toLowerCase()) ||
+                  (e.username && user.username && e.username.toLowerCase() === user.username.toLowerCase()))
+            );
 
           if (entry) {
             user.mfaSecret = entry.mfaSecret || null;
             user.mfaEnabled = !!entry.mfaEnabled;
             user.pendingMfaSecret = entry.pendingMfaSecret || null;
-            if (entry.password && !user.password) user.password = entry.password;
+            if (entry.password) user.password = entry.password;
           }
         }
 
-        // 2. Load persisted users from users.json into USERS array if not already present
         for (const [key, val] of Object.entries(mfaMap)) {
           if (val && typeof val === 'object' && (val.email || val.id)) {
             const userId = val.id || key;
@@ -142,14 +180,12 @@ function loadUserMfaData() {
       }
     }
   } catch (err) {
-    // Non-blocking
+    console.warn('[authService] Warning: Failed to load user data from users.json:', err.message);
   }
 }
 
 function saveUserMfaData() {
   try {
-    const dir = path.dirname(USERS_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     let existingMap = {};
     if (fs.existsSync(USERS_FILE)) {
       try {
@@ -158,7 +194,7 @@ function saveUserMfaData() {
     }
     const mfaMap = { ...existingMap };
     for (const user of USERS) {
-      if (user.mfaSecret || user.mfaEnabled || user.pendingMfaSecret || existingMap[user.id]) {
+      if (user.mfaSecret || user.mfaEnabled || user.pendingMfaSecret || existingMap[user.id] || user.password) {
         mfaMap[user.id] = {
           ...(existingMap[user.id] || {}),
           id: user.id,
@@ -176,20 +212,273 @@ function saveUserMfaData() {
         };
       }
     }
-    fs.writeFileSync(USERS_FILE, JSON.stringify(mfaMap, null, 2), 'utf-8');
+    safeWriteJsonSync(USERS_FILE, mfaMap);
   } catch (err) {
-    // Non-blocking
+    console.warn('[authService] Warning: Failed to save user data to users.json:', err.message);
   }
 }
 
-// Initial load
-loadUserMfaData();
+function migratePlaintextPasswordsFile(filePath) {
+  if (!fs.existsSync(filePath)) return 0;
+  const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  let count = 0;
+  if (typeof content === 'object' && content !== null) {
+    for (const key of Object.keys(content)) {
+      const u = content[key];
+      if (u.password && typeof u.password === 'string' && !u.password.startsWith('$2a$') && !u.password.startsWith('$2b$') && !u.password.startsWith('$2y$')) {
+        u.password = bcrypt.hashSync(u.password, 10);
+        count++;
+      }
+    }
+  }
+  if (count > 0) {
+    safeWriteJsonSync(filePath, content);
+  }
+  return count;
+}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+function migrateAllPasswords() {
+  if (process.env.AUTH_V2 === 'false') return;
+  let modified = false;
+  for (const u of USERS) {
+    if (u.password && typeof u.password === 'string' && !u.password.startsWith('$2a$') && !u.password.startsWith('$2b$') && !u.password.startsWith('$2y$')) {
+      u.password = bcrypt.hashSync(u.password, 10);
+      modified = true;
+    }
+  }
+  if (fs.existsSync(USERS_FILE)) {
+    migratePlaintextPasswordsFile(USERS_FILE);
+  }
+  if (modified) {
+    saveUserMfaData();
+  }
+}
+
+// Perform initialization
+loadUserMfaData();
+migrateAllPasswords();
+
+// ─── JWT Primitives (RFC 7519 HMAC-SHA256) ───────────────────────────────────
+
+function base64UrlEncode(strOrBuffer) {
+  return Buffer.from(strOrBuffer)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function base64UrlDecode(str) {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) base64 += '=';
+  return Buffer.from(base64, 'base64').toString('utf8');
+}
+
+function signJwt(payload, secret = assertJwtSecretValid()) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const encodedHeader = base64UrlEncode(JSON.stringify(header));
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest();
+  const encodedSignature = base64UrlEncode(signature);
+  return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
+}
+
+function decodeJwt(token) {
+  const parts = (token || '').split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const header = JSON.parse(base64UrlDecode(parts[0]));
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    return { header, payload, signature: parts[2] };
+  } catch (_) {
+    return null;
+  }
+}
+
+function verifyJwtSignature(token, secret = assertJwtSecretValid()) {
+  const decoded = decodeJwt(token);
+  if (!decoded) return { valid: false, error: 'MALFORMED_TOKEN' };
+  const parts = token.split('.');
+  const expectedSig = base64UrlEncode(
+    crypto.createHmac('sha256', secret).update(`${parts[0]}.${parts[1]}`).digest()
+  );
+
+  const sigBuf = Buffer.from(parts[2]);
+  const expectedBuf = Buffer.from(expectedSig);
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+    return { valid: false, error: 'INVALID_TOKEN' };
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (decoded.payload.exp && nowSec > decoded.payload.exp) {
+    return { valid: false, error: 'TOKEN_EXPIRED', payload: decoded.payload };
+  }
+
+  return { valid: true, payload: decoded.payload };
+}
+
+// ─── Redis & In-Memory Active Revocation ───────────────────────────────────────
+
+function setSimulatedRedisFailure(flag) {
+  _simulatedRedisFailure = !!flag;
+}
+
+function resetRevocationState() {
+  _inMemoryBlocklist.clear();
+  _inMemoryUserRevokedBefore.clear();
+}
+
+function getRedisClient() {
+  if (_simulatedRedisFailure) {
+    return { status: 'failed' };
+  }
+  try {
+    const queueService = require('./queueService');
+    if (queueService.redisClient && queueService.redisClient.status === 'ready') {
+      return queueService.redisClient;
+    }
+  } catch (_) {}
+  return null;
+}
+
+async function revokeToken(jti, expSec) {
+  if (!jti) return;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const ttlSec = expSec ? Math.max(1, expSec - nowSec) : 4 * 3600;
+
+  const redis = getRedisClient();
+  if (process.env.NODE_ENV === 'production' && (!redis || redis.status !== 'ready')) {
+    const err = new Error('Authentication validation service temporarily unavailable.');
+    err.statusCode = 503;
+    err.code = 'AUTH_SERVICE_UNAVAILABLE';
+    throw err;
+  }
+
+  if (redis && redis.status === 'ready') {
+    await redis.set(`blocklist:${jti}`, '1', 'EX', ttlSec);
+  } else {
+    _inMemoryBlocklist.set(jti, nowSec + ttlSec);
+  }
+}
+
+async function revokeAllUserTokens(userId) {
+  if (!userId) return;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const redis = getRedisClient();
+
+  if (process.env.NODE_ENV === 'production' && (!redis || redis.status !== 'ready')) {
+    const err = new Error('Authentication validation service temporarily unavailable.');
+    err.statusCode = 503;
+    err.code = 'AUTH_SERVICE_UNAVAILABLE';
+    throw err;
+  }
+
+  if (redis && redis.status === 'ready') {
+    await redis.set(`user_revoked_before:${userId}`, String(nowSec), 'EX', 4 * 3600);
+  } else {
+    _inMemoryUserRevokedBefore.set(userId, nowSec);
+  }
+}
+
+async function isTokenRevoked(jti, userId, iatSec) {
+  if (process.env.AUTH_V2 === 'false') return { revoked: false };
+
+  const isProd = process.env.NODE_ENV === 'production';
+  const redis = getRedisClient();
+
+  if (isProd && (!redis || redis.status !== 'ready')) {
+    const err = new Error('Authentication validation service temporarily unavailable.');
+    err.statusCode = 503;
+    err.code = 'AUTH_SERVICE_UNAVAILABLE';
+    throw err;
+  }
+
+  if (redis && redis.status === 'ready') {
+    if (jti) {
+      const isBlocked = await redis.get(`blocklist:${jti}`);
+      if (isBlocked) return { revoked: true, reason: 'TOKEN_REVOKED' };
+    }
+    if (userId) {
+      const revokedBefore = await redis.get(`user_revoked_before:${userId}`);
+      if (revokedBefore && iatSec <= parseInt(revokedBefore, 10)) {
+        return { revoked: true, reason: 'USER_SESSION_TERMINATED' };
+      }
+    }
+    return { revoked: false };
+  }
+
+  // In-memory fallback (test / local non-prod)
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (jti && _inMemoryBlocklist.has(jti)) {
+    const exp = _inMemoryBlocklist.get(jti);
+    if (nowSec <= exp) return { revoked: true, reason: 'TOKEN_REVOKED' };
+    _inMemoryBlocklist.delete(jti);
+  }
+  if (userId && _inMemoryUserRevokedBefore.has(userId)) {
+    const revokedBefore = _inMemoryUserRevokedBefore.get(userId);
+    if (iatSec <= revokedBefore) {
+      return { revoked: true, reason: 'USER_SESSION_TERMINATED' };
+    }
+  }
+
+  return { revoked: false };
+}
+
+// ─── Login Rate Limiting ───────────────────────────────────────────────────────
+
+function resetRateLimits() {
+  _inMemoryLoginRateMap.clear();
+}
+
+async function checkLoginRateLimit(ip, username) {
+  const normalizedUser = (username || '').toLowerCase().trim();
+  const key = `login_attempt:${ip}:${normalizedUser}`;
+  const redis = getRedisClient();
+
+  if (redis && redis.status === 'ready') {
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, 900);
+    if (count > 5) {
+      const ttl = await redis.ttl(key);
+      return { allowed: false, retryAfter: Math.max(1, ttl) };
+    }
+    return { allowed: true };
+  }
+
+  // In-memory fallback
+  const now = Date.now();
+  let entry = _inMemoryLoginRateMap.get(key);
+  if (!entry || now > entry.expiresAtMs) {
+    entry = { count: 0, expiresAtMs: now + 900 * 1000 };
+  }
+  entry.count += 1;
+  _inMemoryLoginRateMap.set(key, entry);
+
+  if (entry.count > 5) {
+    const retryAfter = Math.max(1, Math.ceil((entry.expiresAtMs - now) / 1000));
+    return { allowed: false, retryAfter };
+  }
+  return { allowed: true };
+}
+
+async function clearLoginRateLimit(ip, username) {
+  const normalizedUser = (username || '').toLowerCase().trim();
+  const key = `login_attempt:${ip}:${normalizedUser}`;
+  const redis = getRedisClient();
+  if (redis && redis.status === 'ready') {
+    await redis.del(key);
+  } else {
+    _inMemoryLoginRateMap.delete(key);
+  }
+}
+
+// ─── Session Issuance ─────────────────────────────────────────────────────────
 
 function _safeUser(user) {
   if (!user) return null;
-  // Never expose password or secrets in any outbound object
   const { password, mfaSecret, pendingMfaSecret, ...safe } = user;
   return {
     ...safe,
@@ -207,6 +496,62 @@ function _purgeExpiredTokens() {
   }
 }
 
+function issueSessionForUserLegacy(user) {
+  _purgeExpiredTokens();
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + LEGACY_TOKEN_TTL_MS;
+  const session = {
+    user: _safeUser(user),
+    token,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(expiresAt).toISOString(),
+  };
+  tokens.set(token, { ...session, expiresAt });
+  return session;
+}
+
+function issueSessionForUserV2(user) {
+  let nowSec = Math.floor(Date.now() / 1000);
+  const revokedBefore = _inMemoryUserRevokedBefore.get(user?.id);
+  if (revokedBefore && nowSec <= revokedBefore) {
+    nowSec = revokedBefore + 1;
+  }
+  const expSec = nowSec + 4 * 3600; // Exactly 4 hours
+  const jti = crypto.randomUUID();
+
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+    assignedClient: user.assignedClient,
+    jti,
+    iat: nowSec,
+    exp: expSec,
+  };
+
+  const token = signJwt(payload);
+  const session = {
+    user: _safeUser(user),
+    token,
+    payload,
+    createdAt: new Date(nowSec * 1000).toISOString(),
+    expiresAt: new Date(expSec * 1000).toISOString(),
+  };
+
+  // Also maintain in-memory map for fast sync lookups if needed
+  tokens.set(token, { ...session, expiresAt: expSec * 1000 });
+  return session;
+}
+
+function issueSessionForUser(user) {
+  if (process.env.AUTH_V2 === 'false') {
+    return issueSessionForUserLegacy(user);
+  }
+  return issueSessionForUserV2(user);
+}
+
+// ─── User Authentication & Profile Lookups ────────────────────────────────────
+
 function getUserById(id) {
   return USERS.find((u) => u.id === id) || null;
 }
@@ -214,10 +559,170 @@ function getUserById(id) {
 function getUserByEmail(email) {
   if (!email) return null;
   const target = email.toLowerCase().trim();
-  return USERS.find(
-    (u) => u.email.toLowerCase() === target || (u.username && u.username.toLowerCase() === target)
-  ) || null;
+  return (
+    USERS.find(
+      (u) => u.email.toLowerCase() === target || (u.username && u.username.toLowerCase() === target)
+    ) || null
+  );
 }
+
+async function updateUserPassword(userId, newPassword) {
+  const user = getUserById(userId);
+  if (!user) throw new Error(`User not found: ${userId}`);
+  user.password = bcrypt.hashSync(newPassword, 10);
+  saveUserMfaData();
+  await revokeAllUserTokens(userId);
+  return true;
+}
+
+function authenticateUser(email, password) {
+  if (!email || !password) return null;
+
+  const target = email.toLowerCase().trim();
+  const user = USERS.find(
+    (u) => u.email.toLowerCase() === target || (u.username && u.username.toLowerCase() === target)
+  );
+  if (!user || !user.password) return null;
+
+  let isMatch = false;
+  if (
+    user.password.startsWith('$2a$') ||
+    user.password.startsWith('$2b$') ||
+    user.password.startsWith('$2y$')
+  ) {
+    isMatch = bcrypt.compareSync(password, user.password);
+  } else {
+    // Plaintext legacy verification with lazy upgrade
+    isMatch = (user.password === password);
+    if (isMatch && process.env.AUTH_V2 !== 'false') {
+      user.password = bcrypt.hashSync(password, 10);
+      saveUserMfaData();
+    }
+  }
+
+  if (!isMatch) return null;
+
+  if (user.mfaEnabled) {
+    const tempToken = createMFATempToken(user);
+    return {
+      mfaRequired: true,
+      tempToken,
+      user: _safeUser(user),
+    };
+  }
+
+  return issueSessionForUser(user);
+}
+
+// ─── Token Verification & Invalidation ────────────────────────────────────────
+
+async function verifyToken(authHeader) {
+  if (!authHeader) return null;
+
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : authHeader.trim();
+
+  if (!token) return null;
+
+  // Legacy fallback if explicitly disabled
+  if (process.env.AUTH_V2 === 'false') {
+    const data = tokens.get(token);
+    if (!data) return null;
+    if (Date.now() > data.expiresAt) {
+      tokens.delete(token);
+      return null;
+    }
+    return data;
+  }
+
+  // Standard JWT (contains 2 dots)
+  if (token.split('.').length === 3) {
+    const verifyResult = verifyJwtSignature(token);
+    if (!verifyResult.valid) {
+      const err = new Error(
+        verifyResult.error === 'TOKEN_EXPIRED'
+          ? 'Token expired.'
+          : 'Invalid authentication token.'
+      );
+      err.code = verifyResult.error;
+      throw err;
+    }
+
+    const { payload } = verifyResult;
+    const revocation = await isTokenRevoked(payload.jti, payload.sub, payload.iat);
+    if (revocation.revoked) {
+      const err = new Error('Token has been revoked.');
+      err.code = revocation.reason || 'TOKEN_REVOKED';
+      throw err;
+    }
+
+    const user = getUserById(payload.sub) || {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      assignedClient: payload.assignedClient,
+    };
+
+    return {
+      user: _safeUser(user),
+      token,
+      payload,
+      createdAt: new Date(payload.iat * 1000).toISOString(),
+      expiresAt: new Date(payload.exp * 1000).toISOString(),
+    };
+  }
+
+  // Fallback for service tokens (svc_...) or legacy tokens
+  const data = tokens.get(token);
+  if (!data) return null;
+  if (Date.now() > data.expiresAt) {
+    tokens.delete(token);
+    return null;
+  }
+  return data;
+}
+
+async function invalidateToken(authHeader) {
+  if (!authHeader) return;
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : authHeader.trim();
+  if (!token) return;
+
+  tokens.delete(token);
+
+  if (process.env.AUTH_V2 !== 'false' && token.split('.').length === 3) {
+    const decoded = decodeJwt(token);
+    if (decoded?.payload?.jti) {
+      await revokeToken(decoded.payload.jti, decoded.payload.exp);
+    }
+  }
+}
+
+function registerServiceSession(user) {
+  const token = 'svc_' + crypto.randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + TOKEN_TTL_MS;
+  const session = {
+    user: _safeUser(user),
+    token,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(expiresAt).toISOString(),
+  };
+  tokens.set(token, { ...session, expiresAt });
+  return session;
+}
+
+function getDemoUsers() {
+  return USERS.map((u) => ({
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    assignedClient: u.assignedClient,
+  }));
+}
+
+// ─── MFA Primitives ───────────────────────────────────────────────────────────
 
 function setUserMFA(userId, { mfaSecret, mfaEnabled, pendingMfaSecret } = {}) {
   const user = getUserById(userId);
@@ -266,105 +771,7 @@ function consumeMFATempToken(tempToken) {
   if (tempToken) mfaTempTokens.delete(tempToken);
 }
 
-function issueSessionForUser(user) {
-  _purgeExpiredTokens();
-  const token = crypto.randomBytes(32).toString('hex');
-
-  if (tokens.size >= 10000) {
-    _purgeExpiredTokens();
-    if (tokens.size >= 9000) {
-      const keys = [...tokens.keys()].slice(0, Math.floor(tokens.size * 0.2));
-      keys.forEach((k) => tokens.delete(k));
-    }
-  }
-
-  const expiresAt = Date.now() + TOKEN_TTL_MS;
-  const session = {
-    user: _safeUser(user),
-    token,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(expiresAt).toISOString(),
-  };
-
-  tokens.set(token, { ...session, expiresAt });
-  return session;
-}
-
-// ─── Auth Functions ───────────────────────────────────────────────────────────
-
-function authenticateUser(email, password) {
-  if (!email || !password) return null;
-
-  const target = email.toLowerCase().trim();
-  const user = USERS.find(
-    (u) => (u.email.toLowerCase() === target || (u.username && u.username.toLowerCase() === target)) && u.password === password
-  );
-  if (!user) return null;
-
-  // If MFA is enabled, issue short-lived tempToken and challenge without real session JWT
-  if (user.mfaEnabled) {
-    const tempToken = createMFATempToken(user);
-    return {
-      mfaRequired: true,
-      tempToken,
-      user: _safeUser(user),
-    };
-  }
-
-  return issueSessionForUser(user);
-}
-
-function verifyToken(authHeader) {
-  if (!authHeader) return null;
-
-  const token = authHeader.startsWith('Bearer ')
-    ? authHeader.slice(7).trim()
-    : authHeader.trim();
-
-  if (!token) return null;
-
-  const data = tokens.get(token);
-  if (!data) return null;
-
-  // Check expiry
-  if (Date.now() > data.expiresAt) {
-    tokens.delete(token);
-    return null;
-  }
-
-  return data;
-}
-
-function invalidateToken(authHeader) {
-  if (!authHeader) return;
-  const token = authHeader.startsWith('Bearer ')
-    ? authHeader.slice(7).trim()
-    : authHeader.trim();
-  tokens.delete(token);
-}
-
-function registerServiceSession(user) {
-  const token = 'svc_' + crypto.randomBytes(32).toString('hex');
-  const expiresAt = Date.now() + TOKEN_TTL_MS;
-  const session = {
-    user: _safeUser(user),
-    token,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(expiresAt).toISOString(),
-  };
-  tokens.set(token, { ...session, expiresAt });
-  return session;
-}
-
-function getDemoUsers() {
-  // Never expose password field
-  return USERS.map((u) => ({
-    email: u.email,
-    name: u.name,
-    role: u.role,
-    assignedClient: u.assignedClient,
-  }));
-}
+// ─── Single-Use Download & SSE Tickets ────────────────────────────────────────
 
 function _purgeExpiredDownloadTickets() {
   const now = Date.now();
@@ -377,7 +784,7 @@ function createDownloadTicket({ user, userId, clientId, jobId, exportType }) {
   _purgeExpiredDownloadTickets();
   const ticket = 'dl_' + crypto.randomBytes(32).toString('hex');
   const expiresAt = Date.now() + DOWNLOAD_TICKET_TTL_MS;
-  const safeUser = user ? _safeUser(user) : (userId ? _safeUser(USERS.find(u => u.id === userId)) : null);
+  const safeUser = user ? _safeUser(user) : userId ? _safeUser(USERS.find((u) => u.id === userId)) : null;
   downloadTickets.set(ticket, {
     user: safeUser,
     userId: userId || safeUser?.id,
@@ -395,7 +802,6 @@ function verifyAndConsumeDownloadTicket(ticket, requestedClientId, jobId) {
   const data = downloadTickets.get(ticket);
   if (!data) return null;
 
-  // Immediately consume ticket (single-use guarantee)
   downloadTickets.delete(ticket);
 
   if (Date.now() > data.expiresAt) return null;
@@ -415,9 +821,9 @@ function _purgeExpiredSSETickets() {
 function createSSETicket({ user, userId, clientId, ttlMs }) {
   _purgeExpiredSSETickets();
   const ticket = 'sse_' + crypto.randomBytes(32).toString('hex');
-  const ttl = (typeof ttlMs === 'number') ? ttlMs : SSE_TICKET_TTL_MS;
+  const ttl = typeof ttlMs === 'number' ? ttlMs : SSE_TICKET_TTL_MS;
   const expiresAt = Date.now() + ttl;
-  const safeUser = user ? _safeUser(user) : (userId ? _safeUser(USERS.find(u => u.id === userId)) : null);
+  const safeUser = user ? _safeUser(user) : userId ? _safeUser(USERS.find((u) => u.id === userId)) : null;
   sseTickets.set(ticket, {
     user: safeUser,
     userId: userId || safeUser?.id,
@@ -433,7 +839,6 @@ function verifyAndConsumeSSETicket(ticket, requestedClientId) {
   const data = sseTickets.get(ticket);
   if (!data) return null;
 
-  // Immediately consume ticket (single-use guarantee)
   sseTickets.delete(ticket);
 
   if (Date.now() > data.expiresAt) return null;
@@ -443,6 +848,26 @@ function verifyAndConsumeSSETicket(ticket, requestedClientId) {
 }
 
 module.exports = {
+  assertJwtSecretValid,
+  base64UrlEncode,
+  base64UrlDecode,
+  signJwt,
+  decodeJwt,
+  verifyJwtSignature,
+  issueSessionForUserV2,
+  issueSessionForUserLegacy,
+  issueSessionForUser,
+  revokeToken,
+  revokeAllUserTokens,
+  isTokenRevoked,
+  setSimulatedRedisFailure,
+  resetRevocationState,
+  checkLoginRateLimit,
+  clearLoginRateLimit,
+  resetRateLimits,
+  migratePlaintextPasswordsFile,
+  migrateAllPasswords,
+  updateUserPassword,
   authenticateUser,
   registerServiceSession,
   verifyToken,
@@ -459,7 +884,6 @@ module.exports = {
   createMFATempToken,
   verifyMFATempToken,
   consumeMFATempToken,
-  issueSessionForUser,
   loadUserMfaData,
   loadUserData: loadUserMfaData,
   saveUserMfaData,
