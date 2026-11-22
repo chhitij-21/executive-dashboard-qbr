@@ -1,249 +1,360 @@
-# Implementation Plan — Item #4: Real Auth (JWT, bcrypt, 4h TTL & Redis Revocation)
+# Implementation Plan — Item #3: Database Layer (Turso/LibSQL Unified Persistence & Encrypted Recipients)
 
 **Status**: Waiting for user **APPROVED** before writing code.  
-**Roadmap Item**: **#4 Real Auth (JWT/bcrypt)**  
-**Sequence Context**: Implemented prior to **#3 (Database Layer)** and **#14 (API Versioning)** to guarantee the v1 API contract incorporates production authentication primitives.
+**Roadmap Item**: **#3 Database Layer (Multi-Tenant Relational Storage & Data Encryption)**  
+**Sequence Context**: Implemented following **#4 (Real Auth)** and prior to **#14 (API-First v1 Versioning)** to ensure all core database models and encryption-at-rest policies are established before freezing the API contract.
 
 ---
 
-## 1. Overview & Objectives
+## 1. Executive Summary & Goals
 
-Item #4 replaces legacy in-memory plain token authentication with an enterprise-grade, stateless signed JWT architecture hardened with:
-1. **4-Hour Access Token TTL**: Tokens expire 4 hours after issuance (`TOKEN_TTL = 4 * 60 * 60 * 1000`), bounded and compliant for enterprise SaaS.
-2. **Two-Tier Active Revocation via Redis**:
-   - **Per-Token Blocklist (`jti`)**: Single-session logout (`POST /api/auth/logout`) blacklists the token's `jti` with TTL matching the remaining token lifetime.
-   - **User-Level Instant Cutoff (`user_revoked_before`)**: Terminating an employee, admin suspension, or changing a password invalidates all existing sessions for that user across all pods in $< 1$ ms.
-3. **Fail-Closed Production Resilience**: In production, Redis is strictly required. If Redis becomes unreachable during a revocation check, `requireAuth` fails closed with **HTTP 503 Service Unavailable** (never fail-open). In-memory fallback is isolated to `NODE_ENV === 'test'` and non-production dev.
-4. **Login Brute-Force Rate Limiting (`checkLoginRateLimit`)**: Enforces 5 failed attempts per 15 minutes per `(IP, username)` via Redis counters (`login_attempt:{ip}:{username}`, TTL 900s). Exceeding limit returns **HTTP 429 Too Many Requests** with header `Retry-After: 900`. Successful login resets the counter.
-5. **Bcrypt Password Security & On-Boot Migration**: Passwords stored as `bcrypt` hashes (cost factor 10). On boot under `AUTH_V2`, legacy plaintext passwords in `data/users.json` are automatically upgraded to bcrypt hashes without locking out demo accounts.
-6. **No User Enumeration & Constant-Time Comparisons**: Standardized generic error responses and constant-time password verification eliminate timing and enumeration attacks.
-7. **`AUTH_V2` Rollback Gate**: Gated behind `AUTH_V2 !== 'false'`; setting `AUTH_V2=false` instantly restores legacy in-memory session behavior if emergency rollback is required.
+Item #3 consolidates the application's fragmented persistence model (legacy JSON files on local disk: `users.json`, `schedules.json`, `runs.json`, and `templates_manifest.json`) into a single, ACID-compliant, multi-tenant relational database powered by **`@libsql/client` (Turso / LibSQL)**.
+
+Key deliverables:
+1. **Unified Relational Schema**: Centralize dynamic data (`users`, `schedules`, `schedule_runs`, `templates`) into relational tables alongside existing inventory tables (`inventory_devices`, `reports_tickets`).
+2. **AES-256-GCM Encryption at Rest**: Encrypt sensitive recipient emails (`recipients_encrypted`) in the `schedules` table, resolving the compliance gap identified in Item #13.
+3. **Idempotent, Atomic, and Reversible Migration**: Standalone script (`migrate-legacy-files.js`) that imports existing JSON files, validates records, commits DB transactions, and renames source files to `.migrated`.
+4. **Offline & CI Test Parity**: Dual-mode engine supporting remote Turso in production (`TURSO_DATABASE_URL=libsql://...`) and zero-dependency embedded SQLite (`file:./data/test.db`) in local/test environments.
+5. **Clean Repository Abstractions**: Introduce `backend/repositories/` (`userRepo.js`, `scheduleRepo.js`, `templateRepo.js`), keeping caller service interfaces (`authService`, `schedulerService`, `templateService`) 100% backward compatible.
+6. **Filesystem vs Database Boundary**: Report PPTX/PDF artifacts remain strictly filesystem-backed in `reports/job_<jobId>/` (object storage S3 is designated as backlog).
 
 ---
 
 ## 2. Architecture & Data Flow
 
 ```
-   ┌─────────────────────────────────────────────────────────────┐
-   │             Client Request with Bearer Token                │
-   │             Authorization: Bearer <JWT>                     │
-   └──────────────────────────────┬──────────────────────────────┘
-                                  │
-                                  ▼
-   ┌─────────────────────────────────────────────────────────────┐
-   │        backend/middleware/auth.js: requireAuth              │
-   │  1. Check AUTH_V2 flag: if false -> fallback to legacy map  │
-   │  2. Verify JWT signature & expiration (4h max lifetime)     │
-   │  3. Extract { sub: userId, jti, iat, exp, role }            │
-   └──────────────────────────────┬──────────────────────────────┘
-                                  │
-                                  ▼
-   ┌─────────────────────────────────────────────────────────────┐
-   │         Active Revocation Check (authService)               │
-   │  4. In prod: Check Redis connectivity; if down -> 503       │
-   │  5. Redis GET blocklist:{jti} -> if exists -> 401 REVOKED   │
-   │  6. Redis GET user_revoked_before:{userId}                  │
-   │     If server_revoked_at > jwt.iat -> 401 SESSION_KILLED    │
-   └──────────────────────────────┬──────────────────────────────┘
-                                  │
-                                  ▼
-   ┌─────────────────────────────────────────────────────────────┐
-   │         Attach req.user & Proceed to Controller             │
-   │  req.user = { id: userId, email, role, assignedClient }     │
-   └─────────────────────────────────────────────────────────────┘
+                                  ┌──────────────────────────────┐
+                                  │      Incoming Request        │
+                                  │  (Auth, Schedule, Template)  │
+                                  └──────────────┬───────────────┘
+                                                 │
+                                                 ▼
+                                  ┌──────────────────────────────┐
+                                  │       Service Layer          │
+                                  │ (authService, schedulerSvc)  │
+                                  └──────────────┬───────────────┘
+                                                 │
+                                                 ▼
+                                  ┌──────────────────────────────┐
+                                  │       Repository Layer       │
+                                  │ (userRepo, scheduleRepo, ...)│
+                                  │  - AES-256-GCM Decrypt/Enc   │
+                                  │  - Tenant Isolation Guarantees│
+                                  └──────────────┬───────────────┘
+                                                 │
+                                                 ▼
+                                  ┌──────────────────────────────┐
+                                  │  backend/config/database.js  │
+                                  │      (@libsql/client)        │
+                                  └──────┬────────────────┬──────┘
+                                         │                │
+            ┌────────────────────────────┴──┐          ┌──┴──────────────────────────┐
+            ▼                               │          │                             ▼
+  Production / Cloud                        │          │                 Local Dev / Sandbox / CI
+  Turso Distributed LibSQL                  │          │                 Embedded SQLite
+  (TURSO_DATABASE_URL=libsql://...)         │          │                 (url="file:./data/app.db")
+  PRAGMA foreign_keys = ON;                 │          │                 PRAGMA foreign_keys = ON;
 ```
 
 ---
 
-## 3. Detailed Component Specifications
+## 3. Detailed Specifications
 
-### 3.1 Token Minting, Secret Management & Rotation Specification (`backend/services/authService.js`)
-- **Mechanism**: Native Node.js `crypto` HMAC-SHA256 (RFC 7519 standard JWT format). Ensures zero external dependency CVE risks, 100% environment parity, and native execution speed.
-- **JWT Header**:
-  ```json
-  { "alg": "HS256", "typ": "JWT" }
-  ```
-- **JWT Payload**:
-  ```json
-  {
-    "sub": "user-client-jfl",
-    "email": "jfl@portal.com",
-    "role": "client_user",
-    "assignedClient": "client-jfl",
-    "jti": "d3b07384-d113-4a11-8c9a-245f78acba10",
-    "iat": 1795348800,
-    "exp": 1795363200
-  }
-  ```
-- **TTL**: Exactly 4 hours (14,400 seconds).
-- **`JWT_SECRET` Production Guard**:
-  - Read from `process.env.JWT_SECRET`.
-  - In production (`NODE_ENV === 'production'`), startup halts immediately (`throw new Error('[FATAL] Production startup halted: Missing or insecure JWT_SECRET (must be >= 32 chars).')`) if `JWT_SECRET` is unset or shorter than 32 characters.
-  - In non-production/test, defaults to a safe test secret with an explicit console warning.
-- **`JWT_SECRET` Rotation Path**:
-  - Current baseline: changing `JWT_SECRET` invalidates all existing active tokens immediately, requiring users to log in again.
-  - Backlog architecture path: dual-secret verification (`JWT_SECRET_CURRENT` and `JWT_SECRET_PREVIOUS`) planned for zero-downtime key rotation once external API integrations land.
-
-### 3.2 Redis-Backed Revocation & Fail-Closed Guard
-- **Shared Redis Connection**: Reuses `redisClient` from `queueService` (or initializes Redis connection via `ioredis` when `REDIS_URL` is configured).
-- **In-Memory Fallback**: Isolated strictly to `NODE_ENV === 'test'` or local non-production development when `REDIS_URL` is undefined.
-- **Fail-Closed Logic in Production**:
-  ```javascript
-  async function isTokenRevoked(jti, userId, iatSeconds) {
-    if (process.env.AUTH_V2 === 'false') return { revoked: false };
-
-    const isProd = process.env.NODE_ENV === 'production';
-    const redis = getRedisClient();
-
-    if (isProd && (!redis || redis.status !== 'ready')) {
-      const err = new Error('Authentication validation service temporarily unavailable.');
-      err.statusCode = 503;
-      err.code = 'AUTH_SERVICE_UNAVAILABLE';
-      throw err;
+### 3.1 Encryption Key Management & PII Protection Specification
+- **Algorithm**: `AES-256-GCM` authenticated symmetric encryption with 128-bit authentication tags and unique 96-bit random initialization vectors (IVs) per row.
+- **Master Key Configuration**:
+  - Environment variable: `RECIPIENTS_ENCRYPTION_KEY` (must be a 64-character hex string representing 32 bytes).
+  - Production Guard: If `RECIPIENTS_ENCRYPTION_KEY` is missing or $<64$ hex characters in production (`NODE_ENV === 'production'`), startup halts immediately.
+  - In local development or test mode (`NODE_ENV !== 'production'`), falls back to a deterministic development key with an explicit console warning.
+- **Mandatory Backup Warning**:
+  > **[IMPORTANT]**: The `RECIPIENTS_ENCRYPTION_KEY` MUST be backed up to a secure secret store (e.g. AWS Secrets Manager, HashiCorp Vault) before the first production deployment. **Loss of this key results in permanent, unrecoverable loss of all recipient email lists.**
+- **Key Derivation (Tenant Subkeys)**:
+  - While the master key is global, encryption uses RFC 5869 `HKDF` with SHA-256 to derive a deterministic, isolated 32-byte key per tenant:
+    ```javascript
+    function getTenantKey(tenantId) {
+      return crypto.hkdfSync('sha256', Buffer.from(process.env.RECIPIENTS_ENCRYPTION_KEY, 'hex'), tenantId, 'executive-dashboard-recipients-v1', 32);
     }
-
-    if (redis && redis.status === 'ready') {
-      // 1. Check specific token blocklist
-      const isBlocklisted = await redis.get(`blocklist:${jti}`);
-      if (isBlocklisted) return { revoked: true, reason: 'TOKEN_REVOKED' };
-
-      // 2. Check user-level termination timestamp
-      const revokedBefore = await redis.get(`user_revoked_before:${userId}`);
-      if (revokedBefore && iatSeconds < parseInt(revokedBefore, 10)) {
-        return { revoked: true, reason: 'USER_SESSION_TERMINATED' };
-      }
-      return { revoked: false };
+    ```
+- **Ciphertext Storage Format**:
+  - Stored as a serialized JSON envelope in the `recipients_encrypted` column:
+    ```json
+    {
+      "v": 1,
+      "iv": "a1b2c3d4e5f6789012345678",
+      "tag": "fedcba9876543210fedcba9876543210",
+      "data": "1234abcd5678ef..."
     }
+    ```
+- **Key Rotation Strategy**:
+  - The envelope includes a version field (`v: 1`).
+  - To rotate keys:
+    1. Deploy `RECIPIENTS_ENCRYPTION_KEY_NEW` alongside existing `RECIPIENTS_ENCRYPTION_KEY`.
+    2. Writes use the new key (`v: 2`).
+    3. Reads check `v`: if `v: 1`, decrypts using the legacy key; if `v: 2`, decrypts using the new key.
+    4. An offline CLI script (`node backend/db/reencrypt-recipients.js`) iterates and upgrades all rows to `v: 2`.
+- **Decryption Failure Handling**:
+  - If decryption fails (corrupted tag or missing key), the repository catches the error, logs `[CRITICAL] RECIPIENTS_DECRYPTION_FAILED for schedule <id>`, and returns an empty array `[]` so the application does not crash or expose ciphertext.
 
-    // In-memory fallback (test / local non-prod only)
-    return checkInMemoryRevocation(jti, userId, iatSeconds);
-  }
-  ```
-- **TTL of Revocation Keys**:
-  - `blocklist:{jti}`: `Math.max(1, Math.floor(exp - Date.now() / 1000))` (auto-evicts as soon as token naturally expires).
-  - `user_revoked_before:{userId}`: `4 * 60 * 60` (4 hours; after 4 hours, all tokens minted before that timestamp have naturally expired).
+---
 
-### 3.3 Login Rate Limiting (`checkLoginRateLimit`)
-- **Rate Limit Window**: 5 attempts per 15 minutes (900 seconds) per `(IP, username)`.
-- **Redis Implementation**:
-  ```javascript
-  async function checkLoginRateLimit(ip, username) {
-    const key = `login_attempt:${ip}:${username.toLowerCase()}`;
-    const redis = getRedisClient();
+### 3.2 Legacy Files Migration Specification (`backend/db/migrate-legacy-files.js`)
+- **Execution Guard**:
+  - Migration runs with `ENABLE_SCHEDULED_QBR=false` to prevent a race condition with background scheduled jobs executing while tables are populated.
+- **Idempotency**:
+  - Uses `INSERT OR REPLACE` (or `INSERT INTO ... ON CONFLICT (id) DO UPDATE ...`) based on unique primary keys (`id`). Running the script multiple times produces identical, deterministic database state.
+- **Atomic-ish File Lifecycle**:
+  1. Script reads each legacy JSON file.
+  2. Parses and validates record structures.
+  3. Executes database batch insert in a single transaction.
+  4. Only **AFTER** the database transaction successfully resolves and verifies row counts, the script renames the source file to `<filename>.migrated` (e.g. `schedules.json` $\to$ `schedules.json.migrated`).
+- **Reversibility & Rollback (`backend/db/rollback-legacy-files.js`)**:
+  - If a migration failure or operational rollback is requested, running `node backend/db/rollback-legacy-files.js` renames all `<filename>.migrated` files back to their original `<filename>.json` paths.
+- **Full Migration File List (Exact Paths)**:
+  1. `data/users.json` $\longrightarrow$ `users` table
+  2. `data/tenants/client-jfl/schedules/schedules.json` $\longrightarrow$ `schedules` table (and any additional tenant directories under `data/tenants/`)
+  3. `data/tenants/client-jfl/schedules/runs.json` $\longrightarrow$ `schedule_runs` table (and any additional tenant directories under `data/tenants/`)
+  4. `data/templates_manifest.json` $\longrightarrow$ `templates` table (global manifest)
+  5. `data/tenants/client-jfl/templates/templates_manifest.json` $\longrightarrow$ `templates` table (tenant-specific manifests)
 
-    if (redis && redis.status === 'ready') {
-      const count = await redis.incr(key);
-      if (count === 1) await redis.expire(key, 900);
-      if (count > 5) {
-        const ttl = await redis.ttl(key);
-        return { allowed: false, retryAfter: Math.max(1, ttl) };
-      }
-      return { allowed: true };
-    }
+---
 
-    // In-memory sliding map fallback (test / dev)
-    return checkInMemoryLoginRate(ip, username);
-  }
-  ```
-- **HTTP Response on Breach**:
-  - Status: **HTTP 429 Too Many Requests**
-  - Header: `Retry-After: 900`
-  - Body: `{ error: 'Too many login attempts. Please try again in 15 minutes.', code: 'RATE_LIMIT_EXCEEDED', retryAfter: 900 }`
-- **Reset on Success**: When `authenticateUser` successfully verifies credentials, it calls `clearLoginRateLimit(ip, username)` (`DEL login_attempt:{ip}:{username}`), resetting the counter immediately.
+### 3.3 `data/tenants/` Directory Disposition & Git Tracking
+- **Static Assets Retained on Disk**:
+  - Tenant branding files (`data/tenants/<tenantId>/branding/logo.png`, `logo.svg`) remain on the filesystem.
+  - Tenant static baseline definitions (`data/tenants/<tenantId>/tenant_config.json`) remain on disk.
+  - These files are committed and tracked in Git.
+- **Dynamic Operational Files Moved to DB**:
+  - `schedules.json` and `runs.json` are decommissioned from filesystem writes.
+  - `templates_manifest.json` is decommissioned from filesystem writes (the actual `.pptx` template files remain stored in `data/tenants/<tenantId>/templates/` on disk, but their metadata and active version pointers live in the `templates` database table).
+- **Git Tracking Rules**:
+  - Update `.gitignore` to add:
+    ```gitignore
+    # Dynamic operational tenant state (managed in DB via Item #3)
+    data/tenants/**/schedules/
+    data/tenants/**/templates/*_manifest.json
+    data/templates_manifest.json
+    data/*.db
+    data/*.db-journal
+    data/*.db-wal
+    ```
+  - Pre-existing seed tenants (`client-jfl`, `client-mmtcpamp`) have their baseline profiles provisioned via automated seed routines (`backend/db/seed.js`), ensuring zero dependency on committed runtime JSON state.
 
-### 3.4 Endpoints & RBAC Rules
-1. **`POST /api/auth/logout` (Self-Only)**:
-   - Protected by `requireAuth`.
-   - Extracts calling user's token `jti` and `exp` from `req.user`.
-   - Adds `blocklist:{jti}` to Redis with remaining TTL.
-   - Returns HTTP 200 `{ success: true, message: 'Logged out successfully.' }`.
+---
 
-2. **`POST /api/auth/revoke` (Admin-Only)**:
-   - Protected by `requireAuth` + `requireAdmin`.
-   - Request body: `{ userId: string, jti?: string }`.
-   - If `userId` provided: sets `user_revoked_before:{userId} = Math.floor(Date.now() / 1000)` in Redis (TTL: 4h).
-   - If `jti` provided: sets `blocklist:{jti}` with 4h TTL.
-   - Emits structured audit log to `data/audit/auth.log` (`action: 'TOKEN_REVOCATION', admin: req.user.email, targetUserId: userId`).
-   - Returns HTTP 200 `{ success: true, message: 'User sessions revoked successfully.' }`.
-
-3. **Password Change Integration**:
-   - Whenever a user updates their password (or an admin resets a user password), the service automatically executes:
+### 3.4 Test vs Production Parity & CI Dual-Runner Specification
+- **Engine Parity Safeguards**:
+  - **Foreign Key Enforcement**: SQLite requires explicit PRAGMA activation on every connection. `backend/config/database.js` automatically executes `PRAGMA foreign_keys = ON;` upon connection initialization.
+  - **JSON1 Functions**: Both modern LibSQL / Turso and SQLite 3.38+ natively provide `json_extract()`, `json_array()`, and `json_valid()`.
+  - **UTC Timestamps**: All table datetime columns use standard ISO 8601 UTC strings formatted as `YYYY-MM-DDTHH:MM:SS.SSSZ` (avoiding local timezone divergence between Turso and SQLite).
+- **CI Test Strategy**:
+  1. **Fast Local / PR Unit Test Suite**: Executes against an embedded SQLite file database (`file:./data/test.db`), ensuring 100% offline functionality, fast execution ($< 2$ seconds), and zero external network dependencies.
+  2. **Nightly / Pre-Merge Ephemeral Smoke Suite**: Runs automated regression tests against Turso cloud/ephemeral database by passing `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+  3. **Auto-Detection Switch**: In `backend/config/database.js`:
      ```javascript
-     await revokeAllUserTokens(userId);
+     const dbUrl = process.env.TURSO_DATABASE_URL || (process.env.NODE_ENV === 'test' ? 'file:./data/test.db' : 'file:./data/app.db');
      ```
-   - All active tokens for that user immediately fail validation on subsequent requests.
-
-### 3.5 Demo Users, Password Storage & Git Strategy
-- **Git Tracking Strategy**:
-  - `data/users.json` is strictly **gitignored** (`.gitignore` line 27), ensuring no customer credentials, user records, or password hashes are ever checked into git history.
-  - In-memory seed users (`SUPER_ADMIN`, `client-jfl`, `client-mmtc`) provide zero-dependency first-boot initialization.
-- **Multi-Pod Atomic File Writes**:
-  - Migrating or updating user passwords in `data/users.json` uses atomic writes via `safeWriteJson(targetPath, data)` (temp-file write + rename with Windows 3-tier fallback), preventing multi-pod file corruption.
-- **On-Boot & Lazy Upgrade to bcrypt**:
-  - Uses `bcryptjs@2.4.3` (cost factor 10) for pure-JS cross-platform stability (eliminates native C++ compilation failures on Windows/Render).
-  - On startup inside `authService.initAuth()`:
-    1. Reads `data/users.json` (and seeded demo user array).
-    2. Inspects password field for each user.
-    3. If password does NOT match `/^\$2[aby]\$\d{2}\$/` (not a valid bcrypt hash):
-       - Computes `const hash = await bcrypt.hash(plaintext, 10);`
-       - Replaces plaintext password with `hash`.
-       - Writes updated user records back to `data/users.json` via `safeWriteJson`.
-  - **Login Lazy Upgrade**: If an existing user record still contains plaintext when `authenticateUser` runs, it compares constant-time, verifies, upgrades password to bcrypt hash in the background, and saves.
-  - Guarantees zero credential lockouts for default demo users (`admin123`, `jfl123`, `mmtc123`).
-
-### 3.6 Section 21 Hardening Checklist
-- [x] **Rate Limit on `/login`**: 5 attempts per 15-minute sliding window per IP + username combination with `Retry-After: 900`.
-- [x] **Constant-Time Compare**: `bcrypt.compare` (which uses constant-time string comparison internally).
-- [x] **Token Lifespan**: Exactly 4 hours (24h plain token eliminated).
-- [x] **No User Enumeration**: Returns generic `{ error: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' }` with HTTP 401 for both unknown email and incorrect password.
-- [x] **Payload Sanitation**: Outbound user objects in sessions and `/api/auth/me` are stripped of `password`, `mfaSecret`, `pendingMfaSecret`.
-- [x] **`.env.example` Entries**:
-  - `JWT_SECRET=replace_with_at_least_32_byte_secure_random_key`
-  - `AUTH_V2=true`
-  - `REDIS_URL=redis://localhost:6379`
 
 ---
 
-## 4. File Changes & Touches
-
-### Files to Modify
-1. `package.json`: Add exact dependency `bcryptjs@2.4.3`.
-2. `backend/services/authService.js`:
-   - Add JWT minting, verification, and decoding (native RFC 7519 HMAC-SHA256).
-   - Implement `checkLoginRateLimit(ip, username)` and `clearLoginRateLimit(ip, username)`.
-   - Implement `revokeToken(jti, exp)` and `revokeAllUserTokens(userId)`.
-   - Implement Redis blocklist check with 503 fail-closed in production.
-   - Add on-boot bcrypt migration for unhashed user passwords using `safeWriteJson`.
-   - Support `AUTH_V2=false` fallback toggle.
-3. `backend/middleware/auth.js`:
-   - Update `requireAuth` to support JWT verification, `jti` blocklist check, and `user_revoked_before` timestamp check.
-   - Attach decoded JWT payload to `req.user`.
-   - Catch Redis errors in production and emit HTTP 503 `AUTH_SERVICE_UNAVAILABLE`.
-4. `backend/index.js`:
-   - Update `/api/auth/login` to integrate `checkLoginRateLimit` and reset on success.
-   - Mount `POST /api/auth/revoke` (admin only).
-   - Update `POST /api/auth/logout` to invoke `authService.revokeToken`.
-5. `.env.example`: Add `JWT_SECRET`, `AUTH_V2`, and `REDIS_URL` documentation.
-
-### New Test Files
-1. `backend/tests/authV2.test.js`:
-   - 14 comprehensive unit and integration tests covering JWT minting, 4h TTL, blocklist revocation, user termination, password change session kill, fail-closed production behavior, login rate limiting, and backward compatibility.
+### 3.5 Operational Boundary & One-Liners
+- **Report Artifact Storage**:
+  - Generated executive presentation files (`reports/job_<jobId>/presentation.pptx` and `summary.pdf`) remain filesystem-backed.
+  - Migration to cloud object storage (AWS S3 or Cloudflare R2) is logged as a backlog item (Item #2 Storage).
+- **Scheduled QBR Concurrency Lock**:
+  - Running database migrations requires setting `ENABLE_SCHEDULED_QBR=false` or acquiring the global scheduler lock to prevent active cron triggers from racing against schema updates.
 
 ---
 
-## 5. Verification Plan & Test Suite (14 Tests)
+## 4. Relational Database Schema (`backend/db/schema.sql`)
 
-1. **`mintJwt_valid4hTtl`**: Minted token contains `exp - iat === 14400` seconds (4 hours) and valid signature.
-2. **`verifyToken_validSignature`**: `requireAuth` succeeds with HTTP 200 and attaches `req.user` accurately.
-3. **`verifyToken_expiredToken_returns401`**: Token with past `exp` rejected with HTTP 401 `TOKEN_EXPIRED`.
-4. **`verifyToken_invalidSecret_returns401`**: Token signed with mismatched secret rejected with HTTP 401 `INVALID_TOKEN`.
-5. **`logout_revokesJti_subsequentRequest401`**: `POST /api/auth/logout` places `jti` in blocklist; subsequent call with same token returns HTTP 401 `TOKEN_REVOKED`.
-6. **`revoke_adminOnly_nonAdminForbidden`**: `POST /api/auth/revoke` returns HTTP 403 when called by client user.
-7. **`revoke_userLevel_killsAllActiveSessions`**: Admin revoking user ID sets `user_revoked_before`; all previously issued tokens for that user immediately return HTTP 401 `USER_SESSION_TERMINATED`.
-8. **`passwordChange_triggersUserRevocation`**: Updating user password automatically kills existing sessions.
-9. **`prodFailClosed_redisDown_returns503`**: In production (`NODE_ENV=production`), Redis outage during revocation check returns HTTP 503 `AUTH_SERVICE_UNAVAILABLE`.
-10. **`onBootMigration_hashesPlaintextDemoUsers`**: Boot process detects plaintext passwords and upgrades to bcrypt `$2b$` in `data/users.json`.
-11. **`noUserEnumeration_constantTimeCompare`**: Non-existent user and wrong password return identical HTTP 401 `INVALID_CREDENTIALS`.
-12. **`authV2_rollbackFlag_preservesLegacyMap`**: Setting `AUTH_V2=false` successfully routes authentication through legacy in-memory session map.
-13. **`loginRateLimit_5Attempts_6thReturns429`**: 5 failed login attempts for `(ip, username)` succeed, 6th attempt returns HTTP 429 with `Retry-After: 900`; successful login resets counter.
-14. **`prodStartup_missingJwtSecret_throws`**: In production (`NODE_ENV=production`), server halts with fatal error if `JWT_SECRET` is missing or $<32$ characters.
+```sql
+-- ── Existing Inventory & Ticket Tables (Preserved) ──────────────────────────
+CREATE TABLE IF NOT EXISTS inventory_devices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id TEXT NOT NULL,
+  serial_no TEXT NOT NULL,
+  mac_address TEXT,
+  cloud_id TEXT,
+  hostname TEXT,
+  device_type TEXT,
+  model TEXT,
+  site_id TEXT,
+  rack_location TEXT,
+  status TEXT DEFAULT 'active',
+  first_seen_at TEXT DEFAULT (datetime('now')),
+  last_seen_at TEXT DEFAULT (datetime('now')),
+  last_sync_id INTEGER,
+  UNIQUE (client_id, serial_no)
+);
+
+CREATE TABLE IF NOT EXISTS inventory_syncs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id TEXT NOT NULL,
+  triggered_by TEXT,
+  uploaded_file_name TEXT,
+  diff_summary TEXT, 
+  status TEXT DEFAULT 'pending',
+  created_at TEXT DEFAULT (datetime('now')),
+  approved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS inventory_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_id INTEGER REFERENCES inventory_syncs(id),
+  client_id TEXT NOT NULL,
+  serial_no TEXT,
+  change_type TEXT, 
+  before_state TEXT, 
+  after_state TEXT, 
+  changed_fields TEXT, 
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS inventory_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_id INTEGER,
+  client_id TEXT NOT NULL,
+  snapshot_data TEXT, 
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS reports_tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id TEXT NOT NULL,
+  ticket_number TEXT NOT NULL,
+  period_start TEXT,
+  period_end TEXT,
+  payload_json TEXT NOT NULL,
+  bucket TEXT,
+  ticket_type TEXT,
+  uploaded_at TEXT NOT NULL,
+  UNIQUE(client_id, ticket_number)
+);
+
+-- ── Item #3 Unified Tables ──────────────────────────────────────────────────
+
+-- 1. User Profiles & Credentials
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('admin', 'client_user')),
+  assigned_client TEXT NOT NULL,
+  avatar TEXT,
+  mfa_secret TEXT,
+  mfa_enabled INTEGER DEFAULT 0,
+  pending_mfa_secret TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 2. Scheduled QBRs (with AES-256-GCM Encrypted Recipients)
+CREATE TABLE IF NOT EXISTS schedules (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  cadence TEXT NOT NULL CHECK(cadence IN ('weekly', 'monthly', 'quarterly')),
+  cron_expression TEXT NOT NULL,
+  day_of_month INTEGER,
+  day_of_week INTEGER,
+  hour_utc INTEGER NOT NULL,
+  recipients_encrypted TEXT NOT NULL,
+  active INTEGER DEFAULT 1,
+  last_run_at TEXT,
+  last_status TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(tenant_id, name)
+);
+
+-- 3. Schedule Run History
+CREATE TABLE IF NOT EXISTS schedule_runs (
+  id TEXT PRIMARY KEY,
+  schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
+  tenant_id TEXT NOT NULL,
+  schedule_name TEXT NOT NULL,
+  run_at TEXT NOT NULL,
+  trigger_type TEXT NOT NULL CHECK(trigger_type IN ('SCHEDULED', 'MANUAL')),
+  cadence TEXT NOT NULL,
+  period_start TEXT NOT NULL,
+  period_end TEXT NOT NULL,
+  period_label TEXT NOT NULL,
+  days INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('SUCCESS', 'FAILED')),
+  job_id TEXT,
+  dedup_key TEXT UNIQUE NOT NULL,
+  duration_ms INTEGER,
+  error_message TEXT,
+  download_url TEXT,
+  dashboard_url TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 4. Template Metadata & Manifests
+CREATE TABLE IF NOT EXISTS templates (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  filename TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
+  file_size_bytes INTEGER NOT NULL,
+  uploaded_by TEXT NOT NULL,
+  uploaded_at TEXT NOT NULL,
+  is_active INTEGER DEFAULT 0,
+  UNIQUE(tenant_id, version)
+);
+
+-- Index optimization
+CREATE INDEX IF NOT EXISTS idx_schedules_tenant ON schedules(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_runs_tenant_schedule ON schedule_runs(tenant_id, schedule_id);
+CREATE INDEX IF NOT EXISTS idx_templates_tenant_active ON templates(tenant_id, is_active);
+```
+
+---
+
+## 5. TDD Test Plan (`backend/tests/databaseV2.test.js`)
+
+We will author an automated test suite containing 12 targeted tests:
+
+1. `db_connection_dualMode`: Connects to embedded SQLite (`file:./data/test.db`) when `TURSO_DATABASE_URL` is omitted and Turso when configured.
+2. `db_foreignKeys_enforced`: Proves foreign key constraints fail on invalid `schedule_id` insertion.
+3. `userRepo_crud_roundtrip`: Inserts, retrieves by ID, retrieves by email, updates password, and lists users.
+4. `recipients_encrypt_decrypt_aes256`: Encrypts recipient email list with AES-256-GCM; ciphertext envelope contains valid IV, tag, and version; decrypts to original array.
+5. `recipients_tenantKey_isolation`: Ciphertext encrypted for `client-jfl` cannot be decrypted using `client-mmtc`'s derived key.
+6. `recipients_lossRecovery_gracefulFallback`: Corrupted tag or mismatched key returns `[]` without throwing or crashing the process.
+7. `scheduleRepo_crud_roundtrip`: Creates schedule with encrypted recipients, updates schedule metadata, and queries active schedules.
+8. `scheduleRuns_dedupKey_uniqueConstraint`: Prevents duplicate runs for identical tenant, schedule, and period.
+9. `templateRepo_versioning_and_activeToggle`: Inserts versions 1 and 2; activates version 2; confirms only one active version per tenant.
+10. `migrationScript_idempotent_reRunSafe`: Running `migrate-legacy-files.js` twice produces identical database state without duplicate rows.
+11. `migrationScript_atomicLifecycle_renamesSource`: Verifies source files are renamed to `.migrated` only after successful database commit.
+12. `rollbackScript_restoresOriginalJson`: Verifies `rollback-legacy-files.js` successfully restores `.migrated` files back to `.json`.
+
+---
+
+## 6. Implementation Steps
+
+1. **Update Database Client (`backend/config/database.js`)**:
+   - Implement automatic fallback to embedded SQLite (`file:./data/app.db` or `file:./data/test.db` in tests).
+   - Execute `PRAGMA foreign_keys = ON;` upon connection initialization.
+2. **Expand DDL & Migration Runner (`backend/db/schema.sql`, `backend/db/migrate.js`)**:
+   - Append tables: `users`, `schedules`, `schedule_runs`, `templates`.
+   - Update `migrate.js` to execute DDL statements idempotently.
+3. **Build Crypto Utility (`backend/utils/cryptoUtil.js`)**:
+   - Implement `encryptRecipients(recipientsArray, tenantId)` and `decryptRecipients(envelope, tenantId)` using AES-256-GCM + HKDF.
+4. **Build Repositories (`backend/repositories/`)**:
+   - `userRepo.js`: DB operations for users.
+   - `scheduleRepo.js`: DB operations for schedules & runs with automatic recipient encryption/decryption.
+   - `templateRepo.js`: DB operations for template versions and active manifest pointers.
+5. **Author Migration & Rollback Scripts**:
+   - `backend/db/migrate-legacy-files.js`: Idempotent JSON-to-DB migration with `.migrated` file renaming.
+   - `backend/db/rollback-legacy-files.js`: Rollback restoration script.
+6. **Wire Repositories into Services**:
+   - Adapt `authService.js`, `schedulerService.js`, and `templateService.js` to consume repositories while maintaining legacy memory caches where needed for high performance.
+7. **Run Full Verification**:
+   - Execute `node --test backend/tests/databaseV2.test.js`.
+   - Execute `npm test` across all 363+ tests.
+   - Execute frontend tests and build.
+8. **Local Commit**:
+   - Stage and commit locally on `main` without pushing: `feat(db): unified LibSQL/Turso database layer with AES-256 encrypted recipients`.
