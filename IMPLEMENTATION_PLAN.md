@@ -9,26 +9,26 @@
 ## 1. Acknowledged Carry-Forward Items & Review of #14 Touches
 
 ### 1.1 Item #14 Git Diff Review on Files from #3, #11, and #13
-A rigorous diff audit was performed on all files touched during Item #14 that originated in #3 (Database), #11 (Templates), and #13 (Scheduling). The findings are:
+A line-by-line diff audit of commit `952b3e5` (Item #14) was conducted across the 7 files originating in #3 (Database), #11 (Templates), and #13 (Scheduling):
 
 | File | Change Category | Logic vs Assertion Analysis |
 | :--- | :--- | :--- |
-| `backend/config/database.js` | **Logic Update** | `getDatabaseUrl()` was hardened for test safety: in `process.env.NODE_ENV === 'test'`, it now rejects remote `libsql://` or `http://` URLs unless `url.startsWith('file:')` or `process.env.TEST_USE_TURSO` is set. This prevents sandboxed test runs from timing out on remote network calls and ensures tests reliably use local `data/test.db`. |
+| `backend/config/database.js` | **Logic Update** | Hardened `getDatabaseUrl()`: when `NODE_ENV === 'test'`, it now rejects remote `libsql://` or `http://` URLs unless `url.startsWith('file:')` or `TEST_USE_TURSO` is set. This prevents sandboxed test runs from hanging on external network calls and guarantees tests use local `data/test.db`. |
 | `backend/db/schema.sql` | **Schema Addition** | Added missing `job_id TEXT` column to `reports_tickets` table definition. Phase 1 MMTC report upload (`reportUpload.js`) associates tickets with a `job_id`, which was expected by T23 in `report.test.js` but had been omitted in the initial SQLite schema. |
-| `backend/services/schedulerService.js` | **Logic Update** | Fixed `getSchedulesRaw()`: previously, reading schedules from SQLite hardcoded `templateVersion: 'latest'` and `lastError: null`. It now merges SQLite schedule records with disk metadata from `schedules.json`, ensuring `templateVersion`, `timezone`, `nextRunAt`, and `lastError` are accurately preserved. |
+| `backend/services/schedulerService.js` | **Logic Update** | Fixed `getSchedulesRaw()`: previously, reading schedules from SQLite hardcoded dummy constants (`templateVersion: 'latest'`, `lastError: null`). It now merges SQLite records with `schedules.json` metadata, ensuring `templateVersion`, `timezone`, `nextRunAt`, and `lastError` are accurately preserved. |
 | `backend/services/templateService.js` | **Logic Update** | Aligned template storage path to `data/tenants/{canonicalId}/templates/versions/{storedName}` and synchronized template deletion and activation with SQLite (`templateRepo.deleteVersion` and `templateRepo.setActiveVersion`). |
-| `backend/tests/report.test.js` | **Lifecycle Setup** | Added `await migrate();` in `before()` hook to guarantee database tables exist before test execution. No logic changes. |
+| `backend/tests/report.test.js` | **Lifecycle Setup** | Added `await migrate();` in `before()` hook to guarantee database tables exist before test execution. No logic or assertion changes. |
 | `backend/tests/scheduledQbr.test.js` | **Lifecycle Setup** | Added `DELETE FROM schedule_runs WHERE tenant_id = ?` and `DELETE FROM schedules WHERE tenant_id = ?` in `before()`, `beforeEach()`, and `after()` hooks to eliminate cross-suite state leakage. No test assertion changes. |
 | `backend/tests/templateVersioning.test.js` | **Lifecycle Setup** | Added `await migrate();` and `DELETE FROM templates WHERE tenant_id = ?` across hooks to guarantee table readiness and prevent template collision. No test assertion changes. |
 
 ### 1.2 Carry-Forward Item 1: #16 Priority — Test Isolation
-- **Current Reality**: The test suite currently passes 392/392 tests across 49 suites serially using `node --test --test-concurrency=1`.
-- **Root Cause**: Tests share a single SQLite database file (`data/test.db`), tenant directories (`data/tenants/`), and in-process singletons (`jobCache.js`, `_authRateMap`). Default parallelism causes SQLite lock contention (`SQLITE_BUSY`) and data collisions.
-- **Commitment for #16**: The #16 plan will explicitly design per-worker test isolation (e.g. worker-scoped test databases `data/test-${process.pid}.db` and unique test tenant IDs), or formally document and standardize serial CI execution (`--test-concurrency=1`) as the supported CI execution contract.
+- **Current State**: The suite passes 392/392 tests across 49 suites serially using `node --test --test-concurrency=1`.
+- **Root Cause**: Tests share a single SQLite database file (`data/test.db`), tenant directories (`data/tenants/`), and in-process singletons (`jobCache.js`, `_authRateMap`). Default parallelism causes SQLite lock contention (`SQLITE_BUSY`) and state collision.
+- **Commitment for #16**: The #16 plan will explicitly design per-worker test isolation (e.g. worker-scoped test databases `data/test-${process.pid}.db` and isolated tenant directories), or formally document and standardize serial CI execution (`--test-concurrency=1`) as the supported CI execution contract.
 
-### 1.3 Carry-Forward Item 2: `v1Router.js` Modular Decomposition Backlog
-- **Current Reality**: `backend/routes/v1Router.js` is 2,206 lines, housing consolidated route handlers for auth, dashboard, reports, schedules, templates, rules, and telemetry.
-- **Backlog Tracking**: Decomposing `v1Router.js` into modular domain sub-routers (`backend/routes/v1/authRoutes.js`, `backend/routes/v1/dashboardRoutes.js`, `backend/routes/v1/reportRoutes.js`, `backend/routes/v1/scheduleRoutes.js`, etc.) is tracked as a dedicated backlog item (targeted for #16 or post-#16). It is non-blocking for Item #15.
+### 1.3 Carry-Forward Item 2: `v1Router.js` (2,206 lines) Decomposition Backlog
+- **Current State**: `backend/routes/v1Router.js` consolidates all platform routes into a single canonical router.
+- **Backlog Tracking**: Decomposing `v1Router.js` into domain sub-routers (`v1/authRoutes.js`, `v1/dashboardRoutes.js`, `v1/reportRoutes.js`, `v1/scheduleRoutes.js`, `v1/tenantRoutes.js`, etc.) is logged as a tracked backlog refactor target for #16 or post-#16. It is non-blocking for Item #15.
 
 ---
 
@@ -42,26 +42,32 @@ The backend currently relies on 320+ ad-hoc `console.log`, `console.warn`, and `
 4. **Unformatted Telemetry**: Log aggregators (Datadog, CloudWatch, Render, ELK) cannot index or alert on unstructured stdout strings. Logs require structured JSON formatting with ISO timestamps, severity levels, PID, and host tags.
 
 ### 2.2 Core Deliverables
-1. **Pino Structured Logger (`backend/utils/logger.js`)**:
+1. **Pino Structured Logger with Standard Serializers (`backend/utils/logger.js`)**:
    - High-throughput JSON logging with ISO timestamps, log levels (`fatal`, `error`, `warn`, `info`, `debug`, `trace`), and service metadata.
+   - **Pino Standard Serializers (GAP 1)**: Configures `serializers: { err: pino.stdSerializers.err, req: pino.stdSerializers.req, res: pino.stdSerializers.res }`. Guarantees `logger.error({ err })` extracts `type`, `message`, and complete `stack` trace instead of empty `{ err: {} }`.
    - **Automated Field Redaction**: Automatically scrubs `req.headers.authorization`, `req.headers["x-service-pass"]`, `*.password`, `*.token`, `*.mfaCode`, `*.secret`, `*.recipients`, `*.secretKey`, `*.accessToken`, `*.refreshToken`.
+   - **Error Log Rate Limiting (Token Bucket) (ONE-LINER 1)**: In-memory token bucket capping error-level logs at **100 errors/sec**. Beyond 100/sec, errors are suppressed and counted, emitting a single summary warning when the window resets. Prevents log storms and disk/I/O saturation during cascading failures.
+   - **Dev Transport Note (ONE-LINER 2)**: Formatted for human readability via `pino-pretty` in non-production (`NODE_ENV === 'development'`) when available, and pure JSON in `production`. Silent by default in `test` mode (`silent`).
    - **Child Logger Factory**: `getChildLogger(moduleName, context)` to support scoped module logging (e.g. `scheduler`, `auth`, `queue`).
-   - **Silent Test Mode**: Suppresses log noise during `NODE_ENV === 'test'` unless `LOG_LEVEL` or `ENABLE_TEST_LOGS` is set.
-2. **Request Correlation Middleware (`backend/middleware/loggingMiddleware.js`)**:
-   - Generates a UUID v4 `X-Request-Id` if not provided, or propagates incoming client/proxy `X-Request-Id`.
-   - Attaches `res.setHeader('X-Request-Id', reqId)` and `req.log = logger.child({ reqId, client_id, user_id })`.
-   - Logs request start and request completion with method, route, HTTP status code, duration in ms, remote IP, and user-agent.
-   - Suppresses high-frequency health probe noise (`/api/v1/health` logged at `debug` level).
-3. **Sentry Error Tracking & Graceful Fallback (`backend/utils/sentry.js`)**:
+2. **Request Correlation Middleware & Body Privacy Policy (`backend/middleware/loggingMiddleware.js`)**:
+   - **Strict `X-Request-Id` Validation (ONE-LINER 3)**: Incoming header must be $\le 128$ characters and match `/^[a-zA-Z0-9\-_]+$/`. Invalid or missing IDs generate a fresh UUID v4.
+   - Sets response header `X-Request-Id` and attaches `req.log = logger.child({ reqId, client_id, user_id })`.
+   - **Zero Body Logging Policy (GAP 3)**: Request bodies are **NEVER** logged by default. Only `method`, `url`, `statusCode`, `durationMs`, `contentLength`, `reqId`, `ip`, `userAgent`, and authenticated `userId`/`tenantId` are recorded. Handlers needing body context must call an explicit `redactBody(body)` helper.
+   - Logs request duration via `process.hrtime.bigint()` on `res.finish`. Suppresses polling noise for health endpoints (logged at `debug` level).
+3. **Sentry Error Tracking with `beforeSend` Scrubber (`backend/utils/sentry.js`)**:
    - Initializes `@sentry/node` if `SENTRY_DSN` is configured.
+   - **`beforeSend` Security Scrubber (GAP 2)**: Strips `event.request.headers.authorization`, `event.request.headers.cookie`, and `event.request.headers['x-service-pass']`. Redacts `event.request.data` to `'[REDACTED]'`. Deletes raw `event.request.cookies`.
+   - **Data Residency Compliance Note (GAP 2)**: Enterprise tenants subject to EU GDPR or India DPDP mandates MUST configure an EU/regional `SENTRY_DSN` (e.g. `https://xxx@o000.eu.ingest.sentry.io/xxx`) for geographic data isolation.
    - **Graceful No-Op Fallback**: If `SENTRY_DSN` is omitted or in `NODE_ENV === 'test'`, operates in safe mock/no-op mode without throwing or failing startup.
-   - Express request and error handler middleware integration.
    - Safe `captureException(err, context)` helper for async background tasks (BullMQ workers, cron jobs) with tenant, job, and module tagging.
    - Process-level unhandled rejection and uncaught exception safety nets.
 4. **Centralized JSON 500 Error Handler**:
    - Express error-handling middleware (`(err, req, res, next)`) attached before fallback handlers.
-   - Captures error in Sentry, logs via Pino with `req.id`, and returns consistent JSON `{ error: 'Internal Server Error', status: 500, reqId }`. Stack traces are omitted in production.
-5. **Observability Health Telemetry**:
+   - Invokes `sentry.captureException(err)` (verified via spy in tests), logs via `req.log.error` with `req.id`, and returns consistent JSON `{ error: 'Internal Server Error', status: 500, reqId }`.
+5. **Scoped `console.*` Migration (ONE-LINER 4)**:
+   - Migrated in this item: `backend/index.js` (boot, shutdown, uncaught exceptions), `backend/services/authService.js` (auth failures, brute force rate-limits), `backend/services/schedulerService.js` (execution failures, recipient alerts), and `backend/services/queueService.js` (worker failures).
+   - Backlog: Remaining calculation modules (`processData.js`, `pptGenerator.js`, `aiChatService.js`) remain unchanged and migrate progressively in subsequent quality waves.
+6. **Observability Health Telemetry**:
    - Updates `/api/v1/health` and legacy `/api/health` to expose observability status (`logger: 'pino'`, `logLevel`, `sentryActive: boolean`, `sentryEnvironment`).
 
 ---
@@ -72,8 +78,8 @@ The backend currently relies on 320+ ad-hoc `console.log`, `console.warn`, and `
                                Incoming HTTP Request
                                          │
                                          ▼
-                             [X-Request-Id Extractor]
-                      (Preserve incoming or generate UUID v4)
+                            [X-Request-Id Validator]
+             (Must be <= 128 chars & ^[a-zA-Z0-9\-_]+$, else UUID v4)
                                          │
                                          ▼
                                  [Sentry Request]
@@ -83,6 +89,7 @@ The backend currently relies on 320+ ad-hoc `console.log`, `console.warn`, and `
                             [Pino Logging Middleware]
                        - Attach req.id & req.log
                        - Set Response Header: X-Request-Id
+                       - Zero Body Policy: Never logs req.body
                        - Timer: process.hrtime.bigint()
                                          │
                                          ▼
@@ -100,9 +107,11 @@ The backend currently relies on 320+ ad-hoc `console.log`, `console.warn`, and `
                     ▼                                         ▼
           res.on('finish')                         Express Error Middleware
       req.log.info({                                  - sentry.captureException(err)
-        method, url, status,                          - req.log.error({ err, reqId })
-        durationMs, ip                                - res.status(500).json({
-      })                                                  error: 'Internal Server Error',
+        method, url, status,                            [beforeSend scrubs auth/cookies/body]
+        durationMs, ip, reqId                         - req.log.error({ err, reqId })
+      })                                                [pino.stdSerializers.err logs stack]
+                                                      - res.status(500).json({
+                                                          error: 'Internal Server Error',
                                                           reqId
                                                         })
 ```
@@ -112,25 +121,28 @@ The backend currently relies on 320+ ad-hoc `console.log`, `console.warn`, and `
 ## 4. Files to Create and Modify
 
 ### 4.1 Files to Create:
-1. `backend/utils/logger.js`: Root Pino logger instance, redactor configuration, child logger factory, and test-safe stream handling.
-2. `backend/middleware/loggingMiddleware.js`: Request correlation ID generation, header propagation, request child logger injection, and duration tracking on `res.finish`.
-3. `backend/utils/sentry.js`: Sentry initialization wrapper, Express middleware adapters, safe `captureException` helper with tenant/job tagging, and no-op fallback client.
-4. `backend/tests/observability.test.js`: Comprehensive TDD suite verifying redaction, correlation IDs, request timing, Sentry no-op behavior, Express error handling, and health telemetry.
+1. `backend/utils/logger.js`: Root Pino logger instance, standard error/req/res serializers, redactor configuration, error rate limiter token bucket, child logger factory, and test stream handling.
+2. `backend/middleware/loggingMiddleware.js`: Request correlation ID validation (regex + 128-char cap), header propagation, request child logger injection, zero-body logging policy, and duration tracking on `res.finish`.
+3. `backend/utils/sentry.js`: Sentry initialization wrapper, `beforeSend` security scrubber (strips auth/cookies/payload), Express middleware adapters, safe `captureException` helper with tenant/job tagging, and no-op fallback client.
+4. `backend/tests/observability.test.js`: Comprehensive TDD suite verifying serializers, redaction, correlation IDs, zero-body logging, Sentry `beforeSend` scrubbing, Express error handling with spy assertion, and health telemetry.
 
 ### 4.2 Files to Modify:
 1. `package.json` & `backend/package.json`: Add dependencies `pino`, `pino-http`, `@sentry/node`.
 2. `backend/index.js`:
    - Initialize Sentry (`sentry.initSentry(app)`).
-   - Mount `loggingMiddleware` immediately after CORS and Sentry request handler.
+   - Mount `sentry.sentryRequestHandler` and `loggingMiddleware` before routes.
    - Mount `sentry.sentryErrorHandler` and JSON 500 error-handling middleware after route mounts.
    - Add process-level crash safety nets (`unhandledRejection`, `uncaughtException`).
+   - Migrate startup and shutdown logs from `console.*` to `logger.*`.
 3. `backend/routes/v1Router.js`:
    - Update `GET /health` and `GET /health/scheduler` to expose observability telemetry (`logger`, `logLevel`, `sentryActive`).
-4. `backend/services/queueService.js`:
+4. `backend/services/authService.js`:
+   - Replace critical auth failure and brute force `console.warn`/`console.error` with `logger.warn`/`logger.error`.
+5. `backend/services/queueService.js`:
    - Replace raw `console.error` with `sentry.captureException(err, { module: 'queueService', jobId })` and `logger.error`.
-5. `backend/services/schedulerService.js`:
-   - Replace raw `console.error` with `sentry.captureException(err, { module: 'schedulerService', tenantId, scheduleId })` and `logger.error`.
-6. `.env.example`: Add `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`, `LOG_LEVEL`.
+6. `backend/services/schedulerService.js`:
+   - Replace critical failure `console.error` with `sentry.captureException(err, { module: 'schedulerService', tenantId, scheduleId })` and `logger.error`.
+7. `.env.example`: Add `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`, `LOG_LEVEL`.
 
 ---
 
@@ -158,6 +170,30 @@ const defaultLevel = isTest
   ? (process.env.LOG_LEVEL || (process.env.ENABLE_TEST_LOGS ? 'info' : 'silent'))
   : (process.env.LOG_LEVEL || 'info');
 
+// Error log rate limiting: token bucket capped at 100/sec (ONE-LINER 1)
+const ERROR_LOG_LIMIT = 100;
+let errorTokens = ERROR_LOG_LIMIT;
+let lastRefill = Date.now();
+let suppressedErrorCount = 0;
+
+function checkErrorRateLimit() {
+  const now = Date.now();
+  if (now - lastRefill >= 1000) {
+    if (suppressedErrorCount > 0) {
+      logger.warn(`[logger] Rate limit reset: ${suppressedErrorCount} error logs suppressed in the last window.`);
+      suppressedErrorCount = 0;
+    }
+    errorTokens = ERROR_LOG_LIMIT;
+    lastRefill = now;
+  }
+  if (errorTokens > 0) {
+    errorTokens -= 1;
+    return true;
+  }
+  suppressedErrorCount += 1;
+  return false;
+}
+
 const logger = pino({
   level: defaultLevel,
   timestamp: pino.stdTimeFunctions.isoTime,
@@ -165,14 +201,24 @@ const logger = pino({
     pid: process.pid,
     service: 'executive-qbr-backend',
   },
+  serializers: {
+    err: pino.stdSerializers.err,     // GAP 1: Extracts type, message, stack
+    error: pino.stdSerializers.err,
+    req: pino.stdSerializers.req,
+    res: pino.stdSerializers.res,
+  },
   redact: {
     paths: REDACT_PATHS,
     censor: '[REDACTED]',
   },
-  serializers: {
-    err: pino.stdSerializers.err,
-    req: pino.stdSerializers.req,
-    res: pino.stdSerializers.res,
+  hooks: {
+    logMethod(inputArgs, method, level) {
+      // 50 = error, 60 = fatal
+      if (level >= 50 && !checkErrorRateLimit()) {
+        return; // Suppress error log storm
+      }
+      return method.apply(this, inputArgs);
+    },
   },
 });
 
@@ -184,6 +230,7 @@ module.exports = {
   logger,
   getChildLogger,
   REDACT_PATHS,
+  checkErrorRateLimit,
 };
 ```
 
@@ -192,9 +239,23 @@ module.exports = {
 const { v4: uuidv4 } = require('uuid');
 const { logger } = require('../utils/logger');
 
+const REQUEST_ID_REGEX = /^[a-zA-Z0-9\-_]+$/;
+
+function validateRequestId(incomingId) {
+  if (
+    typeof incomingId === 'string' &&
+    incomingId.length > 0 &&
+    incomingId.length <= 128 &&
+    REQUEST_ID_REGEX.test(incomingId)
+  ) {
+    return incomingId;
+  }
+  return uuidv4();
+}
+
 function loggingMiddleware(req, res, next) {
-  // 1. Correlation ID: propagate or generate
-  const reqId = req.headers['x-request-id'] || uuidv4();
+  // 1. Correlation ID: validated or newly generated (ONE-LINER 3)
+  const reqId = validateRequestId(req.headers['x-request-id']);
   req.id = reqId;
   res.setHeader('X-Request-Id', reqId);
 
@@ -211,6 +272,8 @@ function loggingMiddleware(req, res, next) {
     const elapsedNs = process.hrtime.bigint() - startTime;
     const durationMs = Number(elapsedNs / 1000000n);
 
+    // GAP 3: ZERO BODY LOGGING POLICY
+    // Request bodies are strictly omitted from default request logs
     const logData = {
       reqId,
       method: req.method,
@@ -241,7 +304,10 @@ function loggingMiddleware(req, res, next) {
   next();
 }
 
-module.exports = loggingMiddleware;
+module.exports = {
+  loggingMiddleware,
+  validateRequestId,
+};
 ```
 
 ### 5.3 Sentry Integration & Fallback (`backend/utils/sentry.js`)
@@ -251,12 +317,30 @@ const { logger } = require('./logger');
 
 let isSentryInitialized = false;
 
+// GAP 2: Security Scrubber for Sentry Events
+function sentryBeforeSend(event, hint) {
+  if (event.request) {
+    if (event.request.headers) {
+      delete event.request.headers.authorization;
+      delete event.request.headers.cookie;
+      delete event.request.headers['x-service-pass'];
+    }
+    if (event.request.cookies) {
+      delete event.request.cookies;
+    }
+    if (event.request.data) {
+      event.request.data = '[REDACTED]';
+    }
+  }
+  return event;
+}
+
 function initSentry(app) {
   const dsn = process.env.SENTRY_DSN;
   const isTest = process.env.NODE_ENV === 'test' && !process.env.ENABLE_TEST_SENTRY;
 
   if (!dsn || isTest) {
-    logger.debug('[sentry] SENTRY_DSN not configured or running in test mode. Sentry initialized in no-op mock mode.');
+    logger.debug('[sentry] SENTRY_DSN not configured or running in test mode. Operating in mock mode.');
     isSentryInitialized = false;
     return;
   }
@@ -267,6 +351,7 @@ function initSentry(app) {
       environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'production',
       release: process.env.npm_package_version || '1.0.0',
       tracesSampleRate: parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.1'),
+      beforeSend: sentryBeforeSend,
     });
     isSentryInitialized = true;
     logger.info('[sentry] Sentry error tracking successfully initialized.');
@@ -277,7 +362,6 @@ function initSentry(app) {
 }
 
 function captureException(err, context = {}) {
-  // Always log error via structured logger
   logger.error({ err, ...context }, context.message || err.message);
 
   if (!isSentryInitialized) {
@@ -296,16 +380,12 @@ function captureException(err, context = {}) {
 }
 
 function sentryRequestHandler() {
-  if (!isSentryInitialized) {
-    return (req, res, next) => next();
-  }
+  if (!isSentryInitialized) return (req, res, next) => next();
   return Sentry.Handlers?.requestHandler ? Sentry.Handlers.requestHandler() : (req, res, next) => next();
 }
 
 function sentryErrorHandler() {
-  if (!isSentryInitialized) {
-    return (err, req, res, next) => next(err);
-  }
+  if (!isSentryInitialized) return (err, req, res, next) => next(err);
   return Sentry.Handlers?.errorHandler ? Sentry.Handlers.errorHandler() : (err, req, res, next) => next(err);
 }
 
@@ -314,29 +394,9 @@ module.exports = {
   captureException,
   sentryRequestHandler,
   sentryErrorHandler,
+  sentryBeforeSend,
   isInitialized: () => isSentryInitialized,
 };
-```
-
-### 5.4 Centralized JSON 500 Express Middleware (`backend/index.js`)
-```javascript
-// Mounted after routes, after Sentry error handler, before static files:
-app.use((err, req, res, next) => {
-  const reqId = req.id || req.headers['x-request-id'] || 'unknown';
-  const status = err.status || err.statusCode || 500;
-
-  if (req.log?.error) {
-    req.log.error({ err, status, reqId }, err.message);
-  } else {
-    logger.error({ err, status, reqId }, err.message);
-  }
-
-  res.status(status).json({
-    error: status >= 500 ? 'Internal Server Error' : err.message,
-    status,
-    reqId,
-  });
-});
 ```
 
 ---
@@ -345,48 +405,52 @@ app.use((err, req, res, next) => {
 
 New comprehensive test suite `backend/tests/observability.test.js` covering:
 
-1. **`logger_redacts_sensitive_authorization_header`**: Asserts `req.headers.authorization` is scrubbed to `[REDACTED]`.
-2. **`logger_redacts_sensitive_password_and_token`**: Asserts objects with keys `password`, `token`, `secret`, `recipients` have values scrubbed to `[REDACTED]`.
-3. **`correlationId_generated_when_missing`**: `GET /api/v1/health` without `X-Request-Id` returns 200 and attaches a valid UUID v4 `X-Request-Id` response header.
-4. **`correlationId_propagated_when_present`**: `GET /api/v1/health` with `X-Request-Id: trace-custom-999` echoes `X-Request-Id: trace-custom-999` in response headers.
-5. **`loggingMiddleware_attaches_child_logger`**: Asserts route handlers receive `req.log` pre-bound with `reqId`.
-6. **`sentry_noop_when_dsn_omitted`**: Asserts `initSentry` without `SENTRY_DSN` does not throw and leaves `isInitialized()` as `false`.
-7. **`sentry_captureException_safe_when_uninitialized`**: Asserts `captureException(new Error('fail'), { module: 'test' })` returns `null` without crashing.
-8. **`express_error_handler_returns_json_500_with_reqId`**: Asserts an error thrown in an Express route triggers the global error handler, sets status 500, and returns `{ error: 'Internal Server Error', status: 500, reqId }`.
-9. **`health_telemetry_includes_observability`**: Asserts `GET /api/v1/health` returns `{ status: 'ok', version: 'v1', observability: { logger: 'pino', sentryActive: false } }`.
-10. **`background_error_capture_enriches_tags`**: Asserts `captureException` passes tenant, module, and jobId tags to Sentry context.
+1. **`logger_serializes_error_with_stack` (GAP 1)**: Asserts logging `{ err: new Error('boom') }` produces serialized object containing `type: 'Error'`, `message: 'boom'`, and full `stack` string (not `{ err: {} }`).
+2. **`sentry_beforeSend_scrubsAuthHeader` (GAP 2)**: Asserts `sentryBeforeSend(event)` strips `authorization`, `cookie`, `x-service-pass`, and redacts `request.data` to `'[REDACTED]'`.
+3. **`loggingMiddleware_doesNotLogRequestBody` (GAP 3)**: Asserts a `POST` request with JSON body `{ password: 'supersecret', token: 'xyz' }` records metadata but strictly does NOT attach or log request body payload.
+4. **`logger_redacts_sensitive_authorization_and_tokens`**: Asserts redaction paths scrub authorization headers, passwords, secrets, and recipients to `[REDACTED]`.
+5. **`correlationId_validation_and_sanitization` (ONE-LINER 3)**:
+   - Valid: `custom-trace_123` is preserved and returned in `X-Request-Id`.
+   - Invalid: `bad header with spaces!` or string $> 128$ chars is rejected and replaced with a valid UUID v4.
+6. **`correlationId_generated_when_missing`**: Asserts incoming request without `X-Request-Id` gets UUID v4 in response header and attached to `req.id`.
+7. **`logger_error_rate_limiting_token_bucket` (ONE-LINER 1)**: Asserts error logging is throttled when exceeding 100 calls in a 1-second window and warns on reset.
+8. **`sentry_noop_when_dsn_omitted`**: Asserts `initSentry` without `SENTRY_DSN` does not throw and leaves `isInitialized()` as `false`.
+9. **`express_error_handler_returns_json_500_and_calls_sentry` (ONE-LINER 5)**: Asserts an error thrown in an Express route triggers the global error handler, sets status 500, returns `{ error: 'Internal Server Error', status: 500, reqId }`, and invokes `captureException` spy with the error.
+10. **`health_telemetry_includes_observability`**: Asserts `GET /api/v1/health` returns `{ status: 'ok', version: 'v1', observability: { logger: 'pino', sentryActive: false } }`.
+11. **`background_error_capture_enriches_tags`**: Asserts `captureException` passes tenant, module, and jobId tags to Sentry context.
 
 ---
 
 ## 7. HUMAN ACTION REQUIRED — Observability (Sentry & Pino)
 
-Per Section 10 of SYSTEM DIRECTIVE:
-
 ### 1. Dashboard Steps (Click-by-Click)
 1. Log into your [Sentry Dashboard](https://sentry.io/).
 2. Click **Create Project** $\to$ select **Node.js / Express**.
-3. Set project name: `executive-qbr-backend`.
-4. Copy the generated **DSN URL** (format: `https://<key>@<org>.ingest.sentry.io/<project-id>`).
-5. Open your deployment platform (e.g. Render Dashboard $\to$ Environment Variables).
+3. Name the project `executive-qbr-backend`.
+4. Copy the generated **DSN URL** (`https://<key>@<org>.ingest.sentry.io/<project-id>`).
+5. In your production hosting platform (e.g. Render Dashboard), add the environment variables below.
 
 ### 2. Environment Variables to Set
 | Variable Name | Example Value (DO NOT use real secrets in code) | Purpose |
 | :--- | :--- | :--- |
-| `SENTRY_DSN` | `https://examplePublicKey@o000000.ingest.sentry.io/0000000` | Sentry ingestion endpoint |
+| `SENTRY_DSN` | `https://examplePublicKey@o000000.ingest.sentry.io/0000000` | Sentry ingestion endpoint (Use EU region if required) |
 | `SENTRY_ENVIRONMENT` | `production` | Deployment environment tag |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Performance APM transaction sample rate (10%) |
 | `LOG_LEVEL` | `info` | Pino log verbosity (`info`, `debug`, `warn`, `error`) |
 
+> [!IMPORTANT]
+> **Data Residency Requirement (GAP 2)**:
+> Enterprise customers subject to EU GDPR or India DPDP data localization requirements **MUST** use an EU-region Sentry organization and DSN (e.g. `https://xxx@o000.eu.ingest.sentry.io/xxx`) to ensure error telemetry never leaves the required legal jurisdiction.
+
 ### 3. Verification Command
-To verify Sentry connectivity in production:
 ```bash
 curl -X GET https://your-deployed-domain.com/api/v1/health
 ```
-Assert response contains `"observability": { "logger": "pino", "sentryActive": true }`.
+Assert the response includes `"observability": { "logger": "pino", "sentryActive": true }`.
 
 ### 4. What Breaks if the Human Skips This
 - If `SENTRY_DSN` is omitted:
-  - The application **will NOT crash** and remains 100% functional.
+  - The application **will NOT crash** and remains 100% operational.
   - Pino structured JSON logging continues writing to `stdout`.
   - Sentry exception tracking and alerting remain inactive (errors log to stdout only; no email/Slack alerts fire).
 
