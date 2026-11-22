@@ -4,6 +4,7 @@ const { describe, it, before, beforeEach, afterEach, after } = require('node:tes
 const assert = require('node:assert');
 const http = require('http');
 const express = require('express');
+const pino = require('pino');
 
 describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tracking', () => {
   let app;
@@ -25,8 +26,62 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
     assert.ok(serialized.stack && serialized.stack.includes('Database connection failed'), 'stack trace must be present');
   });
 
-  // 2. GAP 2: Sentry beforeSend Security Scrubber
-  it('2. sentry_beforeSend_scrubsAuthHeader: Strips sensitive headers, cookies, and payload', () => {
+  // 2. Pino Redaction: Authorization header
+  it('2. logger_redacts_sensitive_authorization_header: Scrubs Authorization Bearer tokens in Pino logs', () => {
+    const { REDACT_PATHS } = require('../utils/logger');
+    let output = '';
+    const testLogger = pino(
+      { redact: { paths: REDACT_PATHS, censor: '[REDACTED]' } },
+      { write: (chunk) => { output += chunk; } }
+    );
+
+    testLogger.info({
+      req: {
+        headers: {
+          authorization: 'Bearer super-secret-admin-jwt',
+          'x-service-pass': 'master-service-pass-secret',
+        },
+      },
+    });
+
+    const parsed = JSON.parse(output);
+    assert.strictEqual(parsed.req.headers.authorization, '[REDACTED]', 'authorization header must be [REDACTED]');
+    assert.strictEqual(parsed.req.headers['x-service-pass'], '[REDACTED]', 'x-service-pass header must be [REDACTED]');
+  });
+
+  // 3. Pino Redaction: Password, Token, Secrets at root & nested
+  it('3. logger_redacts_sensitive_password_and_token: Scrubs password, token, secret, recipients at root and nested paths', () => {
+    const { REDACT_PATHS } = require('../utils/logger');
+    let output = '';
+    const testLogger = pino(
+      { redact: { paths: REDACT_PATHS, censor: '[REDACTED]' } },
+      { write: (chunk) => { output += chunk; } }
+    );
+
+    testLogger.info({
+      password: 'plainPassword123',
+      token: 'secret-token-xyz',
+      secret: 'api-secret-key',
+      recipients: ['confidential@client.com'],
+      nested: {
+        password: 'nestedPassword456',
+        token: 'nestedToken789',
+        mfaCode: '654321',
+      },
+    });
+
+    const parsed = JSON.parse(output);
+    assert.strictEqual(parsed.password, '[REDACTED]', 'root password must be [REDACTED]');
+    assert.strictEqual(parsed.token, '[REDACTED]', 'root token must be [REDACTED]');
+    assert.strictEqual(parsed.secret, '[REDACTED]', 'root secret must be [REDACTED]');
+    assert.strictEqual(parsed.recipients, '[REDACTED]', 'root recipients must be [REDACTED]');
+    assert.strictEqual(parsed.nested.password, '[REDACTED]', 'nested password must be [REDACTED]');
+    assert.strictEqual(parsed.nested.token, '[REDACTED]', 'nested token must be [REDACTED]');
+    assert.strictEqual(parsed.nested.mfaCode, '[REDACTED]', 'nested mfaCode must be [REDACTED]');
+  });
+
+  // 4. GAP 2: Sentry beforeSend Security Scrubber
+  it('4. sentry_beforeSend_scrubsAuthHeader: Strips sensitive headers, cookies, and payload', () => {
     const { sentryBeforeSend } = require('../utils/sentry');
     assert.strictEqual(typeof sentryBeforeSend, 'function', 'sentryBeforeSend must be exported');
 
@@ -52,8 +107,8 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
     assert.strictEqual(scrubbed.request.data, '[REDACTED]', 'request data payload must be redacted');
   });
 
-  // 3. GAP 2: tracesSampleRate reads from process.env
-  it('3. sentry_tracesSampleRate_readsEnv: Correctly parses SENTRY_TRACES_SAMPLE_RATE env var', () => {
+  // 5. GAP 2: tracesSampleRate reads from process.env
+  it('5. sentry_tracesSampleRate_readsEnv: Correctly parses SENTRY_TRACES_SAMPLE_RATE env var', () => {
     const { getTracesSampleRate } = require('../utils/sentry');
     assert.strictEqual(typeof getTracesSampleRate, 'function', 'getTracesSampleRate must be exported');
 
@@ -73,12 +128,12 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
     }
   });
 
-  // 4. GAP 3: redactBody Utility (Circular refs, depth limit, nested arrays, immutability)
-  it('4. redactBody_handlesCircular_nestedArrays_depthLimit: Bulletproof body sanitizer', () => {
+  // 6. GAP 3: redactBody Utility (Circular refs, depth limit, nested arrays, immutability)
+  it('6. redactBody_handlesCircular_nestedArrays_depthLimit: Bulletproof body sanitizer', () => {
     const { redactBody } = require('../utils/logger');
     assert.strictEqual(typeof redactBody, 'function', 'redactBody must be exported');
 
-    // Test 4A: Sensitive keys redacted
+    // Test 6A: Sensitive keys redacted
     const input = {
       username: 'jfl-operator',
       password: 'password123',
@@ -99,14 +154,14 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
     assert.strictEqual(redacted.nested.publicField, 'safe data');
     assert.strictEqual(input.password, 'password123', 'Input object must NOT be mutated');
 
-    // Test 4B: Circular references
+    // Test 6B: Circular references
     const circular = { name: 'circular-test' };
     circular.self = circular;
     const cleanCircular = redactBody(circular);
     assert.strictEqual(cleanCircular.name, 'circular-test');
     assert.strictEqual(cleanCircular.self, '[CIRCULAR]');
 
-    // Test 4C: Nested arrays
+    // Test 6C: Nested arrays
     const arrayInput = [
       { password: 'pass1' },
       [{ token: 'token2' }, { safe: 'ok' }],
@@ -116,14 +171,14 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
     assert.strictEqual(cleanArray[1][0].token, '[REDACTED]');
     assert.strictEqual(cleanArray[1][1].safe, 'ok');
 
-    // Test 4D: Depth limit
+    // Test 6D: Depth limit
     const deepObject = { l1: { l2: { l3: { l4: { l5: { l6: 'deep' } } } } } };
     const cleanDeep = redactBody(deepObject, { maxDepth: 5 });
     assert.strictEqual(cleanDeep.l1.l2.l3.l4.l5, '[MAX_DEPTH_EXCEEDED]');
   });
 
-  // 5. ONE-LINER 3: X-Request-Id Validation & Sanitization
-  it('5. correlationId_validation_and_sanitization: Enforces length <= 128 and valid regex', () => {
+  // 7. ONE-LINER 3: X-Request-Id Validation & Sanitization
+  it('7. correlationId_validation_and_sanitization: Enforces length <= 128 and valid regex', () => {
     const { validateRequestId } = require('../middleware/loggingMiddleware');
     assert.strictEqual(typeof validateRequestId, 'function', 'validateRequestId must be exported');
 
@@ -146,8 +201,8 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
     assert.ok(/^[0-9a-f-]{36}$/.test(resultLong), 'Must fall back to UUID v4');
   });
 
-  // 6. ONE-LINER 1: Error Rate Limiting (Token Bucket)
-  it('6. logger_error_rate_limiting_token_bucket: Suppresses error logs beyond 100/sec', () => {
+  // 8. ONE-LINER 1: Error Rate Limiting (Token Bucket)
+  it('8. logger_error_rate_limiting_token_bucket: Suppresses error logs beyond 100/sec', () => {
     const { checkErrorRateLimit } = require('../utils/logger');
     assert.strictEqual(typeof checkErrorRateLimit, 'function', 'checkErrorRateLimit must be exported');
 
@@ -158,22 +213,34 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
     assert.strictEqual(allowedCount, 100, 'Must allow exactly 100 error logs per window');
   });
 
-  // 7. Sentry No-Op Fallback when DSN is omitted
-  it('7. sentry_noop_when_dsn_omitted: Initializes in safe mock mode without throwing', () => {
+  // 9. Sentry No-Op Fallback when DSN is omitted
+  it('9. sentry_noop_when_dsn_omitted: Initializes in safe mock mode without throwing', () => {
     const sentry = require('../utils/sentry');
     const prev = process.env.SENTRY_DSN;
     delete process.env.SENTRY_DSN;
     try {
       sentry.initSentry(express());
       assert.strictEqual(sentry.isInitialized(), false, 'Sentry must remain uninitialized without DSN');
-      const eventId = sentry.captureException(new Error('Test failure'));
+    } finally {
+      if (prev !== undefined) process.env.SENTRY_DSN = prev;
+    }
+  });
+
+  // 10. Sentry safe captureException when uninitialized
+  it('10. sentry_captureException_safe_when_uninitialized: Returns null without throwing when uninitialized', () => {
+    const sentry = require('../utils/sentry');
+    const prev = process.env.SENTRY_DSN;
+    delete process.env.SENTRY_DSN;
+    try {
+      sentry.initSentry(express());
+      const eventId = sentry.captureException(new Error('Test uninitialized failure'), { module: 'testSafe' });
       assert.strictEqual(eventId, null, 'captureException must return null in mock mode without throwing');
     } finally {
       if (prev !== undefined) process.env.SENTRY_DSN = prev;
     }
   });
 
-  // 8. Express Integration: Request ID propagation, Zero-body policy, Abort tracking, 500 JSON
+  // 11. Express Integration: Request ID propagation, Zero-body policy, Abort tracking, 500 JSON
   describe('HTTP Middleware Integration', () => {
     let testServer;
     let testPort;
@@ -190,6 +257,14 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
       // Normal route
       testApp.post('/test/echo', (req, res) => {
         res.json({ ok: true, receivedReqId: req.id });
+      });
+
+      // Route to inspect child logger attachment
+      testApp.get('/test/check-req-log', (req, res) => {
+        res.json({
+          hasReqLog: typeof req.log?.info === 'function',
+          reqId: req.id,
+        });
       });
 
       // Long running route to simulate client abort
@@ -228,7 +303,7 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
       }
     });
 
-    it('8. correlationId_generated_when_missing: Generates UUID v4 in X-Request-Id header', async () => {
+    it('11. correlationId_generated_when_missing: Generates UUID v4 in X-Request-Id header', async () => {
       const res = await fetch(`http://127.0.0.1:${testPort}/test/echo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,7 +318,7 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
       assert.strictEqual(body.receivedReqId, reqIdHeader, 'req.id in handler must match response header');
     });
 
-    it('9. correlationId_propagated_when_valid: Preserves valid incoming X-Request-Id', async () => {
+    it('12. correlationId_propagated_when_valid: Preserves valid incoming X-Request-Id', async () => {
       const customId = 'trace-id-abc_999';
       const res = await fetch(`http://127.0.0.1:${testPort}/test/echo`, {
         method: 'POST',
@@ -259,49 +334,49 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
       assert.strictEqual(body.receivedReqId, customId);
     });
 
-    it('10. loggingMiddleware_doesNotLogRequestBody (GAP 3): Default request logging excludes body', async () => {
-      // Send sensitive credentials in request body
+    it('13. loggingMiddleware_attaches_child_logger: Attaches req.log with info/warn/error pre-bound', async () => {
+      const res = await fetch(`http://127.0.0.1:${testPort}/test/check-req-log`);
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.hasReqLog, true, 'req.log must be attached with logger methods');
+      assert.ok(data.reqId, 'reqId must be present on req');
+    });
+
+    it('14. loggingMiddleware_doesNotLogRequestBody (GAP 3): Default request logging excludes body', async () => {
       const res = await fetch(`http://127.0.0.1:${testPort}/test/echo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: 'leakedpassword123', secret: 'abc' }),
       });
       assert.strictEqual(res.status, 200);
-      // Confirmed: loggingMiddleware only records method, url, status, duration, reqId, ip, userAgent
     });
 
-    it('11. express_error_handler_returns_json_500_and_calls_sentry (ONE-LINER 5): Returns 500 JSON with reqId and spies captureException', async () => {
-      const sentry = require('../utils/sentry');
-      let capturedError = null;
-      let capturedContext = null;
-
-      // Attach spy to captureException
-      const originalCapture = sentry.captureException;
-      sentry.captureException = (err, context) => {
-        capturedError = err;
-        capturedContext = context;
-        return originalCapture(err, context);
+    it('15. loggingMiddleware_normalRequestLogsOnce (DOUBLE-LOG BUG FIX): Normal request logs exactly ONCE', async () => {
+      const { logger } = require('../utils/logger');
+      let logCount = 0;
+      const originalInfo = logger.info;
+      logger.info = function (bindings, msg) {
+        if (bindings && bindings.url && bindings.url.includes('/test/echo')) {
+          logCount++;
+        }
+        return originalInfo.apply(this, arguments);
       };
 
       try {
-        const res = await fetch(`http://127.0.0.1:${testPort}/test/crash`);
-        assert.strictEqual(res.status, 500);
-        const data = await res.json();
-        assert.strictEqual(data.error, 'Internal Server Error');
-        assert.strictEqual(data.status, 500);
-        assert.ok(data.reqId, 'Error response must contain reqId');
-
-        // ONE-LINER 5: Assert captureException was called via spy
-        assert.ok(capturedError, 'sentry.captureException must be invoked');
-        assert.strictEqual(capturedError.message, 'Simulated database deadlock');
-        assert.strictEqual(capturedContext.reqId, data.reqId);
-        assert.strictEqual(capturedContext.module, 'testExpress');
+        const res = await fetch(`http://127.0.0.1:${testPort}/test/echo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ test: 'single-log-check' }),
+        });
+        assert.strictEqual(res.status, 200);
+        await new Promise((r) => setTimeout(r, 60)); // Wait for finish/close events
+        assert.strictEqual(logCount, 1, 'Normal request must log exactly ONCE (never double-logged)');
       } finally {
-        sentry.captureException = originalCapture;
+        logger.info = originalInfo;
       }
     });
 
-    it('12. loggingMiddleware_logsAbortedRequest (GAP 1): Captures client socket disconnect', async () => {
+    it('16. loggingMiddleware_logsAbortedRequest (GAP 1): Captures client socket disconnect', async () => {
       const { logger } = require('../utils/logger');
       let warnLogEmitted = false;
       let loggedData = null;
@@ -331,10 +406,41 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
         logger.warn = originalWarn;
       }
     });
+
+    it('17. express_error_handler_returns_json_500_and_calls_sentry (ONE-LINER 5): Returns 500 JSON with reqId and spies captureException', async () => {
+      const sentry = require('../utils/sentry');
+      let capturedError = null;
+      let capturedContext = null;
+
+      // Attach spy to captureException
+      const originalCapture = sentry.captureException;
+      sentry.captureException = (err, context) => {
+        capturedError = err;
+        capturedContext = context;
+        return originalCapture(err, context);
+      };
+
+      try {
+        const res = await fetch(`http://127.0.0.1:${testPort}/test/crash`);
+        assert.strictEqual(res.status, 500);
+        const data = await res.json();
+        assert.strictEqual(data.error, 'Internal Server Error');
+        assert.strictEqual(data.status, 500);
+        assert.ok(data.reqId, 'Error response must contain reqId');
+
+        // ONE-LINER 5: Assert captureException was called via spy
+        assert.ok(capturedError, 'sentry.captureException must be invoked');
+        assert.strictEqual(capturedError.message, 'Simulated database deadlock');
+        assert.strictEqual(capturedContext.reqId, data.reqId);
+        assert.strictEqual(capturedContext.module, 'testExpress');
+      } finally {
+        sentry.captureException = originalCapture;
+      }
+    });
   });
 
-  // 13. Health endpoint observability telemetry
-  it('13. health_telemetry_includes_observability: GET /api/v1/health exposes logger and sentry telemetry', async () => {
+  // 18. Health endpoint observability telemetry
+  it('18. health_telemetry_includes_observability: GET /api/v1/health exposes logger and sentry telemetry', async () => {
     const mainApp = require('../index');
     let localServer;
     let localPort;
@@ -362,8 +468,8 @@ describe('Item #15: Observability — Pino Structured Logging & Sentry Error Tra
     }
   });
 
-  // 14. Background task error capture enriches tags
-  it('14. background_error_capture_enriches_tags: captureException captures module, tenantId, and jobId tags', () => {
+  // 19. Background task error capture enriches tags
+  it('19. background_error_capture_enriches_tags: captureException captures module, tenantId, and jobId tags', () => {
     const sentry = require('../utils/sentry');
     const { logger } = require('../utils/logger');
 

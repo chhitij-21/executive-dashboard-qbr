@@ -77,11 +77,11 @@ function loggingMiddleware(req, res, next) {
     }
   }
 
-  // Normal completion
-  res.on('finish', () => emitRequestLog(false));
+  // Normal completion (use once to ensure single invocation)
+  res.once('finish', () => emitRequestLog(false));
 
   // GAP 1: Client socket disconnect before finish
-  res.on('close', () => {
+  res.once('close', () => {
     if (!res.writableEnded) {
       emitRequestLog(true);
     }
@@ -94,3 +94,4 @@ module.exports = {
   loggingMiddleware,
   validateRequestId,
 };
+
