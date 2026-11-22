@@ -3,10 +3,13 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL, apiFetch } from '../config/api';
 import MFASetup from './MFASetup';
+import ScheduleManagerModal from './ScheduleManagerModal';
 
 export default function ClientManager() {
   const { clients, activeClient, activeLocation, setActiveClient, setActiveLocation, refreshClients, isAdmin, isBackendOffline } = useAuth();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedClientForSchedule, setSelectedClientForSchedule] = useState(null);
   const [newClient, setNewClient] = useState({
     name: '',
     code: '',
@@ -226,6 +229,11 @@ incident_severity_values:
     }
   };
 
+  const handleOpenScheduleModal = (client) => {
+    setSelectedClientForSchedule(client);
+    setShowScheduleModal(true);
+  };
+
   const handleUploadTemplate = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !selectedClientForBranding) return;
@@ -430,25 +438,36 @@ incident_severity_values:
                       <span>🧮 Customer Calculation Logic &amp; Rule Engine Settings</span>
                       <code style={{ marginLeft: '0.5rem' }}>{c.ruleConfigFile || 'rules.yaml'}</code>
                     </div>
-                    {isAdmin && (
-                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                        <button
-                          className="btn-secondary-sm"
-                          onClick={() => handleOpenBrandingModal(c)}
-                          style={{ background: '#fdf2f8', color: '#9d174d', border: '1px solid #fbcfe8', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: '6px', cursor: 'pointer' }}
-                          title="Configure tenant branding colors, logo, and PPT template"
-                        >
-                          🎨 Branding &amp; Templates
-                        </button>
-                        <button
-                          className="btn-secondary-sm"
-                          onClick={() => handleOpenRulesModal(c)}
-                          style={{ background: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: '6px', cursor: 'pointer' }}
-                        >
-                          ✏️ Edit rules.yaml
-                        </button>
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                      <button
+                        className="btn-secondary-sm"
+                        onClick={() => handleOpenScheduleModal(c)}
+                        style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                        title="View and configure automated recurring QBR schedules"
+                      >
+                        📅 Schedules
+                        {(c.lastScheduleStatus === 'FAILED' || c.hasScheduleFailure) && <span title="Last scheduled run failed">🔴</span>}
+                      </button>
+                      {isAdmin && (
+                        <>
+                          <button
+                            className="btn-secondary-sm"
+                            onClick={() => handleOpenBrandingModal(c)}
+                            style={{ background: '#fdf2f8', color: '#9d174d', border: '1px solid #fbcfe8', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: '6px', cursor: 'pointer' }}
+                            title="Configure tenant branding colors, logo, and PPT template"
+                          >
+                            🎨 Branding &amp; Templates
+                          </button>
+                          <button
+                            className="btn-secondary-sm"
+                            onClick={() => handleOpenRulesModal(c)}
+                            style={{ background: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: '6px', cursor: 'pointer' }}
+                          >
+                            ✏️ Edit rules.yaml
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="rules-specs-grid">
                     <div className="spec-item">
@@ -993,6 +1012,14 @@ incident_severity_values:
           </div>
         </div>
       )}
+
+      {/* Schedule Manager Modal (Item #13) */}
+      <ScheduleManagerModal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        client={selectedClientForSchedule}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }

@@ -117,6 +117,33 @@ const templateRoutes = require('./routes/templateRoutes');
 app.use(['/api/tenants', '/api/clients'], templateRoutes);
 const dataHealthRoutes = require('./routes/dataHealthRoutes');
 app.use(['/api/data-health', '/data-health'], dataHealthRoutes);
+const scheduleRoutes = require('./routes/scheduleRoutes');
+app.use(['/api/tenants', '/api/clients'], scheduleRoutes);
+app.get(['/api/health/scheduler', '/health/scheduler'], (req, res) => {
+  const health = schedulerService.getHealth();
+  const statusCode = health.ready ? 200 : 503;
+  return res.status(statusCode).json(health);
+});
+
+const schedulerService = require('./services/schedulerService');
+if (process.env.NODE_ENV !== 'test') {
+  schedulerService.initSchedulers().catch((err) => {
+    console.warn('[server] SchedulerService initialization warning:', err.message);
+  });
+}
+
+// Graceful deployment shutdown handler for SIGTERM and SIGINT
+const gracefulShutdown = (signal) => {
+  console.log(`[server] Received ${signal}. Stopping standing schedulers...`);
+  try {
+    schedulerService.stopAll();
+  } catch (err) {
+    console.warn('[server] Error stopping scheduler:', err.message);
+  }
+};
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 
 const queueService = require('./services/queueService');
 queueService.initialize().catch((err) => {

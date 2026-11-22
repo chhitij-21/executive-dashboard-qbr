@@ -1,0 +1,23 @@
+[
+  {
+    "id": "run_1795344208738_81e4a98a",
+    "scheduleId": "550d398e-4c05-4e01-96d3-630f8e41d6b4",
+    "scheduleName": "Rate Limit Target",
+    "runAt": "2026-11-22T10:43:28.740Z",
+    "triggerType": "MANUAL",
+    "cadence": "monthly",
+    "period": {
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-31",
+      "displayLabel": "1 October 2026 – 31 October 2026",
+      "days": 31,
+      "cadence": "monthly"
+    },
+    "status": "SUCCESS",
+    "jobId": "sched_1795344208740_1b2d66",
+    "dedupKey": "client-jfl:550d398e-4c05-4e01-96d3-630f8e41d6b4:monthly:2026-10-01:2026-10-31",
+    "durationMs": 4,
+    "downloadUrl": "/api/ppt/download/sched_1795344208740_1b2d66",
+    "dashboardUrl": "/api/dashboard?jobId=sched_1795344208740_1b2d66"
+  }
+]

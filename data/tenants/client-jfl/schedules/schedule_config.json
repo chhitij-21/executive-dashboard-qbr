@@ -1,0 +1,14 @@
+{
+  "tenantId": "client-jfl",
+  "enabled": true,
+  "cadence": "quarterly",
+  "cronExpression": "0 6 1 1,4,7,10 *",
+  "recipients": [
+    "exec@jfl.com"
+  ],
+  "lastRunAt": null,
+  "nextRunAt": "2027-01-01T00:30:00.000Z",
+  "lastStatus": null,
+  "updatedAt": "2026-11-21T22:21:39.193Z",
+  "updatedBy": "admin@portal.com"
+}

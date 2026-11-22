@@ -1,0 +1,20 @@
+[
+  {
+    "id": "default_monthly",
+    "name": "Default Monthly QBR",
+    "enabled": true,
+    "cadence": "monthly",
+    "cronExpression": "0 6 1 * *",
+    "timezone": "Asia/Kolkata",
+    "templateVersion": "latest",
+    "recipients": [
+      "exec@jfl.com"
+    ],
+    "lastRunAt": null,
+    "nextRunAt": null,
+    "lastStatus": null,
+    "lastError": null,
+    "updatedAt": "2026-11-21T22:21:39.193Z",
+    "updatedBy": "admin@portal.com"
+  }
+]
