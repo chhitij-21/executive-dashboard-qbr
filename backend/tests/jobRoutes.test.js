@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/jobRoutes.test.js
 process.env.NODE_ENV = 'test';
 const { describe, it, before, after } = require('node:test');

@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/dateValidation.test.js
 // Tests for validateDateRange() — mirrors index.js implementation exactly.
 // Run: node --test backend/tests/dateValidation.test.js

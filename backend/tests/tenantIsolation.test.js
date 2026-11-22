@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/tenantIsolation.test.js
 // Automated regression test suite for role-based multi-tenant isolation.
 // Verifies 18 distinct security and tenant isolation scenarios across JFL and MMTC.

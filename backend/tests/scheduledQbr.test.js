@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/scheduledQbr.test.js
 process.env.NODE_ENV = 'test';
 'use strict';
@@ -11,9 +12,11 @@ const schedulerService = require('../services/schedulerService');
 const templateService = require('../services/templateService');
 const queueService = require('../services/queueService');
 
+const clientService = require('../services/clientService');
+
 describe('Scheduled QBR Engine Suite (Item #13)', () => {
   const TEST_TENANT = 'client-test-sched';
-  const tenantDir = path.resolve(__dirname, '../../data/tenants', TEST_TENANT);
+  const tenantDir = clientService.getTenantDir(TEST_TENANT);
   const schedDir = path.join(tenantDir, 'schedules');
 
   before(async () => {

@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/multiTenancy.test.js
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,7 +12,7 @@ const { resolveTenantContext } = require('../middleware/tenantContext');
 
 describe('Multi-Tenancy & Whitelabel Isolation Suite (Item #8)', () => {
   const TEST_TENANT_ID = 'client-test-tenancy';
-  const tenantDir = path.resolve(__dirname, '..', '..', 'data', 'tenants', TEST_TENANT_ID);
+  const tenantDir = clientService.getTenantDir(TEST_TENANT_ID);
 
   after(() => {
     // Cleanup test tenant directory

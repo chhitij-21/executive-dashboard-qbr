@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/inventorySync.test.js
 // Automated test suite for Phase G Inventory Sync Service (TDD)
 

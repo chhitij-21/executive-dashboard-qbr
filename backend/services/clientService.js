@@ -7,11 +7,17 @@ const path = require('path');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
-const DATA_DIR = process.env.VERCEL
-  ? path.join(os.tmpdir(), 'data')
-  : path.resolve(__dirname, '..', '..', 'data');
-const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
-const TENANTS_DIR = path.join(DATA_DIR, 'tenants');
+function getDataDir() {
+  return process.env.DATA_DIR || (process.env.VERCEL
+    ? path.join(os.tmpdir(), 'data')
+    : path.resolve(__dirname, '..', '..', 'data'));
+}
+function getClientsFile() {
+  return path.join(getDataDir(), 'clients.json');
+}
+function getTenantsRootDir() {
+  return process.env.TENANT_DATA_ROOT || path.join(getDataDir(), 'tenants');
+}
 
 const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 
@@ -31,19 +37,21 @@ const DEFAULT_CLIENTS = [
 ];
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  const dir = getDataDir();
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
   }
 }
 
 function loadClients() {
   ensureDataDir();
-  if (!fs.existsSync(CLIENTS_FILE)) {
+  const file = getClientsFile();
+  if (!fs.existsSync(file)) {
     saveClients(DEFAULT_CLIENTS);
     return DEFAULT_CLIENTS;
   }
   try {
-    const raw = fs.readFileSync(CLIENTS_FILE, 'utf8');
+    const raw = fs.readFileSync(file, 'utf8');
     const data = JSON.parse(raw);
     return Array.isArray(data) && data.length > 0 ? data : DEFAULT_CLIENTS;
   } catch (err) {
@@ -54,7 +62,7 @@ function loadClients() {
 
 function saveClients(clients) {
   ensureDataDir();
-  fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients, null, 2), 'utf8');
+  fs.writeFileSync(getClientsFile(), JSON.stringify(clients, null, 2), 'utf8');
 }
 
 function getAllClients() {
@@ -174,7 +182,7 @@ function validateHexColor(hex, fieldName = 'Color') {
 
 function getTenantDir(tenantId) {
   const canonicalId = resolveCanonicalClientId(tenantId) || 'client-default';
-  return path.join(TENANTS_DIR, canonicalId);
+  return path.join(getTenantsRootDir(), canonicalId);
 }
 
 function ensureTenantDirs(tenantId) {

@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/databaseV2.test.js
 // Automated test suite for Item #3: Database Layer (Turso/LibSQL Unified Persistence & Encrypted Recipients)
 

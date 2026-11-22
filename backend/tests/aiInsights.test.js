@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/aiInsights.test.js
 process.env.NODE_ENV = 'test';
 process.env.ALLOW_DEMO_ACCOUNTS = 'true';

@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/incidentSLA.test.js
 // Tests for computeIncidentEnrichment() matching the REAL JFL Excel field names.
 // The actual Excel has:  "Actual Resolution Time (min)" and "Total Resolution Time (min)"

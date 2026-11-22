@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/templateRoutes.test.js
 process.env.NODE_ENV = 'test';
 const { describe, it, before, after } = require('node:test');

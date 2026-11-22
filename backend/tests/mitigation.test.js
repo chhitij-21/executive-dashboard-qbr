@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/mitigation.test.js
 process.env.NODE_ENV = 'test';
 

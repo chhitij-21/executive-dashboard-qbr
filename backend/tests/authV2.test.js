@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/authV2.test.js
 // Automated test suite for Item #4 Real Auth (JWT v2, Redis Revocation, Bcrypt Migration, Rate Limiting)
 

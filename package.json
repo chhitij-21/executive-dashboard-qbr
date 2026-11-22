@@ -12,9 +12,18 @@
     "dev:frontend": "npx vite --config frontend/vite.config.js",
     "build": "npm install --prefer-offline && cd backend && npm install --prefer-offline && cd .. && cd frontend && npm install --include=dev --prefer-offline && npm run build",
     "start": "node --env-file-if-exists=.env backend/index.js",
-    "test": "node --test --test-concurrency=1 backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
+    "pretest": "node scripts/cleanup-test-artifacts.js",
+    "pretest:serial": "node scripts/cleanup-test-artifacts.js",
+    "test": "node --test backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
+    "test:serial": "node --test --test-concurrency=1 backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
+    "test:turso": "node scripts/run-turso-test.js",
+    "check:test-setup": "node scripts/check-test-setup-imports.js",
+    "check:hermetic": "node scripts/verify-hermetic.js",
     "parity": "node scripts/deployment-parity.js",
     "reconcile": "node scripts/ssot-reconciler.js"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
   },
   "dependencies": {
     "@sentry/node": "^11.16.0",

@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/observability.test.js — TDD Suite for Item #15 Observability
 process.env.NODE_ENV = 'test';
 const { describe, it, before, beforeEach, afterEach, after } = require('node:test');

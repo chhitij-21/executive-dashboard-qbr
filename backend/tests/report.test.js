@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/report.test.js
 // Automated test suite for MMTC Reports Dashboard & Ticket Processing (TDD)
 

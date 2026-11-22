@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/asyncQueue.test.js
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');

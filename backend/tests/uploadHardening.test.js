@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/uploadHardening.test.js
 // TDD Test Suite for Item #5: Upload Hardening (Limits / Magic Bytes)
 

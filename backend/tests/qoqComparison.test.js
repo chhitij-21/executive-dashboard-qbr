@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/qoqComparison.test.js
 // Comprehensive Unit & Integration Tests for Item #9: QoQ Compare
 'use strict';

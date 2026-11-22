@@ -22,7 +22,7 @@ function validatePptxMagicBytes(buffer) {
 
 function getTenantTemplatesDir(tenantId) {
   const canonicalId = clientService.resolveCanonicalClientId(tenantId) || 'client-default';
-  const tenantDir = path.resolve(__dirname, '../../data/tenants', canonicalId);
+  const tenantDir = clientService.getTenantDir(canonicalId);
   const templatesDir = path.join(tenantDir, 'templates');
   const versionsDir = path.join(templatesDir, 'versions');
   if (!fs.existsSync(versionsDir)) {
@@ -153,7 +153,7 @@ function getActiveTemplatePath(tenantId) {
   if (!tenantId) return globalFallback;
 
   const canonicalId = clientService.resolveCanonicalClientId(tenantId);
-  const tenantDir = path.resolve(__dirname, '../../data/tenants', canonicalId || tenantId);
+  const tenantDir = clientService.getTenantDir(canonicalId || tenantId);
   const templatesDir = path.join(tenantDir, 'templates');
   const manifestPath = path.join(templatesDir, 'templates_manifest.json');
 
@@ -318,6 +318,7 @@ async function deleteVersion(tenantId, versionId) {
 }
 
 module.exports = {
+  getTenantTemplatesDir,
   getManifest,
   getActiveTemplatePath,
   createVersion,

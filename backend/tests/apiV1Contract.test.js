@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/apiV1Contract.test.js
 // Automated test suite for Item #14: API-First (v1 URI Versioning, Frontend Cutover & Deprecation Lifecycle)
 

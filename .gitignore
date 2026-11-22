@@ -27,6 +27,12 @@ data/incoming/
 data/users.json
 data/mitigation_cache.json
 
+# Test Isolation Artifacts (worker-scoped DBs & tenant sandboxes)
+data/test-*.db
+data/test-*.db-wal
+data/test-*.db-shm
+data/test-tenants-*/
+
 # IMPORTANT: data/reports_metadata.json is NOW TRACKED so Render can
 # resolve jobs via resolveLatestCompletedJob. Do NOT add it back here.
 

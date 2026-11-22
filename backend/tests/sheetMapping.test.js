@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/sheetMapping.test.js
 // TDD Test Suite for Item #6: Sheet Mapping UI & Custom Mapping Support
 

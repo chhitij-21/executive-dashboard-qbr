@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/reconciliation.test.js
 // Test suite for Dashboard -> PPT Data Migration & Zero-Tolerance Reconciliation Engine
 

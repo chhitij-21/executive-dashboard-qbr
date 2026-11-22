@@ -231,9 +231,7 @@ function calculateNextRunAt(cronExpression, cadence = 'monthly', timezone = 'UTC
  */
 function getTenantSchedulesDir(tenantId) {
   const canonicalId = clientService.resolveCanonicalClientId(tenantId) || tenantId || 'client-default';
-  const baseDir = process.env.VERCEL
-    ? path.join(os.tmpdir(), 'data', 'tenants', canonicalId)
-    : path.resolve(__dirname, '../../data/tenants', canonicalId);
+  const baseDir = clientService.getTenantDir(canonicalId);
   const schedDir = path.join(baseDir, 'schedules');
 
   if (!fs.existsSync(schedDir)) {
@@ -1087,7 +1085,16 @@ function setLastHeartbeat(timestamp) {
   _lastHeartbeat = timestamp;
 }
 
+function resetSchedulerState() {
+  stopAll();
+  _scheduledTasks.clear();
+  _scheduleLocks.clear();
+  _idempotencyKeys.clear();
+  _failureAlertsThrottle.clear();
+}
+
 module.exports = {
+  resetSchedulerState,
   validateCron,
   derivePeriodForCadence,
   calculateNextRunAt,

@@ -181,11 +181,12 @@ router.get('/:id/templates/:versionId/download', requireAuth, async (req, res) =
       return res.status(404).json({ error: 'Template version not found', code: 'VERSION_NOT_FOUND' });
     }
 
-    let versionPath = path.resolve(__dirname, `../../data/tenants/${tenantId}/templates/versions/${version.storedName}`);
+    const { versionsDir, templatesDir } = templateService.getTenantTemplatesDir(tenantId);
+    let versionPath = path.join(versionsDir, version.storedName);
     if (!fs.existsSync(versionPath)) {
       const candidates = [
-        path.resolve(__dirname, `../../data/tenants/${tenantId}/templates/${version.storedName}`),
-        path.resolve(__dirname, `../../data/tenants/${tenantId}/templates/master.pptx`),
+        path.join(templatesDir, version.storedName),
+        path.join(templatesDir, 'master.pptx'),
         version.storagePath ? path.resolve(__dirname, '../../', version.storagePath) : null,
       ].filter(Boolean);
       const found = candidates.find((p) => fs.existsSync(p));

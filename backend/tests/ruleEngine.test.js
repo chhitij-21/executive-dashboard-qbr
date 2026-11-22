@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/ruleEngine.test.js
 const test = require('node:test');
 const assert = require('node:assert/strict');

@@ -1,3 +1,4 @@
+require('./_setup');
 process.env.NODE_ENV = 'test';
 
 const { describe, test, beforeEach, afterEach } = require('node:test');

@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/mfa.test.js
 process.env.NODE_ENV = 'test';
 

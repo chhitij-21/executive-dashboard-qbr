@@ -109,6 +109,11 @@ function authRateLimit(req, res, next) {
 }
 
 const _heavyRateMap = new Map();
+function resetRateLimits() {
+  _authRateMap.clear();
+  _heavyRateMap.clear();
+}
+app.resetRateLimits = resetRateLimits;
 const HEAVY_LIMIT = 30; // max 30 heavy upload/analysis ops per 15 mins
 function heavyRateLimit(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
@@ -411,14 +416,15 @@ app.use(['/api', '/api/*'], (req, res) => {
   res.status(404).json({ error: 'API route not found', status: 404, path: req.originalUrl });
 });
 
-// ── Sentry Error Handler (Item #15) ──────────────────────────────────────────
-app.use(sentry.sentryErrorHandler());
-
-// ── Centralized JSON 500 Error Handler (Item #15) ─────────────────────────────
+// ── Centralized JSON 500 Error Handler (Item #15 & Item #16 Sentry Deduplication) ─────
 app.use((err, req, res, next) => {
   const reqId = req.id || req.headers['x-request-id'] || 'unknown';
   const status = err.status || err.statusCode || 500;
-  sentry.captureException(err, { reqId, module: 'express', status });
+
+  // Single authoritative Sentry capture on unhandled 500 errors
+  if (status >= 500) {
+    sentry.captureException(err, { reqId, module: 'express', status });
+  }
 
   if (req.log?.error) {
     req.log.error({ err, status, reqId }, err.message);

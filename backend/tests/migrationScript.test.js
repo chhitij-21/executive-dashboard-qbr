@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/migrationScript.test.js
 // Automated test suite for Phase G.5 Migration Script (TDD)
 

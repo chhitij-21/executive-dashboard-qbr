@@ -1269,9 +1269,21 @@ router.post(['/upload', '/api/upload'], requireAuth, heavyRateLimit, upload.fiel
 });
 
 // ── Job Status Endpoint (for frontend polling) ─────────────────────────────
-router.get(['/status/:jobId', '/api/status/:jobId'], requireAuth, requireClientAccess(), (req, res) => {
+router.get(['/status/:jobId', '/api/status/:jobId'], requireAuth, requireClientAccess(), async (req, res) => {
   const { jobId } = req.params;
   const clientId = req.targetClientId;
+  const queueJob = await queueService.getJob(jobId);
+  if (queueJob) {
+    return res.json({
+      jobId,
+      clientId: queueJob.clientId || clientId,
+      status: queueJob.status,
+      progress: queueJob.progress,
+      step: queueJob.stage || queueJob.step || queueJob.status,
+      stepLabel: queueJob.message || queueJob.stepLabel,
+      error: queueJob.error,
+    });
+  }
   const job = jobs[jobId] || historyService.getReportByJobId(jobId);
   if (!job) {
     return res.status(404).json({ error: 'Job not found', status: 'not_found', code: 'JOB_NOT_FOUND' });
@@ -2191,21 +2203,6 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
 };
 
 router.get(['/ppt/download/:jobId', '/api/ppt/download/:jobId', '/ppt/:jobId', '/api/ppt/:jobId', '/ppt', '/api/ppt'], sendFileHelper('pptPath', 'QBR_Report.pptx'));
-router.get(['/status/:jobId', '/api/status/:jobId'], requireAuth, async (req, res) => {
-  const job = await queueService.getJob(req.params.jobId);
-  if (job) {
-    return res.json({
-      status: job.status,
-      progress: job.progress,
-      step: job.stage,
-      stepLabel: job.message,
-      error: job.error,
-    });
-  }
-  const legacyJob = jobs[req.params.jobId];
-  if (legacyJob) return res.json(legacyJob);
-  return res.status(404).json({ error: 'Job not found' });
-});
 router.get(['/report/:jobId', '/api/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));
 router.get(['/error-report/:jobId', '/api/error-report/:jobId'], sendFileHelper('errorReportPath', 'error_report.json'));
 router.get(['/data-quality/:jobId', '/api/data-quality/:jobId'], sendFileHelper('dataQualityPath', 'data_quality_report.md'));

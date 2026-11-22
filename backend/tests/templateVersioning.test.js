@@ -1,3 +1,4 @@
+require('./_setup');
 // backend/tests/templateVersioning.test.js
 process.env.NODE_ENV = 'test';
 const { describe, it, before, after, beforeEach } = require('node:test');
@@ -26,7 +27,7 @@ describe('Template Versioning & Retention Suite (Item #11)', () => {
 
   beforeEach(async () => {
     // Clean up test tenant directory before each test
-    const tenantDir = path.resolve(__dirname, `../../data/tenants/${testTenant}`);
+    const tenantDir = clientService.getTenantDir(testTenant);
     if (fs.existsSync(tenantDir)) {
       await fs.promises.rm(tenantDir, { recursive: true, force: true }).catch(() => {});
     }
@@ -41,7 +42,7 @@ describe('Template Versioning & Retention Suite (Item #11)', () => {
       const { execute } = require('../config/database');
       await execute('DELETE FROM templates WHERE tenant_id = ?', [testTenant]);
     } catch (_) {}
-    const tenantDir = path.resolve(__dirname, `../../data/tenants/${testTenant}`);
+    const tenantDir = clientService.getTenantDir(testTenant);
     if (fs.existsSync(tenantDir)) {
       await fs.promises.rm(tenantDir, { recursive: true, force: true }).catch(() => {});
     }
@@ -79,11 +80,11 @@ describe('Template Versioning & Retention Suite (Item #11)', () => {
     assert.strictEqual(manifest.versions[0].versionId, version.versionId);
 
     // Verify file exists on disk
-    const versionPath = path.resolve(__dirname, `../../data/tenants/${testTenant}/templates/versions/${version.storedName}`);
+    const versionPath = path.join(clientService.getTenantDir(testTenant), `templates/versions/${version.storedName}`);
     assert.ok(fs.existsSync(versionPath), 'Versioned physical file must exist on disk');
 
     // Verify master.pptx copy exists for legacy compatibility
-    const masterPath = path.resolve(__dirname, `../../data/tenants/${testTenant}/templates/master.pptx`);
+    const masterPath = path.join(clientService.getTenantDir(testTenant), 'templates/master.pptx');
     assert.ok(fs.existsSync(masterPath), 'master.pptx copy must exist for legacy compatibility');
   });
 
@@ -142,12 +143,12 @@ describe('Template Versioning & Retention Suite (Item #11)', () => {
     const existsInManifest = manifest.versions.some((v) => v.versionId === oldest.versionId);
     assert.strictEqual(existsInManifest, false, 'Oldest version must be removed from manifest');
 
-    const oldestDiskPath = path.resolve(__dirname, `../../data/tenants/${testTenant}/templates/versions/${oldest.storedName}`);
+    const oldestDiskPath = path.join(clientService.getTenantDir(testTenant), `templates/versions/${oldest.storedName}`);
     assert.strictEqual(fs.existsSync(oldestDiskPath), false, 'Oldest version file must be physically deleted from disk');
 
     // Versions 2 through 6 must still exist
     for (let i = 1; i < versions.length; i++) {
-      const vPath = path.resolve(__dirname, `../../data/tenants/${testTenant}/templates/versions/${versions[i].storedName}`);
+      const vPath = path.join(clientService.getTenantDir(testTenant), `templates/versions/${versions[i].storedName}`);
       assert.ok(fs.existsSync(vPath), `Version ${versions[i].versionId} should exist on disk`);
     }
   });

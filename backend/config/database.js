@@ -25,9 +25,16 @@ function getDatabaseUrl() {
       return url;
     }
   }
-  const defaultDbFile = process.env.NODE_ENV === 'test'
-    ? path.resolve(__dirname, '../../data/test.db')
-    : path.resolve(__dirname, '../../data/app.db');
+
+  if (process.env.NODE_ENV === 'test') {
+    if (process.env.TEST_DB_PATH) {
+      return `file:${path.resolve(process.env.TEST_DB_PATH).replace(/\\/g, '/')}`;
+    }
+    const workerDbFile = path.resolve(__dirname, `../../data/test-${process.pid}.db`);
+    return `file:${workerDbFile.replace(/\\/g, '/')}`;
+  }
+
+  const defaultDbFile = path.resolve(__dirname, '../../data/app.db');
   return `file:${defaultDbFile.replace(/\\/g, '/')}`;
 }
 

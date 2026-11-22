@@ -1,0 +1,99 @@
+name: Production CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Backend Tests, Frontend Tests & Build (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm ci
+
+      - name: Install Backend Dependencies
+        run: cd backend && npm ci
+
+      - name: Install Frontend Dependencies
+        run: cd frontend && npm ci
+
+      - name: Verify Test Isolation Setup Imports
+        run: npm run check:test-setup
+
+      - name: Validate OpenAPI 3.0 Specification
+        run: npx @redocly/cli lint docs/openapi-v1.yaml
+
+      - name: Run Backend Parallel Test Suite
+        run: npm test
+
+      - name: Verify Hermetic Working Tree (No Tracked File Drift)
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain | grep -v 'SYSTEM DIRECTIVE')"
+
+      - name: Run Frontend Unit Tests
+        run: npm --prefix frontend test -- --run
+
+      - name: Build Frontend for Production
+        run: npm --prefix frontend run build
+
+  turso-parity:
+    name: Turso LibSQL Dialect Parity Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Cleanly skip if secrets are unavailable (e.g. fork PRs or missing repo secret)
+    if: ${{ secrets.TURSO_DATABASE_URL != '' && secrets.TURSO_AUTH_TOKEN != '' }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm ci
+
+      - name: Install Backend Dependencies
+        run: cd backend && npm ci
+
+      - name: Run Backend Test Suite with Turso Parity
+        env:
+          TEST_USE_TURSO: 'true'
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_TABLE_PREFIX: ci_${{ github.run_id }}_
+        run: npm run test:turso
+
+      - name: Cleanup Ephemeral Turso Test Tables
+        if: always()
+        env:
+          TEST_USE_TURSO: 'true'
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_TABLE_PREFIX: ci_${{ github.run_id }}_
+        run: node scripts/cleanup-turso-ci.js
