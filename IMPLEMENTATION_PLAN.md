@@ -146,7 +146,7 @@ When a scheduled job fires, it derives calendar dates according to the configure
 
 ---
 
-### 4. Six Core System Blockers Resolved
+### 4. Nine Core System & Concurrency Blockers Resolved
 
 #### 1. Custom Cron Frequency Restriction & Semantic Validation
 - **Problem**: Sub-daily custom cron (e.g. `"0 */6 * * *"` or `"*/15 * * * *"`) fires multiple times per day/month, but since the derived period defaults to the previous calendar month, every run after the first shares the exact same dedup key and is silently dropped, executing only once per month. Furthermore, typos like `"* * * * *"` would trigger 1,440 runs/day and OOM the server.
@@ -236,12 +236,32 @@ When a scheduled job fires, it derives calendar dates according to the configure
   2. Release `tenantLock` **SECOND**.
 - **Rationale**: If `schedule_lock` were acquired before `tenantLock`, waiting for a long manual upload would waste the cron slot lock and block recovery.
 
+#### 7. Lost Update Prevention on schedules.json
+- **Problem**: Execution completion updates execution metadata (`lastRunAt`, `lastStatus`, `lastError`, `nextRunAt`) in `schedules.json`. Concurrently, an administrator may update cadence, timezone, or recipients via `POST /api/tenants/:id/schedules`. Since both operations read-modify-write `schedules.json`, one update would overwrite the other. Optimistic locking on `updatedAt` protects admin-vs-admin edits only.
+- **Solution**: Split metadata persistence into a dedicated helper `updateScheduleMetadata(tenantId, scheduleId, metadata)` and wrap all `schedules.json` read-modify-write operations in an exclusive file lock via `proper-lockfile` (with retry backoff). This serializes admin updates and background execution completions so both changes are guaranteed to persist.
+- **Test**: `concurrentAdminUpdateAndExecutionCompletion` (admin updates recipients while background execution completes $\to$ both new recipients and updated `lastRunAt` are preserved).
+
+#### 8. runs.json Concurrent Write Corruption Prevention
+- **Problem**: When multiple schedules (e.g. Weekly Ops and Monthly Exec) for the same tenant trigger in the same minute, concurrent uncoordinated writes could corrupt `runs.json`.
+- **Solution**:
+  1. The initial write of the `PENDING` run record is strictly deferred until **AFTER** `tenant_lock` acquisition, serializing queue submissions and run-log initialization per tenant.
+  2. All `runs.json` writes execute via atomic file replacement (`safeWriteJson`: temporary file `.runs.json.tmp.{random}` + atomic rename `fs.promises.rename` with copy-fallback on Windows), never raw append streams.
+- **Test**: `concurrentSchedulesSameMinute_bothRecordedNoCorruption` (two schedules triggered at the exact same minute $\to$ serialized via tenant lock; both run records present in `runs.json` with zero corruption).
+
+#### 9. Server-Side Immutable Schedule ID Generation
+- **Problem**: Unspecified schedule ID assignment allows clients to forge IDs, overwrite existing schedules, or cause collisions.
+- **Solution**: On creation (`POST /api/tenants/:id/schedules`), the server strictly generates `id = crypto.randomUUID()`.
+  - The schedule ID is strictly immutable once persisted.
+  - Any client-supplied `id` in the request body for new schedules is stripped/ignored by the server.
+- **Test**: `scheduleIdGeneration_serverUuidDistinct` (POST create twice without ID $\to$ generates 2 distinct UUIDs with zero collisions).
+
 ---
 
 ### 5. Production Specifications & Operational Guarantees
 
 #### A. Health Monitoring Endpoint
-- `GET /api/health/scheduler` returns `{ ready: _schedulersReady, activeTasks: count, lastHeartbeat: ISOString }` for container orchestrator readiness/liveness probes.
+- `GET /api/health/scheduler` returns `{ ready: _schedulersReady && isHeartbeatAlive, activeTasks: count, lastHeartbeat: ISOString }` for container orchestrator readiness/liveness probes.
+- **Heartbeat Freshness Threshold**: If `lastHeartbeat` is **> 5 minutes old** (`Date.now() - new Date(lastHeartbeat).getTime() > 300000`), `ready` evaluates to `false` (orchestrator probe fails).
 
 #### B. Compliance Admin Audit Logging
 - All administrative schedule mutations (create, update, delete, trigger) append structured audit records to `data/audit/schedules.log`:
@@ -271,6 +291,8 @@ When a scheduled job fires, it derives calendar dates according to the configure
 10. **Tenant Lock Backoff**: If `acquireTenantLock` fails due to an ongoing upload, it retries **3 times** with exponential backoff (500ms, 1000ms, 2000ms); if still locked, records `TENANT_LOCKED` and invokes `notifyFailure()`.
 11. **node-cron Version Pin**: Explicitly pinned to `^4.6.0` in `package.json` (modern v4 API: `cron.validate(expr)` boolean check; `cron.schedule(expr, fn, { timezone })`).
 12. **Email Delivery Mechanism**: Noted as an **out-of-scope stub** for this batch (mocked via structured notification dispatcher with pluggable SMTP/SES transport interface).
+13. **Trigger Endpoint Rate Limiting**: `POST /api/tenants/:id/schedules/:scheduleId/trigger` enforces a rate limit of max 5 requests/minute per admin user (spam protection), returning HTTP 429 with `Retry-After: 60` upon violation.
+14. **Recipients PII at Rest Architecture Note**: Plaintext email addresses stored in `schedules.json`. *Recipients PII stored in plaintext in schedules.json; will be encrypted at rest after DB migration #3. Current gap acknowledged.*
 
 ---
 
@@ -354,7 +376,13 @@ When a scheduled job fires, it derives calendar dates according to the configure
 11. **roleBasedErrorMasking**: Client user receives masked generic error; admin receives raw error with stack.
 12. **emptyPeriod_noDataLogsAndSkips**: 0 devices and 0 incidents logs `NO_DATA_FOR_PERIOD` and skips generation.
 13. **schedulerHealthEndpoint**: `GET /api/health/scheduler` returns `{ ready: true, activeTasks, lastHeartbeat }`.
-14. **cleanTeardown_noActiveTimers**: Calls `schedulerService.stopAll()`; asserts `getActiveTaskCount() === 0` and process exits without hang.
+14. **schedulerHealth_heartbeatStaleFalse**: When `lastHeartbeat` is > 5 minutes old, health endpoint returns `ready: false`.
+15. **concurrentAdminUpdateAndExecutionCompletion**: Concurrent admin update + execution completion $\to$ both changes preserved via locked metadata update without lost updates.
+16. **concurrentSchedulesSameMinute_bothRecordedNoCorruption**: Two schedules fire in same minute $\to$ serialized via tenant lock; both run records present in `runs.json` with zero corruption.
+17. **scheduleIdGeneration_serverUuidDistinct**: POST create twice without ID $\to$ 2 distinct server-generated UUIDs created, client-supplied ID ignored.
+18. **triggerRateLimit_fivePerMinute**: Admin triggering >5 times in 1 minute receives HTTP 429 with `Retry-After: 60`.
+19. **cleanTeardown_noActiveTimers**: Calls `schedulerService.stopAll()`; asserts `getActiveTaskCount() === 0` and process exits without hang.
+
 
 #### B. Frontend Verification (`frontend/src/__tests__/ScheduleManagerModal.test.jsx`)
 1. **rendersMultipleSchedulesList**: Displays tabbed/listed schedules configured for the tenant.
