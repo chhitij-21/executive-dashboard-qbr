@@ -1,402 +1,249 @@
-# Implementation Plan — Item #12 Refinements & Item #13: Scheduled QBR
+# Implementation Plan — Item #4: Real Auth (JWT, bcrypt, 4h TTL & Redis Revocation)
 
 **Status**: Waiting for user **APPROVED** before writing code.  
-**Roadmap Items**:
-- **Item #12 Refinements**: Data Health Panel (6 Critical Production Safeguards)
-- **Item #13**: Scheduled QBR Engine (Batch 3 Final Item)
+**Roadmap Item**: **#4 Real Auth (JWT/bcrypt)**  
+**Sequence Context**: Implemented prior to **#3 (Database Layer)** and **#14 (API Versioning)** to guarantee the v1 API contract incorporates production authentication primitives.
 
 ---
 
-## Part 1: Item #12 Data Health Panel — 6 Production Safeguards
+## 1. Overview & Objectives
 
-### 1. Standardized Content-Disposition Header & JobId Sanitization
-On both `/export?format=xlsx` and `/export?format=pdf` endpoints, the filename dynamically interpolates a strictly sanitized `jobId`:
-```javascript
-const safeJobId = String(jobId || 'latest').replace(/[^a-zA-Z0-9_-]/g, '_');
-const filename = `Data_Health_Report_${safeJobId}.${format}`;
-```
-- **Sanitization Guard**: Strips CRLF (`\r`, `\n`), quotation marks (`"`), slashes, and spaces to eliminate HTTP header injection and filename tampering vulnerabilities.
-- For Excel: `Content-Disposition: attachment; filename="Data_Health_Report_job_123.xlsx"`
-- For PDF: `Content-Disposition: attachment; filename="Data_Health_Report_job_123.pdf"`
-
-### 2. Invariant Reconciliation: R1 vs R5 (Excluding Stock from Sites)
-- **R1 (Physical Inventory Conservation)**:
-  $$\text{Active Switches} + \text{Active APs} + \text{Stock Devices} = \text{Total Devices}$$
-- **R5 (Site Device Allocation Consistency)**:
-  Site summary tables explicitly represent operational devices installed at client store/branch sites. Unassigned spare/shelf hardware in warehouse storage (`stockDevices`) is NOT part of site device allocations.
-  $$\sum_{s \in \text{sites}} s.\text{deviceCount} = \text{Total Active Devices} = \text{Total Devices} - \text{Stock Devices}$$
-  - **Formula**: `Sum of Site Device Counts = Total Active Devices (Total Devices - Stock Devices)`
-  - **Expected Value**: `totalDevices - stockDevices`
-  - Eliminates false positive invariant violations on datasets with stock inventory.
-
-### 3. Removal of Shared `qbrData` Deep-Freeze
-- Remove `Object.freeze` / `deepFreeze` on the shared in-memory `qbrData` object. Freezing shared references introduces runtime `TypeError` risks in downstream middleware or routes that annotate transient properties.
-- Immutability is enforced contractually by ensuring `dataHealthService.js` operates purely as a read-only scanner without mutating any inputs.
-
-### 4. Empty / Minimal Dataset: `INSUFFICIENT_DATA` Status
-When a dataset contains 0 devices and 0 incidents:
-- **Status**: `"INSUFFICIENT_DATA"` (never `"HEALTHY"`).
-- **Health Score**: `null` (displayed in the UI as `"N/A"`).
-- **Audit Detail**: `"Insufficient data to evaluate health metrics (0 devices and 0 incidents found)."`
-- All invariant checks marked as not applicable with clear explanatory text.
-- Includes automated test assertion verifying `status === 'INSUFFICIENT_DATA'` and `score === null`.
-
-### 5. PDF & Excel Export DoS Protection: Rate Limiting, Headers & Scopes
-- **Per-Tenant Rate Limiting**: Added `checkExportRateLimit(tenantId)` allowing a maximum of 5 export requests per 60 seconds per tenant. If exceeded, returns HTTP 429 Too Many Requests (`RATE_LIMIT_EXCEEDED`) with header `Retry-After: 60` and JSON `{ code: 'RATE_LIMIT_EXCEEDED', retryAfter: 60 }`.
-  - *Architecture Note & Known Limitation*: Implemented as an in-memory sliding window map (`_exportRateMap`), suitable for single-instance / development setups. In horizontally autoscaled multi-pod environments, this should be backed by Redis `INCR` + `EXPIRE` leveraging the Redis client from `queueService`.
-- **Hard Limit**: Maximum 2,000 issues exported. If `?strict=true` and count > 2,000, returns HTTP 413 Payload Too Large (`PAYLOAD_TOO_LARGE`). Otherwise automatically caps to top 2,000 issues with a visible notice banner.
-- **Unicode Glyph Transliteration**: Pure Node.js PDF 1.4 generator translates Unicode symbols (`⚠️` $\to$ `[!]`, `₹` $\to$ `INR `, `🟢` $\to$ `[PASS]`, etc.) to guarantee 100% crash-free Type 1 Helvetica font streams.
-- **Export Scope Separation (1-Page Executive PDF vs Full Excel)**:
-  - **PDF Export**: Strictly a 1-page **Executive Summary** by design (top 10 prioritized issues, all 5 mathematical invariant conservation audits, health metrics, and operational recommendations).
-  - **Excel (.xlsx) Export**: Dedicated to full-catalog data audits, exporting complete data up to the 2,000-issue cap across multi-tab structured worksheets (`Executive Summary`, `Invariant Rules`, `Data Hygiene Issues`, `Operational Recommendations`). Full 2,000-issue data is in XLSX.
-
-### 6. Lazy-Load Job Pinning & Stale Cache Invalidation
-- **Job-Pinned Fetch**: `DataHealthModal.jsx` must pass `?jobId=${activeJobId || 'latest'}` on every `/api/data-health/issue/:issueId` call.
-- **Scoped Cache Key**: Snapshot cache key is scoped by job: `${activeJobId || 'default'}_${issue.id}`.
-- **Cache Invalidation on Refresh**: Whenever `activeJobId` changes or the dataset refreshes, `snapshotCache` is wiped clean (`setSnapshotCache({})`), preventing stale row snapshots from bleeding across jobs.
-- Added test in `DataHealthModal.test.jsx` verifying that changing `activeJobId` clears cached row previews.
+Item #4 replaces legacy in-memory plain token authentication with an enterprise-grade, stateless signed JWT architecture hardened with:
+1. **4-Hour Access Token TTL**: Tokens expire 4 hours after issuance (`TOKEN_TTL = 4 * 60 * 60 * 1000`), bounded and compliant for enterprise SaaS.
+2. **Two-Tier Active Revocation via Redis**:
+   - **Per-Token Blocklist (`jti`)**: Single-session logout (`POST /api/auth/logout`) blacklists the token's `jti` with TTL matching the remaining token lifetime.
+   - **User-Level Instant Cutoff (`user_revoked_before`)**: Terminating an employee, admin suspension, or changing a password invalidates all existing sessions for that user across all pods in $< 1$ ms.
+3. **Fail-Closed Production Resilience**: In production, Redis is strictly required. If Redis becomes unreachable during a revocation check, `requireAuth` fails closed with **HTTP 503 Service Unavailable** (never fail-open). In-memory fallback is isolated to `NODE_ENV === 'test'` and non-production dev.
+4. **Login Brute-Force Rate Limiting (`checkLoginRateLimit`)**: Enforces 5 failed attempts per 15 minutes per `(IP, username)` via Redis counters (`login_attempt:{ip}:{username}`, TTL 900s). Exceeding limit returns **HTTP 429 Too Many Requests** with header `Retry-After: 900`. Successful login resets the counter.
+5. **Bcrypt Password Security & On-Boot Migration**: Passwords stored as `bcrypt` hashes (cost factor 10). On boot under `AUTH_V2`, legacy plaintext passwords in `data/users.json` are automatically upgraded to bcrypt hashes without locking out demo accounts.
+6. **No User Enumeration & Constant-Time Comparisons**: Standardized generic error responses and constant-time password verification eliminate timing and enumeration attacks.
+7. **`AUTH_V2` Rollback Gate**: Gated behind `AUTH_V2 !== 'false'`; setting `AUTH_V2=false` instantly restores legacy in-memory session behavior if emergency rollback is required.
 
 ---
 
-## Part 2: Item #13 Scheduled QBR Engine Plan
-
-### 1. Overview & Objectives
-The **Scheduled QBR** engine automates recurring report generation for enterprise tenants across multiple independent schedules (e.g. Weekly Ops report for NOC + Monthly Executive QBR for Leadership). It eliminates manual report execution at period close by:
-1. **Automated Dynamic Period Resolution**: Automatically resolving previous month, quarter, or weekly boundaries (e.g., dynamically generating `1 May 2026 – 31 May 2026` on June 1st) with zero static hardcoded date strings.
-2. **Template Version Pinning (Item #11 Integration)**: Schedules pin a specific template version (`v1`, `v2`) or track `"latest"`. If a pinned template is pruned/deprecated, generation halts safely and alerts the NOC.
-3. **Multi-Schedule Architecture per Tenant**: Supports an array of multiple distinct schedules per tenant (`data/tenants/{tenantId}/schedules/schedules.json`), each with its own cadence, timezone, pinned template, and recipients.
-4. **Crash Mid-Run Recovery**: Writes a `PENDING` run record at execution start; reconciles unfinalized runs on boot, marking dead/crashed jobs as `FAILED` and notifying administrators.
-5. **Strict Lock Ordering & Backoff**: Acquires `tenantLock` FIRST (guaranteeing pipeline exclusivity with 3x backoff) and distributed `schedule_lock` SECOND (preventing multi-pod double-fire), releasing in reverse order.
-6. **Idempotency Key & Job Deduplication**: Period-bound dedup key `{tenantId}:{scheduleId}:{cadence}:{periodStart}:{periodEnd}` (TTL 24h) preventing duplicate report generations and returning HTTP 409 `DUPLICATE_JOB` on redundant ad-hoc triggers.
-7. **Missed-Run Boot Recovery**: On startup, `initSchedulers()` compares `lastRunAt` against `now` to detect missed calendar slots from server downtime, triggering an immediate catch-up run logged as `MISSED_RUN_RECOVERED`.
-8. **Failure Alerting Dispatcher**: Active `notifyFailure(tenantId, error)` hook delivering notifications to `config.recipients` (throttled to 1/hr per error code) and surfacing 🔴 status alerts on tenant dashboard cards.
-9. **Clean Teardown & Isolated Test Timers**: Exporting `stopAll()` to stop every registered standing cron task, guaranteeing 0 hanging timers and crash-free test exits.
-
----
-
-### 2. Architecture & Data Flow
+## 2. Architecture & Data Flow
 
 ```
    ┌─────────────────────────────────────────────────────────────┐
-   │             node-cron Standing Tasks (v4.6.0)               │
-   │  - Configured with tenant IANA timezone (e.g. Asia/Kolkata) │
-   │  - Distinct task per scheduleId: 'sched_monthly', etc.      │
-   └──────────────────────────────┬──────────────────────────────┘
-                                  │ (Slot fires at wall-clock hour)
-                                  ▼
-   ┌─────────────────────────────────────────────────────────────┐
-   │  LOCK ORDERING:                                             │
-   │  1. queueService.acquireTenantLock(tenantId) [3x backoff]   │
-   │  2. Redis SETNX schedule_lock:{tenant}:{schedId}:{slot} (5m)│
+   │             Client Request with Bearer Token                │
+   │             Authorization: Bearer <JWT>                     │
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
-   │         backend/services/schedulerService.js                │
-   │  1. Write PENDING run record to runs.json (at start)        │
-   │  2. Idempotency Check: dedup_qbr:{tenant}:{sched}:{period}  │
-   │  3. Template Pinning: Resolve pinnedVersion from manifest   │
-   │  4. Run QBR processing; on fail -> notifyFailure(1/hr cap)  │
-   │  5. Finalize run record to SUCCESS/FAILED (capped 100 runs) │
-   │  6. Release locks in REVERSE order (schedule_lock, tenant)  │
+   │        backend/middleware/auth.js: requireAuth              │
+   │  1. Check AUTH_V2 flag: if false -> fallback to legacy map  │
+   │  2. Verify JWT signature & expiration (4h max lifetime)     │
+   │  3. Extract { sub: userId, jti, iat, exp, role }            │
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
-   │         backend/routes/scheduleRoutes.js                    │
-   │  - Boot Readiness Gate: rejects with 503 until init done    │
-   │  - GET /api/tenants/:id/schedules (Read-only for Clients)   │
-   │  - POST /api/tenants/:id/schedules (Admin; optimistic lock) │
-   │  - POST /api/tenants/:id/schedules/:schedId/trigger (Run)   │
-   │  - DELETE /api/tenants/:id/schedules/:schedId (Admin)       │
+   │         Active Revocation Check (authService)               │
+   │  4. In prod: Check Redis connectivity; if down -> 503       │
+   │  5. Redis GET blocklist:{jti} -> if exists -> 401 REVOKED   │
+   │  6. Redis GET user_revoked_before:{userId}                  │
+   │     If server_revoked_at > jwt.iat -> 401 SESSION_KILLED    │
    └──────────────────────────────┬──────────────────────────────┘
                                   │
                                   ▼
    ┌─────────────────────────────────────────────────────────────┐
-   │     frontend/src/components/ScheduleManagerModal.jsx        │
-   │  - Schedule List with "+ Add Schedule" and Edit Drawer      │
-   │  - Cadence: Monthly | Quarterly | Weekly | Custom Cron      │
-   │  - Template Version Dropdown: 'Latest Active' vs Pinned 'v2'│
-   │  - Timezone Dropdown from Intl.supportedValuesOf('timeZone')│
-   │  - Execution History Table with evicted 404 artifact guard  │
-   │  - ⚡ Run Now Trigger Button (Admin Only; HTTP 409 handled) │
+   │         Attach req.user & Proceed to Controller             │
+   │  req.user = { id: userId, email, role, assignedClient }     │
    └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 3. Dynamic Period Resolution & Timezone Rules (Zero Hardcoded Dates)
+## 3. Detailed Component Specifications
 
-When a scheduled job fires, it derives calendar dates according to the configured cadence:
-
-| Cadence | Execution Timing | Derived Date Period Formulation |
-|---|---|---|
-| **Monthly** | 1st day of month at 06:00 (local timezone) | Previous full calendar month (e.g. if run on June 1, `2026-05-01` to `2026-05-31`). Formatted as `1 May 2026 – 31 May 2026`. Respects 28/29/30/31 calendar days. |
-| **Quarterly** | 1st day of quarter at 06:00 (Jan 1, Apr 1, Jul 1, Oct 1) | Previous full calendar quarter (e.g. if run on July 1, Q2: `2026-04-01` to `2026-06-30`). Formatted as `1 Apr 2026 – 30 Jun 2026`. |
-| **Weekly** | Every Monday at 06:00 (local timezone) | Preceding 7 full calendar days (Monday to Sunday). |
-| **Custom Cron** | User-defined 5-field cron expression | Restricted to $\ge 24\text{h}$ frequency. Defaults to previous calendar month. Custom date ranges are strictly capped at 1 year and future dates are rejected with HTTP 400 (`FUTURE_DATE_REJECTED`). Sub-daily schedules rejected with HTTP 400 (`SUB_DAILY_CRON_NOT_SUPPORTED`). |
-
-#### Timezone Conversion & DST Policy:
-- **Tenant Timezone Pre-Conversion**: `derivePeriodForCadence(cadence, refDate, timezone)` converts `refDate` to the tenant's IANA timezone (via `Intl.DateTimeFormat`) **before** extracting year/month/day. On UTC servers, a trigger at June 1 06:00 IST (`2026-05-31T00:30:00Z` UTC) converts to June 1 in IST and correctly derives May (`2026-05-01` to `2026-05-31`), preventing wrong-month skew.
-- **Tenant Timezone Binding**: `timezone` stored per schedule (defaults to tenant settings from `clientService`, e.g. `'Asia/Kolkata'`, never server OS timezone).
-- **node-cron Timezone Execution**: Instantiated with `{ timezone: schedule.timezone }`.
-- **Daylight Saving Time (DST) Handling**: `node-cron` evaluates standard IANA timezones against local wall-clock time:
-  - Spring-Forward (skipped hour): When 02:00 springs to 03:00, schedules falling in the skipped hour execute immediately at the transition boundary.
-  - Fall-Back (repeated hour): When 02:00 repeats, schedules execute once on the first occurrence.
-
----
-
-### 4. Nine Core System & Concurrency Blockers Resolved
-
-#### 1. Custom Cron Frequency Restriction & Semantic Validation
-- **Problem**: Sub-daily custom cron (e.g. `"0 */6 * * *"` or `"*/15 * * * *"`) fires multiple times per day/month, but since the derived period defaults to the previous calendar month, every run after the first shares the exact same dedup key and is silently dropped, executing only once per month. Furthermore, typos like `"* * * * *"` would trigger 1,440 runs/day and OOM the server.
-- **Solution**: Restrict custom cron to $\ge 24\text{ hours}$ frequency.
-  - `cron.validate(expr)` checks 5-field syntax.
-  - Semantic validation checks interval between consecutive executions: if interval $< 24\text{ hours}$, reject with **HTTP 400 `SUB_DAILY_CRON_NOT_SUPPORTED`** or **`CRON_FREQUENCY_TOO_HIGH`**.
-  - QBR cadences are strictly daily or slower by definition.
-
-#### 2. Period Derivation Timezone Conversion
-- `derivePeriodForCadence(cadence, refDate, timezone = 'UTC')`:
-  - Uses `new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: 'numeric', hourCycle: 'h23' })` to project `refDate` into the tenant's local calendar day before deriving period boundaries.
-  - Guarantees that UTC cloud servers running jobs for IST/JST/PST tenants always resolve the correct calendar month.
-  - Test: System timezone UTC, tenant timezone `Asia/Kolkata`, trigger at June 1 06:00 IST $\to$ derived period is May 1 – May 31.
-
-#### 3. Template Version Pinning (Item #11 Integration)
-- **Schedule Schema**: Includes `templateVersion: "latest" | "v1" | "v2" | ...` (defaults to `"latest"`).
-- **Resolution Logic**:
-  - Reads tenant manifest from `templateService.getManifest(tenantId)`.
-  - If `"latest"`, uses `manifest.activeVersionId` (or master template fallback if tenant has no custom versions).
-  - If pinned to a specific version (e.g. `"v2"`), loads `templates/versions/{versionId}.pptx`.
-  - **Pruned / Deprecated Guard**: If the pinned version has been pruned by the 5-version retention policy or deleted, generation halts safely, does NOT fall back silently, triggers `notifyFailure(tenantId, 'PINNED_TEMPLATE_DEPRECATED')`, and logs `status: 'FAILED'`.
-- **Admin UI**: Dropdown offering `"Latest Active Template (Auto-Update)"` alongside all uploaded versions (`v1 — 1 May 2026`, `v2 — 15 May 2026`).
-- **Test Assertion**: Pinned `v2` + new active version uploaded as `v3` $\to$ report generation strictly uses `v2`.
-
-#### 4. Crash Mid-Run Recovery
-- **Execution State Journaling**:
-  - At the exact start of execution, write a `PENDING` run record to `runs.json`:
-    `{ id, scheduleId, runAt, status: 'PENDING', jobId, dedupKey, cadence, period }`.
-  - On successful completion, update the record to `status: 'SUCCESS'`. On catch error, update to `status: 'FAILED'`.
-- **Boot Reconciliation**:
-  - During `initSchedulers()`, scan all tenant `runs.json` files for lingering `PENDING` records.
-  - For each `PENDING` run, query `queueService.getJob(jobId)`.
-  - If the job is missing, aborted, or dead due to a server crash, transition the run record to `status: 'FAILED'`, `error: 'Server crashed mid-execution. Job terminated.'`, and trigger `notifyFailure(tenantId, 'SERVER_CRASH_MID_RUN', run)`.
-  - Eliminates silent job loss and prevents zombie duplicate executions when dedup keys expire.
-
-#### 5. Multiple Schedules Per Tenant Architecture
-- **Schema & Persistence**: Tenants can configure multiple distinct schedules stored in `data/tenants/{tenantId}/schedules/schedules.json` (array of schedule objects):
-  ```javascript
-  [
-    {
-      id: "sched_monthly_exec",
-      name: "Monthly Executive QBR",
-      enabled: true,
-      cadence: "monthly",
-      cronExpression: "0 6 1 * *",
-      timezone: "Asia/Kolkata",
-      templateVersion: "latest",
-      recipients: ["cio@dominos.in"],
-      lastRunAt: "2026-05-01T06:00:00.000Z",
-      nextRunAt: "2026-06-01T06:00:00.000Z",
-      lastStatus: "SUCCESS",
-      lastError: null,
-      updatedAt: "2026-05-22T02:00:00.000Z",
-      updatedBy: "admin@portal.com"
-    },
-    {
-      id: "sched_weekly_ops",
-      name: "Weekly NOC Operations Report",
-      enabled: true,
-      cadence: "weekly",
-      cronExpression: "0 6 * * 1",
-      timezone: "Asia/Kolkata",
-      templateVersion: "v2",
-      recipients: ["noc-leads@dominos.in"],
-      lastRunAt: "2026-05-18T06:00:00.000Z",
-      nextRunAt: "2026-05-25T06:00:00.000Z",
-      lastStatus: "SUCCESS",
-      lastError: null,
-      updatedAt: "2026-05-22T02:00:00.000Z",
-      updatedBy: "admin@portal.com"
-    }
-  ]
+### 3.1 Token Minting, Secret Management & Rotation Specification (`backend/services/authService.js`)
+- **Mechanism**: Native Node.js `crypto` HMAC-SHA256 (RFC 7519 standard JWT format). Ensures zero external dependency CVE risks, 100% environment parity, and native execution speed.
+- **JWT Header**:
+  ```json
+  { "alg": "HS256", "typ": "JWT" }
   ```
-- **Endpoints**:
-  - `GET /api/tenants/:id/schedules` $\to$ returns `{ success: true, schedules: [...], runs: [...] }`.
-  - `POST /api/tenants/:id/schedules` $\to$ creates or updates a schedule by `schedule.id`.
-  - `POST /api/tenants/:id/schedules/:scheduleId/trigger` $\to$ triggers Run Now for a specific schedule.
-  - `DELETE /api/tenants/:id/schedules/:scheduleId` $\to$ deletes a specific schedule.
-- **Frontend**: `ScheduleManagerModal` presents a schedule management list, "+ Add Schedule" button, and per-schedule controls.
+- **JWT Payload**:
+  ```json
+  {
+    "sub": "user-client-jfl",
+    "email": "jfl@portal.com",
+    "role": "client_user",
+    "assignedClient": "client-jfl",
+    "jti": "d3b07384-d113-4a11-8c9a-245f78acba10",
+    "iat": 1795348800,
+    "exp": 1795363200
+  }
+  ```
+- **TTL**: Exactly 4 hours (14,400 seconds).
+- **`JWT_SECRET` Production Guard**:
+  - Read from `process.env.JWT_SECRET`.
+  - In production (`NODE_ENV === 'production'`), startup halts immediately (`throw new Error('[FATAL] Production startup halted: Missing or insecure JWT_SECRET (must be >= 32 chars).')`) if `JWT_SECRET` is unset or shorter than 32 characters.
+  - In non-production/test, defaults to a safe test secret with an explicit console warning.
+- **`JWT_SECRET` Rotation Path**:
+  - Current baseline: changing `JWT_SECRET` invalidates all existing active tokens immediately, requiring users to log in again.
+  - Backlog architecture path: dual-secret verification (`JWT_SECRET_CURRENT` and `JWT_SECRET_PREVIOUS`) planned for zero-downtime key rotation once external API integrations land.
 
-#### 6. Strict Lock Ordering (Deadlock & Slot Waste Prevention)
-- **Acquisition Order**:
-  1. `queueService.acquireTenantLock(tenantId)` **FIRST** (ensures exclusive pipeline access; retries up to 3x with backoff).
-  2. Distributed `schedule_lock:{tenantId}:{scheduleId}:{timeSlot}` via Redis `SETNX` (TTL 5m) **SECOND** (deduplicates multi-pod triggers).
-- **Release Order in Reverse**:
-  1. Release `schedule_lock` **FIRST**.
-  2. Release `tenantLock` **SECOND**.
-- **Rationale**: If `schedule_lock` were acquired before `tenantLock`, waiting for a long manual upload would waste the cron slot lock and block recovery.
+### 3.2 Redis-Backed Revocation & Fail-Closed Guard
+- **Shared Redis Connection**: Reuses `redisClient` from `queueService` (or initializes Redis connection via `ioredis` when `REDIS_URL` is configured).
+- **In-Memory Fallback**: Isolated strictly to `NODE_ENV === 'test'` or local non-production development when `REDIS_URL` is undefined.
+- **Fail-Closed Logic in Production**:
+  ```javascript
+  async function isTokenRevoked(jti, userId, iatSeconds) {
+    if (process.env.AUTH_V2 === 'false') return { revoked: false };
 
-#### 7. Lost Update Prevention on schedules.json
-- **Problem**: Execution completion updates execution metadata (`lastRunAt`, `lastStatus`, `lastError`, `nextRunAt`) in `schedules.json`. Concurrently, an administrator may update cadence, timezone, or recipients via `POST /api/tenants/:id/schedules`. Since both operations read-modify-write `schedules.json`, one update would overwrite the other. Optimistic locking on `updatedAt` protects admin-vs-admin edits only.
-- **Solution**: Split metadata persistence into a dedicated helper `updateScheduleMetadata(tenantId, scheduleId, metadata)` and wrap all `schedules.json` read-modify-write operations in an exclusive file lock via `proper-lockfile` (with retry backoff). This serializes admin updates and background execution completions so both changes are guaranteed to persist.
-- **Test**: `concurrentAdminUpdateAndExecutionCompletion` (admin updates recipients while background execution completes $\to$ both new recipients and updated `lastRunAt` are preserved).
+    const isProd = process.env.NODE_ENV === 'production';
+    const redis = getRedisClient();
 
-#### 8. runs.json Concurrent Write Corruption Prevention
-- **Problem**: When multiple schedules (e.g. Weekly Ops and Monthly Exec) for the same tenant trigger in the same minute, concurrent uncoordinated writes could corrupt `runs.json`.
-- **Solution**:
-  1. The initial write of the `PENDING` run record is strictly deferred until **AFTER** `tenant_lock` acquisition, serializing queue submissions and run-log initialization per tenant.
-  2. All `runs.json` writes execute via atomic file replacement (`safeWriteJson`: temporary file `.runs.json.tmp.{random}` + atomic rename `fs.promises.rename` with copy-fallback on Windows), never raw append streams.
-- **Test**: `concurrentSchedulesSameMinute_bothRecordedNoCorruption` (two schedules triggered at the exact same minute $\to$ serialized via tenant lock; both run records present in `runs.json` with zero corruption).
+    if (isProd && (!redis || redis.status !== 'ready')) {
+      const err = new Error('Authentication validation service temporarily unavailable.');
+      err.statusCode = 503;
+      err.code = 'AUTH_SERVICE_UNAVAILABLE';
+      throw err;
+    }
 
-#### 9. Server-Side Immutable Schedule ID Generation
-- **Problem**: Unspecified schedule ID assignment allows clients to forge IDs, overwrite existing schedules, or cause collisions.
-- **Solution**: On creation (`POST /api/tenants/:id/schedules`), the server strictly generates `id = crypto.randomUUID()`.
-  - The schedule ID is strictly immutable once persisted.
-  - Any client-supplied `id` in the request body for new schedules is stripped/ignored by the server.
-- **Test**: `scheduleIdGeneration_serverUuidDistinct` (POST create twice without ID $\to$ generates 2 distinct UUIDs with zero collisions).
+    if (redis && redis.status === 'ready') {
+      // 1. Check specific token blocklist
+      const isBlocklisted = await redis.get(`blocklist:${jti}`);
+      if (isBlocklisted) return { revoked: true, reason: 'TOKEN_REVOKED' };
 
----
+      // 2. Check user-level termination timestamp
+      const revokedBefore = await redis.get(`user_revoked_before:${userId}`);
+      if (revokedBefore && iatSeconds < parseInt(revokedBefore, 10)) {
+        return { revoked: true, reason: 'USER_SESSION_TERMINATED' };
+      }
+      return { revoked: false };
+    }
 
-### 5. Production Specifications & Operational Guarantees
+    // In-memory fallback (test / local non-prod only)
+    return checkInMemoryRevocation(jti, userId, iatSeconds);
+  }
+  ```
+- **TTL of Revocation Keys**:
+  - `blocklist:{jti}`: `Math.max(1, Math.floor(exp - Date.now() / 1000))` (auto-evicts as soon as token naturally expires).
+  - `user_revoked_before:{userId}`: `4 * 60 * 60` (4 hours; after 4 hours, all tokens minted before that timestamp have naturally expired).
 
-#### A. Health Monitoring Endpoint
-- `GET /api/health/scheduler` returns `{ ready: _schedulersReady && isHeartbeatAlive, activeTasks: count, lastHeartbeat: ISOString }` for container orchestrator readiness/liveness probes.
-- **Heartbeat Freshness Threshold**: If `lastHeartbeat` is **> 5 minutes old** (`Date.now() - new Date(lastHeartbeat).getTime() > 300000`), `ready` evaluates to `false` (orchestrator probe fails).
+### 3.3 Login Rate Limiting (`checkLoginRateLimit`)
+- **Rate Limit Window**: 5 attempts per 15 minutes (900 seconds) per `(IP, username)`.
+- **Redis Implementation**:
+  ```javascript
+  async function checkLoginRateLimit(ip, username) {
+    const key = `login_attempt:${ip}:${username.toLowerCase()}`;
+    const redis = getRedisClient();
 
-#### B. Compliance Admin Audit Logging
-- All administrative schedule mutations (create, update, delete, trigger) append structured audit records to `data/audit/schedules.log`:
-  `{ action: "CREATE"|"UPDATE"|"DELETE"|"TRIGGER", scheduleId, tenantId, timestamp: ISOString, ip: req.ip, user: req.user.email }`.
+    if (redis && redis.status === 'ready') {
+      const count = await redis.incr(key);
+      if (count === 1) await redis.expire(key, 900);
+      if (count > 5) {
+        const ttl = await redis.ttl(key);
+        return { allowed: false, retryAfter: Math.max(1, ttl) };
+      }
+      return { allowed: true };
+    }
 
-#### C. Role-Based Error Masking
-- Non-admin client users inspecting schedule status see a sanitized customer-ready message (`"Report generation encountered an issue. Please contact administrator."`), while Super Admins see full technical error messages and stack traces.
+    // In-memory sliding map fallback (test / dev)
+    return checkInMemoryLoginRate(ip, username);
+  }
+  ```
+- **HTTP Response on Breach**:
+  - Status: **HTTP 429 Too Many Requests**
+  - Header: `Retry-After: 900`
+  - Body: `{ error: 'Too many login attempts. Please try again in 15 minutes.', code: 'RATE_LIMIT_EXCEEDED', retryAfter: 900 }`
+- **Reset on Success**: When `authenticateUser` successfully verifies credentials, it calls `clearLoginRateLimit(ip, username)` (`DEL login_attempt:{ip}:{username}`), resetting the counter immediately.
 
-#### D. Empty Derived Period Guard
-- If source workbooks contain 0 devices and 0 incidents for the derived period, report generation is skipped with `status: 'NO_DATA_FOR_PERIOD'` logged in `runs.json`, and an alert is dispatched to the NOC instead of generating and delivering empty reports to executives.
+### 3.4 Endpoints & RBAC Rules
+1. **`POST /api/auth/logout` (Self-Only)**:
+   - Protected by `requireAuth`.
+   - Extracts calling user's token `jti` and `exp` from `req.user`.
+   - Adds `blocklist:{jti}` to Redis with remaining TTL.
+   - Returns HTTP 200 `{ success: true, message: 'Logged out successfully.' }`.
 
-#### E. Graceful Shutdown Signal Trapping (SIGTERM / SIGINT)
-- Server process registers `SIGTERM` and `SIGINT` handlers:
-  1. Immediately invokes `schedulerService.stopAll()` to prevent new cron triggers.
-  2. Awaits completion of in-flight queue jobs up to graceful timeout before exiting cleanly, preventing corrupted or severed PPTX generation during deployments.
+2. **`POST /api/auth/revoke` (Admin-Only)**:
+   - Protected by `requireAuth` + `requireAdmin`.
+   - Request body: `{ userId: string, jti?: string }`.
+   - If `userId` provided: sets `user_revoked_before:{userId} = Math.floor(Date.now() / 1000)` in Redis (TTL: 4h).
+   - If `jti` provided: sets `blocklist:{jti}` with 4h TTL.
+   - Emits structured audit log to `data/audit/auth.log` (`action: 'TOKEN_REVOCATION', admin: req.user.email, targetUserId: userId`).
+   - Returns HTTP 200 `{ success: true, message: 'User sessions revoked successfully.' }`.
 
-#### Additional One-Line Invariants:
-1. **Tenant Deletion Cleanup**: When a tenant is deleted or deactivated, invoke `stopAllForTenant(tenantId)` and archive `runs.json` to `archived_runs.json`.
-2. **Custom Cron Period Limits**: Custom start/end date overrides are capped at a maximum of 1 calendar year (366 days), and future end dates are rejected with HTTP 400 (`FUTURE_DATE_REJECTED`).
-3. **Frontend Timezone Selector**: Dropdown populated dynamically via `Intl.supportedValuesOf('timeZone')` with search filtering, defaulting to the client's configured timezone.
-4. **Optimistic Concurrency Control**: `POST /api/tenants/:id/schedules` compares incoming `updatedAt` against on-disk `updatedAt`; if mismatched, rejects with HTTP 409 Conflict (`SCHEDULE_VERSION_CONFLICT`).
-5. **Failure Alert Throttling**: `notifyFailure()` throttles outbound email dispatches for the same `(tenantId, errorCode)` tuple to at most 1 email per hour.
-6. **Evicted Job Artifact Download Handling**: When downloading artifacts from `runs.json`, if the underlying `jobId` report directory has been pruned/evicted, the route returns HTTP 404 with `{ code: 'JOB_ARTIFACT_EVICTED', error: 'Report artifacts for this run have expired or been pruned.' }`.
-7. **Boot Readiness Gate**: An internal flag `_schedulersReady` ensures `initSchedulers()` completes all boot scans and reconciliations before `POST /schedules*` mutations are accepted (rejecting with HTTP 503 `SCHEDULER_INITIALIZING` during boot). `GET /api/tenants/:id/schedules` during `_schedulersReady === false` returns HTTP 200 `{ schedules: [], runs: [], initializing: true }` so the frontend displays an initializing state without crashing.
-8. **Timezone Mutation Hot-Swap**: When `saveSchedule` updates `timezone` or `cronExpression`, it explicitly stops the previous `node-cron` instance and mounts a fresh task under the new timezone; verified by an automated unit test.
-9. **Run History Retention (Per Schedule)**: `runs.json` strictly retains the last **100** execution entries **PER SCHEDULE** (pruned per schedule on each append, ensuring high-frequency cadences do not evict quarterly schedule logs).
-10. **Tenant Lock Backoff**: If `acquireTenantLock` fails due to an ongoing upload, it retries **3 times** with exponential backoff (500ms, 1000ms, 2000ms); if still locked, records `TENANT_LOCKED` and invokes `notifyFailure()`.
-11. **node-cron Version Pin**: Explicitly pinned to `^4.6.0` in `package.json` (modern v4 API: `cron.validate(expr)` boolean check; `cron.schedule(expr, fn, { timezone })`).
-12. **Email Delivery Mechanism**: Noted as an **out-of-scope stub** for this batch (mocked via structured notification dispatcher with pluggable SMTP/SES transport interface).
-13. **Trigger Endpoint Rate Limiting**: `POST /api/tenants/:id/schedules/:scheduleId/trigger` enforces a rate limit of max 5 requests/minute per admin user (spam protection), returning HTTP 429 with `Retry-After: 60` upon violation.
-14. **Recipients PII at Rest Architecture Note**: Plaintext email addresses stored in `schedules.json`. *Recipients PII stored in plaintext in schedules.json; will be encrypted at rest after DB migration #3. Current gap acknowledged.*
+3. **Password Change Integration**:
+   - Whenever a user updates their password (or an admin resets a user password), the service automatically executes:
+     ```javascript
+     await revokeAllUserTokens(userId);
+     ```
+   - All active tokens for that user immediately fail validation on subsequent requests.
 
----
+### 3.5 Demo Users, Password Storage & Git Strategy
+- **Git Tracking Strategy**:
+  - `data/users.json` is strictly **gitignored** (`.gitignore` line 27), ensuring no customer credentials, user records, or password hashes are ever checked into git history.
+  - In-memory seed users (`SUPER_ADMIN`, `client-jfl`, `client-mmtc`) provide zero-dependency first-boot initialization.
+- **Multi-Pod Atomic File Writes**:
+  - Migrating or updating user passwords in `data/users.json` uses atomic writes via `safeWriteJson(targetPath, data)` (temp-file write + rename with Windows 3-tier fallback), preventing multi-pod file corruption.
+- **On-Boot & Lazy Upgrade to bcrypt**:
+  - Uses `bcryptjs@2.4.3` (cost factor 10) for pure-JS cross-platform stability (eliminates native C++ compilation failures on Windows/Render).
+  - On startup inside `authService.initAuth()`:
+    1. Reads `data/users.json` (and seeded demo user array).
+    2. Inspects password field for each user.
+    3. If password does NOT match `/^\$2[aby]\$\d{2}\$/` (not a valid bcrypt hash):
+       - Computes `const hash = await bcrypt.hash(plaintext, 10);`
+       - Replaces plaintext password with `hash`.
+       - Writes updated user records back to `data/users.json` via `safeWriteJson`.
+  - **Login Lazy Upgrade**: If an existing user record still contains plaintext when `authenticateUser` runs, it compares constant-time, verifies, upgrades password to bcrypt hash in the background, and saves.
+  - Guarantees zero credential lockouts for default demo users (`admin123`, `jfl123`, `mmtc123`).
 
-### 6. Backend Implementation Plan
-
-#### 6.1. `backend/services/schedulerService.js`
-- **Methods**:
-  - `validateCron(expr)`: Validates 5-field syntax and verifies frequency $\ge 24\text{ hours}$. Rejects sub-daily expressions.
-  - `derivePeriodForCadence(cadence, refDate, timezone)`: Converts `refDate` to tenant timezone using `Intl.DateTimeFormat`, then derives exact calendar boundaries.
-  - `initSchedulers()`: Scans tenant directories, reconciles `PENDING` runs, checks missed-run recovery slots, mounts standing tasks with `{ timezone }`, sets `_schedulersReady = true`.
-  - `saveSchedule(tenantId, scheduleData, user)`: Validates cron/timezone, optimistic concurrency check, atomic disk write, hot-swaps cron task, logs admin audit record.
-  - `getSchedules(tenantId, userRole)`: Returns schedules (with role-based error masking for non-admins) and last 100 runs.
-  - `executeScheduledQbr(tenantId, scheduleId, triggerType = 'CRON', options = {})`:
-    - Checks empty dataset guard: skips if 0 devices and 0 incidents.
-    - Strict lock ordering: `acquireTenantLock` (3x backoff) then `schedule_lock`.
-    - Idempotency key evaluation (`dedup_qbr:...`). Returns HTTP 409 if duplicate ad-hoc run.
-    - Appends `PENDING` record to `runs.json` at start.
-    - Pinned template resolution from manifest.
-    - Runs generation; on error, calls `notifyFailure()` (1/hr throttle).
-    - Updates run record to `SUCCESS` or `FAILED` and releases locks in reverse order.
-  - `stopAll()` / `stopAllForTenant(tenantId)`: Stops active `node-cron` tasks and clears timer maps.
-  - `getActiveTaskCount()`: Returns active cron task count for test assertions.
-  - `notifyFailure(tenantId, errorCode, details)`: Throttled alert dispatcher (1/hr per errorCode).
-
-#### 6.2. `backend/routes/scheduleRoutes.js`
-- `GET /api/health/scheduler`: Returns `{ ready, activeTasks, lastHeartbeat }`.
-- `GET /api/tenants/:id/schedules`: Returns schedules array and run history. Client users restricted to assigned tenant; client users receive masked errors.
-- `POST /api/tenants/:id/schedules`: Creates/updates schedule (Admin only; enforces `_schedulersReady` gate, optimistic lock, audit log).
-- `POST /api/tenants/:id/schedules/:scheduleId/trigger`: Triggers immediate Run Now (Admin only; returns HTTP 409 `DUPLICATE_JOB` on duplicates).
-- `DELETE /api/tenants/:id/schedules/:scheduleId`: Deletes schedule (Admin only).
-
-#### 6.3. `backend/index.js`
-- Mount `scheduleRoutes` at `/api/tenants`, `/api/clients`, and `/api/health`.
-- Register `SIGTERM` / `SIGINT` handlers for graceful shutdown calling `schedulerService.stopAll()`.
-- Invoke `schedulerService.initSchedulers()` on server startup.
-
----
-
-### 7. Frontend UI/UX Plan
-
-#### 7.1. `frontend/src/components/ScheduleManagerModal.jsx`
-- Clean modal dialog:
-  - **Header**: `📅 Automated QBR Scheduling & Cadence Manager`
-  - **Schedule Selector & Add Button**:
-    - List of configured schedules for this tenant.
-    - `+ Add Schedule` button (Admin only).
-  - **Configuration Section (Admin Editable, Client View-Only)**:
-    - **Active Switch**: Toggle specific schedule on/off.
-    - **Schedule Name**: E.g. `"Monthly Executive QBR"`.
-    - **Cadence Selector**: Radio cards for Monthly, Quarterly, Weekly, and Custom Cron ($\ge 24$h validation feedback).
-    - **Template Version Dropdown**: Select `"Latest Active Template (Auto-Update)"` or specific pinned version (`v1`, `v2`).
-    - **Timezone Selector**: Dropdown populated from `Intl.supportedValuesOf('timeZone')` with search filter.
-    - **Recipients Input**: Multi-email chip input for alerts.
-  - **Run History Table**:
-    - Columns: Execution Date, Schedule Name, Trigger (`⏰ Cron`, `⚡ Ad-Hoc`, `🔄 Missed Recovery`), Derived Period, Duration, Status, Artifacts.
-    - Evicted 404 handler for purged artifacts.
-  - **Action Footer**:
-    - `⚡ Run Now` button (Admin only; handles HTTP 409 duplicate alert).
-    - `💾 Save Schedule` button (Admin only; handles HTTP 409 optimistic conflict).
-    - `Close` button.
-
-#### 7.2. `frontend/src/components/ClientManager.jsx`
-- `📅 Schedules` button on every client card.
-- Client card displays 🔴 failure badge if any schedule has `lastStatus === 'FAILED'`.
-
----
-
-### 8. Comprehensive Test Plan & Invariants
-
-#### A. Backend Test Suite (`backend/tests/scheduledQbr.test.js`)
-1. **dynamicPeriod_timezonePreConversion**: System timezone UTC, tenant timezone `Asia/Kolkata`, trigger at June 1 06:00 IST $\to$ derived period is May 1 – May 31.
-2. **cronSemanticFrequency_rejectsSubDaily**: Rejects `* * * * *` and sub-daily cron with HTTP 400 `SUB_DAILY_CRON_NOT_SUPPORTED` / `CRON_FREQUENCY_TOO_HIGH`.
-3. **templateVersionPinning_v2Pinned_v3Active**: Pinned `v2` + active updated to `v3` $\to$ generator strictly uses `v2`. Deprecated version triggers `notifyFailure`.
-4. **crashMidRun_dedupKeyExpired_noSilentSkip**: Simulates `PENDING` run with dead job on boot $\to$ reconciles to `status: 'FAILED'`, triggers `notifyFailure()`, and avoids silent skip even if dedup key expired.
-5. **lockOrdering_tenantFirstScheduleSecond**: Asserts `tenantLock` acquired 1st (with 3x backoff), `schedule_lock` 2nd, released in reverse.
-6. **scheduleUpdateDuringExecution_currentRunCompletes**: Updating schedule config while a run is in progress allows the current run to complete cleanly with starting parameters.
-7. **idempotencyKey_duplicateAdHoc409**: Triggers same period twice; first succeeds, second returns HTTP 409 `DUPLICATE_JOB`, and only 1 run record exists.
-8. **timezoneMutationHotSwap**: Updating timezone stops old cron and mounts new task with updated timezone.
-9. **optimisticConcurrency_versionConflict409**: Mismatched `updatedAt` returns HTTP 409 `SCHEDULE_VERSION_CONFLICT`.
-10. **failureAlertThrottling_maxOnePerHour**: 5 rapid failure triggers dispatch exactly 1 alert email within 1 hour for same error code.
-11. **roleBasedErrorMasking**: Client user receives masked generic error; admin receives raw error with stack.
-12. **emptyPeriod_noDataLogsAndSkips**: 0 devices and 0 incidents logs `NO_DATA_FOR_PERIOD` and skips generation.
-13. **schedulerHealthEndpoint**: `GET /api/health/scheduler` returns `{ ready: true, activeTasks, lastHeartbeat }`.
-14. **schedulerHealth_heartbeatStaleFalse**: When `lastHeartbeat` is > 5 minutes old, health endpoint returns `ready: false`.
-15. **concurrentAdminUpdateAndExecutionCompletion**: Concurrent admin update + execution completion $\to$ both changes preserved via locked metadata update without lost updates.
-16. **concurrentSchedulesSameMinute_bothRecordedNoCorruption**: Two schedules fire in same minute $\to$ serialized via tenant lock; both run records present in `runs.json` with zero corruption.
-17. **scheduleIdGeneration_serverUuidDistinct**: POST create twice without ID $\to$ 2 distinct server-generated UUIDs created, client-supplied ID ignored.
-18. **triggerRateLimit_fivePerMinute**: Admin triggering >5 times in 1 minute receives HTTP 429 with `Retry-After: 60`.
-19. **cleanTeardown_noActiveTimers**: Calls `schedulerService.stopAll()`; asserts `getActiveTaskCount() === 0` and process exits without hang.
-
-
-#### B. Frontend Verification (`frontend/src/__tests__/ScheduleManagerModal.test.jsx`)
-1. **rendersMultipleSchedulesList**: Displays tabbed/listed schedules configured for the tenant.
-2. **addScheduleButton**: Clicking "+ Add Schedule" creates new draft schedule card and opens configuration drawer (Admin only).
-3. **perScheduleDuplicate409**: Clicking Run Now on duplicate period displays specific per-schedule 409 conflict banner without affecting other schedules.
-4. **clientUserViewOnly**: Non-admin client users see view-only controls (Run Now and Save disabled/hidden, errors masked).
-5. **bootInitializingState**: When API returns `{ initializing: true }`, renders non-blocking loader.
-6. **suiteAndBuild**: `npm --prefix frontend test` passes 100%; `npm --prefix frontend run build` completes with 0 errors.
+### 3.6 Section 21 Hardening Checklist
+- [x] **Rate Limit on `/login`**: 5 attempts per 15-minute sliding window per IP + username combination with `Retry-After: 900`.
+- [x] **Constant-Time Compare**: `bcrypt.compare` (which uses constant-time string comparison internally).
+- [x] **Token Lifespan**: Exactly 4 hours (24h plain token eliminated).
+- [x] **No User Enumeration**: Returns generic `{ error: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' }` with HTTP 401 for both unknown email and incorrect password.
+- [x] **Payload Sanitation**: Outbound user objects in sessions and `/api/auth/me` are stripped of `password`, `mfaSecret`, `pendingMfaSecret`.
+- [x] **`.env.example` Entries**:
+  - `JWT_SECRET=replace_with_at_least_32_byte_secure_random_key`
+  - `AUTH_V2=true`
+  - `REDIS_URL=redis://localhost:6379`
 
 ---
 
-### 9. Rollback Plan
-If any issue occurs, `schedulerService` can be disabled with feature flag `ENABLE_SCHEDULED_QBR=false` without affecting manual uploads or dashboard features.
+## 4. File Changes & Touches
+
+### Files to Modify
+1. `package.json`: Add exact dependency `bcryptjs@2.4.3`.
+2. `backend/services/authService.js`:
+   - Add JWT minting, verification, and decoding (native RFC 7519 HMAC-SHA256).
+   - Implement `checkLoginRateLimit(ip, username)` and `clearLoginRateLimit(ip, username)`.
+   - Implement `revokeToken(jti, exp)` and `revokeAllUserTokens(userId)`.
+   - Implement Redis blocklist check with 503 fail-closed in production.
+   - Add on-boot bcrypt migration for unhashed user passwords using `safeWriteJson`.
+   - Support `AUTH_V2=false` fallback toggle.
+3. `backend/middleware/auth.js`:
+   - Update `requireAuth` to support JWT verification, `jti` blocklist check, and `user_revoked_before` timestamp check.
+   - Attach decoded JWT payload to `req.user`.
+   - Catch Redis errors in production and emit HTTP 503 `AUTH_SERVICE_UNAVAILABLE`.
+4. `backend/index.js`:
+   - Update `/api/auth/login` to integrate `checkLoginRateLimit` and reset on success.
+   - Mount `POST /api/auth/revoke` (admin only).
+   - Update `POST /api/auth/logout` to invoke `authService.revokeToken`.
+5. `.env.example`: Add `JWT_SECRET`, `AUTH_V2`, and `REDIS_URL` documentation.
+
+### New Test Files
+1. `backend/tests/authV2.test.js`:
+   - 14 comprehensive unit and integration tests covering JWT minting, 4h TTL, blocklist revocation, user termination, password change session kill, fail-closed production behavior, login rate limiting, and backward compatibility.
 
 ---
 
-**Status**: Waiting for user **APPROVED** before proceeding to implementation.
+## 5. Verification Plan & Test Suite (14 Tests)
+
+1. **`mintJwt_valid4hTtl`**: Minted token contains `exp - iat === 14400` seconds (4 hours) and valid signature.
+2. **`verifyToken_validSignature`**: `requireAuth` succeeds with HTTP 200 and attaches `req.user` accurately.
+3. **`verifyToken_expiredToken_returns401`**: Token with past `exp` rejected with HTTP 401 `TOKEN_EXPIRED`.
+4. **`verifyToken_invalidSecret_returns401`**: Token signed with mismatched secret rejected with HTTP 401 `INVALID_TOKEN`.
+5. **`logout_revokesJti_subsequentRequest401`**: `POST /api/auth/logout` places `jti` in blocklist; subsequent call with same token returns HTTP 401 `TOKEN_REVOKED`.
+6. **`revoke_adminOnly_nonAdminForbidden`**: `POST /api/auth/revoke` returns HTTP 403 when called by client user.
+7. **`revoke_userLevel_killsAllActiveSessions`**: Admin revoking user ID sets `user_revoked_before`; all previously issued tokens for that user immediately return HTTP 401 `USER_SESSION_TERMINATED`.
+8. **`passwordChange_triggersUserRevocation`**: Updating user password automatically kills existing sessions.
+9. **`prodFailClosed_redisDown_returns503`**: In production (`NODE_ENV=production`), Redis outage during revocation check returns HTTP 503 `AUTH_SERVICE_UNAVAILABLE`.
+10. **`onBootMigration_hashesPlaintextDemoUsers`**: Boot process detects plaintext passwords and upgrades to bcrypt `$2b$` in `data/users.json`.
+11. **`noUserEnumeration_constantTimeCompare`**: Non-existent user and wrong password return identical HTTP 401 `INVALID_CREDENTIALS`.
+12. **`authV2_rollbackFlag_preservesLegacyMap`**: Setting `AUTH_V2=false` successfully routes authentication through legacy in-memory session map.
+13. **`loginRateLimit_5Attempts_6thReturns429`**: 5 failed login attempts for `(ip, username)` succeed, 6th attempt returns HTTP 429 with `Retry-After: 900`; successful login resets counter.
+14. **`prodStartup_missingJwtSecret_throws`**: In production (`NODE_ENV=production`), server halts with fatal error if `JWT_SECRET` is missing or $<32$ characters.
