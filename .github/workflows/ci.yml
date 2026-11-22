@@ -45,13 +45,8 @@ jobs:
       - name: Validate OpenAPI 3.0 Specification
         run: npx @redocly/cli lint docs/openapi-v1.yaml
 
-      - name: Run Backend Parallel Test Suite
-        run: npm test
-
-      - name: Verify Hermetic Working Tree (No Tracked File Drift)
-        run: |
-          git status --porcelain
-          test -z "$(git status --porcelain | grep -v 'SYSTEM DIRECTIVE')"
+      - name: Run Backend Parallel Test Suite & Verify Hermetic Working Tree
+        run: npm run check:hermetic
 
       - name: Run Frontend Unit Tests
         run: npm --prefix frontend test -- --run
@@ -63,8 +58,8 @@ jobs:
     name: Turso LibSQL Dialect Parity Test
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Cleanly skip if secrets are unavailable (e.g. fork PRs or missing repo secret)
-    if: ${{ secrets.TURSO_DATABASE_URL != '' && secrets.TURSO_AUTH_TOKEN != '' }}
+    # Cleanly skip if on a fork PR where secrets cannot be evaluated
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -75,13 +70,30 @@ jobs:
           node-version: 20
           cache: 'npm'
 
+      - name: Check Turso Secrets
+        id: check_secrets
+        env:
+          URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          if [ -n "$URL" ] && [ -n "$TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Turso parity testing enabled."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Turso secrets not available. Skipping parity test."
+          fi
+
       - name: Install Root Dependencies
+        if: steps.check_secrets.outputs.enabled == 'true'
         run: npm ci
 
       - name: Install Backend Dependencies
+        if: steps.check_secrets.outputs.enabled == 'true'
         run: cd backend && npm ci
 
       - name: Run Backend Test Suite with Turso Parity
+        if: steps.check_secrets.outputs.enabled == 'true'
         env:
           TEST_USE_TURSO: 'true'
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
@@ -90,10 +102,11 @@ jobs:
         run: npm run test:turso
 
       - name: Cleanup Ephemeral Turso Test Tables
-        if: always()
+        if: always() && steps.check_secrets.outputs.enabled == 'true'
         env:
           TEST_USE_TURSO: 'true'
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_TABLE_PREFIX: ci_${{ github.run_id }}_
         run: node scripts/cleanup-turso-ci.js
+
