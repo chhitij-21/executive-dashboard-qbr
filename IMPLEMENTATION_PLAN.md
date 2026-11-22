@@ -17,17 +17,19 @@ Currently, running `npm test` requires serial execution (`--test-concurrency=1`)
    - Isolated tenant directories: dynamic `os.tmpdir()/test-tenants-${process.pid}`, ensuring zero file contention across suites.
    - Dynamic vulnerability path: `os.tmpdir()/vuln-${process.pid}.json` via `VULN_DATA_PATH`.
    - Clean in-memory resets: `resetJobCache()`, `resetRateLimits()`, `resetSchedulerState()`.
-   - Formal test setup/teardown harness in `backend/tests/_setup.js`.
-   - Pre-test cleanup script `scripts/cleanup-test-artifacts.js` triggered via `npm run pretest` to purge orphaned test databases after SIGKILL/OOM.
+   - Formal test setup/teardown harness in `backend/tests/_setup.js` with **strictly synchronous** exit cleanup (`fs.unlinkSync`, `fs.rmSync`).
+   - Automated import enforcement script `scripts/check-test-setup-imports.js` ensuring 100% of test files import `_setup.js`.
+   - Pre-test cleanup scripts `pretest` and `pretest:serial` via `scripts/cleanup-test-artifacts.js` to purge orphaned test databases after SIGKILL/OOM.
    - `.gitignore` update ignoring all worker databases (`data/test-*.db*`) and temporary tenant directories.
    - Remove `--test-concurrency=1` from `package.json` test script; tests execute concurrently across all available CPU cores with **zero** `SQLITE_BUSY` errors.
 2. **P0-2: Production CI Pipeline (`.github/workflows/ci.yml`)**:
    - Automated GitHub Actions workflow triggered on `push` and `pull_request` against `main`.
-   - Matrix testing across **Node 18 LTS** and **Node 20 LTS** (`strategy: matrix: { node-version: [18, 20] }`).
+   - Matrix testing across **Node 18 LTS** and **Node 20 LTS** (`strategy: matrix: { node-version: [18, 20] }`), naturally testing 2 complete test runs per PR.
    - Automated validation steps:
+     - Check `_setup.js` import compliance across all test files (`npm run check:test-setup`).
      - OpenAPI 3.0 contract lint/validation (`docs/openapi-v1.yaml`).
      - Backend parallel test execution (`npm test`).
-     - Hermetic clean-tree check (`scripts/verify-hermetic.js`: fails if tree was dirty before tests or dirty after tests).
+     - Hermetic clean-tree check (`scripts/verify-hermetic.js`: runs AFTER tests finish; fails if tree was dirty before tests or dirty after tests).
      - Frontend Vitest suite (`npm --prefix frontend test -- --run`).
      - Frontend production Vite build (`npm --prefix frontend run build`).
      - Hard PR failure on any red step.
@@ -45,6 +47,7 @@ Currently, running `npm test` requires serial execution (`--test-concurrency=1`)
    - Duplicate route detection test ensures no duplicate `(method, path)` endpoints across any sub-routers.
    - Zero regression: All 16 contract tests in `backend/tests/apiV1Contract.test.js` and all existing 411 tests pass.
 4. **P1-2: Dual-Runner Parity CI Job (Turso vs SQLite)**:
+   - Cross-platform runner script `scripts/run-turso-test.js` providing zero-dependency Node-native environment switching for `npm run test:turso` on Windows, macOS, and Linux.
    - CI job running tests with `TEST_USE_TURSO=true` against an ephemeral/remote Turso database.
    - Condition: Skipped on fork PRs or when `secrets.TURSO_DATABASE_URL` is empty. Failure mode is SKIPPED, not failed.
    - Data cleanup: PR/run-scoped tables (`ci_${{ github.run_id }}_`) and cleanup script `scripts/cleanup-turso-ci.js` run on completion (`if: always()`) to protect 1GB Turso storage limits.
@@ -56,7 +59,7 @@ Currently, running `npm test` requires serial execution (`--test-concurrency=1`)
 6. **P2-2: Hermetic Test Contract & Verification Protocol**:
    - Strict contract: *"npm test requires no network, mutates zero tracked files."*
    - Script `scripts/verify-hermetic.js` enforces clean tree before tests, runs tests, and asserts clean tree after tests.
-   - 5x consecutive test validation protocol (`1..5 | % { npm test }`) to prove zero flakiness under parallel execution.
+   - 5x consecutive test validation protocol on local release branch (`1..5 | % { npm test }`) to prove zero flakiness under parallel execution.
 7. **P2-3: Sentry Deduplication Resolution**:
    - Adopt Option (A): Remove `sentry.setupExpressErrorHandler(app)` from `backend/index.js`. Only the centralized Express error middleware captures unhandled exceptions via `sentry.captureException(err, { reqId, module: 'express', status })`.
 
@@ -86,8 +89,8 @@ Currently, running `npm test` requires serial execution (`--test-concurrency=1`)
          └─────────────────────────┼─────────────────────────┘
                                    │
                                    ▼
-                   Process Teardown (_setup.js)
-              (Unlinks test-*.db and cleans tmp dirs)
+              Synchronous Process Teardown (_setup.js)
+        (fs.unlinkSync test-*.db* & fs.rmSync tmp dirs)
                                    │
                                    ▼
                       Git Tree Remains 100% Clean
@@ -115,163 +118,130 @@ Currently, running `npm test` requires serial execution (`--test-concurrency=1`)
 
 ---
 
-## 3. Detailed Resolution of User Blockers & Concerns
+## 3. Detailed Resolution of User Blockers, Gaps & Concerns
 
-### 3.1 BLOCKER 1: Sentry Deduplication in Express (Option A)
-- **Problem**: `err.__sentry_captured__` is a custom flag not set by Sentry's `setupExpressErrorHandler`. Calling both `setupExpressErrorHandler` and manual `sentry.captureException` in custom error middleware causes duplicate error reports.
+### 3.1 GAP 1: Cross-Platform `test:turso` Execution (Node-Native)
+- **Problem**: `cross-env` is not installed; `cross-env TEST_USE_TURSO=true npm test` fails immediately on Windows.
 - **Resolution**:
-  - Completely **remove** `sentry.setupExpressErrorHandler(app)` from `backend/index.js`.
-  - The centralized custom Express error middleware handles all unhandled error logging and Sentry reporting:
+  - Implement zero-dependency Node-native runner script: `scripts/run-turso-test.js`:
     ```javascript
-    app.use((err, req, res, next) => {
-      const reqId = req.id || req.headers['x-request-id'] || 'unknown';
-      const status = err.status || err.statusCode || 500;
+    const { spawnSync } = require('child_process');
+    const env = { ...process.env, TEST_USE_TURSO: 'true' };
+    const result = spawnSync('npm', ['test'], { stdio: 'inherit', env, shell: true });
+    process.exit(result.status || 0);
+    ```
+  - In `package.json`, define: `"test:turso": "node scripts/run-turso-test.js"`.
+  - Also add `cross-env` to `devDependencies` for projects/developers preferring CLI variable assignment.
 
-      // Single, authoritative Sentry capture on unhandled/500 errors
-      if (status >= 500) {
-        sentry.captureException(err, { reqId, module: 'express', status });
+### 3.2 GAP 2: Enforce `_setup.js` Import Across 100% of Test Files
+- **Problem**: If even 1 test file omits `require('./_setup')`, that file falls back to shared `data/test.db` without PID scoping, causing intermittent `SQLITE_BUSY` locks under parallel execution.
+- **Resolution**:
+  - Implement enforcement script `scripts/check-test-setup-imports.js`:
+    - Reads all test files matching `backend/tests/*.test.js` and `backend/tests/ai/*.test.js` (excluding `_setup.js`).
+    - Uses regex `/require\(['"].*\/_setup(\.js)?['"]\)/` to confirm the test imports `_setup.js`.
+    - If any file is missing the import, it logs `MISSING _setup.js import: <filePath>` and terminates with exit code 1.
+  - Wired into `package.json`: `"check:test-setup": "node scripts/check-test-setup-imports.js"`.
+  - Executed as a gating step in CI and inside `scripts/verify-hermetic.js`.
+
+### 3.3 GAP 3: Decouple Hermetic Verification from Parallel Test Runner
+- **Problem**: Running a test asserting `git status --porcelain` *inside* `backend/tests/testIsolation.test.js` races against parallel worker processes creating temporary test artifacts, falsely failing.
+- **Resolution**:
+  - Remove `hermetic_contract_git_status_clean` from `backend/tests/testIsolation.test.js`.
+  - Hermetic verification runs exclusively in `scripts/verify-hermetic.js` (and in CI step) **AFTER** `npm test` has completely finished and all child worker processes have exited.
+  - Replaced test in `testIsolation.test.js` with `exit_handler_cleanup_synchronous` (spawns child process requiring `_setup.js`, exits, and verifies artifacts were deleted).
+
+### 3.4 GAP 4: Synchronous Exit Cleanup in `_setup.js`
+- **Problem**: Node ignores asynchronous callbacks and promises inside `process.on('exit')`. If cleanup uses `fs.unlink` or async/await, files are dropped and persist on disk.
+- **Resolution**:
+  - `backend/tests/_setup.js` exclusively uses synchronous Node filesystem APIs in its exit handler:
+    ```javascript
+    process.on('exit', () => {
+      try {
+        const dbPath = process.env.TEST_DB_PATH;
+        if (dbPath) {
+          if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+          if (fs.existsSync(`${dbPath}-wal`)) fs.unlinkSync(`${dbPath}-wal`);
+          if (fs.existsSync(`${dbPath}-shm`)) fs.unlinkSync(`${dbPath}-shm`);
+        }
+        const tenantDir = process.env.TENANT_DATA_ROOT;
+        if (tenantDir && fs.existsSync(tenantDir)) {
+          fs.rmSync(tenantDir, { recursive: true, force: true });
+        }
+        const vulnPath = process.env.VULN_DATA_PATH;
+        if (vulnPath && fs.existsSync(vulnPath)) {
+          fs.unlinkSync(vulnPath);
+        }
+      } catch (e) {
+        // Suppress teardown errors during process termination
       }
-
-      if (req.log?.error) {
-        req.log.error({ err, status, reqId }, err.message);
-      } else {
-        logger.error({ err, status, reqId }, err.message);
-      }
-
-      res.status(status).json({
-        error: status >= 500 ? 'Internal Server Error' : err.message,
-        status,
-        reqId,
-      });
     });
     ```
-  - Test: `sentry_express_singleCapture_on500` asserts `captureException` is invoked exactly once during a 500 error.
+  - Added test: `exit_handler_cleanup_synchronous` spawns a child worker, lets it exit, and verifies `fs.existsSync` returns false for all worker artifacts.
 
-### 3.2 BLOCKER 2: `.gitignore` and `pretest` Cleanup
-- **Updates to `.gitignore`**:
-  ```gitignore
-  # Test Isolation Artifacts
-  data/test-*.db
-  data/test-*.db-wal
-  data/test-*.db-shm
-  data/test-tenants-*/
-  ```
-- **New Script `scripts/cleanup-test-artifacts.js`**:
-  - Scans `data/` for orphaned `test-*.db`, `test-*.db-wal`, `test-*.db-shm`, and `test-tenants-*`.
-  - Removes them using Node `fs.rmSync` / `fs.unlinkSync` with `force: true`.
-  - Wired into `package.json`: `"pretest": "node scripts/cleanup-test-artifacts.js"`.
+### 3.5 CONCERN 1: Validation Execution Scope (5x vs 2x)
+- **Local Pre-Merge / Release Gate**: Run `npm test` 5 consecutive times (`1..5 | % { npm test }` or `for i in {1..5}; do npm test || exit 1; done`). 5/5 passes required before marking Item #16 complete.
+- **Pull Request CI (`.github/workflows/ci.yml`)**: Uses GitHub Actions matrix for Node 18 and Node 20. Running 1x per matrix leg naturally tests 2 full runs on distinct Node engines without adding +3 minutes to every developer PR.
 
-### 3.3 BLOCKER 3: Test Setup/Teardown Mechanism (`backend/tests/_setup.js`)
-- **Mechanism**:
-  - File: `backend/tests/_setup.js`.
-  - Automatically executed on worker startup:
-    1. Sets PID-scoped environment variables:
-       - `process.env.NODE_ENV = 'test'`
-       - `process.env.TEST_DB_PATH = path.resolve(__dirname, '../../data/test-' + process.pid + '.db')`
-       - `process.env.TENANT_DATA_ROOT = path.join(os.tmpdir(), 'test-tenants-' + process.pid)`
-       - `process.env.VULN_DATA_PATH = path.join(os.tmpdir(), 'vuln-' + process.pid + '.json')`
-    2. Hooks `process.on('exit')` and `process.on('SIGINT')` to unlink the database and remove the temp tenant directory.
-    3. Exports:
-       - `setupTestEnvironment()`: Initializes paths and seeds minimal test DB tables if needed.
-       - `cleanupTestEnvironment()` / `resetAllState()`: Resets `jobCache.resetJobCache()`, `schedulerService.resetSchedulerState()`, and `index.resetRateLimits()`.
-  - In each test suite: Imported at top (`const { resetAllState } = require('./_setup');`) and called in `test.afterEach(resetAllState)` or `test.after(...)`.
+### 3.6 CONCERN 2: `pretest:serial` Lifecycle Hook
+- **Problem**: `npm run test:serial` does not trigger `pretest` (npm lifecycle only binds `pretest` to `npm test`).
+- **Resolution**:
+  - Add explicit `"pretest:serial": "node scripts/cleanup-test-artifacts.js"` in `package.json`.
+  - Guarantees `npm run test:serial` also cleans orphaned test files prior to execution.
 
-### 3.4 BLOCKER 4: Turso Parity CI Job Credentials & Cleanup
-- **In `.github/workflows/ci.yml`**:
-  - Secret access: `secrets.TURSO_DATABASE_URL` and `secrets.TURSO_AUTH_TOKEN`.
-  - Skip condition: `if: ${{ secrets.TURSO_DATABASE_URL != '' && secrets.TURSO_AUTH_TOKEN != '' }}`.
-  - Failure behavior: When secrets are absent (fork PRs or missing config), the job is cleanly **SKIPPED** (not failed).
-  - Storage defense: Script `scripts/cleanup-turso-ci.js` executes in `if: always()` step to drop tables created during test execution, preventing exhaustion of Turso's 1GB limit.
-
-### 3.5 CONCERN 1: Node Version Matrix in CI
-- Matrix configured in `.github/workflows/ci.yml`:
-  ```yaml
-  strategy:
-    matrix:
-      node-version: [18, 20]
-  ```
-- `package.json` specifies minimum supported engine: `"engines": { "node": ">=18.0.0 <23.0.0" }`.
-
-### 3.6 CONCERN 2: 5x Consecutive Test Validation Protocol
-- Once parallelization is active (without `--test-concurrency=1`), run 5 consecutive test passes locally and document the output:
-  - PowerShell: `1..5 | ForEach-Object { Write-Host "Test Run $_"; npm test }`
-  - All 5/5 runs must pass with 100% green tests and zero `SQLITE_BUSY` errors before marking Item #16 complete.
-
-### 3.7 CONCERN 3: `v1Router.js` Catch-All 404 & Duplicate Route Detection
-- Sub-routers (`v1/authRoutes.js`, etc.) contain **no** 404 handlers.
-- Exactly one catch-all 404 handler is placed at the end of `v1Router.js`:
-  ```javascript
-  router.use('*', (req, res) => {
-    res.status(404).json({
-      error: 'API route not found',
-      status: 404,
-      path: req.originalUrl,
-    });
-  });
-  ```
-- New test `v1Router_noDuplicateRoutes`: Traverses `v1Router.stack` recursively, gathers all `(method, path)` pairs, and asserts `duplicateRoutes.length === 0`.
-
-### 3.8 CONCERN 4: `verify-hermetic.js` Clean-Tree Protocol
-- Step 1: Pre-test check: `git status --porcelain`. If dirty, abort immediately with:
-  `"ERROR: Working tree is dirty before tests ran. Commit or stash existing changes before running hermetic verification."` (exit code 1).
-- Step 2: Execute `npm test` synchronously via child process.
-- Step 3: Post-test check: `git status --porcelain`. If dirty, output diff and exit code 1.
-- Step 4: Exit 0 if clean.
-
-### 3.9 CONCERN 5: `package.json` Scripts Before/After
-- **Before**:
-  ```json
-  "scripts": {
-    "dev": "node --env-file-if-exists=.env --watch --watch-path=backend backend/index.js",
-    "dev:backend": "node --watch --watch-path=backend backend/index.js",
-    "dev:frontend": "npx vite --config frontend/vite.config.js",
-    "build": "npm install --prefer-offline && cd backend && npm install --prefer-offline && cd .. && cd frontend && npm install --include=dev --prefer-offline && npm run build",
-    "start": "node --env-file-if-exists=.env backend/index.js",
-    "test": "node --test --test-concurrency=1 backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
-    "parity": "node scripts/deployment-parity.js",
-    "reconcile": "node scripts/ssot-reconciler.js"
-  }
-  ```
-- **After**:
-  ```json
-  "scripts": {
-    "dev": "node --env-file-if-exists=.env --watch --watch-path=backend backend/index.js",
-    "dev:backend": "node --watch --watch-path=backend backend/index.js",
-    "dev:frontend": "npx vite --config frontend/vite.config.js",
-    "build": "npm install --prefer-offline && cd backend && npm install --prefer-offline && cd .. && cd frontend && npm install --include=dev --prefer-offline && npm run build",
-    "start": "node --env-file-if-exists=.env backend/index.js",
-    "pretest": "node scripts/cleanup-test-artifacts.js",
-    "test": "node --test backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
-    "test:serial": "node --test --test-concurrency=1 backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
-    "test:turso": "cross-env TEST_USE_TURSO=true npm test",
-    "check:hermetic": "node scripts/verify-hermetic.js",
-    "parity": "node scripts/deployment-parity.js",
-    "reconcile": "node scripts/ssot-reconciler.js"
-  }
-  ```
+### 3.7 Auto-Migration Parallel Safety Note
+- `backend/db/schema.sql` uses `CREATE TABLE IF NOT EXISTS` for all tables.
+- In addition, because each worker process connects to its own dedicated SQLite database file (`data/test-${process.pid}.db`), migrations run in strict isolation without lock contention.
 
 ---
 
-## 4. Files to Touch & Scope Breakdown
+## 4. `package.json` Scripts Specification
 
-### 4.1 Files to Create:
-1. `.github/workflows/ci.yml`: Production GitHub Actions workflow (Node 18/20 matrix, `npm ci`, parallel test, clean git check, frontend test, Vite build, Turso parity job).
+### 4.1 Before & After
+
+```diff
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --watch --watch-path=backend backend/index.js",
+    "dev:backend": "node --watch --watch-path=backend backend/index.js",
+    "dev:frontend": "npx vite --config frontend/vite.config.js",
+    "build": "npm install --prefer-offline && cd backend && npm install --prefer-offline && cd .. && cd frontend && npm install --include=dev --prefer-offline && npm run build",
+    "start": "node --env-file-if-exists=.env backend/index.js",
+-   "test": "node --test --test-concurrency=1 backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
++   "pretest": "node scripts/cleanup-test-artifacts.js",
++   "pretest:serial": "node scripts/cleanup-test-artifacts.js",
++   "test": "node --test backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
++   "test:serial": "node --test --test-concurrency=1 backend/tests/*.test.js backend/tests/ai/*.test.js frontend/src/__tests__/validators/*.test.js",
++   "test:turso": "node scripts/run-turso-test.js",
++   "check:test-setup": "node scripts/check-test-setup-imports.js",
++   "check:hermetic": "node scripts/verify-hermetic.js",
+    "parity": "node scripts/deployment-parity.js",
+    "reconcile": "node scripts/ssot-reconciler.js"
+  }
+```
+
+---
+
+## 5. Files to Touch & Scope Breakdown
+
+### 5.1 Files to Create:
+1. `.github/workflows/ci.yml`: Production GitHub Actions workflow (Node 18/20 matrix, `npm ci`, setup check, parallel test, clean git check, frontend test, Vite build, Turso parity job).
 2. `scripts/cleanup-test-artifacts.js`: Cross-platform pre-test artifact cleaner (`test-*.db*`, `test-tenants-*`).
-3. `scripts/verify-hermetic.js`: Strict clean-tree verifier (pre-check clean -> test -> post-check clean).
-4. `scripts/cleanup-turso-ci.js`: Turso cloud table dropper for CI runs.
-5. `backend/tests/_setup.js`: Isolated worker test setup, PID path binding, and state resets.
-6. `backend/routes/v1/authRoutes.js`: Auth endpoints extracted from `v1Router.js`.
-7. `backend/routes/v1/dashboardRoutes.js`: Dashboard, site, lineage, QoQ, and AI routes extracted from `v1Router.js`.
-8. `backend/routes/v1/reportRoutes.js`: Uploads, analysis, history, and PPT routes extracted from `v1Router.js`.
-9. `backend/routes/v1/tenantRoutes.js`: Client CRUD, locations, settings, and rules routes extracted from `v1Router.js`.
-10. `backend/routes/v1/scheduleRoutes.js`: Schedule CRUD, execution triggering, and runs history extracted from `scheduleRoutes.js`.
-11. `backend/routes/v1/dataHealthRoutes.js`: Data health inspection and export routes extracted from `v1Router.js`.
-12. `backend/routes/v1/healthRoutes.js`: Health check routes extracted from `v1Router.js`.
-13. `backend/tests/testIsolation.test.js`: Comprehensive TDD suite for worker isolation, duplicate routes, rate-limit resets, and Sentry single-capture.
+3. `scripts/check-test-setup-imports.js`: Enforcement check ensuring 100% of test files import `_setup.js`.
+4. `scripts/run-turso-test.js`: Cross-platform Node-native runner for Turso test mode.
+5. `scripts/verify-hermetic.js`: Strict clean-tree verifier (pre-check clean -> test -> post-check clean).
+6. `scripts/cleanup-turso-ci.js`: Turso cloud table dropper for CI runs.
+7. `backend/tests/_setup.js`: Isolated worker test setup, PID path binding, and **synchronous** exit cleanup.
+8. `backend/routes/v1/authRoutes.js`: Auth endpoints extracted from `v1Router.js`.
+9. `backend/routes/v1/dashboardRoutes.js`: Dashboard, site, lineage, QoQ, and AI routes extracted from `v1Router.js`.
+10. `backend/routes/v1/reportRoutes.js`: Uploads, analysis, history, and PPT routes extracted from `v1Router.js`.
+11. `backend/routes/v1/tenantRoutes.js`: Client CRUD, locations, settings, and rules routes extracted from `v1Router.js`.
+12. `backend/routes/v1/scheduleRoutes.js`: Schedule CRUD, execution triggering, and runs history extracted from `scheduleRoutes.js`.
+13. `backend/routes/v1/dataHealthRoutes.js`: Data health inspection and export routes extracted from `v1Router.js`.
+14. `backend/routes/v1/healthRoutes.js`: Health check routes extracted from `v1Router.js`.
+15. `backend/tests/testIsolation.test.js`: Comprehensive TDD suite for worker isolation, duplicate routes, rate-limit resets, synchronous exit cleanup, and Sentry single-capture.
 
-### 4.2 Files to Modify:
+### 5.2 Files to Modify:
 1. `.gitignore`: Add test isolation patterns (`data/test-*.db*`, `data/test-tenants-*/`).
-2. `package.json`: Add `pretest`, remove `--test-concurrency=1` from `test`, add `test:serial`, `test:turso`, `check:hermetic`.
+2. `package.json`: Add `pretest`, `pretest:serial`, remove `--test-concurrency=1` from `test`, add `test:serial`, `test:turso`, `check:test-setup`, `check:hermetic`, add `devDependencies: { "cross-env": "^7.0.3" }`.
 3. `backend/config/database.js`: Worker-scoped database URL (`test-${process.pid}.db`) and auto-migration on worker launch.
 4. `backend/services/clientService.js`: Respect `process.env.TENANT_DATA_ROOT`.
 5. `backend/services/schedulerService.js`: Respect `clientService.getTenantDir()` and export `resetSchedulerState()`.
@@ -280,10 +250,11 @@ Currently, running `npm test` requires serial execution (`--test-concurrency=1`)
 8. `backend/services/jobCache.js`: Export `resetJobCache()`.
 9. `backend/routes/v1Router.js`: Decompose into modular router aggregator with single 404 catch-all.
 10. `backend/index.js`: Remove `sentry.setupExpressErrorHandler(app)` (Option A Sentry deduplication) and export `resetRateLimits()`.
+11. Existing test files (`backend/tests/*.test.js`, `backend/tests/ai/*.test.js`): Ensure `require('./_setup')` or `require('../_setup')` is present at the top.
 
 ---
 
-## 5. Test Strategy (TDD)
+## 6. Test Strategy (TDD)
 
 New test suite `backend/tests/testIsolation.test.js` covering:
 
@@ -298,11 +269,11 @@ New test suite `backend/tests/testIsolation.test.js` covering:
 9. **`v1Router_noDuplicateRoutes`**: Asserts no duplicate `(method, path)` endpoints exist across all domain sub-routers.
 10. **`v1Router_unmatched_returns_json_404`**: Asserts unmatched `/api/v1/nonexistent` returns 404 JSON with `{ error: 'API route not found', status: 404 }`.
 11. **`sentry_express_singleCapture_on500`**: Asserts unhandled 500 triggers `sentry.captureException` exactly once (no double-capture).
-12. **`hermetic_contract_git_status_clean`**: Runs the entire test suite and asserts `git status --porcelain` contains zero modified or untracked files.
+12. **`exit_handler_cleanup_synchronous`**: Spawns a child process that requires `_setup.js`, exits, and asserts PID-scoped files are synchronously unlinked.
 
 ---
 
-## 6. Risk Assessment & Rollback
+## 7. Risk Assessment & Rollback
 
 - **Risk Level**: **LOW**.
   - Worker isolation strictly improves stability and test speed without altering production business logic or math formulas.
