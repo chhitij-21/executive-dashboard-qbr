@@ -265,9 +265,9 @@ When a scheduled job fires, it derives calendar dates according to the configure
 4. **Optimistic Concurrency Control**: `POST /api/tenants/:id/schedules` compares incoming `updatedAt` against on-disk `updatedAt`; if mismatched, rejects with HTTP 409 Conflict (`SCHEDULE_VERSION_CONFLICT`).
 5. **Failure Alert Throttling**: `notifyFailure()` throttles outbound email dispatches for the same `(tenantId, errorCode)` tuple to at most 1 email per hour.
 6. **Evicted Job Artifact Download Handling**: When downloading artifacts from `runs.json`, if the underlying `jobId` report directory has been pruned/evicted, the route returns HTTP 404 with `{ code: 'JOB_ARTIFACT_EVICTED', error: 'Report artifacts for this run have expired or been pruned.' }`.
-7. **Boot Readiness Gate**: An internal flag `_schedulersReady` ensures `initSchedulers()` completes all boot scans and reconciliations before `POST /schedules*` mutations are accepted (rejecting with HTTP 503 `SCHEDULER_INITIALIZING` during boot). `GET` endpoints read safely from disk even during boot.
+7. **Boot Readiness Gate**: An internal flag `_schedulersReady` ensures `initSchedulers()` completes all boot scans and reconciliations before `POST /schedules*` mutations are accepted (rejecting with HTTP 503 `SCHEDULER_INITIALIZING` during boot). `GET /api/tenants/:id/schedules` during `_schedulersReady === false` returns HTTP 200 `{ schedules: [], runs: [], initializing: true }` so the frontend displays an initializing state without crashing.
 8. **Timezone Mutation Hot-Swap**: When `saveSchedule` updates `timezone` or `cronExpression`, it explicitly stops the previous `node-cron` instance and mounts a fresh task under the new timezone; verified by an automated unit test.
-9. **Run History Retention**: `runs.json` strictly retains the last **100** execution entries (pruned on each append).
+9. **Run History Retention (Per Schedule)**: `runs.json` strictly retains the last **100** execution entries **PER SCHEDULE** (pruned per schedule on each append, ensuring high-frequency cadences do not evict quarterly schedule logs).
 10. **Tenant Lock Backoff**: If `acquireTenantLock` fails due to an ongoing upload, it retries **3 times** with exponential backoff (500ms, 1000ms, 2000ms); if still locked, records `TENANT_LOCKED` and invokes `notifyFailure()`.
 11. **node-cron Version Pin**: Explicitly pinned to `^4.6.0` in `package.json` (modern v4 API: `cron.validate(expr)` boolean check; `cron.schedule(expr, fn, { timezone })`).
 12. **Email Delivery Mechanism**: Noted as an **out-of-scope stub** for this batch (mocked via structured notification dispatcher with pluggable SMTP/SES transport interface).
@@ -341,25 +341,28 @@ When a scheduled job fires, it derives calendar dates according to the configure
 ### 8. Comprehensive Test Plan & Invariants
 
 #### A. Backend Test Suite (`backend/tests/scheduledQbr.test.js`)
-1. **Dynamic Period Calculation with Timezone Conversion**: System timezone UTC, tenant timezone `Asia/Kolkata`, trigger at June 1 06:00 IST $\to$ derived period is May 1 – May 31.
-2. **Cron Semantic Frequency Check**: Rejects `* * * * *` and sub-daily cron with HTTP 400 `SUB_DAILY_CRON_NOT_SUPPORTED` / `CRON_FREQUENCY_TOO_HIGH`.
-3. **Template Version Pinning**: Pinned `v2` + active updated to `v3` $\to$ generator strictly uses `v2`. Deprecated version triggers `notifyFailure`.
-4. **Crash Mid-Run Recovery**: Simulates `PENDING` run with dead job on boot $\to$ reconciles to `status: 'FAILED'` and triggers `notifyFailure()`.
-5. **Lock Ordering & Reverse Release**: Asserts `tenantLock` acquired 1st (with 3x backoff), `schedule_lock` 2nd, released in reverse.
-6. **Idempotency Key & HTTP 409**: Triggers same period twice; first succeeds, second returns HTTP 409 `DUPLICATE_JOB`, and only 1 run record exists.
-7. **Timezone Mutation Hot-Swap**: Updating timezone stops old cron and mounts new task with updated timezone.
-8. **Optimistic Concurrency**: Mismatched `updatedAt` returns HTTP 409 `SCHEDULE_VERSION_CONFLICT`.
-9. **Failure Alert Throttling**: 5 rapid failure triggers dispatch exactly 1 alert email within 1 hour.
-10. **Role-Based Error Masking**: Client user receives masked error; admin receives raw error.
-11. **Empty Period Guard**: 0 devices and 0 incidents logs `NO_DATA_FOR_PERIOD` and skips generation.
-12. **Scheduler Health Endpoint**: `GET /api/health/scheduler` returns `{ ready: true, activeTasks, lastHeartbeat }`.
-13. **Clean Teardown**: Calls `schedulerService.stopAll()`; asserts `getActiveTaskCount() === 0` and process exits without hang.
+1. **dynamicPeriod_timezonePreConversion**: System timezone UTC, tenant timezone `Asia/Kolkata`, trigger at June 1 06:00 IST $\to$ derived period is May 1 – May 31.
+2. **cronSemanticFrequency_rejectsSubDaily**: Rejects `* * * * *` and sub-daily cron with HTTP 400 `SUB_DAILY_CRON_NOT_SUPPORTED` / `CRON_FREQUENCY_TOO_HIGH`.
+3. **templateVersionPinning_v2Pinned_v3Active**: Pinned `v2` + active updated to `v3` $\to$ generator strictly uses `v2`. Deprecated version triggers `notifyFailure`.
+4. **crashMidRun_dedupKeyExpired_noSilentSkip**: Simulates `PENDING` run with dead job on boot $\to$ reconciles to `status: 'FAILED'`, triggers `notifyFailure()`, and avoids silent skip even if dedup key expired.
+5. **lockOrdering_tenantFirstScheduleSecond**: Asserts `tenantLock` acquired 1st (with 3x backoff), `schedule_lock` 2nd, released in reverse.
+6. **scheduleUpdateDuringExecution_currentRunCompletes**: Updating schedule config while a run is in progress allows the current run to complete cleanly with starting parameters.
+7. **idempotencyKey_duplicateAdHoc409**: Triggers same period twice; first succeeds, second returns HTTP 409 `DUPLICATE_JOB`, and only 1 run record exists.
+8. **timezoneMutationHotSwap**: Updating timezone stops old cron and mounts new task with updated timezone.
+9. **optimisticConcurrency_versionConflict409**: Mismatched `updatedAt` returns HTTP 409 `SCHEDULE_VERSION_CONFLICT`.
+10. **failureAlertThrottling_maxOnePerHour**: 5 rapid failure triggers dispatch exactly 1 alert email within 1 hour for same error code.
+11. **roleBasedErrorMasking**: Client user receives masked generic error; admin receives raw error with stack.
+12. **emptyPeriod_noDataLogsAndSkips**: 0 devices and 0 incidents logs `NO_DATA_FOR_PERIOD` and skips generation.
+13. **schedulerHealthEndpoint**: `GET /api/health/scheduler` returns `{ ready: true, activeTasks, lastHeartbeat }`.
+14. **cleanTeardown_noActiveTimers**: Calls `schedulerService.stopAll()`; asserts `getActiveTaskCount() === 0` and process exits without hang.
 
-#### B. Frontend Verification
-- `ScheduleManagerModal.jsx` renders schedule list, template dropdown, timezone selector, recipient list, and history table.
-- Verifies non-admin client users see view-only controls (Run Now and Save disabled/hidden, errors masked).
-- `npm --prefix frontend test` passes 100%.
-- `npm --prefix frontend run build` completes with 0 errors.
+#### B. Frontend Verification (`frontend/src/__tests__/ScheduleManagerModal.test.jsx`)
+1. **rendersMultipleSchedulesList**: Displays tabbed/listed schedules configured for the tenant.
+2. **addScheduleButton**: Clicking "+ Add Schedule" creates new draft schedule card and opens configuration drawer (Admin only).
+3. **perScheduleDuplicate409**: Clicking Run Now on duplicate period displays specific per-schedule 409 conflict banner without affecting other schedules.
+4. **clientUserViewOnly**: Non-admin client users see view-only controls (Run Now and Save disabled/hidden, errors masked).
+5. **bootInitializingState**: When API returns `{ initializing: true }`, renders non-blocking loader.
+6. **suiteAndBuild**: `npm --prefix frontend test` passes 100%; `npm --prefix frontend run build` completes with 0 errors.
 
 ---
 
