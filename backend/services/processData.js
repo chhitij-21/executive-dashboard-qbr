@@ -43,6 +43,7 @@ function getGeneratePPT() {
 }
 const { continuousPipelineAudit } = require('./ai/iq200Validator');
 const { buildLineage } = require('./validators/lineageTracker');
+const { detectAnomalies } = require('./validators/anomalyDetector');
 const clientService = require('./clientService');
 const historyService = require('./historyService');
 const qoqComparisonService = require('./qoqComparisonService');
@@ -1842,6 +1843,18 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
     log(`WARNING: Lineage calculation notice: ${lineageErr.message}`);
   }
 
+  // ── 8e. Automated Incident RCA & Anomaly Detection Tuning (Item #20) ──────────
+  try {
+    const anomalyRes = detectAnomalies(qbrData, { freeze: false });
+    if (anomalyRes && anomalyRes.success) {
+      qbrData.anomalies = anomalyRes.anomalies;
+      qbrData.anomalySummary = anomalyRes.summary;
+      log(`Anomaly Detection: ${anomalyRes.summary?.total || 0} anomalies detected (${anomalyRes.summary?.critical || 0} critical, ${anomalyRes.summary?.high || 0} high)`);
+    }
+  } catch (anomalyErr) {
+    log(`WARNING: Anomaly detection notice: ${anomalyErr.message}`);
+  }
+
   // ── 9. Data quality report ────────────────────────────────────────────────
   writeDataQualityReport(outputDir, devices, incidents, allLocMap, log);
 
@@ -3042,16 +3055,66 @@ function buildIncidentAnalytics(incidents, devices, periodOptions = {}) {
 // ── RCA Analytics ──────────────────────────────────────────────────────────
 
 function buildRCAAnalytics(incidents) {
-  const rawBreakdown = classifyRCALocal(incidents);
-  const standardBreakdown = ruleEngine.buildStandardRCABreakdown(incidents.map(i => ({ RCA: i.RCA, ...i })));
+  const incList = Array.isArray(incidents) ? incidents : [];
+  const rawBreakdown = classifyRCALocal(incList);
+  const standardBreakdown = ruleEngine.buildStandardRCABreakdown(incList.map(i => ({ RCA: i.RCA, ...i })));
   const topRcas = rawBreakdown.filter(r => r.isTop).map(r => r.rca);
 
+  // Device Class Split (Item #20)
+  const isSwitchIncident = i =>
+    /^sw$/i.test(String(i.DeviceType || '').trim()) ||
+    /switch/i.test(String(i.DeviceType || '').trim()) ||
+    (!/^ap$/i.test(String(i.DeviceType || '').trim()) && !/access/i.test(String(i.DeviceType || '').trim()));
+  const isApIncident = i =>
+    /^ap$/i.test(String(i.DeviceType || '').trim()) ||
+    /access/i.test(String(i.DeviceType || '').trim());
+
+  const switchIncidents = incList.filter(isSwitchIncident);
+  const apIncidents = incList.filter(isApIncident);
+
+  const swBreakdown = classifyRCALocal(switchIncidents);
+  const apBreakdown = classifyRCALocal(apIncidents);
+  const swTopRcas = swBreakdown.filter(r => r.isTop).map(r => r.rca);
+  const apTopRcas = apBreakdown.filter(r => r.isTop).map(r => r.rca);
+
+  // Duration-Weighted RCA Impact (Item #20)
+  const rcaMinutesMap = {};
+  let totalOutageMinutes = 0;
+  incList.forEach(inc => {
+    const rca = (inc.RCA && inc.RCA !== 'Unknown') ? inc.RCA : (inc['RCA 2'] || inc['Root Cause'] || inc.RCA || 'Unknown');
+    const mins = computeActualDowntime(inc) + computeHoldDowntime(inc);
+    rcaMinutesMap[rca] = (rcaMinutesMap[rca] || 0) + mins;
+    totalOutageMinutes += mins;
+  });
+
+  const impactWeighted = Object.entries(rcaMinutesMap)
+    .sort((a, b) => b[1] - a[1])
+    .map(([rca, totalMinutes]) => ({
+      rca,
+      totalMinutes: Math.round(totalMinutes),
+      percentage: totalOutageMinutes > 0 ? ((totalMinutes / totalOutageMinutes) * 100).toFixed(1) + '%' : '0.0%',
+    }));
+
   return {
-    totalIncidents: incidents.length,
+    totalIncidents: incList.length,
     topRca: topRcas.length > 0 ? topRcas.join(' / ') : 'None',
     breakdown: rawBreakdown,
     rawBreakdown,
     standardBreakdown,
+    byDeviceClass: {
+      switches: {
+        totalIncidents: switchIncidents.length,
+        topRca: swTopRcas.length > 0 ? swTopRcas.join(' / ') : 'None',
+        breakdown: swBreakdown,
+      },
+      aps: {
+        totalIncidents: apIncidents.length,
+        topRca: apTopRcas.length > 0 ? apTopRcas.join(' / ') : 'None',
+        breakdown: apBreakdown,
+      },
+    },
+    impactWeighted,
+    totalOutageMinutes: Math.round(totalOutageMinutes),
   };
 }
 
@@ -3328,7 +3391,7 @@ function filterDashboardBySite(data, siteFilter) {
   });
   const proactiveTicketAnalytics = buildProactiveTicketAnalytics(enrichedIncidents, filteredOtherActivities);
 
-  return {
+  const filteredResult = {
     ...data,
     siteFilterApplied: normalizeSiteName(siteFilter),
     // Always preserve the original report_period from the full dataset — never lose period label on site drill-down.
@@ -3346,6 +3409,16 @@ function filterDashboardBySite(data, siteFilter) {
     incidents: enrichedIncidents,
     otherActivities: filteredOtherActivities,
   };
+
+  try {
+    const siteAnomalyRes = detectAnomalies(filteredResult, { freeze: false });
+    if (siteAnomalyRes && siteAnomalyRes.success) {
+      filteredResult.anomalies = siteAnomalyRes.anomalies;
+      filteredResult.anomalySummary = siteAnomalyRes.summary;
+    }
+  } catch (_) {}
+
+  return filteredResult;
 }
 
 function reconcileRMA(devices, incidents) {
@@ -3379,6 +3452,7 @@ module.exports = {
   validateAnalytics,
   buildExecutiveSummary,
   buildIncidentAnalytics,
+  buildRCAAnalytics,
   buildSLAAnalytics,
   deriveSubCategory,
   reconcileRMA,

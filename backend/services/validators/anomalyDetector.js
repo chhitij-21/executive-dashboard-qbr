@@ -6,6 +6,44 @@ function sha1(str) {
   return crypto.createHash('sha1').update(String(str || '')).digest('hex');
 }
 
+function parseTimestamp(val) {
+  if (val === undefined || val === null || val === '') return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (typeof val === 'number') {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof val === 'string') {
+    const s = val.trim();
+    if (!s) return null;
+    const num = Number(s);
+    if (!isNaN(num) && num > 30000 && num < 100000) {
+      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (s.includes('T')) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (/^\d{2}-\d{2}-\d{4}/.test(s)) {
+      const parts = s.split(' ');
+      const [day, mon, yr] = parts[0].split('-');
+      const timePart = parts[1] || '00:00:00';
+      const d = new Date(`${yr}-${mon}-${day}T${timePart.length === 5 ? timePart + ':00' : timePart}`);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const parts = s.split(' ');
+      const timePart = parts[1] || '00:00:00';
+      const d = new Date(`${parts[0]}T${timePart.length === 5 ? timePart + ':00' : timePart}`);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
 function deepFreeze(obj) {
   if (obj === null || typeof obj !== 'object') return obj;
   if (Object.isFrozen(obj)) return obj;
@@ -36,7 +74,9 @@ function detectAnomalies(qbrData, options = {}) {
       };
     }
 
-    deepFreeze(qbrData);
+    if (options.freeze !== false) {
+      deepFreeze(qbrData);
+    }
 
     const devices = Array.isArray(qbrData.devices) ? qbrData.devices : [];
     const incidents = Array.isArray(qbrData.incidents) ? qbrData.incidents : [];
@@ -50,7 +90,8 @@ function detectAnomalies(qbrData, options = {}) {
     const addAnomaly = (severity, type, entity, message, evidence, recommendation) => {
       const siteKey = entity?.site || '';
       const devKey = entity?.device || '';
-      const id = sha1(`${type}|${siteKey}|${devKey}`).slice(0, 16);
+      const ticketKey = entity?.ticket || '';
+      const id = sha1(`${type}|${siteKey}|${devKey}|${ticketKey}`).slice(0, 16);
       if (!anomalyMap.has(id)) {
         anomalyMap.set(id, {
           id,
@@ -278,6 +319,157 @@ function detectAnomalies(qbrData, options = {}) {
       });
     }
 
+    // K. DEVICE_FLAPPING (Item #20)
+    // Condition: >= 3 incidents in a 72-hour window OR >= 5 total incidents for a device
+    const deviceIncidentsMap = new Map();
+    incidents.forEach(inc => {
+      const devId = (inc?.DeviceID || inc?.['Device ID'] || inc?.SerialNo || '').trim();
+      if (devId) {
+        if (!deviceIncidentsMap.has(devId)) {
+          deviceIncidentsMap.set(devId, []);
+        }
+        deviceIncidentsMap.get(devId).push(inc);
+      }
+    });
+
+    deviceIncidentsMap.forEach((devIncs, devId) => {
+      const siteId = devIncs[0]?.SiteID || devIncs[0]?.Location || 'Unknown';
+      const count = devIncs.length;
+
+      // Check timestamps for 72h rolling window
+      const validTimestamps = devIncs
+        .map(i => parseTimestamp(i['Created Time'] || i.CreatedTime || i.OpenTime || i.created_at || i['Open Date'] || i['Date']))
+        .filter(Boolean)
+        .map(d => d.getTime())
+        .sort((a, b) => a - b);
+
+      let hasFlappingWindow = false;
+      if (validTimestamps.length >= 3) {
+        const windowMs = 72 * 3600 * 1000;
+        for (let i = 0; i <= validTimestamps.length - 3; i++) {
+          if (validTimestamps[i + 2] - validTimestamps[i] <= windowMs) {
+            hasFlappingWindow = true;
+            break;
+          }
+        }
+      }
+
+      if (count >= 5 || hasFlappingWindow) {
+        const severity = count >= 5 ? 'CRITICAL' : 'HIGH';
+        const sampleTickets = devIncs.slice(0, 5).map(i => i.IncidentNumber || i.IncidentID || i.TicketNumber || i.Ticket || 'N/A');
+        addAnomaly(
+          severity,
+          'DEVICE_FLAPPING',
+          { device: devId, site: siteId },
+          `Device ${devId} experienced flapping behavior (${count} incidents recorded${hasFlappingWindow ? ', including 3+ incidents within a 72-hour window' : ''}).`,
+          { deviceId: devId, siteId, incidentCount: count, flappingWindow72h: hasFlappingWindow, sampleTickets },
+          'Inspect device physical connectivity, uplink flapping, and power supply stability.'
+        );
+      }
+    });
+
+    // L. CORRELATED_AP_OUTAGE (Item #20)
+    // Condition: >= 2 distinct APs failing at the same site within a 15-minute window
+    const apIncidentsBySite = new Map();
+    incidents.forEach(inc => {
+      const devType = String(inc.DeviceType || inc['Device Type'] || '').trim();
+      const devId = (inc.DeviceID || inc['Device ID'] || '').trim();
+      const isAp = /^ap$/i.test(devType) || /access/i.test(devType) || /ap-/i.test(devId);
+      if (isAp && devId) {
+        const siteId = inc.SiteID || inc.Location || 'Unknown';
+        if (!apIncidentsBySite.has(siteId)) {
+          apIncidentsBySite.set(siteId, []);
+        }
+        const ts = parseTimestamp(inc['Created Time'] || inc.CreatedTime || inc.OpenTime || inc.created_at || inc['Open Date'] || inc['Date']);
+        if (ts) {
+          apIncidentsBySite.get(siteId).push({ devId, timestamp: ts.getTime(), inc });
+        }
+      }
+    });
+
+    apIncidentsBySite.forEach((siteAps, siteId) => {
+      if (siteAps.length >= 2) {
+        siteAps.sort((a, b) => a.timestamp - b.timestamp);
+        const windowMs = 15 * 60 * 1000;
+        for (let i = 0; i < siteAps.length; i++) {
+          const cluster = [siteAps[i]];
+          for (let j = i + 1; j < siteAps.length; j++) {
+            if (siteAps[j].timestamp - siteAps[i].timestamp <= windowMs) {
+              cluster.push(siteAps[j]);
+            } else {
+              break;
+            }
+          }
+          const uniqueAps = Array.from(new Set(cluster.map(c => c.devId)));
+          if (uniqueAps.length >= 2) {
+            addAnomaly(
+              'HIGH',
+              'CORRELATED_AP_OUTAGE',
+              { site: siteId },
+              `Correlated AP outage detected at site ${siteId}: ${uniqueAps.length} distinct access points failed within 15 minutes.`,
+              { siteId, apCount: uniqueAps.length, affectedAps: uniqueAps, timeWindowMinutes: 15 },
+              'Check PoE switch port budgets, switch uplink connectivity, and local LAN segment power at site.'
+            );
+            break;
+          }
+        }
+      }
+    });
+
+    // M. EXTENDED_OUTAGE_RESOLUTION (Item #20)
+    // Condition: actual resolution > 1440 mins (24h) OR hold time > 2880 mins (48h)
+    incidents.forEach(inc => {
+      const actMin = safeNum(inc.ActualResolutionMin || inc['Actual Resolution Time (min)'] || inc['Resolution Time (Minutes)'] || inc['Actual Resolution Time (Minutes)'] || inc.ActualResolutionMinutes || inc.resolution_minutes) || 0;
+      const holdMin = safeNum(inc.HoldTimeMin || inc['Total JFL Downtime (Mins)HOLD Minute'] || inc['Time on Hold (min)'] || inc['Time on Hold (Minutes)'] || inc.HoldTimeMinutes) || 0;
+      const devId = (inc.DeviceID || inc['Device ID'] || 'Unknown').trim();
+      const siteId = inc.SiteID || inc.Location || 'Unknown';
+      const ticketRef = String(inc.display_reference?.value || inc.IncidentNumber || inc.IncidentID || inc.TicketNumber || inc.Ticket || '').trim();
+
+      if (actMin > 1440 || holdMin > 2880) {
+        const isCritical = actMin > 4320 || holdMin > 7200;
+        addAnomaly(
+          isCritical ? 'CRITICAL' : 'HIGH',
+          'EXTENDED_OUTAGE_RESOLUTION',
+          { device: devId, site: siteId, ticket: ticketRef },
+          `Incident ${ticketRef || 'N/A'} on device ${devId} at site ${siteId} experienced extended resolution time (${Math.round(actMin)} min) or hold time (${Math.round(holdMin)} min).`,
+          { ticket: ticketRef, deviceId: devId, siteId, actualResolutionMinutes: Math.round(actMin), holdMinutes: Math.round(holdMin) },
+          'Review vendor escalation SLA and third-party dispatch bottlenecks for extended outages.'
+        );
+      }
+    });
+
+    // N. INCIDENT_VOLUME_OUTLIER (Item #20)
+    // Condition: site incident count exceeds mean + 2 * stdDev across sites, with count >= 5
+    const siteCounts = {};
+    incidents.forEach(inc => {
+      const s = inc.SiteID || inc.Location || 'Unknown';
+      siteCounts[s] = (siteCounts[s] || 0) + 1;
+    });
+
+    const siteEntries = Object.entries(siteCounts);
+    if (siteEntries.length >= 3) {
+      const counts = siteEntries.map(([, c]) => c);
+      const mean = counts.reduce((acc, c) => acc + c, 0) / counts.length;
+      const variance = counts.reduce((acc, c) => acc + Math.pow(c - mean, 2), 0) / (counts.length - 1);
+      const stdDev = Math.sqrt(variance);
+
+      if (stdDev > 0) {
+        siteEntries.forEach(([siteId, count]) => {
+          if (count >= 5 && count > mean + 2 * stdDev) {
+            const zScore = parseFloat(((count - mean) / stdDev).toFixed(2));
+            addAnomaly(
+              'HIGH',
+              'INCIDENT_VOLUME_OUTLIER',
+              { site: siteId },
+              `Site ${siteId} recorded ${count} incidents, exceeding organization baseline threshold (${parseFloat((mean + 2 * stdDev).toFixed(1))} incidents, z-score: ${zScore}).`,
+              { siteId, incidentCount: count, mean: parseFloat(mean.toFixed(2)), stdDev: parseFloat(stdDev.toFixed(2)), zScore },
+              'Initiate dedicated site infrastructure audit and assess local environmental/cabling conditions.'
+            );
+          }
+        });
+      }
+    }
+
     const allAnomalies = Array.from(anomalyMap.values());
 
     const severityOrder = { CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
@@ -307,4 +499,4 @@ function detectAnomalies(qbrData, options = {}) {
   }
 }
 
-module.exports = { detectAnomalies };
+module.exports = { detectAnomalies, parseTimestamp };

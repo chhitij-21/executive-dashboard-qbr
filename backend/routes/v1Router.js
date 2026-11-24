@@ -1629,6 +1629,97 @@ router.get(['/lineage/trace', '/api/lineage/trace'], requireAuth, requireClientA
   }
 });
 
+// ── Automated Incident RCA & Anomaly Detection Endpoints (Item #20) ────────
+router.get(['/anomalies', '/api/anomalies'], requireAuth, requireClientAccess((req) => req.query?.clientId || req.query?.client || req.headers['x-client-id'] || (req.user?.assignedClient !== 'all' ? req.user?.assignedClient : 'client-jfl')), async (req, res) => {
+  try {
+    const clientId = req.targetClientId;
+    const reqJobId = req.query?.jobId || 'latest';
+    const siteFilter = req.query?.site || req.query?.location || 'ALL';
+    const severityFilter = (req.query?.severity || '').trim().toUpperCase();
+    const typeFilter = (req.query?.type || '').trim().toUpperCase();
+
+    let dPath = null;
+    let job = null;
+
+    if (!reqJobId || reqJobId === 'latest' || reqJobId === 'default') {
+      job = resolveLatestCompletedJob(clientId);
+      if (job) {
+        const jobClientId = clientService.resolveCanonicalClientId(job.clientId);
+        if (jobClientId !== clientId) {
+          return res.status(403).json({ success: false, error: 'Customer isolation violation: Job does not belong to requested customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+        }
+        dPath = job.dashboardPath;
+      }
+    } else {
+      job = jobs[reqJobId] || historyService.getReportByJobId(reqJobId);
+      if (!job) {
+        return res.status(404).json({ success: false, error: `Job '${reqJobId}' not found.`, code: 'JOB_NOT_FOUND' });
+      }
+      const jobClientId = clientService.resolveCanonicalClientId(job.clientId);
+      if (jobClientId && jobClientId !== clientId) {
+        return res.status(403).json({
+          success: false,
+          error: `Customer isolation violation: Job '${reqJobId}' belongs to customer '${job.clientId}', not '${clientId}'.`,
+          code: 'CUSTOMER_ISOLATION_VIOLATION',
+        });
+      }
+      dPath = job.dashboardPath;
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
+      const canonicalPath = path.resolve('data', 'dashboard_data.json');
+      if (fs.existsSync(canonicalPath)) {
+        dPath = canonicalPath;
+      }
+    }
+
+    if (!dPath || !fs.existsSync(dPath)) {
+      return res.status(200).json({
+        success: true,
+        clientId,
+        total: 0,
+        summary: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+        anomalies: [],
+      });
+    }
+
+    const content = fs.readFileSync(dPath, 'utf8');
+    const rawData = JSON.parse(content);
+
+    // Customer isolation check
+    const rawDataClientId = rawData.clientId ? clientService.resolveCanonicalClientId(rawData.clientId) : null;
+    if (rawDataClientId && rawDataClientId !== clientId) {
+      return res.status(403).json({ success: false, error: 'Customer isolation violation: Dashboard payload belongs to another customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
+    }
+
+    const { filterDashboardBySite } = require('../services/processData');
+    const targetData = (siteFilter && siteFilter !== 'ALL' && siteFilter !== 'All Locations')
+      ? filterDashboardBySite(rawData, siteFilter)
+      : rawData;
+
+    const { detectAnomalies } = require('../services/validators/anomalyDetector');
+    const anomalyResult = detectAnomalies(targetData);
+
+    let filteredAnomalies = Array.isArray(anomalyResult.anomalies) ? anomalyResult.anomalies : [];
+    if (severityFilter) {
+      filteredAnomalies = filteredAnomalies.filter(a => String(a.severity).toUpperCase() === severityFilter);
+    }
+    if (typeFilter) {
+      filteredAnomalies = filteredAnomalies.filter(a => String(a.type).toUpperCase() === typeFilter);
+    }
+
+    res.json({
+      success: true,
+      clientId,
+      total: filteredAnomalies.length,
+      summary: anomalyResult.summary,
+      anomalies: filteredAnomalies,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── Quarter-over-Quarter Comparison Endpoint (Item #9) ────────────────────
 router.get(['/qoq/compare', '/api/qoq/compare'], requireAuth, requireClientAccess(), async (req, res) => {
   try {

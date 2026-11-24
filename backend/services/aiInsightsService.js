@@ -172,6 +172,13 @@ function generateFallbackInsights(section, data) {
   const switchRCA = exec.primaryRcaSwitches || 'Stable Operations (No Incidents)';
   const apRCA = exec.primaryRcaAPs || 'Stable Operations (No Incidents)';
 
+  // Anomaly & Impact-Weighted RCA Grounding (Item #20)
+  const anomalies = Array.isArray(data?.anomalies) ? data.anomalies : [];
+  const criticalAnomalies = anomalies.filter(a => a.severity === 'CRITICAL');
+  const highAnomalies = anomalies.filter(a => a.severity === 'HIGH');
+  const impactList = Array.isArray(data?.rcaAnalytics?.impactWeighted) ? data.rcaAnalytics.impactWeighted : [];
+  const topImpactRca = impactList.length > 0 ? impactList[0] : null;
+
   const normalizedSection = (section || 'overview').toLowerCase();
 
   let summary = '';
@@ -192,6 +199,13 @@ function generateFallbackInsights(section, data) {
       if (switchRCA !== 'Stable Operations (No Incidents)') {
         risks.push(`Outage concentration risk: Core switch downtime was primarily impacted by ${switchRCA}.`);
       }
+      {
+        const swAnomaly = anomalies.find(a => (a.type === 'DEVICE_FLAPPING' || a.type === 'UPTIME_FLOOR_BREACH' || a.type === 'UPTIME_DIVERGENCE'));
+        if (swAnomaly) {
+          risks.unshift(`Switch operational anomaly: ${swAnomaly.message}`);
+          actions.unshift(swAnomaly.recommendation);
+        }
+      }
       if (risks.length === 0) {
         risks.push('Switch hardware lifecycle: Routine aging on edge switches requires regular health monitoring.');
       }
@@ -206,6 +220,13 @@ function generateFallbackInsights(section, data) {
       }
       if (apRCA !== 'Stable Operations (No Incidents)') {
         risks.push(`Access point hold exposure: Ticket resolution delays on APs were predominantly linked to ${apRCA}.`);
+      }
+      {
+        const apAnomaly = anomalies.find(a => a.type === 'CORRELATED_AP_OUTAGE');
+        if (apAnomaly) {
+          risks.unshift(`Correlated AP anomaly: ${apAnomaly.message}`);
+          actions.unshift(apAnomaly.recommendation);
+        }
       }
       if (risks.length === 0) {
         risks.push('RF interference variance: High-density peak dining hours introduce temporary channel utilization spikes.');
@@ -222,6 +243,13 @@ function generateFallbackInsights(section, data) {
       if (majorIncidents > 0) {
         risks.push(`Major incident volume: ${majorIncidents} P2 tickets contributed to cumulative resolution backlog.`);
       }
+      {
+        const incAnomaly = anomalies.find(a => a.type === 'INCIDENT_VOLUME_OUTLIER' || a.type === 'EXTENDED_OUTAGE_RESOLUTION');
+        if (incAnomaly) {
+          risks.unshift(`Incident distribution anomaly: ${incAnomaly.message}`);
+          actions.unshift(incAnomaly.recommendation);
+        }
+      }
       if (risks.length === 0) {
         risks.push('Incident velocity risk: Sudden spikes in edge carrier outages could strain tier-1 NOC response times.');
       }
@@ -231,6 +259,11 @@ function generateFallbackInsights(section, data) {
 
     case 'rca':
       summary = `Root Cause Analysis indicates that switch outages were primarily driven by ${switchRCA}, while AP disruptions were led by ${apRCA}. Targeted engineering mitigation on these primary categories represents the highest-leverage path to zero-downtime operations.`;
+      if (topImpactRca && topImpactRca.totalMinutes > 0) {
+        summary += ` Duration-weighted analysis reveals that "${topImpactRca.rca}" drove the greatest cumulative outage impact (${topImpactRca.totalMinutes} minutes, ${topImpactRca.percentage} of all downtime).`;
+        risks.unshift(`Cumulative downtime concentration: '${topImpactRca.rca}' accounted for ${topImpactRca.totalMinutes} minutes (${topImpactRca.percentage}) of total network downtime.`);
+        actions.unshift(`Prioritize preventive remediation on '${topImpactRca.rca}' to drive maximum outage duration reduction.`);
+      }
       if (switchRCA !== 'Stable Operations (No Incidents)') {
         risks.push(`Systemic switch root cause: Recurring incidents under '${switchRCA}' expose infrastructure vulnerabilities.`);
       }
@@ -277,6 +310,13 @@ function generateFallbackInsights(section, data) {
     case 'executive':
     default:
       summary = `Enterprise network operations for ${customer} achieved a Health Score of ${healthScore}/100 (${healthLabel}) and ${slaCompliance}% SLA compliance across ${totalDevices} devices in ${period}. Fleet switch uptime reached ${switchUptime}%, with primary downtime drivers effectively isolated to ${switchRCA}.`;
+      if (criticalAnomalies.length > 0) {
+        risks.unshift(`Critical Anomaly Alert: ${criticalAnomalies[0].message}`);
+        actions.unshift(criticalAnomalies[0].recommendation);
+      } else if (highAnomalies.length > 0) {
+        risks.unshift(`High-Priority Operational Anomaly: ${highAnomalies[0].message}`);
+        actions.unshift(highAnomalies[0].recommendation);
+      }
       if (healthScore < 90) {
         risks.push(`Infrastructure health risk: Enterprise health score (${healthScore}/100) indicates elevated operational risk.`);
       }
