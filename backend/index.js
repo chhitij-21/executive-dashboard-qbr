@@ -418,6 +418,7 @@ function deprecationMiddleware(req, res, next) {
 
 const healthRoutes = require('./routes/v1/healthRoutes');
 app.use(healthRoutes);
+app.get('/docs', (_req, res) => res.redirect(302, '/api/v1/docs'));
 
 app.use('/api/v1', v1Router);
 app.use('/api', deprecationMiddleware, v1Router);

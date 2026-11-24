@@ -70,6 +70,7 @@ const validationRoutes = require('./validationRoutes');
 const auditRoutes = require('./v1/auditRoutes');
 const authRoutes = require('./v1/authRoutes');
 const webhookRoutes = require('./v1/webhookRoutes');
+const docsRoutes = require('./v1/docsRoutes');
 
 router.use('/vulnerabilities', vulnerabilitiesRouter);
 router.use(['/mfa', '/api/mfa'], mfaRouter);
@@ -83,6 +84,7 @@ router.use(['/validate', '/api/validate'], validationRoutes.router);
 router.use(auditRoutes);
 router.use(authRoutes);
 router.use(webhookRoutes);
+router.use(docsRoutes);
 
 // ── Canonical Health & Readiness Endpoints (Item #1, Item #14, Item #15) ────────
 const healthRoutes = require('./v1/healthRoutes');

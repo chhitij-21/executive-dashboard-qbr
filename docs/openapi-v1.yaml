@@ -2,26 +2,50 @@ openapi: 3.0.3
 info:
   title: Executive Dashboard & QBR Generator Platform API
   description: >
-    Canonical API v1 specification for the Executive QBR Platform.
-    Provides complete multi-tenant reporting, automated scheduling,
-    vulnerability monitoring, AI analytics, and presentation generation.
+    Canonical OpenAPI v1 specification for the Executive QBR Platform.
+    Provides multi-tenant SSOT network analytics, automated PPTX/QBR generation,
+    temporal anomaly detection & duration-weighted RCA, real-time Cisco Meraki &
+    Catalyst Center webhook ingestion, immutable security audit trails, and AI insights.
   version: 1.0.0
   contact:
     name: Executive Platform Engineering Team
+
 servers:
   - url: /api/v1
-    description: Canonical API v1 Base URL
+    description: Canonical API v1 Base URL (Recommended)
   - url: /api
     description: Legacy Endpoint Alias (RFC 8594 Deprecated; includes Deprecation and Link headers)
+
+tags:
+  - name: Health & Observability
+    description: Kubernetes/container liveness, readiness, and scheduler health probes
+  - name: Authentication & MFA
+    description: JWT v2 authentication, TOTP MFA enrollment, single-use tickets, and token revocation
+  - name: Tenants & Configuration
+    description: Multi-tenant provisioning, branding settings, standing schedules, templates, and SLA rules
+  - name: Reports & Upload Pipeline
+    description: Excel workbook ingestion, async job polling, SSOT dashboard retrieval, and PPTX export
+  - name: AI, RCA & Anomaly Intelligence
+    description: Temporal anomaly detection, duration-weighted RCA, metric lineage tracing, and AI executive insights
+  - name: Data Hygiene & Vulnerabilities
+    description: Cross-workbook invariant checks, inventory sync reconciliation, and Cisco PSIRT CVE advisories
+  - name: Security Audit & Compliance
+    description: Immutable tamper-evident audit logs and RFC 4180 compliance CSV exports
+  - name: Real-Time IT Connectors
+    description: Cisco Meraki & Catalyst Center webhook management, HMAC-SHA256 ingestion, and event buffer
+  - name: API Documentation
+    description: Machine-readable OpenAPI schema and interactive Swagger-style API Explorer
 
 security:
   - BearerAuth: []
 
 paths:
+  # ── Health & Observability ──────────────────────────────────────────────────
   /health:
     get:
-      summary: API & Platform Health Check
-      description: Returns liveness status, API version, and scheduler health summary.
+      tags: [Health & Observability]
+      summary: API & Platform Health Summary
+      description: Returns liveness status, API version, scheduler health, and observability telemetry.
       security: []
       responses:
         '200':
@@ -31,42 +55,55 @@ paths:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
-                    example: ok
-                  ts:
-                    type: string
-                    format: date-time
-                  version:
-                    type: string
-                    example: v1
-                  scheduler:
-                    type: string
-                    example: healthy
+                  status: { type: string, example: ok }
+                  ts: { type: string, format: date-time }
+                  version: { type: string, example: v1 }
+                  scheduler: { type: string, example: healthy }
 
-  /health/scheduler:
+  /health/live:
     get:
-      summary: Scheduler Engine Health
-      description: Returns readiness, active task count, and last heartbeat timestamp of the standing scheduler.
+      tags: [Health & Observability]
+      summary: Liveness Probe
+      description: Fast event-loop liveness check returning uptime and memory usage.
       security: []
       responses:
         '200':
-          description: Scheduler is ready and operational.
+          description: Process is alive.
+
+  /health/ready:
+    get:
+      tags: [Health & Observability]
+      summary: Deep Readiness Probe
+      description: Verifies Turso/SQLite database, storage repository, queue, and scheduler readiness.
+      security: []
+      responses:
+        '200':
+          description: All core subsystems are ready.
+        '503':
+          description: One or more subsystems degraded or unavailable.
+
+  /health/scheduler:
+    get:
+      tags: [Health & Observability]
+      summary: Scheduler Engine Health
+      description: Returns readiness, active cron count, and last heartbeat timestamp.
+      security: []
+      responses:
+        '200':
+          description: Scheduler is ready.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SchedulerHealth'
         '503':
           description: Scheduler is stopped or uninitialized.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SchedulerHealth'
 
+  # ── Authentication & MFA ────────────────────────────────────────────────────
   /auth/login:
     post:
+      tags: [Authentication & MFA]
       summary: User Authentication
-      description: Authenticates user credentials with rate limiting (5 attempts per 15 min) and issues a JWT v2 token.
+      description: Authenticates email/password credentials with brute-force rate limiting and issues a JWT v2 Bearer token (or MFA challenge).
       security: []
       requestBody:
         required: true
@@ -76,47 +113,45 @@ paths:
               type: object
               required: [email, password]
               properties:
-                email:
-                  type: string
-                  format: email
-                  example: admin@portal.com
-                password:
-                  type: string
-                  format: password
-                  example: admin123
+                email: { type: string, format: email, example: admin@portal.com }
+                password: { type: string, format: password, example: admin123 }
       responses:
         '200':
-          description: Successful authentication.
+          description: Authenticated successfully (or MFA challenge returned).
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  token:
-                    type: string
-                  user:
-                    $ref: '#/components/schemas/User'
-        '400':
-          description: Missing email or password.
-        '401':
-          description: Invalid email or password.
-        '429':
-          description: Rate limit exceeded.
+                  token: { type: string }
+                  mfaRequired: { type: boolean }
+                  tempToken: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { description: Invalid credentials. }
+        '429': { description: Rate limit exceeded. }
+
+  /auth/me:
+    get:
+      tags: [Authentication & MFA]
+      summary: Current User Profile
+      responses:
+        '200':
+          description: Active authenticated user profile.
+        '401': { description: Unauthorized. }
 
   /auth/logout:
     post:
+      tags: [Authentication & MFA]
       summary: Self Session Logout
-      description: Revokes the caller's active JWT session via jti blocklist in Redis/in-memory store.
+      description: Revokes caller's active JWT session via jti blocklist.
       responses:
-        '200':
-          description: Logged out successfully.
-        '401':
-          description: Unauthorized.
+        '200': { description: Logged out successfully. }
 
   /auth/revoke:
     post:
+      tags: [Authentication & MFA]
       summary: Admin Session Revocation
-      description: Revokes all sessions for a target user before current timestamp or specific jti. Requires admin role.
+      description: Revokes all sessions for a target userId or specific jti. Admin only.
       requestBody:
         required: true
         content:
@@ -124,117 +159,346 @@ paths:
             schema:
               type: object
               properties:
-                username:
-                  type: string
-                jti:
-                  type: string
+                userId: { type: string }
+                jti: { type: string }
       responses:
-        '200':
-          description: Sessions revoked successfully.
-        '403':
-          description: Admin privilege required.
+        '200': { description: Revocation processed. }
+        '403': { description: Admin privilege required. }
+
+  /auth/download-ticket:
+    post:
+      tags: [Authentication & MFA]
+      summary: Issue Single-Use Download Ticket
+      description: Issues a 60-second single-use ticket for secure binary PPTX/CSV downloads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId]
+              properties:
+                clientId: { type: string, example: client-jfl }
+                jobId: { type: string, example: latest }
+                exportType: { type: string, example: pptx }
+      responses:
+        '200': { description: Download ticket issued. }
+        '403': { description: Cross-tenant access denied. }
+
+  /auth/sse-ticket:
+    post:
+      tags: [Authentication & MFA]
+      summary: Issue Single-Use SSE Stream Ticket
+      description: Issues a 60-second single-use ticket for real-time Server-Sent Events streams.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId]
+              properties:
+                clientId: { type: string, example: client-jfl }
+      responses:
+        '200': { description: SSE ticket issued. }
+
+  /mfa/setup:
+    post:
+      tags: [Authentication & MFA]
+      summary: Initialize TOTP MFA Enrollment
+      responses:
+        '200': { description: Returns base32 secret and QR code data URI. }
+
+  /mfa/verify:
+    post:
+      tags: [Authentication & MFA]
+      summary: Verify and Enable TOTP MFA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, example: '123456' }
+      responses:
+        '200': { description: MFA verified and enabled. }
+        '400': { description: Invalid 6-digit code. }
+
+  # ── Tenants & Configuration ─────────────────────────────────────────────────
+  /clients:
+    get:
+      tags: [Tenants & Configuration]
+      summary: List Provisioned Clients with Branding Settings
+      responses:
+        '200': { description: Array of tenant objects with settings and branding. }
+
+  /tenants:
+    get:
+      tags: [Tenants & Configuration]
+      summary: List Tenants & Settings
+      responses:
+        '200': { description: List of tenants. }
+    post:
+      tags: [Tenants & Configuration]
+      summary: Provision New Tenant (Admin Only)
+      responses:
+        '201': { description: Tenant provisioned. }
+
+  /tenants/{id}/settings:
+    get:
+      tags: [Tenants & Configuration]
+      summary: Get Tenant Branding & Settings
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200': { description: Tenant settings object. }
+    put:
+      tags: [Tenants & Configuration]
+      summary: Update Tenant Branding & Settings (Admin Only)
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200': { description: Settings updated. }
+
+  /tenants/{id}/schedules:
+    get:
+      tags: [Tenants & Configuration]
+      summary: List Tenant QBR Schedules
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200': { description: List of standing schedules. }
+    post:
+      tags: [Tenants & Configuration]
+      summary: Create Tenant QBR Schedule
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '201': { description: Schedule created. }
+
+  /tenants/{id}/templates:
+    get:
+      tags: [Tenants & Configuration]
+      summary: List PPTX Master Template Versions
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200': { description: Versioned template manifest (5-version retention). }
+
+  /rules:
+    get:
+      tags: [Tenants & Configuration]
+      summary: Read Active SLA & RCA Rules Configuration
+      security: []
+      responses:
+        '200': { description: Returns rules.yaml source and parsed configuration. }
+
+  # ── Reports & Upload Pipeline ───────────────────────────────────────────────
+  /upload:
+    post:
+      tags: [Reports & Upload Pipeline]
+      summary: Upload Incident & Inventory Workbooks for Processing
+      description: Enqueues asynchronous QBR processing with strict dynamic custom date validation (start_date <= end_date <= today).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [incidentFile, inventoryFile, start_date, end_date]
+              properties:
+                incidentFile: { type: string, format: binary }
+                inventoryFile: { type: string, format: binary }
+                clientId: { type: string, example: client-jfl }
+                start_date: { type: string, format: date, example: '2026-04-01' }
+                end_date: { type: string, format: date, example: '2026-04-30' }
+      responses:
+        '202': { description: Job accepted and queued. }
+        '400': { description: Invalid file type, magic byte failure, or invalid date range. }
+
+  /jobs/{jobId}:
+    get:
+      tags: [Reports & Upload Pipeline]
+      summary: Poll Async Report Generation Job Status
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Job progress, stage, and download URLs. }
+        '404': { description: Job not found. }
+    delete:
+      tags: [Reports & Upload Pipeline]
+      summary: Cancel Queued or Running Job
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Job cancelled. }
 
   /dashboard:
     get:
-      summary: Executive QBR Dashboard Data
-      description: Returns processed SSOT analytics, site summaries, SLA compliance, and uptime metrics.
+      tags: [Reports & Upload Pipeline]
+      summary: Executive QBR Dashboard SSOT Payload
+      description: Returns processed SSOT analytics, site summaries, SLA compliance, uptime metrics, and anomaly summaries.
       parameters:
-        - in: query
-          name: clientId
-          schema:
-            type: string
-          required: true
-          description: Tenant identifier (e.g. client-jfl, client-mmtcpamp)
+        - $ref: '#/components/parameters/ClientIdQuery'
         - in: query
           name: jobId
-          schema:
-            type: string
-          description: Optional specific report job identifier
+          schema: { type: string }
+          description: Specific report job ID or 'latest'
         - in: query
           name: site
-          schema:
-            type: string
-          description: Optional site name filter
+          schema: { type: string }
+          description: Optional physical site filter
       responses:
         '200':
-          description: Dashboard data payload.
+          description: Dashboard SSOT payload.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardData'
-        '400':
-          description: Missing clientId.
-        '403':
-          description: Forbidden - cross-tenant access denied.
-        '404':
-          description: Report data not found.
+        '400': { description: Missing clientId. }
+        '403': { description: Forbidden — cross-tenant access denied. }
 
-  /tenants:
+  /history:
     get:
-      summary: List Tenants
-      description: Returns list of provisioned tenant configurations.
+      tags: [Reports & Upload Pipeline]
+      summary: Tenant Report Generation History
+      parameters:
+        - $ref: '#/components/parameters/ClientIdQuery'
+      responses:
+        '200': { description: Chronological list of historical QBR runs. }
+
+  /qoq/compare:
+    get:
+      tags: [Reports & Upload Pipeline]
+      summary: Quarter-over-Quarter Longitudinal Comparison
+      parameters:
+        - $ref: '#/components/parameters/ClientIdQuery'
+      responses:
+        '200': { description: QoQ uptime, incident, and SLA delta metrics. }
+
+  /ppt/download/{jobId}:
+    get:
+      tags: [Reports & Upload Pipeline]
+      summary: Download Synchronized Executive PPTX Deck
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: ticket
+          schema: { type: string }
+          description: Single-use download ticket (alternative to Bearer header)
       responses:
         '200':
-          description: List of tenants.
+          description: PowerPoint (.pptx) binary stream.
+
+  # ── AI, RCA & Anomaly Intelligence ──────────────────────────────────────────
+  /anomalies:
+    get:
+      tags: [AI, RCA & Anomaly Intelligence]
+      summary: Query Temporal & Statistical Infrastructure Anomalies
+      description: Evaluates flapping devices, correlated AP outages, extended outage resolutions, and incident volume outliers.
+      parameters:
+        - in: query
+          name: clientId
+          schema: { type: string }
+          description: Tenant ID (defaults to caller's assigned client or client-jfl for admin)
+        - in: query
+          name: severity
+          schema: { type: string, enum: [CRITICAL, HIGH, MEDIUM, LOW] }
+        - in: query
+          name: type
+          schema: { type: string, example: DEVICE_FLAPPING }
+        - in: query
+          name: site
+          schema: { type: string }
+      responses:
+        '200':
+          description: Detected anomalies and severity summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  clientId: { type: string }
+                  total: { type: integer }
+                  summary: { $ref: '#/components/schemas/AnomalySummary' }
+                  anomalies:
+                    type: array
+                    items: { $ref: '#/components/schemas/Anomaly' }
+
+  /lineage:
+    get:
+      tags: [AI, RCA & Anomaly Intelligence]
+      summary: Full Data Provenance & Lineage Tree
+      parameters:
+        - $ref: '#/components/parameters/ClientIdQuery'
+      responses:
+        '200': { description: Lineage map tying dashboard KPIs back to Excel coordinates. }
+
+  /lineage/trace:
+    get:
+      tags: [AI, RCA & Anomaly Intelligence]
+      summary: Trace Single KPI Lineage
+      parameters:
+        - $ref: '#/components/parameters/ClientIdQuery'
+        - in: query
+          name: key
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Cell-level provenance for requested metric. }
+
+  /ai/insights:
     post:
-      summary: Provision Tenant
-      description: Registers a new tenant organization. Requires admin role.
+      tags: [AI, RCA & Anomaly Intelligence]
+      summary: Generate Grounded AI Executive Narrative
+      description: Generates CTO-grade executive summary, business risks, and action items grounded in SSOT anomalies and duration-weighted RCA.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                section: { type: string, example: overview }
+                clientId: { type: string, example: client-jfl }
       responses:
-        '201':
-          description: Tenant created.
+        '200': { description: Grounded executive narrative JSON. }
 
-  /tenants/{id}/settings:
-    get:
-      summary: Get Tenant Settings
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Tenant settings object.
-    put:
-      summary: Update Tenant Settings
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Settings updated.
-
-  /tenants/{id}/schedules:
-    get:
-      summary: List Tenant Schedules
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: List of standing schedules.
+  /chat:
     post:
-      summary: Create Tenant Schedule
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
+      tags: [AI, RCA & Anomaly Intelligence]
+      summary: Conversational QBR Intelligence Query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: { type: string }
+                clientId: { type: string }
+                sessionId: { type: string }
       responses:
-        '201':
-          description: Schedule created.
+        '200': { description: Verified AI response with IQ-200 hallucination checks. }
 
+  # ── Data Hygiene & Vulnerabilities ──────────────────────────────────────────
   /data-health:
     get:
+      tags: [Data Hygiene & Vulnerabilities]
       summary: Data Hygiene & Invariant Telemetry
-      description: Evaluates cross-workbook invariants, device integrity, and incident hygiene scores.
       responses:
         '200':
           description: Data health report.
@@ -243,18 +507,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/DataHealthReport'
 
-  /vulnerabilities:
-    get:
-      summary: CVE & Security Vulnerability Feed
-      description: Returns network hardware and infrastructure CVE advisories matched against tenant inventory.
-      responses:
-        '200':
-          description: Vulnerability list and severity breakdown.
-
   /validate:
     post:
+      tags: [Data Hygiene & Vulnerabilities]
       summary: Run Report Invariant Validation
-      description: Validates QBR dataset against enterprise data hygiene rules.
       requestBody:
         required: true
         content:
@@ -263,11 +519,289 @@ paths:
               type: object
               required: [qbrData]
               properties:
-                qbrData:
-                  type: object
+                qbrData: { type: object }
+      responses:
+        '200': { description: Validation result. }
+
+  /vulnerabilities:
+    get:
+      tags: [Data Hygiene & Vulnerabilities]
+      summary: Cisco PSIRT CVE & Security Vulnerability Feed
+      responses:
+        '200': { description: Vulnerability list matched against tenant inventory. }
+
+  /inventory/sync:
+    post:
+      tags: [Data Hygiene & Vulnerabilities]
+      summary: Diff & Sync Hardware Inventory Snapshot
+      responses:
+        '200': { description: Inventory reconciliation diff and sync result. }
+
+  /inventory/history:
+    get:
+      tags: [Data Hygiene & Vulnerabilities]
+      summary: List Inventory Sync Audit History
+      responses:
+        '200': { description: Past inventory syncs with rollback metadata. }
+
+  # ── Security Audit & Compliance ─────────────────────────────────────────────
+  /audit:
+    get:
+      tags: [Security Audit & Compliance]
+      summary: Query Admin-Wide Immutable Security Audit Logs
+      description: Queries tamper-evident database audit logs across all tenants. Admin role required.
+      parameters:
+        - in: query
+          name: tenantId
+          schema: { type: string }
+        - in: query
+          name: eventType
+          schema: { type: string }
+        - in: query
+          name: severity
+          schema: { type: string, enum: [INFO, WARN, CRITICAL] }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
       responses:
         '200':
-          description: Validation result.
+          description: Paginated audit entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  logs:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditLogEntry' }
+        '403': { description: Admin role required. }
+
+  /audit/export:
+    get:
+      tags: [Security Audit & Compliance]
+      summary: Export Admin-Wide Audit Trail CSV (RFC 4180)
+      responses:
+        '200':
+          description: CSV compliance export stream.
+          content:
+            text/csv:
+              schema: { type: string }
+
+  /tenants/{id}/audit:
+    get:
+      tags: [Security Audit & Compliance]
+      summary: Query Tenant-Scoped Audit Logs
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200': { description: Tenant-scoped audit logs. }
+        '403': { description: Cross-tenant access forbidden. }
+
+  /tenants/{id}/audit/export:
+    get:
+      tags: [Security Audit & Compliance]
+      summary: Export Tenant Audit Trail CSV (RFC 4180)
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200':
+          description: Tenant CSV export stream.
+
+  # ── Real-Time IT Connectors ─────────────────────────────────────────────────
+  /connectors:
+    get:
+      tags: [Real-Time IT Connectors]
+      summary: List Tenant Webhook Connectors
+      description: Lists configured Meraki, Catalyst Center, and generic connectors with masked secret previews.
+      parameters:
+        - in: query
+          name: clientId
+          schema: { type: string }
+      responses:
+        '200':
+          description: Connector list.
+    post:
+      tags: [Real-Time IT Connectors]
+      summary: Provision Webhook Connector (Admin Only)
+      description: Creates a connector and returns the generated whsec_* secret once in plain text.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, name]
+              properties:
+                clientId: { type: string, example: client-jfl }
+                provider: { type: string, enum: [meraki, catalyst_center, generic] }
+                name: { type: string, example: JFL Store Meraki Alerts }
+                sharedSecret: { type: string }
+      responses:
+        '201': { description: Connector created with one-time webhookSecret. }
+
+  /connectors/{connectorId}:
+    patch:
+      tags: [Real-Time IT Connectors]
+      summary: Toggle Connector or Rotate HMAC Secret (Admin Only)
+      parameters:
+        - in: path
+          name: connectorId
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                name: { type: string }
+                rotateSecret: { type: boolean }
+      responses:
+        '200': { description: Connector updated. }
+    delete:
+      tags: [Real-Time IT Connectors]
+      summary: Delete Webhook Connector (Admin Only)
+      parameters:
+        - in: path
+          name: connectorId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Connector deleted. }
+
+  /connectors/{connectorId}/events:
+    get:
+      tags: [Real-Time IT Connectors]
+      summary: List Ingested Events for Connector
+      parameters:
+        - in: path
+          name: connectorId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [buffered, processed, ignored] }
+        - in: query
+          name: severity
+          schema: { type: string, enum: [CRITICAL, HIGH, MEDIUM, LOW, INFO] }
+      responses:
+        '200': { description: Paginated webhook event history. }
+
+  /webhooks/meraki/{connectorId}:
+    post:
+      tags: [Real-Time IT Connectors]
+      summary: Ingest Cisco Meraki Webhook Alert
+      description: Cryptographically verifies HMAC-SHA256 (x-meraki-signature) or sharedSecret, normalizes device/site/RCA, and deduplicates by alertId.
+      security:
+        - MerakiWebhookHmac: []
+      parameters:
+        - in: path
+          name: connectorId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alertId: { type: string }
+                alertType: { type: string, example: AP went down }
+                alertLevel: { type: string, example: critical }
+                networkName: { type: string, example: IND-PVC-SEC70 }
+                deviceSerial: { type: string, example: Q2KD-AAAA-0001 }
+                deviceModel: { type: string, example: MR46 }
+      responses:
+        '202': { description: Event verified and buffered. }
+        '200': { description: Duplicate alertId acknowledged (idempotent). }
+        '401': { description: Invalid or missing HMAC signature / sharedSecret. }
+        '403': { description: Connector disabled. }
+
+  /webhooks/catalyst/{connectorId}:
+    post:
+      tags: [Real-Time IT Connectors]
+      summary: Ingest Cisco Catalyst Center (DNA-C) Event Webhook
+      description: Cryptographically verifies HMAC-SHA256 (x-catalyst-signature) and normalizes Assurance issues into buffered incidents.
+      security:
+        - CatalystWebhookHmac: []
+      parameters:
+        - in: path
+          name: connectorId
+          required: true
+          schema: { type: string }
+      responses:
+        '202': { description: Event verified and buffered. }
+        '200': { description: Duplicate eventId acknowledged. }
+        '401': { description: Invalid signature. }
+
+  /webhooks/ingest/{connectorId}:
+    post:
+      tags: [Real-Time IT Connectors]
+      summary: Ingest Generic Signed Webhook Event
+      security:
+        - MerakiWebhookHmac: []
+      parameters:
+        - in: path
+          name: connectorId
+          required: true
+          schema: { type: string }
+      responses:
+        '202': { description: Event verified and buffered. }
+
+  /webhooks/buffered-incidents:
+    get:
+      tags: [Real-Time IT Connectors]
+      summary: Materialize Buffered Webhook Events as SSOT Incidents + Anomaly Preview
+      parameters:
+        - in: query
+          name: clientId
+          schema: { type: string }
+        - in: query
+          name: site
+          schema: { type: string }
+      responses:
+        '200': { description: SSOT-formatted buffered incidents and live anomaly triggers. }
+
+  /webhooks/flush:
+    post:
+      tags: [Real-Time IT Connectors]
+      summary: Mark Buffered Webhook Events as Processed (Admin Only)
+      responses:
+        '200': { description: Returns flushed event count. }
+
+  # ── API Documentation ───────────────────────────────────────────────────────
+  /docs:
+    get:
+      tags: [API Documentation]
+      summary: Interactive OpenAPI / Swagger API Explorer UI
+      security: []
+      responses:
+        '200':
+          description: Self-contained interactive HTML API explorer.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /openapi.json:
+    get:
+      tags: [API Documentation]
+      summary: OpenAPI 3.0.3 Specification (JSON)
+      security: []
+      responses:
+        '200':
+          description: Parsed OpenAPI JSON schema.
+
+  /openapi.yaml:
+    get:
+      tags: [API Documentation]
+      summary: OpenAPI 3.0.3 Specification (YAML)
+      security: []
+      responses:
+        '200':
+          description: Raw OpenAPI YAML file.
 
 components:
   securitySchemes:
@@ -275,81 +809,148 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: Obtain a JWT v2 token from POST /api/v1/auth/login.
+    MerakiWebhookHmac:
+      type: apiKey
+      in: header
+      name: x-meraki-signature
+      description: Hex HMAC-SHA256 digest of raw request body using connector webhookSecret.
+    CatalystWebhookHmac:
+      type: apiKey
+      in: header
+      name: x-catalyst-signature
+      description: Hex HMAC-SHA256 digest (optional sha256= prefix) of raw request body.
+
+  parameters:
+    ClientIdQuery:
+      in: query
+      name: clientId
+      required: true
+      schema: { type: string, example: client-jfl }
+      description: Canonical tenant identifier (e.g. client-jfl, client-mmtcpamp)
+    TenantIdPath:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, example: client-jfl }
+      description: Canonical tenant identifier
 
   schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string }
+
     User:
       type: object
       properties:
-        id:
-          type: string
-        username:
-          type: string
-        email:
-          type: string
-        role:
-          type: string
-          enum: [admin, user, viewer]
-        client_access:
-          type: array
-          items:
-            type: string
+        id: { type: string }
+        username: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [admin, client_user] }
+        assignedClient: { type: string }
 
     SchedulerHealth:
       type: object
       properties:
-        ready:
-          type: boolean
-        activeTasks:
-          type: integer
-        lastHeartbeat:
-          type: string
-          format: date-time
+        ready: { type: boolean }
+        activeTasks: { type: integer }
+        lastHeartbeat: { type: string, format: date-time }
 
     DashboardData:
       type: object
       properties:
-        customerName:
-          type: string
-        reportingPeriod:
-          type: string
-        generatedAt:
-          type: string
-        executiveSummary:
+        customerName: { type: string }
+        reportingPeriod: { type: string }
+        report_period:
           type: object
+          properties:
+            start_date: { type: string }
+            end_date: { type: string }
+            display_label: { type: string }
+        generatedAt: { type: string }
+        executiveSummary: { type: object }
         siteSummary:
           type: array
-          items:
-            type: object
-        switchAnalytics:
-          type: object
-        apAnalytics:
-          type: object
-        incidentAnalytics:
-          type: object
-        rcaAnalytics:
-          type: object
-        slaAnalytics:
-          type: object
+          items: { type: object }
+        switchAnalytics: { type: object }
+        apAnalytics: { type: object }
+        incidentAnalytics: { type: object }
+        rcaAnalytics: { type: object }
+        slaAnalytics: { type: object }
+        anomalies:
+          type: array
+          items: { $ref: '#/components/schemas/Anomaly' }
+        anomalySummary: { $ref: '#/components/schemas/AnomalySummary' }
 
     DataHealthReport:
       type: object
       properties:
-        success:
-          type: boolean
-        tenantId:
-          type: string
+        success: { type: boolean }
+        tenantId: { type: string }
         health:
           type: object
           properties:
-            status:
-              type: string
-            score:
-              type: number
-            invariants:
-              type: object
-            metrics:
-              type: object
+            status: { type: string }
+            score: { type: number }
+            invariants: { type: object }
+            metrics: { type: object }
             issues:
               type: array
-              items:
-                type: object
+              items: { type: object }
+
+    Anomaly:
+      type: object
+      properties:
+        id: { type: string }
+        severity: { type: string, enum: [CRITICAL, HIGH, MEDIUM, LOW] }
+        type: { type: string }
+        entity: { type: object }
+        message: { type: string }
+        evidence: { type: object }
+        recommendation: { type: string }
+
+    AnomalySummary:
+      type: object
+      properties:
+        total: { type: integer }
+        critical: { type: integer }
+        high: { type: integer }
+        medium: { type: integer }
+        low: { type: integer }
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id: { type: string }
+        timestamp: { type: string, format: date-time }
+        event_type: { type: string }
+        severity: { type: string, enum: [INFO, WARN, CRITICAL] }
+        tenant_id: { type: string }
+        username: { type: string }
+        action: { type: string }
+        status: { type: string, enum: [SUCCESS, FAILURE] }
+
+    WebhookConnector:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        provider: { type: string, enum: [meraki, catalyst_center, generic] }
+        name: { type: string }
+        secretPreview: { type: string }
+        enabled: { type: boolean }
+        eventCount: { type: integer }
+
+    WebhookEvent:
+      type: object
+      properties:
+        id: { type: string }
+        connectorId: { type: string }
+        eventType: { type: string }
+        severity: { type: string }
+        deviceId: { type: string }
+        siteId: { type: string }
+        rcaHint: { type: string }
+        status: { type: string, enum: [buffered, processed, ignored] }
