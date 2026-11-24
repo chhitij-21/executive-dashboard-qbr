@@ -33,6 +33,11 @@ if (!process.env.AUDIT_LOG_DIR || (process.env.AUDIT_LOG_DIR.includes('test-audi
   process.env.AUDIT_LOG_DIR = defaultAuditDir;
 }
 
+const defaultUsersPath = path.join(os.tmpdir(), `test-users-${process.pid}.json`);
+if (!process.env.USERS_DATA_PATH || (process.env.USERS_DATA_PATH.includes('test-users-') && !process.env.USERS_DATA_PATH.includes(`test-users-${process.pid}.json`))) {
+  process.env.USERS_DATA_PATH = defaultUsersPath;
+}
+
 let _initialized = false;
 let _cleanedUp = false;
 
@@ -76,6 +81,13 @@ function cleanupSynchronous() {
     const auditDir = process.env.AUDIT_LOG_DIR;
     if (auditDir && fs.existsSync(auditDir)) {
       fs.rmSync(auditDir, { recursive: true, force: true });
+    }
+  } catch (_) {}
+
+  try {
+    const usersPath = process.env.USERS_DATA_PATH;
+    if (usersPath && fs.existsSync(usersPath)) {
+      fs.unlinkSync(usersPath);
     }
   } catch (_) {}
 }

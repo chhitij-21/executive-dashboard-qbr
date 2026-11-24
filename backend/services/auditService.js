@@ -15,6 +15,8 @@ const SENSITIVE_KEYS = new Set([
   'password_hash',
   'token',
   'secret',
+  'webhook_secret',
+  'shared_secret',
   'mfa_secret',
   'jwt',
   'authorization',

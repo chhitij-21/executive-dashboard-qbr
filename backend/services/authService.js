@@ -88,7 +88,9 @@ if (process.env.ENABLE_CLIENT_ACCOUNTS !== 'false') {
   }
 }
 
-const USERS_FILE = path.resolve(__dirname, '../../data/users.json');
+function getUsersFile() {
+  return process.env.USERS_DATA_PATH || path.resolve(__dirname, '../../data/users.json');
+}
 
 // In-memory legacy fallback token map: token -> { session, expiresAt }
 const tokens = new Map();
@@ -131,11 +133,12 @@ function safeWriteJsonSync(filePath, data) {
 
 function loadUserMfaData() {
   try {
-    if (fs.existsSync(USERS_FILE)) {
+    const usersFile = getUsersFile();
+    if (fs.existsSync(usersFile)) {
       let raw = null;
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
-          raw = fs.readFileSync(USERS_FILE, 'utf-8');
+          raw = fs.readFileSync(usersFile, 'utf-8');
           break;
         } catch (e) {
           if (e.code === 'EBUSY' && attempt < 4) {
@@ -201,10 +204,11 @@ function loadUserMfaData() {
 
 function saveUserMfaData() {
   try {
+    const usersFile = getUsersFile();
     let existingMap = {};
-    if (fs.existsSync(USERS_FILE)) {
+    if (fs.existsSync(usersFile)) {
       try {
-        existingMap = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8')) || {};
+        existingMap = JSON.parse(fs.readFileSync(usersFile, 'utf-8')) || {};
       } catch (e) {}
     }
     const mfaMap = { ...existingMap };
@@ -227,7 +231,7 @@ function saveUserMfaData() {
         };
       }
     }
-    safeWriteJsonSync(USERS_FILE, mfaMap);
+    safeWriteJsonSync(usersFile, mfaMap);
   } catch (err) {
     console.warn('[authService] Warning: Failed to save user data to users.json:', err.message);
   }
@@ -283,8 +287,9 @@ function migrateAllPasswords() {
       modified = true;
     }
   }
-  if (fs.existsSync(USERS_FILE)) {
-    migratePlaintextPasswordsFile(USERS_FILE);
+  const usersFile = getUsersFile();
+  if (fs.existsSync(usersFile)) {
+    migratePlaintextPasswordsFile(usersFile);
   }
   if (modified) {
     saveUserMfaData();

@@ -7,7 +7,7 @@ const path = require('path');
 const authService = require('../services/authService');
 
 describe('AuthService users.json dynamic persistence suite', () => {
-  const usersFilePath = path.resolve(__dirname, '../../data/users.json');
+  const usersFilePath = process.env.USERS_DATA_PATH || path.resolve(__dirname, '../../data/users.json');
   let originalFileContent = '{}';
 
   before(() => {

@@ -75,7 +75,14 @@ app.use(cors({
   credentials: true,
 }));
 app.use(compression());
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({
+  limit: '2mb',
+  verify: (req, _res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('/webhooks/')) {
+      req.rawBody = buf;
+    }
+  },
+}));
 
 // ── Inline rate limiter for auth routes (FINDING-009) ─────────────────────────
 // Limits each IP to 20 login attempts per 15 minutes without a new dependency.

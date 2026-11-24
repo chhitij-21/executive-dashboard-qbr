@@ -10,7 +10,14 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // Body parser with 2mb limit strictly inside v1Router (GAP 3)
-router.use(express.json({ limit: '2mb' }));
+router.use(express.json({
+  limit: '2mb',
+  verify: (req, _res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('/webhooks/')) {
+      req.rawBody = buf;
+    }
+  },
+}));
 
 // Cache-Control: no-store on all API responses
 router.use((req, res, next) => {
@@ -62,6 +69,7 @@ const scheduleRoutes = require('./scheduleRoutes');
 const validationRoutes = require('./validationRoutes');
 const auditRoutes = require('./v1/auditRoutes');
 const authRoutes = require('./v1/authRoutes');
+const webhookRoutes = require('./v1/webhookRoutes');
 
 router.use('/vulnerabilities', vulnerabilitiesRouter);
 router.use(['/mfa', '/api/mfa'], mfaRouter);
@@ -74,6 +82,7 @@ router.use(['/data-health', '/api/data-health'], dataHealthRoutes);
 router.use(['/validate', '/api/validate'], validationRoutes.router);
 router.use(auditRoutes);
 router.use(authRoutes);
+router.use(webhookRoutes);
 
 // ── Canonical Health & Readiness Endpoints (Item #1, Item #14, Item #15) ────────
 const healthRoutes = require('./v1/healthRoutes');
