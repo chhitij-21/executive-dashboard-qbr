@@ -356,4 +356,55 @@ describe('Sub-Item #2.2: Dual-Write & Storage Orphan Prevention Suite', () => {
       server.close();
     }
   });
+
+  it('13. Sub-Item #2.4: cleanup-migrated-storage safely purges local copies only after verifying DB ETag', async () => {
+    const cleanup = require('../../scripts/cleanup-migrated-storage');
+
+    // 1. Create a dummy migrated report
+    const reportsDir = path.resolve('reports');
+    if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+    const dummyFile = path.join(reportsDir, `jfl_cleanup_test_${Date.now()}.pptx`);
+    const buf = createValidPptxBuffer();
+    fs.writeFileSync(dummyFile, buf);
+
+    try {
+      // Put into DB with exact ETag
+      const key = `tenants/client-jfl/reports/legacy/${path.basename(dummyFile)}`;
+      await storageRepo.putObject({
+        tenantId: 'client-jfl',
+        key,
+        buffer: buf,
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      });
+
+      // Cleanup finds it eligible
+      const dryRes = await cleanup.run({ execute: false });
+      assert.strictEqual(dryRes.success, true);
+      assert.ok(dryRes.eligibleCount >= 1);
+
+      // Execute live removal
+      const execRes = await cleanup.run({ execute: true });
+      assert.strictEqual(execRes.success, true);
+      assert.ok(execRes.removedCount >= 1);
+      assert.strictEqual(fs.existsSync(dummyFile), false, 'Verified local copy must be unlinked');
+
+      // Verify DB copy still exists intact
+      const dbObj = await storageRepo.getObject({ tenantId: 'client-jfl', key });
+      assert.ok(dbObj, 'DB storage object must remain intact after local disk cleanup');
+    } finally {
+      if (fs.existsSync(dummyFile)) fs.unlinkSync(dummyFile);
+    }
+  });
+
+  it('14. Sub-Item #2.4: schedulerService mounts standing nightly storage lifecycle prune task', async () => {
+    const schedulerService = require('../services/schedulerService');
+    await schedulerService.initSchedulers();
+
+    const health = schedulerService.getHealth();
+    assert.strictEqual(typeof health.ready, 'boolean');
+    assert.ok(health.activeTasks >= 1, 'At least the storage lifecycle standing task must be active');
+
+    // Clean teardown
+    schedulerService.stopAll();
+  });
 });

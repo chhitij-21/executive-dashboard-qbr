@@ -1030,6 +1030,23 @@ async function initSchedulers() {
     }
   }
 
+  // Mount standing nightly storage lifecycle prune (Sub-Item #2.4: 1-Year Auto-Expire)
+  if (!_scheduledTasks.has('system:storage-lifecycle')) {
+    try {
+      const storageRepo = require('../repositories/storageRepo');
+      const lifecycleTask = cron.schedule('0 2 * * *', async () => {
+        try {
+          console.log('[schedulerService] Running nightly storage lifecycle prune (365 days)...');
+          const pruned = await storageRepo.pruneExpiredObjects({ olderThanDays: 365 });
+          console.log(`[schedulerService] Completed nightly storage lifecycle purge: ${pruned} expired objects pruned.`);
+        } catch (err) {
+          console.error('[schedulerService] Error during nightly storage lifecycle purge:', err.message);
+        }
+      });
+      _scheduledTasks.set('system:storage-lifecycle', lifecycleTask);
+    } catch (_) {}
+  }
+
   _schedulersReady = true;
 
   // Start heartbeat interval
