@@ -107,8 +107,9 @@ function discoverMigrationInventory() {
   return inventory;
 }
 
-async function run() {
-  console.log(`[migrate-to-db-storage] Mode: ${isExecute ? 'EXECUTE (live migration)' : 'DRY RUN (preview only)'}`);
+async function run(options = {}) {
+  const executeMode = options.execute !== undefined ? options.execute : (process.argv.includes('--execute'));
+  console.log(`[migrate-to-db-storage] Mode: ${executeMode ? 'EXECUTE (live migration)' : 'DRY RUN (preview only)'}`);
   console.log('[migrate-to-db-storage] Scanning local filesystem inventory...');
 
   const inventory = discoverMigrationInventory();
@@ -118,7 +119,7 @@ async function run() {
 
   console.log(`[migrate-to-db-storage] Found ${totalFiles} file(s) across inventory totaling ${totalMb} MB.`);
 
-  if (isDryRun && !isExecute) {
+  if (!executeMode) {
     console.log('\n--- DRY RUN PREVIEW TABLE ---');
     console.log('Index | Tenant | Size (KB) | Target Key');
     console.log('------------------------------------------------------------');
@@ -136,12 +137,22 @@ async function run() {
   // Live execution mode
   console.log('\n[migrate-to-db-storage] Beginning live migration to Turso database...');
   let migratedCount = 0;
+  let skippedCount = 0;
   let migratedBytes = 0;
 
   for (let i = 0; i < inventory.length; i++) {
     const item = inventory[i];
     try {
       const buffer = fs.readFileSync(item.filePath);
+      const etag = crypto.createHash('sha256').update(buffer).digest('hex');
+
+      // Idempotency check: check if object exists with matching etag
+      const existing = await storageRepo.getObject({ tenantId: item.tenantId, key: item.key });
+      if (existing && existing.metadata?.etag === etag) {
+        skippedCount++;
+        continue;
+      }
+
       await storageRepo.putObject({
         tenantId: item.tenantId,
         key: item.key,
@@ -151,12 +162,31 @@ async function run() {
       migratedCount++;
       migratedBytes += buffer.length;
       if ((i + 1) % 10 === 0 || i + 1 === inventory.length) {
-        console.log(`[migrate-to-db-storage] Progress: ${i + 1}/${inventory.length} files migrated (${(migratedBytes / (1024 * 1024)).toFixed(1)} MB)...`);
+        console.log(`[migrate-to-db-storage] Progress: ${i + 1}/${inventory.length} processed (${migratedCount} written, ${skippedCount} skipped, ${(migratedBytes / (1024 * 1024)).toFixed(1)} MB)...`);
       }
     } catch (err) {
       console.error(`[migrate-to-db-storage] Failed migrating ${item.key}:`, err.message);
     }
   }
+
+  // ── Reconciliation Gate (Sub-Item #2.2.5) ──────────────────────────────────
+  console.log('\n[migrate-to-db-storage] Executing Reconciliation Gate Verification...');
+  let missingCount = 0;
+  for (const item of inventory) {
+    const check = await storageRepo.getObject({ tenantId: item.tenantId, key: item.key });
+    if (!check) {
+      console.error(`[migrate-to-db-storage] RECONCILIATION FAILURE: Missing object for key ${item.key}`);
+      missingCount++;
+    }
+  }
+
+  if (missingCount > 0) {
+    throw new Error(`Reconciliation Gate FAILED: ${missingCount} objects missing in database storage. Cutover blocked.`);
+  }
+
+  console.log(`✓ RECONCILIATION GATE PASSED: 0 missing objects. All ${inventory.length} inventory items verified in storage_objects.`);
+  console.log(`✓ Migration complete! Processed ${inventory.length} files (${migratedCount} newly written, ${skippedCount} idempotent skips, ${(migratedBytes / (1024 * 1024)).toFixed(1)} MB).`);
+  return { success: true, totalFiles: inventory.length, migratedCount, skippedCount, totalBytes: migratedBytes, mode: 'execute' };
 
   console.log(`\n✓ Migration complete! Successfully migrated ${migratedCount}/${inventory.length} files (${(migratedBytes / (1024 * 1024)).toFixed(1)} MB) to database storage.`);
   return { success: true, totalFiles: migratedCount, totalBytes: migratedBytes, mode: 'execute' };

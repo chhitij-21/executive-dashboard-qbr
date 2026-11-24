@@ -189,4 +189,40 @@ describe('Sub-Item #2.2: Dual-Write & Storage Orphan Prevention Suite', () => {
     const afterObj = await storageRepo.getObject({ tenantId: 'client-jfl', key: testKey });
     assert.strictEqual(afterObj, null, 'Orphaned upload must be purged from storageRepo');
   });
+
+  it('9. migrate-to-db-storage: Dry-run, live execution, idempotency and reconciliation gate', async () => {
+    const migration = require('../../scripts/migrate-to-db-storage');
+    // 1. Dry run
+    const dryRes = await migration.run({ execute: false });
+    assert.strictEqual(dryRes.success, true);
+    assert.strictEqual(dryRes.mode, 'dry-run');
+
+    // 2. Create sample file in reports directory
+    const reportsDir = path.resolve('reports');
+    if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+    const testReportFile = path.join(reportsDir, `jfl_test_mig_${Date.now()}.pptx`);
+    fs.writeFileSync(testReportFile, createValidPptxBuffer());
+
+    try {
+      // 3. Live execution with reconciliation gate
+      const execRes = await migration.run({ execute: true });
+      assert.strictEqual(execRes.success, true);
+      assert.strictEqual(execRes.mode, 'execute');
+      assert.ok(execRes.totalFiles >= 1);
+
+      // Verify object exists in storageRepo
+      const inv = migration.discoverMigrationInventory();
+      const targetItem = inv.find((i) => i.filePath === testReportFile);
+      assert.ok(targetItem);
+      const stored = await storageRepo.getObject({ tenantId: targetItem.tenantId, key: targetItem.key });
+      assert.ok(stored);
+
+      // 4. Idempotency re-run
+      const rerunRes = await migration.run({ execute: true });
+      assert.strictEqual(rerunRes.success, true);
+      assert.ok(rerunRes.skippedCount >= 1, 'Subsequent run must skip matching etags');
+    } finally {
+      if (fs.existsSync(testReportFile)) fs.unlinkSync(testReportFile);
+    }
+  });
 });
