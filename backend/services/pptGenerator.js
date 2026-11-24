@@ -28,7 +28,11 @@
 
 const fs   = require('fs');
 const path = require('path');
-const PptxGenJS = require('pptxgenjs');
+let _PptxGenJS = null;
+function getPptxGenJS() {
+  if (!_PptxGenJS) _PptxGenJS = require('pptxgenjs');
+  return _PptxGenJS;
+}
 const { isGenericLocation, normalizeSiteName } = require('./excelParser');
 // FINDING-010/012/029 FIX: Import ruleEngine to use canonical health labels and
 // period-aware SLA target instead of duplicated local functions.
@@ -539,7 +543,8 @@ async function buildPresentation(data, outputPath, options = {}) {
   _slideNum = 0;
   applyTheme(data);
   try {
-    const pres = new PptxGenJS();
+    const PptxGen = getPptxGenJS();
+    const pres = new PptxGen();
   pres.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5 inches
 
   const exec        = data.executiveSummary || {};

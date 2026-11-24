@@ -28,7 +28,13 @@ const schedulerService = require('../services/schedulerService');
 const sentry = require('../utils/sentry');
 const { logger } = require('../utils/logger');
 const { processJFLWorkbooks, filterDashboardBySite } = require('../services/processData');
-const { generatePPT } = require('../services/pptGenerator');
+let _generatePPT = null;
+function getGeneratePPT() {
+  if (!_generatePPT) {
+    _generatePPT = require('../services/pptGenerator').generatePPT;
+  }
+  return _generatePPT;
+}
 const jobs = require('../services/jobCache');
 
 const {
@@ -65,34 +71,9 @@ router.use(['/tenants', '/api/tenants', '/clients', '/api/clients'], scheduleRou
 router.use(['/data-health', '/api/data-health'], dataHealthRoutes);
 router.use(['/validate', '/api/validate'], validationRoutes.router);
 
-// ── Canonical Health & Scheduler Health Endpoints (GAP 2 & Item #15) ────────
-router.get(['/health', '/api/health'], (req, res) => {
-  const scheduler = schedulerService.getHealth();
-  res.json({
-    status: 'ok',
-    ts: new Date().toISOString(),
-    version: 'v1',
-    scheduler: scheduler.status || (scheduler.ready ? 'healthy' : 'degraded'),
-    observability: {
-      logger: 'pino',
-      logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),
-      sentryActive: sentry.isInitialized(),
-      environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'production',
-    },
-  });
-});
-
-router.get(['/health/scheduler', '/api/health/scheduler'], (req, res) => {
-  const health = schedulerService.getHealth();
-  const statusCode = health.ready ? 200 : 503;
-  return res.status(statusCode).json({
-    ...health,
-    observability: {
-      logger: 'pino',
-      sentryActive: sentry.isInitialized(),
-    },
-  });
-});
+// ── Canonical Health & Readiness Endpoints (Item #1, Item #14, Item #15) ────────
+const healthRoutes = require('./v1/healthRoutes');
+router.use(healthRoutes);
 
 // Helper to resolve data paths
 function resolveDataPath(...subpaths) {
@@ -2194,7 +2175,7 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
               return res.status(403).json({ error: 'Customer isolation violation: Data artifact belongs to another customer.', code: 'CUSTOMER_ISOLATION_VIOLATION' });
             }
 
-            await generatePPT(qbrData, templatePath, freshPptPath);
+            await getGeneratePPT()(qbrData, templatePath, freshPptPath);
             job.pptPath = freshPptPath;
             jobs[activeJobId] = { ...jobs[activeJobId], pptPath: freshPptPath };
             historyService.recordReport({

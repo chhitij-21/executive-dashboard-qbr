@@ -20,7 +20,8 @@
     "check:test-setup": "node scripts/check-test-setup-imports.js",
     "check:hermetic": "node scripts/verify-hermetic.js",
     "parity": "node scripts/deployment-parity.js",
-    "reconcile": "node scripts/ssot-reconciler.js"
+    "reconcile": "node scripts/ssot-reconciler.js",
+    "benchmark:boot": "node scripts/benchmark-boot.js"
   },
   "devDependencies": {
     "cross-env": "^7.0.3"

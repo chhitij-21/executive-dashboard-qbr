@@ -11,15 +11,9 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const os = require('os');
 
-const { processJFLWorkbooks, filterDashboardBySite } = require('./services/processData');
-// generatePPT is imported here so the download helper can regenerate a fresh PPT
-// from the job's own dashboard_data.json whenever the pre-generated file is missing.
-// This is the SSOT guarantee: the PPT always reflects the exact same data as the dashboard.
-const { generatePPT } = require('./services/pptGenerator');
-
+const { filterDashboardBySite } = require('./services/processData');
 const clientService = require('./services/clientService');
 const historyService = require('./services/historyService');
-const { validateUpload } = require('./services/uploadValidationService');
 const authService = require('./services/authService');
 const ruleEngine = require('./services/ruleEngine');
 const { migrate } = require('./db/migrate');
@@ -184,6 +178,7 @@ queueService.registerProcessor(async (jobState, jobData) => {
 
       await queueService.updateProgress(jobId, 25, 'parsing_excel', 'Parsing Excel workbooks...');
 
+      const { processJFLWorkbooks } = require('./services/processData');
       const result = await processJFLWorkbooks(jobData.incidentPath, jobData.inventoryPath, outputDir, {
         clientId,
         clientName,
@@ -414,6 +409,9 @@ function deprecationMiddleware(req, res, next) {
   next();
 }
 
+const healthRoutes = require('./routes/v1/healthRoutes');
+app.use(healthRoutes);
+
 app.use('/api/v1', v1Router);
 app.use('/api', deprecationMiddleware, v1Router);
 
@@ -464,7 +462,7 @@ app.get('*', (req, res) => {
   res.json({ message: 'Executive Dashboard & Multi-Client QBR Portal API running.' });
 });
 
-if ((require.main === module || !process.env.VERCEL) && process.env.NODE_ENV !== 'test') {
+if ((require.main === module || !process.env.VERCEL) && (process.env.NODE_ENV !== 'test' || process.env.BENCHMARK_BOOT === 'true')) {
   // Validate JWT secret requirements on boot
   authService.assertJwtSecretValid();
   const DEFAULT_PORT = process.env.PORT || 3000;
@@ -547,7 +545,9 @@ if ((require.main === module || !process.env.VERCEL) && process.env.NODE_ENV !==
     });
 
     if (!fs.existsSync(VULN_FILE)) {
-      fetchAndSave().catch(console.error);
+      setTimeout(() => {
+        fetchAndSave().catch((err) => console.error('[vuln-fetch] Initial sync error:', err.message));
+      }, 5000);
     }
   } catch (cronErr) {
     console.warn('[server] Warning initializing vulnerability scheduler:', cronErr.message);

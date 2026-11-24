@@ -19,6 +19,11 @@ let _currentUrl = null;
  * Otherwise, falls back to embedded SQLite file.
  */
 function getDatabaseUrl() {
+  if (process.env.BENCHMARK_BOOT === 'true') {
+    const benchDb = path.resolve(__dirname, `../../data/test-bench-${process.pid}.db`);
+    return `file:${benchDb.replace(/\\/g, '/')}`;
+  }
+
   if (process.env.TURSO_DATABASE_URL && process.env.TURSO_DATABASE_URL.trim()) {
     const url = process.env.TURSO_DATABASE_URL.trim();
     if (process.env.NODE_ENV !== 'test' || url.startsWith('file:') || process.env.TEST_USE_TURSO) {

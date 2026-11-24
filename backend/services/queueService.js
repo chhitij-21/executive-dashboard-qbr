@@ -596,6 +596,15 @@ class QueueService {
     }
   }
 
+  getHealth() {
+    return {
+      ready: true,
+      mode: this.isRedisActive ? 'bullmq-redis' : 'in-memory',
+      pendingJobs: this.inMemoryQueue.size,
+      activeTenantLocks: this.tenantLockManager.size,
+    };
+  }
+
   _clearInMemoryJobs() {
     this.inMemoryQueue.clear();
     this.tenantLockManager.clear();

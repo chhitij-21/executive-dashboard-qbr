@@ -2,7 +2,11 @@
 // JFL-specific parser: handles the two-file format (incidents + inventory).
 // ZERO ASSUMPTION: every read is traced to Sheet → Row → Column.
 
-const xlsx = require('xlsx');
+let _xlsx = null;
+function getXlsx() {
+  if (!_xlsx) _xlsx = require('xlsx');
+  return _xlsx;
+}
 const path = require('path');
 
 /**
@@ -10,6 +14,7 @@ const path = require('path');
  * Rows preserve raw values; __source is attached for traceability.
  */
 function loadWorkbook(filePath) {
+  const xlsx = getXlsx();
   const wb = xlsx.readFile(filePath, { cellDates: false, raw: true, dense: true });
   const result = {};
   wb.SheetNames.forEach((name) => {

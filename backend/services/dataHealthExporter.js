@@ -7,7 +7,11 @@
 
 'use strict';
 
-const xlsx = require('xlsx');
+let _xlsx = null;
+function getXlsx() {
+  if (!_xlsx) _xlsx = require('xlsx');
+  return _xlsx;
+}
 
 const MAX_EXPORT_ISSUES = 2000;
 
@@ -67,6 +71,7 @@ function generateExcelReport(qbrData, health, options = {}) {
   validateExportLimit(health?.issues?.length || 0, options);
 
   const cappedIssues = capIssuesForExport(health?.issues || []);
+  const xlsx = getXlsx();
   const wb = xlsx.utils.book_new();
 
   // ── Sheet 1: Overview & Invariants ────────────────────────────────

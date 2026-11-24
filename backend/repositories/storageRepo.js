@@ -356,6 +356,21 @@ async function pruneExpiredObjects({ olderThanDays = 365 } = {}) {
   return ids.length;
 }
 
+/**
+ * Health check probe for database-backed BLOB storage.
+ * Verifies table availability and executes a low-overhead count query.
+ * @returns {Promise<{ healthy: boolean, backend: string, error?: string }>}
+ */
+async function healthCheck() {
+  try {
+    await ensureTables();
+    await execute('SELECT COUNT(1) as count FROM storage_objects LIMIT 1');
+    return { healthy: true, backend: 'database_blob' };
+  } catch (err) {
+    return { healthy: false, backend: 'database_blob', error: err.message };
+  }
+}
+
 module.exports = {
   CHUNK_SIZE,
   computeEtag,
@@ -365,4 +380,5 @@ module.exports = {
   listObjects,
   streamObjectToResponse,
   pruneExpiredObjects,
+  healthCheck,
 };

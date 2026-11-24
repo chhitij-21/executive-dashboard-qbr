@@ -2,10 +2,15 @@
 // Validates uploaded files before triggering the heavy calculation pipeline.
 // Verifies presence, file format, workbook readabilities, sheet existence, and column presence.
 
-const xlsx = require('xlsx');
+let _xlsx = null;
+function getXlsx() {
+  if (!_xlsx) _xlsx = require('xlsx');
+  return _xlsx;
+}
 const path = require('path');
 
 function validateUpload(incidentInput, inventoryInput) {
+  const xlsx = getXlsx();
   const errors = [];
   const warnings = [];
 

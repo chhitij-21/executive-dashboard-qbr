@@ -34,7 +34,13 @@ function normalizeSiteName(site) {
   return rawNormalizeSiteName(str);
 }
 const ruleEngine = require('./ruleEngine');
-const { generatePPT } = require('./pptGenerator');
+let _generatePPT = null;
+function getGeneratePPT() {
+  if (!_generatePPT) {
+    _generatePPT = require('./pptGenerator').generatePPT;
+  }
+  return _generatePPT;
+}
 const { continuousPipelineAudit } = require('./ai/iq200Validator');
 const { buildLineage } = require('./validators/lineageTracker');
 const clientService = require('./clientService');
@@ -1897,7 +1903,7 @@ async function processJFLWorkbooks(incidentFilePath, inventoryFilePath, outputDi
   notifyProgress(75, 'Generating QBR PowerPoint Presentation...', 'generating_ppt');
   // ── 11. PPT Report Generation ──────────────────────────────────────
   // Asynchronous non-blocking PPT generation so API response returns immediately
-  const pptPromise = generatePPT(qbrData, templatePath, pptPath, {
+  const pptPromise = getGeneratePPT()(qbrData, templatePath, pptPath, {
     signal: options.signal,
     onProgress: (pct, msg, stg) => notifyProgress(pct, msg, stg),
   })

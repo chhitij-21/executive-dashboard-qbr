@@ -6,11 +6,16 @@
 const fs = require('fs');
 const path = require('path');
 
-let xlsx;
-try {
-  xlsx = require('xlsx');
-} catch (e) {
-  xlsx = require(path.resolve(__dirname, '../../node_modules/xlsx'));
+let _xlsx = null;
+function getXlsx() {
+  if (!_xlsx) {
+    try {
+      _xlsx = require('xlsx');
+    } catch (e) {
+      _xlsx = require(path.resolve(__dirname, '../../node_modules/xlsx'));
+    }
+  }
+  return _xlsx;
 }
 
 let database = null;
@@ -254,6 +259,7 @@ function getBaselineTickets() {
   }
   if (fs.existsSync(xlsxPath)) {
     try {
+      const xlsx = getXlsx();
       const wb = xlsx.readFile(xlsxPath);
       const sheetName = wb.SheetNames.includes('SLA_Compliance_Report')
         ? 'SLA_Compliance_Report'

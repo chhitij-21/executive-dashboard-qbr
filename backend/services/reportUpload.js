@@ -5,11 +5,16 @@
 
 const path = require('path');
 
-let xlsx;
-try {
-  xlsx = require('xlsx');
-} catch (e) {
-  xlsx = require(path.resolve(__dirname, '../../node_modules/xlsx'));
+let _xlsx = null;
+function getXlsx() {
+  if (!_xlsx) {
+    try {
+      _xlsx = require('xlsx');
+    } catch (e) {
+      _xlsx = require(path.resolve(__dirname, '../../node_modules/xlsx'));
+    }
+  }
+  return _xlsx;
 }
 
 const LOCKED_COLUMNS = [
@@ -59,6 +64,7 @@ function parseTicketExcel(buffer) {
     throw new Error('Invalid Excel file: missing or empty buffer.');
   }
 
+  const xlsx = getXlsx();
   const wb = xlsx.read(buffer, { type: 'buffer' });
   if (!wb.SheetNames || wb.SheetNames.length === 0) {
     throw new Error('Invalid Excel file: workbook contains no sheets.');
