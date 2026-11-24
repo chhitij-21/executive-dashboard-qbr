@@ -28,6 +28,11 @@ if (!process.env.VULN_DATA_PATH || (process.env.VULN_DATA_PATH.includes('vuln-')
   process.env.VULN_DATA_PATH = defaultVulnPath;
 }
 
+const defaultAuditDir = path.join(os.tmpdir(), `test-audit-${process.pid}`);
+if (!process.env.AUDIT_LOG_DIR || (process.env.AUDIT_LOG_DIR.includes('test-audit-') && !process.env.AUDIT_LOG_DIR.includes(`test-audit-${process.pid}`))) {
+  process.env.AUDIT_LOG_DIR = defaultAuditDir;
+}
+
 let _initialized = false;
 let _cleanedUp = false;
 
@@ -64,6 +69,13 @@ function cleanupSynchronous() {
     const vulnPath = process.env.VULN_DATA_PATH;
     if (vulnPath && fs.existsSync(vulnPath)) {
       fs.unlinkSync(vulnPath);
+    }
+  } catch (_) {}
+
+  try {
+    const auditDir = process.env.AUDIT_LOG_DIR;
+    if (auditDir && fs.existsSync(auditDir)) {
+      fs.rmSync(auditDir, { recursive: true, force: true });
     }
   } catch (_) {}
 }

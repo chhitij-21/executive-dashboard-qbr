@@ -333,6 +333,22 @@ async function logAdminAudit(action, scheduleId, tenantId, user = {}, ip = '127.
       ip: ip || '127.0.0.1',
     }) + '\n';
     await fs.promises.appendFile(auditFile, entry, 'utf8');
+
+    try {
+      const auditService = require('./auditService');
+      const eventType = action === 'CREATE' ? 'SCHEDULE_CREATED' : action === 'UPDATE' ? 'SCHEDULE_UPDATED' : action === 'DELETE' ? 'SCHEDULE_DELETED' : `SCHEDULE_${action}`;
+      auditService.logEvent({
+        eventType,
+        severity: 'INFO',
+        tenantId,
+        user,
+        resourceType: 'schedule',
+        resourceId: String(scheduleId),
+        action,
+        status: 'SUCCESS',
+        details: { scheduleId, tenantId, ip },
+      }).catch(() => {});
+    } catch (_) {}
   } catch (err) {
     console.warn('[schedulerService] Audit log write failed:', err.message);
   }

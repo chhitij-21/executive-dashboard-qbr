@@ -118,6 +118,22 @@ function requireClientAccess(extractClientId) {
       }
 
       if (canonicalAssigned !== canonicalClientId) {
+        try {
+          const auditService = require('../services/auditService');
+          auditService.logEvent({
+            eventType: 'SECURITY_ACCESS_DENIED',
+            severity: 'WARN',
+            req,
+            user: req.user,
+            tenantId: canonicalAssigned,
+            action: 'ACCESS',
+            status: 'FAILURE',
+            resourceType: 'tenant',
+            resourceId: canonicalClientId,
+            details: { reason: 'CUSTOMER_ACCESS_FORBIDDEN', targetClient: canonicalClientId },
+          }).catch(() => {});
+        } catch (_) {}
+
         return res.status(403).json({
           error: `Forbidden: You are not authorized to access customer '${client.name || trimmedClientId}'.`,
           code: 'CUSTOMER_ACCESS_FORBIDDEN',

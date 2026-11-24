@@ -168,3 +168,30 @@ CREATE TABLE IF NOT EXISTS storage_chunks (
 CREATE INDEX IF NOT EXISTS idx_storage_tenant_key ON storage_objects (tenant_id, key);
 CREATE INDEX IF NOT EXISTS idx_storage_created_at ON storage_objects (created_at);
 CREATE INDEX IF NOT EXISTS idx_chunks_parent ON storage_chunks(object_id, chunk_index);
+
+-- ── Item #21 Security Audit Trail & Compliance Events ────────────────────────
+
+-- 7. Immutable Security & Business Audit Logs
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id TEXT PRIMARY KEY,
+  timestamp TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  severity TEXT NOT NULL CHECK(severity IN ('INFO', 'WARN', 'CRITICAL')),
+  tenant_id TEXT,
+  user_id TEXT,
+  username TEXT,
+  role TEXT,
+  ip_address TEXT NOT NULL,
+  user_agent TEXT,
+  resource_type TEXT,
+  resource_id TEXT,
+  action TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('SUCCESS', 'FAILURE')),
+  details_json TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_tenant_time ON audit_logs(tenant_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_logs(event_type);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);

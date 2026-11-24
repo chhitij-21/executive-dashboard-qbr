@@ -41,6 +41,22 @@ router.get(['/:id/schedules', '/:id/schedule'], requireAuth, async (req, res) =>
     if (req.user.role !== 'admin') {
       const userTenant = clientService.resolveCanonicalClientId(req.user.assignedClient || req.user.clientId || req.tenantId);
       if (userTenant !== tenantId) {
+        try {
+          const auditService = require('../services/auditService');
+          auditService.logEvent({
+            eventType: 'SECURITY_ACCESS_DENIED',
+            severity: 'WARN',
+            req,
+            user: req.user,
+            tenantId: userTenant,
+            action: 'ACCESS',
+            status: 'FAILURE',
+            resourceType: 'schedule',
+            resourceId: tenantId,
+            details: { reason: 'FORBIDDEN_TENANT_ACCESS', requestedTenant: tenantId, userTenant },
+          }).catch(() => {});
+        } catch (_) {}
+
         return res.status(403).json({
           error: 'Forbidden: You do not have permission to view schedules for this client.',
           code: 'FORBIDDEN_TENANT_ACCESS',

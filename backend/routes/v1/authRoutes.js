@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const authService = require('../../services/authService');
+const auditService = require('../../services/auditService');
 const clientService = require('../../services/clientService');
 const historyService = require('../../services/historyService');
 const jobs = require('../../services/jobCache');
@@ -27,6 +28,15 @@ router.post(['/auth/login', '/api/auth/login'], async (req, res) => {
   // Rate limiting check: 5 attempts per 15 min per IP + username
   const rateLimit = await authService.checkLoginRateLimit(ip, username);
   if (!rateLimit.allowed) {
+    auditService.logEvent({
+      eventType: 'SECURITY_RATE_LIMITED',
+      severity: 'WARN',
+      req,
+      action: 'LOGIN',
+      status: 'FAILURE',
+      details: { reason: 'TOO_MANY_ATTEMPTS', email: username },
+    }).catch(() => {});
+
     res.set('Retry-After', String(rateLimit.retryAfter || 900));
     return res.status(429).json({
       error: 'Too many login attempts. Please try again in 15 minutes.',
@@ -37,11 +47,31 @@ router.post(['/auth/login', '/api/auth/login'], async (req, res) => {
 
   const result = authService.authenticateUser(email.trim(), password);
   if (!result) {
+    auditService.logEvent({
+      eventType: 'AUTH_LOGIN_FAILURE',
+      severity: 'WARN',
+      req,
+      action: 'LOGIN',
+      status: 'FAILURE',
+      details: { reason: 'INVALID_CREDENTIALS', email: username },
+    }).catch(() => {});
+
     return res.status(401).json({ error: 'Invalid email or password', code: 'INVALID_CREDENTIALS' });
   }
 
   // Clear failed attempt counter on success
   await authService.clearLoginRateLimit(ip, username);
+
+  auditService.logEvent({
+    eventType: 'AUTH_LOGIN_SUCCESS',
+    severity: 'INFO',
+    req,
+    user: result.user,
+    action: 'LOGIN',
+    status: 'SUCCESS',
+    tenantId: result.user?.assignedClient,
+    details: { mfaRequired: Boolean(result.mfaRequired) },
+  }).catch(() => {});
 
   if (result.mfaRequired) {
     return res.json({
@@ -60,6 +90,15 @@ router.get(['/auth/me', '/api/auth/me'], requireAuth, (req, res) => {
 
 // ── Logout ──────────────────────────────────────────────────────────────────
 router.post(['/auth/logout', '/api/auth/logout'], async (req, res) => {
+  auditService.logEvent({
+    eventType: 'AUTH_LOGOUT',
+    severity: 'INFO',
+    req,
+    user: req.user,
+    action: 'LOGOUT',
+    status: 'SUCCESS',
+  }).catch(() => {});
+
   await authService.invalidateToken(req.headers.authorization);
   res.json({ success: true, message: 'Logged out successfully.' });
 });
@@ -178,16 +217,14 @@ router.post(['/auth/sse-ticket', '/api/auth/sse-ticket'], requireAuth, (req, res
     }
   }
 
-  const ticketData = authService.createDownloadTicket({
+  const ticketData = authService.createSSETicket({
     user: req.user,
     userId: req.user.id,
     clientId: canonicalClientId,
-    jobId: 'sse-events',
-    exportType: 'sse',
   });
 
   res.json({
-    sseTicket: ticketData.ticket,
+    sseTicket: ticketData.sseTicket,
     expiresIn: ticketData.expiresIn,
     clientId: canonicalClientId,
   });

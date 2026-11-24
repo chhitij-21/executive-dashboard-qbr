@@ -6,6 +6,7 @@ const fs = require('fs');
 const multer = require('multer');
 const templateService = require('../services/templateService');
 const clientService = require('../services/clientService');
+const auditService = require('../services/auditService');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 const templateUpload = multer({
@@ -105,6 +106,19 @@ router.post(
 
       const version = await templateService.createVersion(tenantId, fileBuffer, originalName, uploadedBy);
 
+      auditService.logEvent({
+        eventType: 'TEMPLATE_UPLOADED',
+        severity: 'INFO',
+        req,
+        tenantId,
+        user: req.user,
+        resourceType: 'template',
+        resourceId: String(version.versionId || version.version),
+        action: 'CREATE',
+        status: 'SUCCESS',
+        details: { filename: originalName, version: version.versionId || version.version },
+      }).catch(() => {});
+
       return res.status(201).json({
         success: true,
         message: 'Template version created successfully.',
@@ -129,6 +143,20 @@ router.post('/:id/templates/:versionId/activate', requireAuth, requireAdmin, asy
     }
 
     const manifest = await templateService.activateVersion(tenantId, versionId);
+
+    auditService.logEvent({
+      eventType: 'TEMPLATE_ACTIVATED',
+      severity: 'INFO',
+      req,
+      tenantId,
+      user: req.user,
+      resourceType: 'template',
+      resourceId: String(versionId),
+      action: 'UPDATE',
+      status: 'SUCCESS',
+      details: { activeVersionId: manifest.activeVersionId },
+    }).catch(() => {});
+
     return res.json({
       success: true,
       message: `Template version ${versionId} activated successfully.`,
@@ -153,6 +181,20 @@ router.delete('/:id/templates/:versionId', requireAuth, requireAdmin, async (req
     }
 
     const result = await templateService.deleteVersion(tenantId, versionId);
+
+    auditService.logEvent({
+      eventType: 'TEMPLATE_DELETED',
+      severity: 'INFO',
+      req,
+      tenantId,
+      user: req.user,
+      resourceType: 'template',
+      resourceId: String(versionId),
+      action: 'DELETE',
+      status: 'SUCCESS',
+      details: { deletedVersionId: result.deletedVersionId },
+    }).catch(() => {});
+
     return res.json({
       success: true,
       message: `Template version ${versionId} deleted successfully.`,
