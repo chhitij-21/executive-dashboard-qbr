@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const templateRepo = require('../repositories/templateRepo');
+const storageRepo = require('../repositories/storageRepo');
 const clientService = require('./clientService');
 
 const MAX_TEMPLATE_VERSIONS = 5;
@@ -198,6 +199,14 @@ async function enforceRetentionPolicy(manifest, versionsDir, canonicalId) {
       const prunePath = path.join(versionsDir, pruned.storedName);
       await fs.promises.unlink(prunePath).catch(() => {});
       manifest.versions = manifest.versions.filter((v) => v.versionId !== pruned.versionId);
+      if (process.env.STORAGE_BACKEND !== 'disk') {
+        try {
+          await storageRepo.deleteObject({
+            tenantId: canonicalId,
+            key: `tenants/${canonicalId}/templates/${pruned.storedName}`,
+          });
+        } catch (_) {}
+      }
       try {
         const vNum = typeof pruned.version === 'number' ? pruned.version : parseInt(String(pruned.versionId || '').replace(/\D/g, ''), 10);
         if (canonicalId && vNum) {
@@ -222,6 +231,27 @@ async function createVersion(tenantId, buffer, originalFilename, uploadedBy = 'S
   const filePath = path.join(versionsDir, storedName);
 
   await fs.promises.writeFile(filePath, buffer);
+
+  // Dual-write to database storage (Item #2)
+  if (process.env.STORAGE_BACKEND !== 'disk') {
+    try {
+      await storageRepo.putObject({
+        tenantId: canonicalId,
+        key: `tenants/${canonicalId}/templates/${storedName}`,
+        buffer,
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      });
+      await storageRepo.putObject({
+        tenantId: canonicalId,
+        key: `tenants/${canonicalId}/templates/master.pptx`,
+        buffer,
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      });
+    } catch (err) {
+      await fs.promises.unlink(filePath).catch(() => {});
+      throw new Error(`Dual-write storage failure: ${err.message}`);
+    }
+  }
 
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
 
@@ -279,6 +309,20 @@ async function activateVersion(tenantId, versionId) {
   if (fs.existsSync(versionPath)) {
     const masterPath = path.join(templatesDir, 'master.pptx');
     await fs.promises.copyFile(versionPath, masterPath).catch(() => {});
+
+    if (process.env.STORAGE_BACKEND !== 'disk') {
+      try {
+        const vBuf = await fs.promises.readFile(versionPath);
+        await storageRepo.putObject({
+          tenantId: canonicalId,
+          key: `tenants/${canonicalId}/templates/master.pptx`,
+          buffer: vBuf,
+          mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        });
+      } catch (storageErr) {
+        console.warn(`[templateService] Warning syncing active template to storage: ${storageErr.message}`);
+      }
+    }
   }
 
   try {
@@ -304,6 +348,15 @@ async function deleteVersion(tenantId, versionId) {
 
   const filePath = path.join(versionsDir, target.storedName);
   await fs.promises.unlink(filePath).catch(() => {});
+
+  if (process.env.STORAGE_BACKEND !== 'disk') {
+    try {
+      await storageRepo.deleteObject({
+        tenantId: canonicalId,
+        key: `tenants/${canonicalId}/templates/${target.storedName}`,
+      });
+    } catch (_) {}
+  }
 
   manifest.versions = manifest.versions.filter((v) => v.versionId !== versionId);
   try {

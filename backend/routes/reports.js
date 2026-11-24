@@ -63,6 +63,22 @@ router.post(
       };
       const { insertedCount } = await persistTickets(req.targetClientId, mmtcRows.length > 0 ? mmtcRows : rows, uploadPeriod);
 
+      // Dual-write raw Excel tickets upload to storage repo (Item #2)
+      if (process.env.STORAGE_BACKEND !== 'disk' && req.file && req.file.buffer) {
+        try {
+          const storageRepo = require('../repositories/storageRepo');
+          const uploadId = `upload_${Date.now()}`;
+          await storageRepo.putObject({
+            tenantId: req.targetClientId,
+            key: `tenants/${req.targetClientId}/uploads/${uploadId}/${req.file.originalname || 'tickets.xlsx'}`,
+            buffer: req.file.buffer,
+            mimeType: req.file.mimetype || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          });
+        } catch (storageErr) {
+          console.warn(`[reports] Warning dual-writing raw tickets upload to storage: ${storageErr.message}`);
+        }
+      }
+
       return res.status(201).json({
         message: 'Tickets uploaded and validated successfully',
         totalRows: rows.length,

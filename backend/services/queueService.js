@@ -460,6 +460,7 @@ class QueueService {
 
     // Clean up temporary staged and output files
     await this.cleanupStagedFiles(jobId);
+    await this.purgeOrphanedUploads(jobId);
 
     return true;
   }
@@ -500,10 +501,23 @@ class QueueService {
       await this.failJob(jobId, err);
       this.releaseTenantLock(clientId, jobId);
       await this.cleanupStagedFiles(jobId);
+      await this.purgeOrphanedUploads(jobId);
       throw err;
     } finally {
       if (timerHandle) clearTimeout(timerHandle);
     }
+  }
+
+  async purgeOrphanedUploads(jobId) {
+    if (!jobId || process.env.STORAGE_BACKEND === 'disk') return;
+    try {
+      const storageRepo = require('../repositories/storageRepo');
+      const objects = await storageRepo.listObjects({ prefix: 'tenants/' });
+      const jobUploads = objects.filter((o) => o.key.includes(`/uploads/${jobId}/`));
+      for (const obj of jobUploads) {
+        await storageRepo.deleteObject({ tenantId: obj.tenantId || obj.tenant_id, key: obj.key });
+      }
+    } catch (_) {}
   }
 
   async cleanupStagedFiles(jobId) {

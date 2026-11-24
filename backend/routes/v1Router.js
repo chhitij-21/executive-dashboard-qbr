@@ -1069,6 +1069,32 @@ router.post(['/upload', '/api/upload'], requireAuth, heavyRateLimit, upload.fiel
     }
   }
 
+  // Dual-write raw uploads to storage repo (Item #2 Ephemeral Storage)
+  if (process.env.STORAGE_BACKEND !== 'disk') {
+    const storageRepo = require('../repositories/storageRepo');
+    try {
+      const incBuf = fs.readFileSync(incidentFile.path);
+      await storageRepo.putObject({
+        tenantId: clientId,
+        key: `tenants/${clientId}/uploads/${jobId}/${incidentFile.originalname || path.basename(incidentFile.path)}`,
+        buffer: incBuf,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      if (inventoryFile) {
+        const invBuf = fs.readFileSync(inventoryFile.path);
+        await storageRepo.putObject({
+          tenantId: clientId,
+          key: `tenants/${clientId}/uploads/${jobId}/${inventoryFile.originalname || path.basename(inventoryFile.path)}`,
+          buffer: invBuf,
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+      }
+    } catch (storageErr) {
+      historyService.cleanupTempFiles([incidentFile.path, inventoryFile?.path]);
+      return res.status(500).json({ error: `Dual-write storage failure on raw upload: ${storageErr.message}` });
+    }
+  }
+
   const isSync = req.query.sync === 'true';
 
   if (!isSync) {
@@ -1158,6 +1184,21 @@ router.post(['/upload', '/api/upload'], requireAuth, heavyRateLimit, upload.fiel
         status: 'failed',
         error: failError,
       });
+      if (process.env.STORAGE_BACKEND !== 'disk') {
+        try {
+          const storageRepo = require('../repositories/storageRepo');
+          await storageRepo.deleteObject({
+            tenantId: clientId,
+            key: `tenants/${clientId}/uploads/${jobId}/${incidentFile.originalname || path.basename(incidentFile.path)}`,
+          });
+          if (inventoryFile) {
+            await storageRepo.deleteObject({
+              tenantId: clientId,
+              key: `tenants/${clientId}/uploads/${jobId}/${inventoryFile.originalname || path.basename(inventoryFile.path)}`,
+            });
+          }
+        } catch (_) {}
+      }
       historyService.cleanupTempFiles([incidentFile.path, inventoryFile?.path]);
       return res.status(400).json({
         success: false,
@@ -1252,6 +1293,21 @@ router.post(['/upload', '/api/upload'], requireAuth, heavyRateLimit, upload.fiel
     });
   } catch (err) {
     console.error('[index] Engine upload error:', err.message);
+    if (process.env.STORAGE_BACKEND !== 'disk') {
+      try {
+        const storageRepo = require('../repositories/storageRepo');
+        await storageRepo.deleteObject({
+          tenantId: clientId,
+          key: `tenants/${clientId}/uploads/${jobId}/${incidentFile.originalname || path.basename(incidentFile.path)}`,
+        });
+        if (inventoryFile) {
+          await storageRepo.deleteObject({
+            tenantId: clientId,
+            key: `tenants/${clientId}/uploads/${jobId}/${inventoryFile.originalname || path.basename(inventoryFile.path)}`,
+          });
+        }
+      } catch (_) {}
+    }
     historyService.cleanupTempFiles([incidentFile.path, inventoryFile?.path]);
     jobs[jobId] = { status: 'error', error: err.message };
     historyService.recordReport({

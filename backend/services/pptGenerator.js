@@ -727,6 +727,34 @@ async function buildPresentation(data, outputPath, options = {}) {
       fs.copyFileSync(tmpOutputPath, outputPath);
       try { fs.unlinkSync(tmpOutputPath); } catch (_) {}
     }
+
+    // Dual-write to database storage (Item #2 Ephemeral Storage)
+    if (process.env.STORAGE_BACKEND !== 'disk' && !options.skipStorageWrite) {
+      try {
+        const storageRepo = require('../repositories/storageRepo');
+        const clientService = require('./clientService');
+        const rawTenantId = data.clientId || options.clientId || (data.client_info && data.client_info.id) || (/jfl|jubilant/i.test(data.customerName || '') ? 'client-jfl' : 'client-default');
+        const tenantId = clientService.resolveCanonicalClientId(rawTenantId) || 'client-default';
+        const fileBuffer = await fs.promises.readFile(outputPath);
+        const filename = path.basename(outputPath);
+        const jobMatch = outputPath.match(/job_([a-zA-Z0-9_-]+)/);
+        const jobId = options.jobId || data.jobId || (jobMatch ? jobMatch[1] : null);
+        const storageKey = jobId
+          ? `tenants/${tenantId}/reports/${jobId}/${filename}`
+          : `tenants/${tenantId}/reports/${filename}`;
+
+        await storageRepo.putObject({
+          tenantId,
+          key: storageKey,
+          buffer: fileBuffer,
+          mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        });
+      } catch (storageErr) {
+        // Both-must-succeed policy: fail closed and remove disk file to prevent orphaned/unreplicated state
+        try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch (_) {}
+        throw new Error(`Dual-write storage failure: ${storageErr.message}`);
+      }
+    }
   } catch (err) {
     try {
       if (fs.existsSync(tmpOutputPath)) fs.unlinkSync(tmpOutputPath);

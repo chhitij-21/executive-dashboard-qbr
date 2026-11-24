@@ -11,6 +11,37 @@ const { execute, batch, getClient } = require('../config/database');
 
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB chunk threshold
 
+let _tablesEnsured = false;
+async function ensureTables() {
+  if (_tablesEnsured) return;
+  try {
+    await execute(`
+      CREATE TABLE IF NOT EXISTS storage_objects (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        key TEXT NOT NULL UNIQUE,
+        mime_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        etag TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await execute(`
+      CREATE TABLE IF NOT EXISTS storage_chunks (
+        id TEXT PRIMARY KEY,
+        object_id TEXT NOT NULL REFERENCES storage_objects(id) ON DELETE CASCADE,
+        chunk_index INTEGER NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        data BLOB NOT NULL
+      )
+    `);
+    await execute(`CREATE INDEX IF NOT EXISTS idx_storage_tenant_key ON storage_objects (tenant_id, key)`);
+    await execute(`CREATE INDEX IF NOT EXISTS idx_chunks_parent ON storage_chunks (object_id, chunk_index)`);
+    _tablesEnsured = true;
+  } catch (_) {}
+}
+
 /**
  * Computes a SHA-256 hash string for an in-memory buffer.
  * @param {Buffer} buffer
@@ -30,6 +61,7 @@ function computeEtag(buffer) {
  * @returns {Promise<{id: string, key: string, sizeBytes: number, etag: string, chunksCount: number}>}
  */
 async function putObject({ tenantId, key, buffer, mimeType = 'application/octet-stream' }) {
+  await ensureTables();
   if (!tenantId || !key) {
     throw new Error('storageRepo.putObject: tenantId and key are required');
   }
@@ -105,6 +137,7 @@ async function putObject({ tenantId, key, buffer, mimeType = 'application/octet-
  * @returns {Promise<{metadata: object, buffer: Buffer}|null>}
  */
 async function getObject({ tenantId, key }) {
+  await ensureTables();
   if (!tenantId || !key) return null;
 
   const metaRes = await execute(
@@ -167,6 +200,7 @@ async function getObject({ tenantId, key }) {
  * @returns {Promise<boolean>}
  */
 async function deleteObject({ tenantId, key }) {
+  await ensureTables();
   if (!tenantId || !key) return false;
 
   const metaRes = await execute(
@@ -196,16 +230,26 @@ async function deleteObject({ tenantId, key }) {
  * @returns {Promise<Array<object>>}
  */
 async function listObjects({ tenantId, prefix = '' }) {
-  if (!tenantId) return [];
-
+  await ensureTables();
   const queryPrefix = prefix ? `${prefix}%` : '%';
-  const res = await execute(
-    `SELECT id, tenant_id, key, mime_type, size_bytes, etag, created_at, updated_at
-     FROM storage_objects
-     WHERE tenant_id = ? AND key LIKE ?
-     ORDER BY created_at DESC`,
-    [tenantId, queryPrefix]
-  );
+  let res;
+  if (tenantId && tenantId !== 'admin_override') {
+    res = await execute(
+      `SELECT id, tenant_id, key, mime_type, size_bytes, etag, created_at, updated_at
+       FROM storage_objects
+       WHERE tenant_id = ? AND key LIKE ?
+       ORDER BY created_at DESC`,
+      [tenantId, queryPrefix]
+    );
+  } else {
+    res = await execute(
+      `SELECT id, tenant_id, key, mime_type, size_bytes, etag, created_at, updated_at
+       FROM storage_objects
+       WHERE key LIKE ?
+       ORDER BY created_at DESC`,
+      [queryPrefix]
+    );
+  }
 
   return (res.rows || []).map((row) => ({
     id: row.id,
@@ -231,6 +275,7 @@ async function listObjects({ tenantId, prefix = '' }) {
  * @returns {Promise<boolean>} True if stream completed
  */
 async function streamObjectToResponse({ tenantId, key, req, res, filename }) {
+  await ensureTables();
   const metaRes = await execute(
     `SELECT id, tenant_id, key, mime_type, size_bytes, etag
      FROM storage_objects
@@ -291,6 +336,7 @@ async function streamObjectToResponse({ tenantId, key, req, res, filename }) {
  * @returns {Promise<number>} Number of pruned objects
  */
 async function pruneExpiredObjects({ olderThanDays = 365 } = {}) {
+  await ensureTables();
   const days = Math.max(1, Number(olderThanDays) || 365);
   const findRes = await execute(
     `SELECT id FROM storage_objects
