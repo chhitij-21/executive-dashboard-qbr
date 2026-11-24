@@ -2118,6 +2118,32 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
     const jobOutputDir = path.join(REPORTS_DIR, `job_${activeJobId}`);
     const clientCode = (client.code || client.id || 'REPORT').toUpperCase().replace(/[^A-Z0-9_-]/g, '');
 
+    // ── Database BLOB Storage Cutover (Sub-Item #2.3) ──
+    if (process.env.STORAGE_BACKEND !== 'disk') {
+      const storageRepo = require('../repositories/storageRepo');
+      const filename = pathKey === 'pptPath' ? `${clientCode}_QBR_Report.pptx` : `${clientCode}_${defaultFilename}`;
+      const candidateKeys = [
+        `tenants/${clientId}/reports/${activeJobId}/${path.basename(job?.[pathKey] || 'deck.pptx')}`,
+        `tenants/${clientId}/reports/${activeJobId}/${filename}`,
+        `tenants/${clientId}/reports/${activeJobId}/${defaultFilename}`,
+        `tenants/${clientId}/reports/${activeJobId}/deck.pptx`,
+      ];
+
+      for (const storageKey of candidateKeys) {
+        const stored = await storageRepo.getObject({ tenantId: clientId, key: storageKey });
+        if (stored) {
+          console.log(`[server] Serving streamed BLOB download from database storage: ${storageKey}`);
+          return storageRepo.streamObjectToResponse({
+            tenantId: clientId,
+            key: storageKey,
+            req,
+            res,
+            filename,
+          });
+        }
+      }
+    }
+
     // ── PPT: Serve existing PPT or generate on-the-fly from job's own dashboard_data.json ──
     if (pathKey === 'pptPath') {
       // Task 1.2 (PPT-1): Timestamp-based cache invalidation.
@@ -2257,6 +2283,53 @@ const sendFileHelper = (pathKey, defaultFilename) => async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// GET /api/tenants/:id/logo - Stream tenant branding logo from DB storage (Sub-Item #2.3)
+router.get(['/tenants/:id/logo', '/api/tenants/:id/logo', '/api/v1/tenants/:id/logo'], async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const client = clientService.getClientById(rawId);
+    if (!client) {
+      return res.status(404).json({ error: 'Tenant not found', code: 'TENANT_NOT_FOUND' });
+    }
+    const tenantId = client.id;
+    const storageRepo = require('../repositories/storageRepo');
+
+    // 1. Try DB storage
+    for (const ext of ['.png', '.svg', '.jpg', '.jpeg']) {
+      const key = `tenants/${tenantId}/branding/logo${ext}`;
+      const stored = await storageRepo.getObject({ tenantId, key });
+      if (stored) {
+        return storageRepo.streamObjectToResponse({
+          tenantId,
+          key,
+          req,
+          res,
+          filename: `logo${ext}`,
+        });
+      }
+    }
+
+    // 2. Fall back to local tenant logo or default media
+    const tenantDir = clientService.getTenantDir(tenantId);
+    for (const ext of ['.png', '.svg', '.jpg', '.jpeg']) {
+      const diskLogo = path.join(tenantDir, `logo${ext}`);
+      if (fs.existsSync(diskLogo)) {
+        return res.sendFile(diskLogo);
+      }
+    }
+
+    const defaultLogo = path.resolve(__dirname, '../../templates/extracted_media/image2.png');
+    if (fs.existsSync(defaultLogo)) {
+      return res.sendFile(defaultLogo);
+    }
+
+    return res.status(404).json({ error: 'Logo not found', code: 'LOGO_NOT_FOUND' });
+  } catch (err) {
+    console.error('[server] Error streaming logo:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get(['/ppt/download/:jobId', '/api/ppt/download/:jobId', '/ppt/:jobId', '/api/ppt/:jobId', '/ppt', '/api/ppt'], sendFileHelper('pptPath', 'QBR_Report.pptx'));
 router.get(['/report/:jobId', '/api/report/:jobId'], sendFileHelper('reportPath', 'validation_report.md'));

@@ -182,6 +182,23 @@ router.get('/:id/templates/:versionId/download', requireAuth, async (req, res) =
     }
 
     const { versionsDir, templatesDir } = templateService.getTenantTemplatesDir(tenantId);
+
+    // Stream from database storage (Sub-Item #2.3 Cutover)
+    if (process.env.STORAGE_BACKEND !== 'disk') {
+      const storageRepo = require('../repositories/storageRepo');
+      const key = `tenants/${tenantId}/templates/${version.storedName}`;
+      const stored = await storageRepo.getObject({ tenantId, key });
+      if (stored) {
+        return storageRepo.streamObjectToResponse({
+          tenantId,
+          key,
+          req,
+          res,
+          filename: version.filename,
+        });
+      }
+    }
+
     let versionPath = path.join(versionsDir, version.storedName);
     if (!fs.existsSync(versionPath)) {
       const candidates = [

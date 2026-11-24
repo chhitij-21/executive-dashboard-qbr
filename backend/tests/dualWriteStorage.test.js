@@ -225,4 +225,135 @@ describe('Sub-Item #2.2: Dual-Write & Storage Orphan Prevention Suite', () => {
       if (fs.existsSync(testReportFile)) fs.unlinkSync(testReportFile);
     }
   });
+
+  it('10. Sub-Item #2.3: streamObjectToResponse sets ETag, Content-Disposition and handles 304', async () => {
+    const key = `tenants/client-jfl/reports/stream_test/report.pptx`;
+    const buf = Buffer.from('test_stream_content');
+    const putRes = await storageRepo.putObject({
+      tenantId: 'client-jfl',
+      key,
+      buffer: buf,
+      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    });
+
+    // Mock Express res & req
+    const headers = {};
+    let written = Buffer.alloc(0);
+    let ended = false;
+    let statusCode = 200;
+
+    const mockRes = {
+      setHeader: (k, v) => { headers[k.toLowerCase()] = v; },
+      status: (c) => { statusCode = c; return mockRes; },
+      write: (chunk) => { written = Buffer.concat([written, chunk]); },
+      end: () => { ended = true; },
+      json: () => {},
+    };
+
+    const mockReq = { headers: {} };
+
+    // Initial 200 streaming
+    const streamed = await storageRepo.streamObjectToResponse({
+      tenantId: 'client-jfl',
+      key,
+      req: mockReq,
+      res: mockRes,
+      filename: 'QBR_Report.pptx',
+    });
+
+    assert.strictEqual(streamed, true);
+    assert.strictEqual(ended, true);
+    assert.strictEqual(headers['etag'], putRes.etag);
+    assert.strictEqual(headers['content-disposition'], 'attachment; filename="QBR_Report.pptx"');
+    assert.strictEqual(written.toString('utf8'), 'test_stream_content');
+
+    // Conditional 304 request
+    let ended304 = false;
+    let code304 = 200;
+    const mockRes304 = {
+      setHeader: () => {},
+      status: (c) => { code304 = c; return mockRes304; },
+      write: () => {},
+      end: () => { ended304 = true; },
+    };
+    const mockReq304 = { headers: { 'if-none-match': putRes.etag } };
+
+    const streamed304 = await storageRepo.streamObjectToResponse({
+      tenantId: 'client-jfl',
+      key,
+      req: mockReq304,
+      res: mockRes304,
+    });
+
+    assert.strictEqual(streamed304, true);
+    assert.strictEqual(code304, 304);
+    assert.strictEqual(ended304, true);
+  });
+
+  it('11. Sub-Item #2.3: Tenant isolation rejects cross-tenant stream attempts with 403', async () => {
+    const key = `tenants/client-jfl/reports/private/report.pptx`;
+    await storageRepo.putObject({
+      tenantId: 'client-jfl',
+      key,
+      buffer: Buffer.from('private_jfl_data'),
+    });
+
+    let code = 200;
+    let errJson = null;
+    const mockRes = {
+      setHeader: () => {},
+      status: (c) => { code = c; return mockRes; },
+      json: (j) => { errJson = j; },
+      write: () => {},
+      end: () => {},
+    };
+
+    // Cross-tenant attempt by client-mmtcpamp
+    const res = await storageRepo.streamObjectToResponse({
+      tenantId: 'client-mmtcpamp',
+      key,
+      req: { headers: {} },
+      res: mockRes,
+    });
+
+    assert.strictEqual(res, false);
+    assert.strictEqual(code, 403);
+    assert.strictEqual(errJson.code, 'FORBIDDEN_TENANT_ACCESS');
+  });
+
+  it('12. Sub-Item #2.3: Dedicated logo streaming route serves DB branding asset', async () => {
+    const logoBuf = Buffer.from('<svg>logo</svg>', 'utf8');
+    await storageRepo.putObject({
+      tenantId: 'client-jfl',
+      key: 'tenants/client-jfl/branding/logosvg',
+      buffer: logoBuf,
+      mimeType: 'image/svg+xml',
+    });
+
+    const express = require('express');
+    const app = express();
+    const v1Router = require('../routes/v1Router');
+    app.use('/', v1Router);
+
+    const server = app.listen(0);
+    const port = server.address().port;
+
+    try {
+      // Put standard logo
+      await storageRepo.putObject({
+        tenantId: 'client-jfl',
+        key: 'tenants/client-jfl/branding/logo.png',
+        buffer: Buffer.from('png_logo_data'),
+        mimeType: 'image/png',
+      });
+
+      const res = await fetch(`http://127.0.0.1:${port}/api/tenants/client-jfl/logo`);
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.headers.get('content-type'), 'image/png');
+      const body = await res.text();
+      assert.strictEqual(body, 'png_logo_data');
+    } finally {
+      server.close();
+    }
+  });
 });
