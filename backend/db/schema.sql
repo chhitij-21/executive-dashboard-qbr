@@ -141,3 +141,30 @@ CREATE TABLE IF NOT EXISTS templates (
 CREATE INDEX IF NOT EXISTS idx_schedules_tenant ON schedules(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_runs_tenant_schedule ON schedule_runs(tenant_id, schedule_id);
 CREATE INDEX IF NOT EXISTS idx_templates_tenant_active ON templates(tenant_id, is_active);
+
+-- ── Item #2 Ephemeral Storage (Turso DB BLOBs) ───────────────────────────────
+
+-- 5. Unified Storage Objects Metadata
+CREATE TABLE IF NOT EXISTS storage_objects (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  key TEXT UNIQUE NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  etag TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 6. Unified Storage Binary Chunks (4MB chunk slicing for large payloads)
+CREATE TABLE IF NOT EXISTS storage_chunks (
+  id TEXT PRIMARY KEY,
+  object_id TEXT NOT NULL REFERENCES storage_objects(id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  data BLOB NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_storage_tenant_key ON storage_objects (tenant_id, key);
+CREATE INDEX IF NOT EXISTS idx_storage_created_at ON storage_objects (created_at);
+CREATE INDEX IF NOT EXISTS idx_chunks_parent ON storage_chunks(object_id, chunk_index);
