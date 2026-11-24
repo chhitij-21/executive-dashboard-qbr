@@ -7,6 +7,10 @@ vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }) => <div data-testid="responsive-container">{children}</div>,
   LineChart: ({ children }) => <div data-testid="line-chart">{children}</div>,
   Line: () => null,
+  BarChart: ({ children }) => <div data-testid="bar-chart">{children}</div>,
+  Bar: () => null,
+  ReferenceLine: () => null,
+  Legend: () => null,
   XAxis: () => null,
   YAxis: () => null,
   CartesianGrid: () => null,
@@ -166,5 +170,41 @@ describe('OverviewDashboard Component - QoQ Toggle & State Guard', () => {
     fireEvent.click(closeBtn);
 
     expect(screen.queryByText(/Quarter-over-Quarter Performance Analysis/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the Executive Workspace Hero Banner with customer name and period (Item #17)', () => {
+    render(
+      <OverviewDashboard
+        data={mockQbrData}
+        onNavigate={() => {}}
+        activeClientId="client-jfl"
+      />
+    );
+
+    expect(screen.getByTestId('executive-workspace-hero')).toBeInTheDocument();
+    expect(screen.getByText(/Jubilant FoodWorks/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 Jul 2026 – 30 Sep 2026/i)).toBeInTheDocument();
+  });
+
+  it('renders Site SLA Performance Distribution card and Export PPTX button (Item #17 & #18)', () => {
+    const dataWithSites = {
+      ...mockQbrData,
+      siteSummary: [
+        { siteId: 'Site-Alpha', jflSwitchUptime: 99.8, devices: 10 },
+        { siteId: 'Site-Beta', jflSwitchUptime: 98.5, devices: 8 },
+      ],
+    };
+
+    render(
+      <OverviewDashboard
+        data={dataWithSites}
+        onNavigate={() => {}}
+        activeClientId="client-jfl"
+      />
+    );
+
+    expect(screen.getByTestId('site-sla-distribution-card')).toBeInTheDocument();
+    expect(screen.getByText(/Site SLA Uptime vs Target/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /export executive pptx/i })).toBeInTheDocument();
   });
 });

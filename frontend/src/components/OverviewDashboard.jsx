@@ -15,24 +15,40 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertCircle,
-  BarChart3
+  BarChart3,
+  Download,
+  Building2,
+  Sparkles
 } from 'lucide-react';
 import {
   ResponsiveContainer,
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  ReferenceLine,
+  Legend
 } from 'recharts';
+import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../config/api';
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
 export default function OverviewDashboard({ data, onNavigate, activeClientId }) {
+  let authContext = null;
+  try {
+    authContext = useAuth();
+  } catch (_) {}
+  const activeClient = authContext?.activeClient || null;
+  const [downloadingPpt, setDownloadingPpt] = useState(false);
+
   const [lineageTarget, setLineageTarget] = useState(null);
   const [isQoQEnabled, setIsQoQEnabled] = useState(false);
   const [isQoQModalOpen, setIsQoQModalOpen] = useState(false);
@@ -42,6 +58,43 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
   useEffect(() => {
     setIsQoQEnabled(false);
   }, [activeClientId, data?.clientId, data?.client_id, data?.customerName]);
+
+  const handleDownloadPpt = async () => {
+    const targetClientId = activeClient?.id || data?.clientId || activeClientId;
+    if (!targetClientId) {
+      alert('Cannot download: active customer not selected.');
+      return;
+    }
+    const token = localStorage.getItem('portal_token') || localStorage.getItem('token');
+    try {
+      setDownloadingPpt(true);
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/download-ticket`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          clientId: targetClientId,
+          jobId: data?.jobId || 'latest',
+          exportType: 'ppt',
+        }),
+      });
+      if (res.ok) {
+        const ticketData = await res.json();
+        if (ticketData.downloadTicket) {
+          const downloadUrl = `${API_BASE_URL}/api/v1/ppt/${data?.jobId || 'latest'}?clientId=${encodeURIComponent(targetClientId)}&ticket=${encodeURIComponent(ticketData.downloadTicket)}`;
+          window.location.href = downloadUrl;
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[OverviewDashboard] Download ticket acquisition failed:', err);
+    } finally {
+      setDownloadingPpt(false);
+    }
+    alert('Download failed: could not obtain a secure download ticket. Please ensure you are logged in and try again.');
+  };
 
   const qoqComp = data?.qoqComparison;
   const isStandardQuarter = data?.is_standard_quarter ?? qoqComp?.is_standard_quarter ?? false;
@@ -203,6 +256,25 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
     });
   }, [siteSummary]);
 
+  // Site SLA Performance & Breach Distribution (Item #18)
+  const siteSlaChartData = useMemo(() => {
+    if (!siteSummary || siteSummary.length === 0) return [];
+    return siteSummary.map((s) => {
+      const rawUptime = s.proactiveSwitchUptime ?? s.overallUptime ?? s.jflSwitchUptime ?? s.switchUptime ?? s.uptime ?? 100;
+      const uptimeNum = parseFloat(rawUptime);
+      const uptime = isNaN(uptimeNum) ? 100 : Number(uptimeNum.toFixed(2));
+      const isBreaching = uptime < targetSLA;
+      return {
+        site: s.siteId || s.Location || s.site || 'Site',
+        uptime,
+        slaTarget: targetSLA,
+        isBreaching,
+        color: isBreaching ? (uptime < 80 ? '#ef4444' : '#f59e0b') : '#10b981',
+        devices: s.devices ?? s.deviceCount ?? (s.switches != null ? Number(s.switches) + Number(s.aps || 0) : null),
+      };
+    }).sort((a, b) => a.uptime - b.uptime);
+  }, [siteSummary, targetSLA]);
+
   // Recent Proactive Alerts Table (Top 5 actual incidents)
   const recentAlerts = useMemo(() => {
     if (!incidents || incidents.length === 0) return [];
@@ -254,6 +326,127 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
         boxSizing: 'border-box',
       }}
     >
+      {/* ══════════════════════════════════════════════════════════════
+          EXECUTIVE WORKSPACE HERO BANNER (Item #17)
+          ══════════════════════════════════════════════════════════════ */}
+      <div
+        className="executive-hero-banner"
+        data-testid="executive-workspace-hero"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: '#ffffff',
+          borderRadius: '1rem',
+          border: '1px solid #e2e8f0',
+          padding: '1.25rem 1.75rem',
+          boxShadow: '0 4px 12px rgba(15, 23, 42, 0.03)',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div
+            style={{
+              width: '52px',
+              height: '52px',
+              borderRadius: '12px',
+              backgroundColor: activeClient?.branding?.primaryColor ? `${activeClient.branding.primaryColor}15` : '#eff6ff',
+              border: `2px solid ${activeClient?.branding?.primaryColor || '#3b82f6'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.6rem',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+            }}
+          >
+            {activeClient?.branding?.logo || activeClient?.logo || '🏢'}
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <h2
+                style={{
+                  fontSize: '1.35rem',
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  margin: 0,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {activeClient?.name || data?.customerName || 'Enterprise Executive Operations'}
+              </h2>
+              <span
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  backgroundColor: '#dbeafe',
+                  color: '#1e40af',
+                }}
+              >
+                {activeClient?.code || 'QBR'}
+              </span>
+            </div>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+              Reporting Period:{' '}
+              <strong style={{ color: '#0f172a' }}>
+                {data?.report_period?.display_label || data?.reportingPeriod || 'Current Period'}
+              </strong>{' '}
+              • Fleet Scope:{' '}
+              <strong style={{ color: '#0f172a' }}>{totalDevices} Devices</strong> across{' '}
+              <strong style={{ color: '#0f172a' }}>{siteSummary.length} Sites</strong>
+            </p>
+          </div>
+        </div>
+
+        {/* Executive Action Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.4rem 0.85rem',
+              borderRadius: '8px',
+              backgroundColor: isSlaBelow ? '#fef2f2' : '#f0fdf4',
+              border: `1px solid ${isSlaBelow ? '#fecaca' : '#bbf7d0'}`,
+              color: isSlaBelow ? '#991b1b' : '#166534',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+            }}
+          >
+            <ShieldCheck size={16} />
+            <span>SLA: {currentSLA.toFixed(2)}% ({isSlaBelow ? 'Target Missed' : 'Target Met'})</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDownloadPpt}
+            disabled={downloadingPpt}
+            aria-label="Export Executive PPTX"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              backgroundColor: '#2563eb',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: '0.825rem',
+              cursor: downloadingPpt ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)',
+              transition: 'background-color 0.15s',
+            }}
+          >
+            <Download size={15} />
+            <span>{downloadingPpt ? 'Generating...' : 'Export PPTX'}</span>
+          </button>
+        </div>
+      </div>
       {/* ══════════════════════════════════════════════════════════════
           QOQ COMPARATIVE CONTROLS TOOLBAR (Item #9)
           ══════════════════════════════════════════════════════════════ */}
@@ -1006,6 +1199,92 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
           </div>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════
+          SITE SLA PERFORMANCE & BREACH DISTRIBUTION (Item #18)
+          ══════════════════════════════════════════════════════════════ */}
+      {siteSlaChartData.length > 0 && (
+        <div
+          className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col justify-between"
+          data-testid="site-sla-distribution-card"
+          style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '0.75rem',
+            border: '1px solid #f1f5f9',
+            padding: '1.5rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                Site SLA Uptime vs Target ({targetSLA.toFixed(1)}%)
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
+                Proactive Switch Uptime % per monitored site with threshold line
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontSize: '0.75rem', fontWeight: 600 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#16a34a' }}>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                <span>Compliant ({siteSlaChartData.filter(s => !s.isBreaching).length})</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#dc2626' }}>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+                <span>Breached ({siteSlaChartData.filter(s => s.isBreaching).length})</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ width: '100%', height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={siteSlaChartData} margin={{ top: 20, right: 20, left: -10, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis
+                  dataKey="site"
+                  stroke="#94a3b8"
+                  fontSize={11}
+                  interval={0}
+                  angle={-30}
+                  textAnchor="end"
+                  tickLine={false}
+                />
+                <YAxis
+                  stroke="#94a3b8"
+                  fontSize={11}
+                  domain={[70, 100]}
+                  tickFormatter={(v) => `${v}%`}
+                  tickLine={false}
+                  axisLine={{ stroke: '#e2e8f0' }}
+                />
+                <Tooltip
+                  formatter={(val) => [`${val}%`, 'Uptime']}
+                  labelFormatter={(site) => `Site: ${site}`}
+                  contentStyle={{
+                    backgroundColor: '#0f172a',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                  }}
+                />
+                <ReferenceLine
+                  y={targetSLA}
+                  stroke="#dc2626"
+                  strokeDasharray="4 4"
+                  strokeWidth={2}
+                  label={{ value: `SLA Target ${targetSLA}%`, position: 'top', fill: '#dc2626', fontSize: 11, fontWeight: 700 }}
+                />
+                <Bar dataKey="uptime" radius={[4, 4, 0, 0]}>
+                  {siteSlaChartData.map((entry, index) => (
+                    <Cell key={`site-bar-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════
           ROW 4: TABLES & LISTS (col-span-2 Alerts Table + col-span-1 Performance)

@@ -66,7 +66,15 @@ function saveClients(clients) {
 }
 
 function getAllClients() {
-  return loadClients();
+  const clients = loadClients();
+  return clients.map((c) => {
+    try {
+      const settings = getTenantSettings(c.id);
+      return { ...c, settings, branding: settings?.branding };
+    } catch (_) {
+      return c;
+    }
+  });
 }
 
 const CLIENT_ALIASES = {

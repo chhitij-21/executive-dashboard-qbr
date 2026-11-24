@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth } from '../context/AuthContext';
 import {
   Home,
   UploadCloud,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, onTabChange, onSelectTab }) {
+  const { activeClient } = useAuth();
   const handleSelect = (id) => {
     if (typeof onTabChange === 'function') {
       onTabChange(id);
@@ -64,22 +66,26 @@ export default function Sidebar({ activeTab, onTabChange, onSelectTab }) {
                   width: '10px',
                   height: '10px',
                   borderRadius: '50%',
-                  backgroundColor: '#3b82f6',
-                  boxShadow: '0 0 10px #3b82f6'
+                  backgroundColor: activeClient?.branding?.primaryColor || '#3b82f6',
+                  boxShadow: `0 0 10px ${activeClient?.branding?.primaryColor || '#3b82f6'}`
                 }}
               />
+              <span style={{ fontSize: '1.1rem' }}>
+                {activeClient?.branding?.logo || activeClient?.logo || '🏢'}
+              </span>
               <h1
                 className="font-bold text-lg leading-tight tracking-tight text-white m-0"
-                style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#ffffff' }}
+                style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: '#ffffff', maxWidth: '170px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                title={activeClient?.name || 'Proactive Reports'}
               >
-                Proactive Reports
+                {activeClient?.name ? activeClient.name.replace(/\s*\(.*\)/, '') : 'Proactive Reports'}
               </h1>
             </div>
             <span
               className="text-[10px] text-gray-400 font-medium"
-              style={{ fontSize: '10px', color: '#94a3af', letterSpacing: '0.02em' }}
+              style={{ fontSize: '10px', color: '#94a3af', letterSpacing: '0.02em', paddingLeft: '1.25rem' }}
             >
-              Predict. Prevent. Perform. - Smarter Network
+              {activeClient?.code ? `${activeClient.code} Workspace • Executive QBR` : 'Predict. Prevent. Perform.'}
             </span>
           </div>
         </div>

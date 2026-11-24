@@ -56,6 +56,30 @@ export default function Topbar({ onOpenUpload, data }) {
         className="flex gap-4 items-center"
         style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}
       >
+        {/* Active Tenant Context Badge */}
+        {activeClient && (
+          <div
+            data-testid="topbar-tenant-badge"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              backgroundColor: activeClient?.branding?.primaryColor ? `${activeClient.branding.primaryColor}15` : '#eff6ff',
+              border: `1px solid ${activeClient?.branding?.primaryColor || '#bfdbfe'}`,
+              borderRadius: '0.5rem',
+              padding: '0.45rem 0.85rem',
+              fontSize: '0.825rem',
+              fontWeight: 700,
+              color: activeClient?.branding?.primaryColor || '#1d4ed8',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+            }}
+            title={`Active Tenant Workspace: ${activeClient.name} (${activeClient.id})`}
+          >
+            <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>{activeClient?.branding?.logo || activeClient?.logo || '🏢'}</span>
+            <span>{activeClient.name || 'Enterprise'}</span>
+          </div>
+        )}
+
         {data?.report_period?.display_label && (
           <div className="border rounded px-3 py-2 text-sm flex items-center gap-2 bg-[#f8fafc] text-gray-700 border-gray-200" style={{ border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '0.45rem 0.85rem', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f8fafc', color: '#334155', fontWeight: 500 }}>
             <Calendar size={15} style={{ color: '#64748b' }} />
@@ -105,7 +129,7 @@ export default function Topbar({ onOpenUpload, data }) {
             {clients && clients.length > 0 ? (
               clients.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name || c.id}
+                  {(c.branding?.logo || c.logo || '🏢')} {c.name || c.id}
                 </option>
               ))
             ) : (
