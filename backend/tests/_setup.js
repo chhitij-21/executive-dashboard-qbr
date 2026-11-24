@@ -143,6 +143,13 @@ function resetAllState() {
   } catch (_) {}
 
   try {
+    const authService = require('../services/authService');
+    if (typeof authService.resetRateLimits === 'function') {
+      authService.resetRateLimits();
+    }
+  } catch (_) {}
+
+  try {
     const app = require('../index');
     if (typeof app.resetRateLimits === 'function') {
       app.resetRateLimits();

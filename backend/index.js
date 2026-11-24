@@ -112,6 +112,12 @@ const _heavyRateMap = new Map();
 function resetRateLimits() {
   _authRateMap.clear();
   _heavyRateMap.clear();
+  try {
+    const authService = require('./services/authService');
+    if (typeof authService.resetRateLimits === 'function') {
+      authService.resetRateLimits();
+    }
+  } catch (_) {}
 }
 app.resetRateLimits = resetRateLimits;
 const HEAVY_LIMIT = 30; // max 30 heavy upload/analysis ops per 15 mins

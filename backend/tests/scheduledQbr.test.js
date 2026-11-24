@@ -392,6 +392,9 @@ describe('Schedule Routes HTTP & Security Suite (Item #13)', () => {
   let clientToken = '';
 
   before(async () => {
+    if (typeof app.resetRateLimits === 'function') {
+      app.resetRateLimits();
+    }
     await new Promise((resolve) => {
       server = app.listen(0, '127.0.0.1', () => {
         baseUrl = `http://127.0.0.1:${server.address().port}`;
