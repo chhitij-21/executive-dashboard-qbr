@@ -40,7 +40,7 @@ describe('Sub-Item #2.2: Dual-Write & Storage Orphan Prevention Suite', () => {
   }
 
   function getValidMockData() {
-    const defaultData = JSON.parse(fs.readFileSync(path.resolve('data/bundled_default/dashboard_data.json'), 'utf8'));
+    const defaultData = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../data/bundled_default/dashboard_data.json'), 'utf8'));
     return {
       ...defaultData,
       clientId: 'client-jfl',
@@ -198,7 +198,7 @@ describe('Sub-Item #2.2: Dual-Write & Storage Orphan Prevention Suite', () => {
     assert.strictEqual(dryRes.mode, 'dry-run');
 
     // 2. Create sample file in reports directory
-    const reportsDir = path.resolve('reports');
+    const reportsDir = path.resolve(__dirname, '../../reports');
     if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
     const testReportFile = path.join(reportsDir, `jfl_test_mig_${Date.now()}.pptx`);
     fs.writeFileSync(testReportFile, createValidPptxBuffer());
@@ -361,7 +361,7 @@ describe('Sub-Item #2.2: Dual-Write & Storage Orphan Prevention Suite', () => {
     const cleanup = require('../../scripts/cleanup-migrated-storage');
 
     // 1. Create a dummy migrated report
-    const reportsDir = path.resolve('reports');
+    const reportsDir = path.resolve(__dirname, '../../reports');
     if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
     const dummyFile = path.join(reportsDir, `jfl_cleanup_test_${Date.now()}.pptx`);
     const buf = createValidPptxBuffer();

@@ -241,8 +241,9 @@ test('P2-3: sentry_express_singleCapture_on500', async () => {
 });
 
 test('GAP 4: exit_handler_cleanup_synchronous', () => {
+  const setupAbsPath = path.resolve(__dirname, '_setup').replace(/\\/g, '/');
   const childScript = `
-    require('./backend/tests/_setup');
+    require('${setupAbsPath}');
     const fs = require('fs');
     const dbPath = process.env.TEST_DB_PATH;
     const tenantDir = process.env.TENANT_DATA_ROOT;
