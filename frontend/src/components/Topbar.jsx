@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, ChevronDown, Building2, LogOut } from 'lucide-react';
+import { Calendar, ChevronDown, Building2, LogOut, BookOpen } from 'lucide-react';
+import { API_BASE_URL } from '../config/api';
 
 export default function Topbar({ onOpenUpload, data }) {
   const { user, clients, activeClient, setActiveClient, logout } = useAuth();
@@ -206,6 +207,30 @@ export default function Topbar({ onOpenUpload, data }) {
             </div>
           </div>
         </div>
+
+        {/* Interactive API Docs Link (Item #23) */}
+        <a
+          href={`${API_BASE_URL}/api/v1/docs`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open Interactive OpenAPI 3.0.3 Docs"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.35rem',
+            padding: '0.45rem 0.75rem',
+            borderRadius: '0.5rem',
+            backgroundColor: '#f8fafc',
+            border: '1px solid #cbd5e1',
+            color: '#334155',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            textDecoration: 'none',
+          }}
+        >
+          <BookOpen size={14} />
+          <span>API Docs</span>
+        </a>
 
         {/* Prominent Manual Logout Button */}
         <button

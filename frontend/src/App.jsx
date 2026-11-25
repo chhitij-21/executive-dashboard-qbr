@@ -14,6 +14,8 @@ import ClientManager from './components/ClientManager';
 import ExcelAnalyzer from './components/ExcelAnalyzer';
 import VulnerabilitiesPage from './components/VulnerabilitiesPage';
 import InventorySyncPage from './components/InventorySyncPage';
+import AuditLogsPanel from './components/AuditLogsPanel';
+import ConnectorsPanel from './components/ConnectorsPanel';
 
 import KpiCard from './components/KpiCard';
 import EnterpriseInsightCard from './components/EnterpriseInsightCard';
@@ -1495,6 +1497,22 @@ function MainPortal() {
                     }
                   }}
                 />
+              </div>
+            </ErrorBoundary>
+          )}
+
+          {tab === 'connectors' && (
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <ConnectorsPanel />
+              </div>
+            </ErrorBoundary>
+          )}
+
+          {tab === 'audit' && (
+            <ErrorBoundary>
+              <div style={{ padding: '1.5rem', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+                <AuditLogsPanel />
               </div>
             </ErrorBoundary>
           )}

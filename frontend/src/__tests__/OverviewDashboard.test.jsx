@@ -207,4 +207,57 @@ describe('OverviewDashboard Component - QoQ Toggle & State Guard', () => {
     expect(screen.getByText(/Site SLA Uptime vs Target/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /export executive pptx/i })).toBeInTheDocument();
   });
+
+  it('renders Temporal Anomalies and Impact-Weighted RCA Cards when present (Item #20 UI)', () => {
+    const dataWithAnomalies = {
+      ...mockQbrData,
+      anomalies: [
+        {
+          id: 'anom-1',
+          severity: 'CRITICAL',
+          type: 'DEVICE_FLAPPING',
+          entity: { site: 'Mumbai', device: 'SW-MUM-01' },
+          message: 'Device SW-MUM-01 experienced flapping behavior (5 incidents recorded).',
+          recommendation: 'Inspect uplink cabling.',
+        },
+        {
+          id: 'anom-2',
+          severity: 'HIGH',
+          type: 'CORRELATED_AP_OUTAGE',
+          entity: { site: 'Okhla' },
+          message: '2 distinct access points failed within 15 minutes.',
+          recommendation: 'Check PoE budget.',
+        },
+      ],
+      anomalySummary: { total: 2, critical: 1, high: 1, medium: 0, low: 0 },
+      rcaAnalytics: {
+        impactWeighted: [
+          { rca: 'ISP Issues', totalMinutes: 1200, percentage: '75.0%' },
+          { rca: 'Device Power Issues', totalMinutes: 400, percentage: '25.0%' },
+        ],
+        byDeviceClass: {
+          switches: { totalIncidents: 3, topRca: 'ISP Issues' },
+          aps: { totalIncidents: 2, topRca: 'Device Power Issues' },
+        },
+      },
+    };
+
+    render(
+      <OverviewDashboard
+        data={dataWithAnomalies}
+        onNavigate={() => {}}
+        activeClientId="client-jfl"
+      />
+    );
+
+    expect(screen.getByTestId('anomalies-rca-intelligence')).toBeInTheDocument();
+    expect(screen.getByText(/Operational Anomaly Intelligence \(2\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/1200 min \(75\.0%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Switch Top RCA \(3\)/i)).toBeInTheDocument();
+
+    // Filter to CRITICAL hides HIGH anomaly
+    fireEvent.click(screen.getByRole('button', { name: 'CRITICAL' }));
+    expect(screen.getByText(/DEVICE_FLAPPING/i)).toBeInTheDocument();
+    expect(screen.queryByText(/CORRELATED_AP_OUTAGE/i)).not.toBeInTheDocument();
+  });
 });

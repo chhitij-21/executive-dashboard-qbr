@@ -7,8 +7,13 @@ import {
   Database,
   Settings,
   Clock,
-  ShieldAlert
+  ShieldAlert,
+  ShieldCheck,
+  Plug,
+  BookOpen,
+  ExternalLink
 } from 'lucide-react';
+import { API_BASE_URL } from '../config/api';
 
 export default function Sidebar({ activeTab, onTabChange, onSelectTab }) {
   const { activeClient } = useAuth();
@@ -28,6 +33,8 @@ export default function Sidebar({ activeTab, onTabChange, onSelectTab }) {
     { id: 'incidents', label: 'Proactive Tickets & Engineer SLA Performance', icon: AlertTriangle },
     { id: 'inventory', label: 'Device Inventory', icon: Database },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: ShieldAlert },
+    { id: 'connectors', label: 'IT Connectors & Webhooks', icon: Plug },
+    { id: 'audit', label: 'Security Audit Trail', icon: ShieldCheck },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -139,6 +146,35 @@ export default function Sidebar({ activeTab, onTabChange, onSelectTab }) {
             );
           })}
         </nav>
+      </div>
+
+      {/* Bottom API Docs Shortcut (Item #23) */}
+      <div style={{ padding: '0.9rem 1.25rem', borderTop: '1px solid #1e293b' }}>
+        <a
+          href={`${API_BASE_URL}/api/v1/docs`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.55rem 0.75rem',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            color: '#7dd3fc',
+            fontSize: '0.78rem',
+            fontWeight: 600,
+            textDecoration: 'none',
+          }}
+          title="Open Interactive OpenAPI 3.0.3 Swagger Explorer"
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <BookOpen size={14} />
+            <span>API Docs (OAS 3.0)</span>
+          </span>
+          <ExternalLink size={12} />
+        </a>
       </div>
     </aside>
   );

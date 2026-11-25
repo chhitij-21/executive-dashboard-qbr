@@ -84,6 +84,44 @@ export default function TicketsDetailPage({ data, initialSubTab }) {
         </span>
       </div>
 
+      {/* Temporal Anomalies & Impact-Weighted RCA Highlight Strip (Item #20) */}
+      {((data.rcaAnalytics?.impactWeighted && data.rcaAnalytics.impactWeighted.length > 0) || (data.anomalies && data.anomalies.length > 0)) && (
+        <div
+          data-testid="tickets-anomaly-rca-strip"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '1rem',
+            marginBottom: '1.25rem',
+          }}
+        >
+          {data.rcaAnalytics?.impactWeighted?.length > 0 && (
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem 1.25rem' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                Top Outage Duration Driver (Impact-Weighted RCA)
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <strong style={{ fontSize: '1.05rem', color: '#0f172a' }}>{data.rcaAnalytics.impactWeighted[0].rca}</strong>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#dc2626' }}>
+                  {data.rcaAnalytics.impactWeighted[0].totalMinutes} min ({data.rcaAnalytics.impactWeighted[0].percentage})
+                </span>
+              </div>
+            </div>
+          )}
+
+          {data.anomalies?.length > 0 && (
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '1rem 1.25rem' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                Active Operational Anomalies ({data.anomalies.length})
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#78350f', fontWeight: 600 }}>
+                [{data.anomalies[0].severity}] {data.anomalies[0].type}: {data.anomalies[0].message}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* KPI Cards Header Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         <div style={{ background: '#ffffff', padding: '1.25rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>

@@ -37,7 +37,7 @@ import {
   Legend
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, apiFetch } from '../config/api';
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
@@ -53,11 +53,31 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
   const [isQoQEnabled, setIsQoQEnabled] = useState(false);
   const [isQoQModalOpen, setIsQoQModalOpen] = useState(false);
   const [isDataHealthOpen, setIsDataHealthOpen] = useState(false);
+  const [liveAnomaliesData, setLiveAnomaliesData] = useState(null);
+  const [anomalySeverityFilter, setAnomalySeverityFilter] = useState('ALL');
 
   // Client Switch Reset Guard (Requirement 1 & Roadmap Invariant)
   useEffect(() => {
     setIsQoQEnabled(false);
+    setLiveAnomaliesData(null);
   }, [activeClientId, data?.clientId, data?.client_id, data?.customerName]);
+
+  // Fetch live anomalies from /api/v1/anomalies when authenticated (Item #20 UI Wiring)
+  useEffect(() => {
+    const targetClientId = activeClient?.id || data?.clientId || activeClientId;
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('portal_token') || localStorage.getItem('token')) : null;
+    if (!targetClientId || !token) return;
+    const controller = new AbortController();
+    apiFetch(`${API_BASE_URL}/api/v1/anomalies?clientId=${encodeURIComponent(targetClientId)}`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json && json.success && Array.isArray(json.anomalies)) {
+          setLiveAnomaliesData(json);
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [activeClient?.id, data?.clientId, activeClientId]);
 
   const handleDownloadPpt = async () => {
     const targetClientId = activeClient?.id || data?.clientId || activeClientId;
@@ -1285,6 +1305,199 @@ export default function OverviewDashboard({ data, onNavigate, activeClientId }) 
           </div>
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════
+          TEMPORAL ANOMALIES & IMPACT-WEIGHTED RCA CARDS (Item #20)
+          ══════════════════════════════════════════════════════════════ */}
+      {(() => {
+        const activeAnomalies = liveAnomaliesData?.anomalies || data?.anomalies || [];
+        const anomalySummary = liveAnomaliesData?.summary || data?.anomalySummary || {
+          total: activeAnomalies.length,
+          critical: activeAnomalies.filter((a) => a.severity === 'CRITICAL').length,
+          high: activeAnomalies.filter((a) => a.severity === 'HIGH').length,
+        };
+        const impactWeighted = Array.isArray(data?.rcaAnalytics?.impactWeighted) ? data.rcaAnalytics.impactWeighted : [];
+        const byDeviceClass = data?.rcaAnalytics?.byDeviceClass || null;
+
+        if (activeAnomalies.length === 0 && impactWeighted.length === 0) return null;
+
+        const filteredAnomalies =
+          anomalySeverityFilter === 'ALL'
+            ? activeAnomalies
+            : activeAnomalies.filter((a) => a.severity === anomalySeverityFilter);
+
+        return (
+          <div
+            data-testid="anomalies-rca-intelligence"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
+              gap: '1.5rem',
+            }}
+          >
+            {/* Card 1: Temporal & Statistical Anomaly Intelligence */}
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '0.75rem',
+                border: '1px solid #f1f5f9',
+                padding: '1.5rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.9rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    Operational Anomaly Intelligence ({anomalySummary.total})
+                  </h3>
+                  <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '0.2rem 0 0' }}>
+                    Flapping, correlated AP drops, extended holds & statistical outliers
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  {['ALL', 'CRITICAL', 'HIGH'].map((sev) => (
+                    <button
+                      key={sev}
+                      type="button"
+                      onClick={() => setAnomalySeverityFilter(sev)}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '999px',
+                        padding: '0.2rem 0.6rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        backgroundColor: anomalySeverityFilter === sev ? '#0f172a' : '#f8fafc',
+                        color: anomalySeverityFilter === sev ? '#ffffff' : '#475569',
+                      }}
+                    >
+                      {sev}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {filteredAnomalies.length === 0 ? (
+                <div style={{ fontSize: '0.84rem', color: '#16a34a', padding: '0.75rem', backgroundColor: '#f0fdf4', borderRadius: '8px' }}>
+                  No operational anomalies matching filter ({anomalySeverityFilter}).
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  {filteredAnomalies.slice(0, 5).map((anom) => {
+                    const isCrit = anom.severity === 'CRITICAL';
+                    const isHigh = anom.severity === 'HIGH';
+                    return (
+                      <div
+                        key={anom.id}
+                        style={{
+                          padding: '0.7rem 0.85rem',
+                          borderRadius: '8px',
+                          backgroundColor: isCrit ? '#fef2f2' : isHigh ? '#fffbeb' : '#f8fafc',
+                          border: `1px solid ${isCrit ? '#fecaca' : isHigh ? '#fde68a' : '#e2e8f0'}`,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: isCrit ? '#991b1b' : isHigh ? '#92400e' : '#334155' }}>
+                            [{anom.severity}] {anom.type}
+                          </span>
+                          {(anom.entity?.site || anom.entity?.device) && (
+                            <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
+                              {[anom.entity?.site, anom.entity?.device].filter(Boolean).join(' • ')}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: '#0f172a', fontWeight: 500 }}>{anom.message}</div>
+                        {anom.recommendation && (
+                          <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '0.2rem' }}>
+                            Action: {anom.recommendation}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Card 2: Duration-Weighted RCA Impact & Device Class Split */}
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '0.75rem',
+                border: '1px solid #f1f5f9',
+                padding: '1.5rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.9rem',
+              }}
+            >
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                  Impact-Weighted RCA Drivers
+                </h3>
+                <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '0.2rem 0 0' }}>
+                  Root causes ranked by cumulative downtime minutes across switches & APs
+                </p>
+              </div>
+
+              {impactWeighted.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                  {impactWeighted.slice(0, 5).map((item, i) => {
+                    const pctVal = parseFloat(String(item.percentage).replace('%', '')) || 0;
+                    return (
+                      <div key={item.rca || i} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                          <span style={{ fontWeight: 600, color: '#0f172a' }}>{item.rca}</span>
+                          <span style={{ fontWeight: 700, color: '#1e40af' }}>
+                            {item.totalMinutes} min ({item.percentage})
+                          </span>
+                        </div>
+                        <div style={{ width: '100%', height: '6px', backgroundColor: '#f1f5f9', borderRadius: '999px', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              width: `${Math.min(100, Math.max(0, pctVal))}%`,
+                              height: '100%',
+                              backgroundColor: i === 0 ? '#ef4444' : '#3b82f6',
+                              borderRadius: '999px',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.84rem', color: '#64748b' }}>No cumulative outage minutes recorded.</div>
+              )}
+
+              {byDeviceClass && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: 'auto', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ backgroundColor: '#f8fafc', padding: '0.6rem 0.75rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                      Switch Top RCA ({byDeviceClass.switches?.totalIncidents || 0})
+                    </div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem' }}>
+                      {byDeviceClass.switches?.topRca || 'None'}
+                    </div>
+                  </div>
+                  <div style={{ backgroundColor: '#f8fafc', padding: '0.6rem 0.75rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                      AP Top RCA ({byDeviceClass.aps?.totalIncidents || 0})
+                    </div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem' }}>
+                      {byDeviceClass.aps?.topRca || 'None'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ══════════════════════════════════════════════════════════════
           ROW 4: TABLES & LISTS (col-span-2 Alerts Table + col-span-1 Performance)
