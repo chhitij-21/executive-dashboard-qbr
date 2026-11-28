@@ -4,6 +4,8 @@ frontend/node_modules/
 
 # Build Output — Render builds this fresh on every deploy
 frontend/dist/
+shared/dist/
+*.tsbuildinfo
 dist/
 build/
 

@@ -42,6 +42,9 @@ jobs:
       - name: Verify Test Isolation Setup Imports
         run: npm run check:test-setup
 
+      - name: TypeScript Typecheck & Build Shared Contracts
+        run: npm run typecheck
+
       - name: Validate OpenAPI 3.0 Specification
         run: npx @redocly/cli lint docs/openapi-v1.yaml
 

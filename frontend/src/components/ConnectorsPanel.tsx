@@ -1,36 +1,55 @@
-// frontend/src/components/ConnectorsPanel.jsx
-// Real-Time IT Connectors (Cisco Meraki & Catalyst Center Webhooks) Management UI (Item #19)
+// frontend/src/components/ConnectorsPanel.tsx
+// Real-Time IT Connectors (Cisco Meraki & Catalyst Center Webhooks) UI (Item #19 — Strict TypeScript)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plug, Plus, RotateCw, Trash2, Power, Activity, Copy, CheckCircle, AlertTriangle } from 'lucide-react';
 import { API_BASE_URL, apiFetch } from '../config/api';
 import { useAuth } from '../context/AuthContext';
+import type { Anomaly, ConnectorProvider, WebhookConnector, WebhookEvent } from '../../../shared/types/qbr';
 
-export default function ConnectorsPanel() {
-  const { isAdmin, activeClient } = useAuth();
+interface BufferedIncidentRow {
+  webhookEventId?: string;
+  IncidentNumber?: string;
+  DeviceID?: string;
+  DeviceType?: string;
+  SiteID?: string;
+  RCA?: string;
+  Priority?: string;
+  Subject?: string;
+}
+
+interface RevealedSecretState {
+  id: string;
+  name: string;
+  provider: ConnectorProvider;
+  secret: string;
+}
+
+export default function ConnectorsPanel(): React.ReactElement {
+  const { isAdmin, activeClient } = useAuth() as {
+    isAdmin: boolean;
+    activeClient?: { id?: string; name?: string } | null;
+  };
   const clientId = activeClient?.id || 'client-jfl';
 
-  const [connectors, setConnectors] = useState([]);
-  const [bufferedIncidents, setBufferedIncidents] = useState([]);
-  const [liveAnomalies, setLiveAnomalies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [actionMsg, setActionMsg] = useState(null);
+  const [connectors, setConnectors] = useState<WebhookConnector[]>([]);
+  const [bufferedIncidents, setBufferedIncidents] = useState<BufferedIncidentRow[]>([]);
+  const [liveAnomalies, setLiveAnomalies] = useState<Anomaly[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
-  // Create form state
-  const [provider, setProvider] = useState('meraki');
-  const [name, setName] = useState('');
-  const [sharedSecret, setSharedSecret] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [provider, setProvider] = useState<ConnectorProvider>('meraki');
+  const [name, setName] = useState<string>('');
+  const [sharedSecret, setSharedSecret] = useState<string>('');
+  const [creating, setCreating] = useState<boolean>(false);
 
-  // One-time revealed secret banner after create or rotate
-  const [revealedSecret, setRevealedSecret] = useState(null); // { id, name, provider, secret }
-  const [copiedSecret, setCopiedSecret] = useState(false);
+  const [revealedSecret, setRevealedSecret] = useState<RevealedSecretState | null>(null);
+  const [copiedSecret, setCopiedSecret] = useState<boolean>(false);
 
-  // Selected connector event inspection
-  const [selectedConnector, setSelectedConnector] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [selectedConnector, setSelectedConnector] = useState<WebhookConnector | null>(null);
+  const [events, setEvents] = useState<WebhookEvent[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState<boolean>(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -40,29 +59,35 @@ export default function ConnectorsPanel() {
         apiFetch(`${API_BASE_URL}/api/v1/connectors?clientId=${encodeURIComponent(clientId)}`),
         apiFetch(`${API_BASE_URL}/api/v1/webhooks/buffered-incidents?clientId=${encodeURIComponent(clientId)}`),
       ]);
-      const connJson = await connRes.json().catch(() => ({}));
+      const connJson = (await connRes.json().catch(() => ({}))) as {
+        connectors?: WebhookConnector[];
+        error?: string;
+      };
       if (!connRes.ok) throw new Error(connJson.error || `Failed to load connectors (HTTP ${connRes.status})`);
       setConnectors(Array.isArray(connJson.connectors) ? connJson.connectors : []);
 
       if (bufRes.ok) {
-        const bufJson = await bufRes.json().catch(() => ({}));
+        const bufJson = (await bufRes.json().catch(() => ({}))) as {
+          incidents?: BufferedIncidentRow[];
+          anomalies?: Anomaly[];
+        };
         setBufferedIncidents(Array.isArray(bufJson.incidents) ? bufJson.incidents : []);
         setLiveAnomalies(Array.isArray(bufJson.anomalies) ? bufJson.anomalies : []);
       }
-    } catch (err) {
-      setError(err.message || 'Unable to load IT connectors');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to load IT connectors');
     } finally {
       setLoading(false);
     }
   }, [clientId]);
 
   useEffect(() => {
-    loadData();
+    void loadData();
     setSelectedConnector(null);
     setEvents([]);
   }, [loadData]);
 
-  const handleCreateConnector = async (e) => {
+  const handleCreateConnector = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!name.trim()) return;
     setCreating(true);
@@ -79,27 +104,30 @@ export default function ConnectorsPanel() {
           ...(sharedSecret.trim() ? { sharedSecret: sharedSecret.trim() } : {}),
         }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || `Creation failed (HTTP ${res.status})`);
+      const json = (await res.json().catch(() => ({}))) as {
+        connector?: WebhookConnector;
+        error?: string;
+      };
+      if (!res.ok || !json.connector) throw new Error(json.error || `Creation failed (HTTP ${res.status})`);
       setRevealedSecret({
         id: json.connector.id,
         name: json.connector.name,
         provider: json.connector.provider,
-        secret: json.connector.webhookSecret,
+        secret: json.connector.webhookSecret || '',
       });
       setCopiedSecret(false);
       setName('');
       setSharedSecret('');
       setActionMsg(`Provisioned ${json.connector.name}. Copy the one-time HMAC secret below.`);
       await loadData();
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Creation failed');
     } finally {
       setCreating(false);
     }
   };
 
-  const handleToggleEnabled = async (conn) => {
+  const handleToggleEnabled = async (conn: WebhookConnector): Promise<void> => {
     setError(null);
     try {
       const res = await apiFetch(`${API_BASE_URL}/api/v1/connectors/${conn.id}`, {
@@ -107,15 +135,15 @@ export default function ConnectorsPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !conn.enabled, clientId }),
       });
-      const json = await res.json().catch(() => ({}));
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(json.error || 'Update failed');
       await loadData();
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Update failed');
     }
   };
 
-  const handleRotateSecret = async (conn) => {
+  const handleRotateSecret = async (conn: WebhookConnector): Promise<void> => {
     setError(null);
     try {
       const res = await apiFetch(`${API_BASE_URL}/api/v1/connectors/${conn.id}`, {
@@ -123,30 +151,33 @@ export default function ConnectorsPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rotateSecret: true, clientId }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || 'Secret rotation failed');
+      const json = (await res.json().catch(() => ({}))) as {
+        connector?: WebhookConnector;
+        error?: string;
+      };
+      if (!res.ok || !json.connector) throw new Error(json.error || 'Secret rotation failed');
       setRevealedSecret({
         id: json.connector.id,
         name: json.connector.name,
         provider: json.connector.provider,
-        secret: json.connector.webhookSecret,
+        secret: json.connector.webhookSecret || '',
       });
       setCopiedSecret(false);
       setActionMsg(`Rotated HMAC secret for ${conn.name}. Update your vendor webhook header.`);
       await loadData();
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Secret rotation failed');
     }
   };
 
-  const handleDelete = async (conn) => {
+  const handleDelete = async (conn: WebhookConnector): Promise<void> => {
     setError(null);
     try {
       const res = await apiFetch(`${API_BASE_URL}/api/v1/connectors/${conn.id}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(json.error || 'Delete failed');
       }
       if (selectedConnector?.id === conn.id) {
@@ -154,27 +185,30 @@ export default function ConnectorsPanel() {
         setEvents([]);
       }
       await loadData();
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
-  const handleInspectEvents = async (conn) => {
+  const handleInspectEvents = async (conn: WebhookConnector): Promise<void> => {
     setSelectedConnector(conn);
     setLoadingEvents(true);
     try {
       const res = await apiFetch(`${API_BASE_URL}/api/v1/connectors/${conn.id}/events`);
-      const json = await res.json().catch(() => ({}));
+      const json = (await res.json().catch(() => ({}))) as {
+        events?: WebhookEvent[];
+        error?: string;
+      };
       if (!res.ok) throw new Error(json.error || 'Failed to load events');
       setEvents(Array.isArray(json.events) ? json.events : []);
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load events');
     } finally {
       setLoadingEvents(false);
     }
   };
 
-  const handleFlushBuffer = async () => {
+  const handleFlushBuffer = async (): Promise<void> => {
     setError(null);
     try {
       const res = await apiFetch(`${API_BASE_URL}/api/v1/webhooks/flush`, {
@@ -182,23 +216,22 @@ export default function ConnectorsPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId }),
       });
-      const json = await res.json().catch(() => ({}));
+      const json = (await res.json().catch(() => ({}))) as { flushed?: number; error?: string };
       if (!res.ok) throw new Error(json.error || 'Flush failed');
       setActionMsg(`Flushed ${json.flushed || 0} buffered webhook event(s) to processed state.`);
       await loadData();
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Flush failed');
     }
   };
 
-  const getIngestEndpoint = (prov, id) => {
+  const getIngestEndpoint = (prov: ConnectorProvider | string, id: string): string => {
     const slug = prov === 'catalyst_center' ? 'catalyst' : prov === 'meraki' ? 'meraki' : 'ingest';
     return `/api/v1/webhooks/${slug}/${id}`;
   };
 
   return (
     <div style={{ maxWidth: '1380px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {/* Header */}
       <div
         style={{
           background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)',
@@ -240,7 +273,6 @@ export default function ConnectorsPanel() {
         </div>
       )}
 
-      {/* One-time Webhook Secret Banner */}
       {revealedSecret && (
         <div
           data-testid="one-time-webhook-secret"
@@ -267,7 +299,7 @@ export default function ConnectorsPanel() {
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard?.writeText(revealedSecret.secret).catch(() => {});
+                void navigator.clipboard?.writeText(revealedSecret.secret).catch(() => {});
                 setCopiedSecret(true);
               }}
               style={{
@@ -291,10 +323,9 @@ export default function ConnectorsPanel() {
         </div>
       )}
 
-      {/* Provision Connector (Admin Only) */}
       {isAdmin && (
         <form
-          onSubmit={handleCreateConnector}
+          onSubmit={(e) => void handleCreateConnector(e)}
           style={{
             backgroundColor: '#ffffff',
             borderRadius: '10px',
@@ -310,7 +341,7 @@ export default function ConnectorsPanel() {
             <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Provider</label>
             <select
               value={provider}
-              onChange={(e) => setProvider(e.target.value)}
+              onChange={(e) => setProvider(e.target.value as ConnectorProvider)}
               style={{ padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.84rem' }}
             >
               <option value="meraki">Cisco Meraki</option>
@@ -365,7 +396,6 @@ export default function ConnectorsPanel() {
         </form>
       )}
 
-      {/* Connectors Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1rem' }}>
         {loading ? (
           <div style={{ padding: '1.5rem', backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', color: '#64748b' }}>
@@ -418,7 +448,7 @@ export default function ConnectorsPanel() {
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                 <button
                   type="button"
-                  onClick={() => handleInspectEvents(c)}
+                  onClick={() => void handleInspectEvents(c)}
                   style={{ padding: '0.32rem 0.65rem', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
                 >
                   Inspect Events
@@ -427,7 +457,7 @@ export default function ConnectorsPanel() {
                   <>
                     <button
                       type="button"
-                      onClick={() => handleToggleEnabled(c)}
+                      onClick={() => void handleToggleEnabled(c)}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.32rem 0.65rem', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
                     >
                       <Power size={12} />
@@ -435,7 +465,7 @@ export default function ConnectorsPanel() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleRotateSecret(c)}
+                      onClick={() => void handleRotateSecret(c)}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.32rem 0.65rem', borderRadius: '6px', border: '1px solid #fde68a', backgroundColor: '#fffbeb', color: '#92400e', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
                     >
                       <RotateCw size={12} />
@@ -443,7 +473,7 @@ export default function ConnectorsPanel() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(c)}
+                      onClick={() => void handleDelete(c)}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.32rem 0.65rem', borderRadius: '6px', border: '1px solid #fecaca', backgroundColor: '#fef2f2', color: '#991b1b', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
                     >
                       <Trash2 size={12} />
@@ -457,7 +487,6 @@ export default function ConnectorsPanel() {
         )}
       </div>
 
-      {/* Event Inspector Table when connector selected */}
       {selectedConnector && (
         <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '1rem 1.25rem' }}>
           <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
@@ -498,7 +527,6 @@ export default function ConnectorsPanel() {
         </div>
       )}
 
-      {/* Buffered Incidents & Live Anomaly Triggers */}
       <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '1.15rem 1.35rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -510,7 +538,7 @@ export default function ConnectorsPanel() {
           {isAdmin && bufferedIncidents.length > 0 && (
             <button
               type="button"
-              onClick={handleFlushBuffer}
+              onClick={() => void handleFlushBuffer()}
               style={{
                 padding: '0.38rem 0.85rem',
                 borderRadius: '6px',

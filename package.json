@@ -11,6 +11,8 @@
     "dev:backend": "node --watch --watch-path=backend backend/index.js",
     "dev:frontend": "npx vite --config frontend/vite.config.js",
     "build": "npm install --prefer-offline && cd backend && npm install --prefer-offline && cd .. && cd frontend && npm install --include=dev --prefer-offline && npm run build",
+    "build:shared": "tsc -p tsconfig.shared.json",
+    "typecheck": "npm run build:shared && npm --prefix frontend run typecheck && tsc -p backend/tsconfig.json --noEmit",
     "start": "node --env-file-if-exists=.env backend/index.js",
     "pretest": "node scripts/cleanup-test-artifacts.js",
     "pretest:serial": "node scripts/cleanup-test-artifacts.js",
@@ -24,7 +26,9 @@
     "benchmark:boot": "node scripts/benchmark-boot.js"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3"
+    "@types/node": "^26.6.11",
+    "cross-env": "^7.0.3",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@sentry/node": "^11.16.0",
@@ -44,6 +48,7 @@
     "pptxgenjs": "^3.12.0",
     "uuid": "^9.0.0",
     "xlsx": "^0.18.5",
-    "yaml": "^2.3.1"
+    "yaml": "^2.3.1",
+    "zod": "^4.6.7"
   }
 }

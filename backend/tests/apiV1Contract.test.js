@@ -148,8 +148,8 @@ describe('Item #14: API-First (v1 URI Versioning & Deprecation Lifecycle Suite)'
         if (entry.isDirectory()) {
           scanDir(fullPath);
         } else if (/\.(jsx?|tsx?)$/.test(entry.name)) {
-          // Exclude config/api.js which declares the base resolution logic
-          if (fullPath.endsWith(path.join('config', 'api.js'))) continue;
+          // Exclude config/api.ts / api.js which declares the base resolution logic
+          if (fullPath.endsWith(path.join('config', 'api.ts')) || fullPath.endsWith(path.join('config', 'api.js'))) continue;
 
           const content = fs.readFileSync(fullPath, 'utf8');
           const lines = content.split('\n');

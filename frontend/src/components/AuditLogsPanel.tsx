@@ -1,29 +1,40 @@
-// frontend/src/components/AuditLogsPanel.jsx
-// Security Audit Trail & Compliance Export UI (Item #21)
+// frontend/src/components/AuditLogsPanel.tsx
+// Security Audit Trail & Compliance Logs UI (Item #21 — Strict TypeScript)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ShieldCheck, Download, RefreshCw, Search, AlertTriangle } from 'lucide-react';
 import { API_BASE_URL, apiFetch } from '../config/api';
 import { useAuth } from '../context/AuthContext';
+import type { AuditLogEntry } from '../../../shared/types/qbr';
 
-export default function AuditLogsPanel() {
-  const { isAdmin, activeClient } = useAuth();
-  const [scope, setScope] = useState('TENANT'); // 'TENANT' | 'ALL'
-  const [severity, setSeverity] = useState('ALL');
-  const [actionFilter, setActionFilter] = useState('ALL');
-  const [eventTypeQuery, setEventTypeQuery] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+interface AuditQueryResponse {
+  total?: number;
+  logs?: AuditLogEntry[];
+  error?: string;
+}
 
-  const [logs, setLogs] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState(null);
+export default function AuditLogsPanel(): React.ReactElement {
+  const { isAdmin, activeClient } = useAuth() as {
+    isAdmin: boolean;
+    activeClient?: { id?: string; code?: string } | null;
+  };
 
-  const effectiveScope = isAdmin ? scope : 'TENANT';
+  const [scope, setScope] = useState<'TENANT' | 'ALL'>('TENANT');
+  const [severity, setSeverity] = useState<string>('ALL');
+  const [actionFilter, setActionFilter] = useState<string>('ALL');
+  const [eventTypeQuery, setEventTypeQuery] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
-  const buildQueryParams = useCallback(() => {
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [exporting, setExporting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const effectiveScope: 'TENANT' | 'ALL' = isAdmin ? scope : 'TENANT';
+
+  const buildQueryParams = useCallback((): string => {
     const params = new URLSearchParams();
     if (severity !== 'ALL') params.set('severity', severity);
     if (actionFilter !== 'ALL') params.set('action', actionFilter);
@@ -45,14 +56,16 @@ export default function AuditLogsPanel() {
           ? `${API_BASE_URL}/api/v1/audit`
           : `${API_BASE_URL}/api/v1/tenants/${encodeURIComponent(clientId)}/audit`;
       const res = await apiFetch(`${basePath}${qs ? `?${qs}` : ''}`);
-      const json = await res.json().catch(() => ({}));
+      const json: AuditQueryResponse = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(json.error || `Failed to load audit logs (HTTP ${res.status})`);
       }
-      setLogs(Array.isArray(json.logs) ? json.logs : []);
-      setTotal(Number(json.total ?? (json.logs || []).length));
-    } catch (err) {
-      setError(err.message || 'Unable to fetch audit trail');
+      const rows = Array.isArray(json.logs) ? json.logs : [];
+      setLogs(rows);
+      setTotal(Number(json.total ?? rows.length));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unable to fetch audit trail';
+      setError(msg);
       setLogs([]);
     } finally {
       setLoading(false);
@@ -60,10 +73,10 @@ export default function AuditLogsPanel() {
   }, [activeClient?.id, effectiveScope, isAdmin, buildQueryParams]);
 
   useEffect(() => {
-    loadLogs();
+    void loadLogs();
   }, [loadLogs]);
 
-  const handleExportCsv = async () => {
+  const handleExportCsv = async (): Promise<void> => {
     const clientId = activeClient?.id || 'client-jfl';
     setExporting(true);
     setError(null);
@@ -75,7 +88,7 @@ export default function AuditLogsPanel() {
           : `${API_BASE_URL}/api/v1/tenants/${encodeURIComponent(clientId)}/audit/export`;
       const res = await apiFetch(`${basePath}${qs ? `?${qs}` : ''}`);
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
+        const json: AuditQueryResponse = await res.json().catch(() => ({}));
         throw new Error(json.error || `Export failed (HTTP ${res.status})`);
       }
       const blob = await res.blob();
@@ -87,14 +100,14 @@ export default function AuditLogsPanel() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err.message || 'Failed to export compliance CSV');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to export compliance CSV');
     } finally {
       setExporting(false);
     }
   };
 
-  const getSeverityStyle = (sev) => {
+  const getSeverityStyle = (sev?: string): { bg: string; color: string; border: string } => {
     const s = String(sev || 'INFO').toUpperCase();
     if (s === 'CRITICAL') return { bg: '#fee2e2', color: '#991b1b', border: '#fecaca' };
     if (s === 'WARN') return { bg: '#fef3c7', color: '#92400e', border: '#fde68a' };
@@ -103,7 +116,6 @@ export default function AuditLogsPanel() {
 
   return (
     <div style={{ maxWidth: '1380px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {/* Header */}
       <div
         style={{
           background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
@@ -134,7 +146,7 @@ export default function AuditLogsPanel() {
         <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             type="button"
-            onClick={loadLogs}
+            onClick={() => void loadLogs()}
             disabled={loading}
             style={{
               display: 'flex',
@@ -156,7 +168,7 @@ export default function AuditLogsPanel() {
 
           <button
             type="button"
-            onClick={handleExportCsv}
+            onClick={() => void handleExportCsv()}
             disabled={exporting}
             style={{
               display: 'flex',
@@ -178,7 +190,6 @@ export default function AuditLogsPanel() {
         </div>
       </div>
 
-      {/* Filters Toolbar */}
       <div
         style={{
           backgroundColor: '#ffffff',
@@ -196,8 +207,8 @@ export default function AuditLogsPanel() {
           {isAdmin && (
             <div style={{ display: 'inline-flex', backgroundColor: '#f1f5f9', padding: '3px', borderRadius: '8px' }}>
               {[
-                { id: 'TENANT', label: `${activeClient?.code || 'Tenant'} Scoped` },
-                { id: 'ALL', label: 'All Tenants (Admin)' },
+                { id: 'TENANT' as const, label: `${activeClient?.code || 'Tenant'} Scoped` },
+                { id: 'ALL' as const, label: 'All Tenants (Admin)' },
               ].map((s) => (
                 <button
                   key={s.id}
@@ -290,7 +301,6 @@ export default function AuditLogsPanel() {
         </div>
       )}
 
-      {/* Audit Table */}
       <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
